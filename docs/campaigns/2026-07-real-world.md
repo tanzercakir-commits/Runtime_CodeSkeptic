@@ -215,6 +215,63 @@ Two additions would have changed the verdict on five of the twenty-six rows:
 
 ---
 
+## Addendum: a reported incident, and a ninth defect
+
+After the campaign, the full body of
+[shadps4-emu/shadPS4 issue #4157](https://github.com/shadps4-emu/shadPS4/issues/4157)
+became available. It reports GTA V (CUSA00419 v1.47) aborting during GPU
+initialisation on an Apple M4 Max under Rosetta 2, and it contains something
+the source comments did not: **a measurement**. The reporter compiled a test
+program as x86-64, ran it under Rosetta 2, and observed `ENOMEM` for
+`MAP_FIXED` at every address across the reserved band, `0x1307200000`
+included. Without `MAP_FIXED`, hints in the band redirect to `0x7000000000`
+and succeed.
+
+That is a different evidence class from a code comment. It is recorded as
+`observed_invariant` - a credible third-party observation we cannot reproduce
+- rather than `measured_capability`, which is reserved for what `rs-env-probe`
+saw on the host in front of us.
+
+The same requirement, `contracts/gtav-rage-direct-memory-mapping.json`, across
+four profiles of increasing evidence quality:
+
+| Profile | Evidence of the band | Verdict | Confidence |
+|---|---|---|---|
+| ROADMAP transcription | `heuristic_risk` | UNSUPPORTED | `PREDICTIVE` |
+| shadPS4 source comment | `heuristic_risk` | UNSUPPORTED | `PREDICTIVE` |
+| Issue #4157 measurement | `observed_invariant` | UNSUPPORTED | `OBSERVED_INVARIANT` |
+| This Linux host, probed | n/a - never sampled there | **UNKNOWN** | - |
+
+The last row is the one to read twice. On a host where the address is almost
+certainly mappable, the tool does not say `SUPPORTED`. The probe never sampled
+`0x1307200000`, so it says `UNKNOWN`. "Not observed" cuts both ways.
+
+### Defect 9: the evidence ladder was not monotonic
+
+Building that profile exposed a flaw in the model itself. The ladder ranked
+`observed_invariant` above `statically_inferred`, following the ROADMAP's
+prose - but their ceilings are `OBSERVED_INVARIANT` and `COUNTEREXAMPLE`, and
+`COUNTEREXAMPLE` is the *stronger* claim. So:
+
+```text
+evidence rank -> confidence ceiling (lower = stronger claim)
+  2 ObservedInvariant     -> 2
+  3 StaticallyInferred    -> 1   <- weaker evidence, stronger ceiling
+```
+
+`weakest()` would select `statically_inferred` as the limiting link and then
+permit a stronger conclusion than the `observed_invariant` fact alone would
+have allowed. **Adding better evidence to a chain could weaken its
+conclusion.** The GTA V finding came out `COUNTEREXAMPLE` when it should have
+been capped at `OBSERVED_INVARIANT`.
+
+The ladder's only job is to determine the ceiling, so it is now ordered by the
+ceiling, and `ceiling_is_monotonic_in_the_evidence_order` fails the build if a
+future class is inserted in the wrong place. This is a deviation from ROADMAP
+section 8.2's ordering, made deliberately and for this reason.
+
+---
+
 ## Honest limitations of this campaign
 
 - **One host, one architecture.** Everything was measured on x86-64 Linux.
@@ -226,10 +283,12 @@ Two additions would have changed the verdict on five of the twenty-six rows:
   the constraint was. Automatic extraction is Phase 5. Hand-derivation makes
   the contracts more accurate than a v0 extractor would, and less
   representative of what a real user would get.
-- **No verified field failures.** Constants and code are quoted from real
-  trees at pinned commits, and those quotations are checkable. No claim is
-  made that any specific bug report, user crash or issue corresponds to any
-  contract here.
+- **One verified field failure.** RSC-0011 / the GTA V contract cites a real
+  reported incident with a log excerpt and a described measurement. Every
+  other contract here quotes source at a pinned commit and makes no claim that
+  any bug report corresponds to it. The issue body was supplied by hand; the
+  GitHub API is not reachable from this environment, so nothing was
+  independently re-fetched.
 - **Predictions were not blind.** The reviewers had read the rule list, so
   agreement between prediction and output is weak evidence. Disagreement is
   the part worth reading.

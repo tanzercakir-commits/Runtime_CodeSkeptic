@@ -30,14 +30,30 @@ namespace rs {
 // ---------------------------------------------------------------------------
 // Ordered from strongest to weakest. The numeric order is part of the
 // semantics: `weakest()` relies on it.
+//
+// THE ORDER IS DEFINED BY `confidence_ceiling`, not by intuition about which
+// kind of knowing feels more respectable. That constraint is load-bearing and
+// was learned the hard way: an earlier version ranked ObservedInvariant above
+// StaticallyInferred (as the ROADMAP's prose does), which made the mapping
+// non-monotonic - a chain whose weakest link was `statically_inferred` could
+// claim COUNTEREXAMPLE while a chain whose weakest link was the *stronger*
+// `observed_invariant` was capped at OBSERVED_INVARIANT. Adding better
+// evidence to a chain could therefore weaken its conclusion.
+//
+// The ladder's only job is to decide the ceiling, so it is ordered by the
+// ceiling. `ceiling_is_monotonic_in_the_evidence_order` in the unit tests
+// enforces this and will fail if a future class is inserted in the wrong
+// place.
 enum class EvidenceClass {
-    SpecifiedGuarantee = 0,   // documented, binding platform contract
-    MeasuredCapability = 1,   // rs-env-probe observed it on this host
-    ObservedInvariant = 2,    // held across a recorded trace set
-    StaticallyInferred = 3,   // derived from source analysis
-    BoundedCounterexample = 4,// found within an explicit exploration bound
-    HeuristicRisk = 5,        // pattern match / trend, no proof
-    Unknown = 6,              // NOT probed, NOT specified. Never "supported".
+    SpecifiedGuarantee = 0,    // documented, binding platform contract
+    MeasuredCapability = 1,    // rs-env-probe observed it on this host
+    StaticallyInferred = 2,    // derived from source analysis
+    BoundedCounterexample = 3, // found within an explicit exploration bound
+    ObservedInvariant = 4,     // held across a recorded trace set, or a
+                               // credible third-party observation we cannot
+                               // reproduce
+    HeuristicRisk = 5,         // pattern match / trend, no proof
+    Unknown = 6,               // NOT probed, NOT specified. Never "supported".
 };
 
 std::string_view to_string(EvidenceClass c);

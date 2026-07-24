@@ -6,6 +6,9 @@
 // can be reported as merely conditional, these fail.
 #include "runtimeskeptic/core/evidence.hpp"
 
+#include <iterator>
+#include <string>
+
 #include "runtimeskeptic/core/fact.hpp"
 #include "test_support.hpp"
 
@@ -48,6 +51,53 @@ RS_TEST(confidence_ceiling_matches_the_documented_table) {
     RS_CHECK(confidence_ceiling(EvidenceClass::HeuristicRisk) ==
              Confidence::Predictive);
     RS_CHECK(confidence_ceiling(EvidenceClass::Unknown) == Confidence::Hypothesis);
+}
+
+RS_TEST(ceiling_is_monotonic_in_the_evidence_order) {
+    // The whole point of ordering evidence classes is to decide the ceiling,
+    // so weaker evidence must never permit a stronger claim. An earlier
+    // version ranked ObservedInvariant above StaticallyInferred and broke
+    // this: adding better evidence to a chain could weaken its conclusion,
+    // because weakest() would select a class whose ceiling was higher.
+    const EvidenceClass ladder[] = {
+        EvidenceClass::SpecifiedGuarantee, EvidenceClass::MeasuredCapability,
+        EvidenceClass::StaticallyInferred, EvidenceClass::BoundedCounterexample,
+        EvidenceClass::ObservedInvariant,  EvidenceClass::HeuristicRisk,
+        EvidenceClass::Unknown};
+
+    for (std::size_t i = 0; i + 1 < std::size(ladder); ++i) {
+        // The enum values must be in the order this test lists them.
+        RS_CHECK_MESSAGE(static_cast<int>(ladder[i]) <
+                             static_cast<int>(ladder[i + 1]),
+                         std::string("evidence ladder is out of order at ") +
+                             std::string(to_string(ladder[i])));
+        // And the ceiling must never get stronger as evidence gets weaker.
+        RS_CHECK_MESSAGE(
+            static_cast<int>(confidence_ceiling(ladder[i])) <=
+                static_cast<int>(confidence_ceiling(ladder[i + 1])),
+            std::string("weaker evidence permits a stronger claim: ") +
+                std::string(to_string(ladder[i + 1])) + " allows " +
+                std::string(to_string(confidence_ceiling(ladder[i + 1]))) +
+                " while the stronger " + std::string(to_string(ladder[i])) +
+                " allows only " +
+                std::string(to_string(confidence_ceiling(ladder[i]))));
+    }
+}
+
+RS_TEST(adding_better_evidence_never_weakens_a_conclusion) {
+    // The practical consequence of monotonicity, stated as the property a
+    // user would notice.
+    EvidenceChain chain;
+    chain.add(Layer::Application, EvidenceClass::StaticallyInferred, "a", "s");
+    const Confidence before =
+        clamp_confidence(Confidence::Proven, chain.weakest_class());
+
+    chain.add(Layer::OperatingSystem, EvidenceClass::MeasuredCapability, "b", "s");
+    const Confidence after =
+        clamp_confidence(Confidence::Proven, chain.weakest_class());
+
+    RS_CHECK_MESSAGE(static_cast<int>(after) <= static_cast<int>(before),
+                     "adding a measured fact weakened the conclusion");
 }
 
 RS_TEST(clamping_never_strengthens_a_claim) {

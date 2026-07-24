@@ -1,0 +1,50 @@
+{
+  "schema": "runtime-skeptic.application-requirements.v1",
+  "name": "RAGE engine GPU buffer: sceKernelMapNamedDirectMemory at 0x1307200000",
+  "component": "Grand Theft Auto V (CUSA00419 v1.47) RenderThread, via shadPS4 MemoryManager::MapMemory",
+  "operation": "virtual_memory_map",
+  "request": {
+    "address": "0x1307200000",
+    "size": 131072,
+    "exact_address_required": true,
+    "protection": { "read": true, "write": true, "execute": false },
+    "file_backed": false
+  },
+  "assumptions": {
+    "guest_host_identity_required": true,
+    "translation_layer_available": false,
+    "retries_on_failure": false
+  },
+  "required_postconditions": [
+    "the direct-memory mapping is placed at exactly the guest address the title requested",
+    "a VMA covering [0x1307200000, 0x1307220000) exists in the emulator's address space before CarveVMA runs"
+  ],
+  "permitted_fallbacks": [],
+  "failure_sink": {
+    "kind": "fatal_assert",
+    "location": {
+      "file": "src/core/memory.cpp",
+      "line": 1467,
+      "symbol": "operator()"
+    },
+    "description": "ASSERT_MSG(end_in_vma <= vma.size, \"Mapping cannot fit inside free region\") - FindVMA returns the last VMA before the reserved gap, end_in_vma exceeds vma.size, and the process aborts during GPU initialisation"
+  },
+  "source_locations": [
+    { "file": "src/core/memory.cpp", "line": 1467, "symbol": "MemoryManager::CarveVMA assertion" },
+    { "file": "src/core/address_space.cpp", "line": 39, "symbol": "USER_MIN (Apple/x86-64 workaround)" }
+  ],
+  "assumption_evidence": "statically_inferred",
+  "extraction_limitations": [
+    "The request parameters are transcribed from a log excerpt in shadps4-emu/shadPS4 issue #4157 (in_addr 0x1307200000, len 0x20000, prot 0x33, flags 0x10 MAP_FIXED, phys_addr 0xc2ec0000), not read out of the title's binary. The title chose the address; nothing here establishes why.",
+    "prot 0x33 is decoded as CPU read+write plus GPU read+write. The GPU-side permissions have no representation in this schema and are dropped - a mapping that must be visible to a GPU may carry constraints beyond what a CPU protection triple can express.",
+    "translation_layer_available is false because shadPS4 has no guest-to-host address translation on this path; that is a property of the emulator, read from its source, not declared to us."
+  ],
+  "x_campaign": {
+    "project": "shadPS4 / Grand Theft Auto V",
+    "commit": "2bb20e4 (v0.15.1 WIP); also reproduced on v0.15.0",
+    "source": "shadps4-emu/shadPS4 issue #4157",
+    "quote": "sceKernelMapNamedDirectMemory: in_addr = 0x1307200000, len = 0x20000, prot = 0x33 (RW + GPU RW), flags = 0x10 (MAP_FIXED), phys_addr = 0xc2ec0000, name = 'anon'",
+    "expected_verdict": "UNSUPPORTED",
+    "rationale": "0x1307200000 lies inside the Rosetta 2 GPU carveout, which the issue reports as returning ENOMEM for every MAP_FIXED attempt. The caller demands the exact address and aborts otherwise."
+  }
+}

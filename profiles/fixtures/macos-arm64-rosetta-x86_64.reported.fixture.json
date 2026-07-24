@@ -1,0 +1,126 @@
+{
+  "schema": "runtime-skeptic.environment-profile.v1",
+  "origin": "hand_authored_fixture",
+  "profile_name": "macos-arm64-rosetta-x86_64 (reported measurement, shadPS4 issue #4157)",
+  "platform": {
+    "os": "macos",
+    "os_version": "macOS 15.x (Darwin 25.3.0)",
+    "kernel_version": "Darwin 25.3.0",
+    "host_arch": "aarch64",
+    "process_arch": "x86_64",
+    "translation_mode": "rosetta2"
+  },
+  "virtual_memory": {
+    "page_size": {
+      "value": 16384,
+      "evidence": "heuristic_risk",
+      "source": "hand-authored fixture",
+      "note": "NOT part of the reported measurement. Apple Silicon commonly uses 16 KiB pages, but issue #4157 does not state it and nothing here established it."
+    },
+    "allocation_granularity": {
+      "value": 16384,
+      "evidence": "heuristic_risk",
+      "source": "hand-authored fixture"
+    },
+    "min_map_address": {
+      "value": null,
+      "evidence": "unknown"
+    },
+    "max_user_address": {
+      "value": "0x600000000000",
+      "evidence": "heuristic_risk",
+      "source": "shadps4-emu/shadPS4@d392abe src/core/address_space.cpp:52, USER_MAX = 0x5FFFFFFFFFFF (inclusive) for the non-Linux non-FreeBSD branch",
+      "note": "Derived from shadPS4's own constant, not from the issue's measurement. Half-open exclusive end is the inclusive maximum plus one."
+    },
+    "anonymous_mapping_supported": {
+      "value": true,
+      "evidence": "observed_invariant",
+      "source": "shadps4-emu/shadPS4 issue #4157: the reporter's test program successfully mapped at 0x7000000000 and above",
+      "note": "Mapping works on this host; only specific bands are refused."
+    },
+    "exact_mapping": {
+      "value": "CONDITIONALLY_SUPPORTED",
+      "evidence": "observed_invariant",
+      "source": "shadps4-emu/shadPS4 issue #4157: MAP_FIXED succeeded outside the reserved bands and returned ENOMEM inside them"
+    },
+    "exact_mapping_failure_codes": ["ENOMEM"],
+    "hinted_mapping_may_relocate": {
+      "value": true,
+      "evidence": "observed_invariant",
+      "source": "shadps4-emu/shadPS4 issue #4157: \"Without MAP_FIXED (hint-only), all hints in the gap redirect to 0x7000000000.\"",
+      "note": "A measured relocation, not merely the POSIX permission to relocate. The mapping SUCCEEDS at a different address, which is exactly the silent contract degradation this project exists to catch."
+    },
+    "fixed_noreplace_available": {
+      "value": null,
+      "evidence": "unknown",
+      "note": "macOS has no MAP_FIXED_NOREPLACE equivalent that this fixture establishes."
+    },
+    "reserve_commit_model": {
+      "value": "posix_lazy",
+      "evidence": "heuristic_risk",
+      "source": "hand-authored fixture"
+    },
+    "file_map_beyond_eof": {
+      "value": null,
+      "evidence": "unknown"
+    },
+    "protection": {
+      "write_execute_simultaneous": {
+        "value": null,
+        "evidence": "unknown",
+        "note": "Not addressed by issue #4157. Left unknown rather than carried over from another fixture."
+      },
+      "write_then_execute_transition": {
+        "value": null,
+        "evidence": "unknown"
+      },
+      "anonymous_executable_mapping": {
+        "value": null,
+        "evidence": "unknown"
+      },
+      "jit_entitlement_required": {
+        "value": null,
+        "evidence": "unknown"
+      }
+    },
+    "unavailable_ranges": [
+      {
+        "start": "0xfc0000000",
+        "end": "0x1000000000",
+        "evidence": "observed_invariant",
+        "note": "Rosetta 2 commpage. shadps4-emu/shadPS4 issue #4157 states 0xFC0000000-0xFFFFFFFFF and reports that a test program compiled as x86_64 under Rosetta 2 received ENOMEM for MAP_FIXED at every address tested in this band."
+      },
+      {
+        "start": "0x1000000000",
+        "end": "0x6fc0000000",
+        "evidence": "observed_invariant",
+        "note": "Apple unified-memory GPU carveout. shadps4-emu/shadPS4 issue #4157 reports ENOMEM for MAP_FIXED at every address tested from 0xFC0000000 through ~0x6FC0000000, explicitly including 0x1307200000. NOTE: shadPS4's own source treats the band as ending at 0x6FFFFFFFFF (USER_MIN 0x7000000000), a slightly more conservative bound than the issue's ~0x6FC0000000. The two disagree about the last 1 GiB; neither reading changes the verdict for 0x1307200000."
+      }
+    ],
+    "available_ranges": [
+      {
+        "start": "0x7000000000",
+        "end": "0x7000004000",
+        "evidence": "observed_invariant",
+        "note": "shadps4-emu/shadPS4 issue #4157: \"OK: 0x7000000000\". Only the one page the reporter actually tested is recorded; the rest of the user region was not enumerated and is therefore absent rather than assumed."
+      }
+    ]
+  },
+  "probe_run": {
+    "tool_version": "hand-authored",
+    "probe_version": "none",
+    "run_id": "issue-4157",
+    "timestamp_utc": "",
+    "probe_binary_hash": "",
+    "duration_ms": 0,
+    "warnings": [
+      "THIS PROFILE WAS NOT MEASURED BY rs-env-probe. Its address-range facts are a THIRD-PARTY REPORTED MEASUREMENT transcribed from shadps4-emu/shadPS4 issue #4157, in which the reporter describes compiling and running a test program as x86_64 under Rosetta 2 and observing ENOMEM for MAP_FIXED across the band. We did not reproduce it and cannot.",
+      "Evidence class 'observed_invariant' was chosen deliberately over 'measured_capability'. measured_capability means rs-env-probe observed it on the host in front of us. A credible reported observation we cannot reproduce is evidence, not proof - so every finding derived from these ranges is capped at OBSERVED_INVARIANT and can never be labelled PROVEN.",
+      "Facts NOT covered by the report - page size, W^X policy, JIT entitlement, minimum mappable address - are left unknown rather than copied from the sibling fixtures. Copying them would manufacture agreement between two documents that measured different things."
+    ]
+  },
+  "notes": [
+    "Replace with the output of `rs-env-probe vm` run on a real Apple Silicon host to upgrade these facts to measured_capability. Until then this is the strongest macOS evidence available and it is still not a measurement of your machine.",
+    "Reported environment: Apple M4 Max, 64 GB, macOS 15.x (Darwin 25.3.0), binary is Mach-O 64-bit x86_64 under Rosetta 2."
+  ]
+}
