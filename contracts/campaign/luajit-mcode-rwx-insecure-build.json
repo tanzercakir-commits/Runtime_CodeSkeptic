@@ -1,0 +1,77 @@
+{
+  "schema": "runtime-skeptic.application-requirements.v1",
+  "name": "LuaJIT built with LUAJIT_SECURITY_MCODE=0: the machine-code area is RWX for its whole lifetime and mcode_protect is a no-op",
+  "component": "LuaJIT JIT: MCPROT_GEN/MCPROT_RUN under #if LUAJIT_SECURITY_MCODE == 0 (lj_mcode.c)",
+  "operation": "virtual_memory_map",
+  "request": {
+    "size": 65536,
+    "exact_address_required": false,
+    "protection": {
+      "read": true,
+      "write": true,
+      "execute": true
+    },
+    "write_then_execute": true,
+    "simultaneous_write_execute": true
+  },
+  "assumptions": {
+    "guest_host_identity_required": false,
+    "translation_layer_available": false,
+    "retries_on_failure": true,
+    "max_retries": 16
+  },
+  "required_postconditions": [
+    "MCPROT_GEN == MCPROT_RUN == MCPROT_RWX, so the area is writable and executable simultaneously and forever",
+    "mcode_protect(J, prot) is compiled to an empty function, so there is no point at which the JIT could be asked to flip permissions",
+    "mcode_setprot is likewise compiled out under LUAJIT_SECURITY_MCODE == 0"
+  ],
+  "permitted_fallbacks": [],
+  "failure_sink": {
+    "kind": "error_return",
+    "location": {
+      "file": "LuaJIT/LuaJIT@346ab58:src/lj_mcode.c",
+      "line": 333,
+      "symbol": "mcode_alloc"
+    },
+    "description": "same sink as the default build: lj_trace_err(J, LJ_TRERR_MCODEAL) aborts the trace and the interpreter continues. A host that refuses PROT_WRITE|PROT_EXEC makes mmap fail, which this path reports as a failed trace rather than as a configuration error."
+  },
+  "source_locations": [
+    {
+      "file": "LuaJIT/LuaJIT@346ab58:src/lj_mcode.c",
+      "line": 215,
+      "symbol": "#if LUAJIT_SECURITY_MCODE == 0"
+    },
+    {
+      "file": "LuaJIT/LuaJIT@346ab58:src/lj_mcode.c",
+      "line": 230,
+      "symbol": "#define MCPROT_GEN MCPROT_RWX"
+    },
+    {
+      "file": "LuaJIT/LuaJIT@346ab58:src/lj_mcode.c",
+      "line": 231,
+      "symbol": "#define MCPROT_RUN MCPROT_RWX"
+    },
+    {
+      "file": "LuaJIT/LuaJIT@346ab58:src/lj_mcode.c",
+      "line": 126,
+      "symbol": "#define MCPROT_RWX (PROT_READ|PROT_WRITE|PROT_EXEC)"
+    },
+    {
+      "file": "LuaJIT/LuaJIT@346ab58:src/lj_mcode.c",
+      "line": 217,
+      "symbol": "comment: 'It's generally considered to be a potential security risk to have pages with simultaneous write *and* execute access in a process.'"
+    }
+  ],
+  "assumption_evidence": "statically_inferred",
+  "extraction_limitations": [
+    "this is a non-default build configuration; LUAJIT_SECURITY_MCODE defaults to non-zero. It is included because it is the same source file describing a materially different VM contract under one -D flag."
+  ],
+  "x_campaign": {
+    "project": "luajit",
+    "commit": "346ab58",
+    "source": "src/lj_mcode.c:215-235",
+    "quote": "#if LUAJIT_SECURITY_MCODE == 0\n...\n#define MCPROT_GEN\tMCPROT_RWX\n#define MCPROT_RUN\tMCPROT_RWX\n\nstatic void mcode_protect(jit_State *J, int prot)\n{\n  UNUSED(J); UNUSED(prot);\n}",
+    "expected_verdict": "SUPPORTED",
+    "rationale": "The probe measured write_execute_simultaneous=true on this host, so RWX anonymous memory is obtainable; a W^X-enforcing host is where this would break."
+  }
+}

@@ -1,0 +1,79 @@
+{
+  "schema": "runtime-skeptic.application-requirements.v1",
+  "name": "mimalloc aligned-hint allocation inside the 2TiB-30TiB reserved hint area",
+  "component": "mimalloc: _mi_os_get_aligned_hint / unix_mmap_prim_aligned (64-bit, !MI_NO_ALIGNED_HINT, !MAP_ALIGNED)",
+  "operation": "virtual_memory_reserve",
+  "request": {
+    "address": "0x20000000000",
+    "size": 33554432,
+    "exact_address_required": false,
+    "required_alignment": 33554432,
+    "protection": { "read": true, "write": true, "execute": false }
+  },
+  "assumptions": {
+    "guest_host_identity_required": false,
+    "translation_layer_available": false,
+    "retries_on_failure": true,
+    "max_retries": 1
+  },
+  "required_postconditions": [
+    "the host provides at least 46 bits of usable virtual address space, otherwise the whole hinting strategy is disabled at os.c:119",
+    "the [2TiB, 30TiB) window is habitually free, so a hint aimed into it is usually honoured and the returned address is usually already MI_SEGMENT_ALIGN aligned",
+    "if the hint is not honoured the result is only slower, never wrong: unix_mmap_prim_aligned falls through to a plain mmap and the over-allocate-and-trim path fixes the alignment"
+  ],
+  "permitted_fallbacks": ["relocate"],
+  "failure_sink": {
+    "kind": "retry_loop",
+    "location": {
+      "file": "microsoft/mimalloc@a3ca0e5:src/prim/unix/prim.c",
+      "line": 298,
+      "symbol": "unix_mmap_prim_aligned: fall back to regular mmap"
+    },
+    "description": "if the hinted mmap returns something that is not aligned to try_alignment, prim.c logs _mi_trace_message(\"unable to directly request hinted aligned OS memory ...\") and still returns the pointer; if it returned MAP_FAILED the function retries once without the hint. Exactly one retry, then the generic aligned path takes over. Nothing here is fatal."
+  },
+  "source_locations": [
+    {
+      "file": "microsoft/mimalloc@a3ca0e5:src/os.c",
+      "line": 112,
+      "symbol": "#define MI_HINT_BASE ((uintptr_t)2 << 40)  // 2TiB start"
+    },
+    {
+      "file": "microsoft/mimalloc@a3ca0e5:src/os.c",
+      "line": 113,
+      "symbol": "#define MI_HINT_AREA ((uintptr_t)4 << 40)  // upto (2+4) 6TiB"
+    },
+    {
+      "file": "microsoft/mimalloc@a3ca0e5:src/os.c",
+      "line": 114,
+      "symbol": "#define MI_HINT_MAX  ((uintptr_t)30 << 40) // wrap after 30TiB (area after 32TiB is used for huge OS pages)"
+    },
+    {
+      "file": "microsoft/mimalloc@a3ca0e5:src/os.c",
+      "line": 119,
+      "symbol": "if (mi_os_mem_config.virtual_address_bits < 46) return NULL;  // < 64TiB virtual address space"
+    },
+    {
+      "file": "microsoft/mimalloc@a3ca0e5:src/os.c",
+      "line": 137,
+      "symbol": "if (hint%try_alignment != 0) return NULL; - mimalloc refuses to emit a hint it knows is misaligned"
+    },
+    {
+      "file": "microsoft/mimalloc@a3ca0e5:src/prim/unix/prim.c",
+      "line": 283,
+      "symbol": "p = unix_mmap_prim(hint, size, protect_flags, flags, fd); - plain mmap, hint only"
+    }
+  ],
+  "assumption_evidence": "statically_inferred",
+  "extraction_limitations": [
+    "the actual hint is a running atomic counter seeded at MI_HINT_BASE (os.c:126-136); 0x20000000000 is the seed value, not a fixed address the program will always use",
+    "the 46-bit virtual-address-space precondition at os.c:119 has no field in this schema; it is carried only as a postcondition string"
+  ],
+  "x_campaign": {
+    "project": "mimalloc",
+    "commit": "a3ca0e5",
+    "source": "src/os.c:112",
+    "quote": "#define MI_HINT_BASE ((uintptr_t)2 << 40)  // 2TiB start",
+    "expected_verdict": "SUPPORTED",
+    "rationale": "0x20000000000 is 32MiB-aligned so the declared-alignment branch of rule_address_alignment passes, exact placement is not required and relocation is permitted, and the probe observed 0x20000000000-0x20000400000 as available so the hint branch of rule_range_availability should not fire either."
+  }
+}

@@ -1,0 +1,78 @@
+{
+  "schema": "runtime-skeptic.application-requirements.v1",
+  "name": "LuaJIT arm64: LJ_PAGESIZE is hard-coded to 16384 regardless of the host's real page size, and sizes the FFI callback code area",
+  "component": "LuaJIT: LJ_PAGESIZE (lj_arch.h, LUAJIT_TARGET == LUAJIT_ARCH_ARM64) used by CALLBACK_MCODE_SIZE",
+  "operation": "virtual_memory_map",
+  "request": {
+    "size": 16384,
+    "exact_address_required": false,
+    "required_page_size": 16384,
+    "protection": {
+      "read": true,
+      "write": true,
+      "execute": false
+    },
+    "write_then_execute": true,
+    "simultaneous_write_execute": false
+  },
+  "assumptions": {
+    "guest_host_identity_required": false,
+    "translation_layer_available": false,
+    "retries_on_failure": false
+  },
+  "required_postconditions": [
+    "CALLBACK_MCODE_SIZE == LJ_PAGESIZE * LJ_NUM_CBPAGE == 16384 * 1, and this region is mprotect'ed between RW and RX as callbacks are added",
+    "page_align(S) in the allocator rounds sizes to 16384",
+    "the pseudo-random probe mask is (1 << LJ_ALLOC_MBITS) - LJ_PAGESIZE, so LJ_PAGESIZE also determines the granularity of probed hints"
+  ],
+  "permitted_fallbacks": [],
+  "failure_sink": {
+    "kind": "unchecked",
+    "description": "nothing tests LJ_PAGESIZE against sysconf(_SC_PAGESIZE). If the host page is larger, the mprotect of the callback area silently covers more than the area and can change the protection of whatever the kernel placed in the same host page. If the host page is smaller, the only cost is a slightly oversized allocation."
+  },
+  "source_locations": [
+    {
+      "file": "LuaJIT/LuaJIT@346ab58:src/lj_arch.h",
+      "line": 304,
+      "symbol": "#define LJ_PAGESIZE 16384 (guard: the LUAJIT_ARCH_ARM64 block, alongside LJ_TARGET_GC64 1 and LJ_TARGET_JUMPRANGE 27)"
+    },
+    {
+      "file": "LuaJIT/LuaJIT@346ab58:src/lj_arch.h",
+      "line": 684,
+      "symbol": "#ifndef LJ_PAGESIZE / #define LJ_PAGESIZE 4096 - every other target gets 4096, so arm64 is the sole exception"
+    },
+    {
+      "file": "LuaJIT/LuaJIT@346ab58:src/lj_ccallback.c",
+      "line": 26,
+      "symbol": "#define CALLBACK_MCODE_SIZE (LJ_PAGESIZE * LJ_NUM_CBPAGE)"
+    },
+    {
+      "file": "LuaJIT/LuaJIT@346ab58:src/lj_def.h",
+      "line": 74,
+      "symbol": "#define LJ_NUM_CBPAGE 1 /* Number of FFI callback pages. */"
+    },
+    {
+      "file": "LuaJIT/LuaJIT@346ab58:src/lj_alloc.c",
+      "line": 553,
+      "symbol": "page_align(S): (((S) + (LJ_PAGESIZE - SIZE_T_ONE)) & ~(LJ_PAGESIZE - SIZE_T_ONE))"
+    },
+    {
+      "file": "LuaJIT/LuaJIT@346ab58:src/lj_alloc.c",
+      "line": 269,
+      "symbol": "hint_addr = lj_prng_u64(rs) & (((uintptr_t)1<<LJ_ALLOC_MBITS)-LJ_PAGESIZE)"
+    }
+  ],
+  "assumption_evidence": "statically_inferred",
+  "extraction_limitations": [
+    "this constant is guarded by an arm64 #ifdef and therefore does not apply to an x86-64 build. Running it against an x86-64 host profile tests what the analyzer does with a page-size claim from a build config the host cannot produce.",
+    "the uses of LJ_PAGESIZE found are round-ups and a hint mask, which are safe when the real page is SMALLER. The hazard direction is a host page LARGER than 16384; this document cannot express a one-sided bound."
+  ],
+  "x_campaign": {
+    "project": "luajit",
+    "commit": "346ab58",
+    "source": "src/lj_arch.h:304 and src/lj_ccallback.c:26",
+    "quote": "#define LJ_TARGET_GC64\t\t1\n#define LJ_PAGESIZE\t\t16384\n---\n#define CALLBACK_MCODE_SIZE\t(LJ_PAGESIZE * LJ_NUM_CBPAGE)",
+    "expected_verdict": "UNSUPPORTED",
+    "rationale": "The probe measured a 4096-byte host page and this document declares required_page_size 16384, so a page-size rule should fire. I expect that verdict to be technically correct but practically misleading: LuaJIT's uses of the constant are conservative round-ups that tolerate a smaller host page."
+  }
+}

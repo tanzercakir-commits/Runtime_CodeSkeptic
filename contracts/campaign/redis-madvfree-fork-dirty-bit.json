@@ -1,0 +1,72 @@
+{
+  "schema": "runtime-skeptic.application-requirements.v1",
+  "name": "Redis: a MADV_FREE page rewritten before fork() must remain private-dirty in the child (arm64 pte_wrprotect bug probe)",
+  "component": "Redis: checkLinuxMadvFreeForkBug (__linux__ && __arm64__)",
+  "operation": "virtual_memory_map",
+  "request": {
+    "size": 12288,
+    "exact_address_required": false,
+    "protection": { "read": true, "write": true, "execute": false }
+  },
+  "assumptions": {
+    "guest_host_identity_required": false,
+    "translation_layer_available": false,
+    "retries_on_failure": false
+  },
+  "required_postconditions": [
+    "the 3-page mapping is not merged with an adjacent VMA - Redis enforces this by setting RO|RW|RO protections across the three pages (syscheck.c:225-227)",
+    "after madvise(MADV_FREE) and a subsequent write, the page is re-owned by the process",
+    "after fork(), /proc/self/smaps in the CHILD must report a non-zero Shared_Dirty for that page; zero means the kernel dropped the dirty bit across pte_wrprotect() and the page can be silently reclaimed",
+    "the allocator's MADV_FREE-based purging is therefore safe to combine with fork-based persistence"
+  ],
+  "permitted_fallbacks": [],
+  "failure_sink": {
+    "kind": "error_return",
+    "location": {
+      "file": "redis/redis@b53f65d:src/syscheck.c",
+      "line": 271,
+      "symbol": "checkLinuxMadvFreeForkBug: res = -1"
+    },
+    "description": "the check returns -1 and syscheck reports \"Your kernel has a bug that could lead to data corruption during background save. Please upgrade to the latest stable kernel.\" (syscheck.c:296). Reached from `redis-server --check-system`, which exits non-zero (server.c:8177). The condition it detects is silent data corruption in the RDB written by the background save."
+  },
+  "source_locations": [
+    {
+      "file": "redis/redis@b53f65d:src/syscheck.c",
+      "line": 209,
+      "symbol": "int checkLinuxMadvFreeForkBug(sds *error_msg)"
+    },
+    {
+      "file": "redis/redis@b53f65d:src/syscheck.c",
+      "line": 218,
+      "symbol": "p = mmap(NULL, map_size, PROT_READ, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0); with map_size = 3 * page_size"
+    },
+    {
+      "file": "redis/redis@b53f65d:src/syscheck.c",
+      "line": 240,
+      "symbol": "ret = madvise(q, page_size, MADV_FREE);"
+    },
+    {
+      "file": "redis/redis@b53f65d:src/syscheck.c",
+      "line": 269,
+      "symbol": "child: ret = smapsGetSharedDirty((unsigned long) q); - 'A value of 0 means the kernel is affected by the bug.'"
+    },
+    {
+      "file": "redis/redis@b53f65d:src/syscheck.c",
+      "line": 207,
+      "symbol": "comment naming the fix: ' * titled: \"arm64: pgtable: Ensure dirty bit is preserved across pte_wrprotect()\"'"
+    }
+  ],
+  "assumption_evidence": "statically_inferred",
+  "extraction_limitations": [
+    "nothing in this document expresses what the check is actually about. There is no field for fork(), for copy-on-write, for MADV_FREE, for VMA merging, or for page-table dirty-bit preservation. The request below is only the mmap that sets the stage; the requirement lives entirely in required_postconditions as prose",
+    "the whole check is compiled only under #ifdef __arm64__ (syscheck.c:172, registered at syscheck.c:325); on the x86-64 campaign host this code does not exist"
+  ],
+  "x_campaign": {
+    "project": "redis",
+    "commit": "b53f65d",
+    "source": "src/syscheck.c:269",
+    "quote": "        /* Child: check if the page is marked as dirty, page_size in kb.\n         * A value of 0 means the kernel is affected by the bug. */\n        ret = smapsGetSharedDirty((unsigned long) q);",
+    "expected_verdict": "SUPPORTED",
+    "rationale": "A 12KiB anonymous RW mapping with no address is unobjectionable to every rule in the analyzer, so I expect a bare SUPPORTED. The postconditions that carry the entire requirement are free text the engine never reads."
+  }
+}

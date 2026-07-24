@@ -1,0 +1,77 @@
+{
+  "schema": "runtime-skeptic.application-requirements.v1",
+  "name": "Box64 dynarec: 2 MiB code block mapped PROT_READ|PROT_WRITE|PROT_EXEC and never flipped",
+  "component": "Box64: addDBAlternateBlock / dynarec block allocator (custommem.c, DYNMMAPSZ path)",
+  "operation": "virtual_memory_map",
+  "request": {
+    "size": 2097152,
+    "exact_address_required": false,
+    "protection": {
+      "read": true,
+      "write": true,
+      "execute": true
+    },
+    "write_then_execute": true,
+    "simultaneous_write_execute": true
+  },
+  "assumptions": {
+    "guest_host_identity_required": false,
+    "translation_layer_available": false,
+    "retries_on_failure": false
+  },
+  "required_postconditions": [
+    "the block is writable and executable at the same time: Box64 emits native code into it and branches into it without any mprotect step",
+    "setProtection_box records PROT_READ|PROT_WRITE|PROT_EXEC for the whole block, so Box64's own protection bookkeeping also assumes RWX is durable",
+    "the size is rounded to box64_pagesize, so a host with a larger page rounds the 2 MiB block up rather than failing"
+  ],
+  "permitted_fallbacks": [],
+  "failure_sink": {
+    "kind": "error_return",
+    "location": {
+      "file": "box64/box64@a2ae050:src/custommem.c",
+      "line": 1805,
+      "symbol": "internal dynarec block allocator"
+    },
+    "description": "on MAP_FAILED it logs 'Cannot create dynamic map of %zu bytes' and returns 0; the caller degrades to no dynarec for that block rather than aborting."
+  },
+  "source_locations": [
+    {
+      "file": "box64/box64@a2ae050:src/custommem.c",
+      "line": 105,
+      "symbol": "#define DYNMMAPSZ (2*1024*1024) // allocate 2Mb block for dynarec"
+    },
+    {
+      "file": "box64/box64@a2ae050:src/custommem.c",
+      "line": 106,
+      "symbol": "#define DYNMMAPSZ0 (128*1024) // allocate 128kb block for 1st page"
+    },
+    {
+      "file": "box64/box64@a2ae050:src/custommem.c",
+      "line": 1785,
+      "symbol": "allocsize = (allocsize+(box64_pagesize-1))&~(box64_pagesize-1)"
+    },
+    {
+      "file": "box64/box64@a2ae050:src/custommem.c",
+      "line": 1802,
+      "symbol": "InternalMmap(NULL, allocsize, PROT_READ | PROT_WRITE | PROT_EXEC, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0)"
+    },
+    {
+      "file": "box64/box64@a2ae050:src/custommem.c",
+      "line": 1817,
+      "symbol": "setProtection_box((uintptr_t)p, allocsize, PROT_READ | PROT_WRITE | PROT_EXEC)"
+    }
+  ],
+  "assumption_evidence": "statically_inferred",
+  "extraction_limitations": [
+    "the MAP_HUGETLB variant immediately above (line 1796) is inside '#if 0//def MAP_HUGETLB' and is dead code at this commit; it is not modelled.",
+    "whether Box64 truly never flips protection on this block was established by the absence of an mprotect on the block address, not by proving the negative across all call sites."
+  ],
+  "x_campaign": {
+    "project": "box64",
+    "commit": "a2ae050",
+    "source": "src/custommem.c:1801-1806",
+    "quote": "    if(p==MAP_FAILED)\n        p = InternalMmap(NULL, allocsize, PROT_READ | PROT_WRITE | PROT_EXEC, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);\n    if(p==MAP_FAILED) {\n        dynarec_log(LOG_INFO, \"Cannot create dynamic map of %zu bytes (%s)\\n\", allocsize, strerror(errno));\n        return 0;\n    }",
+    "expected_verdict": "SUPPORTED",
+    "rationale": "The probe measured write_execute_simultaneous=true and jit_entitlement_required=false; plain anonymous RWX mmap works on stock x86-64 Linux without SELinux/PaX in enforcing mode."
+  }
+}

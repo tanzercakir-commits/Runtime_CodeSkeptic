@@ -1,0 +1,81 @@
+{
+  "schema": "runtime-skeptic.application-requirements.v1",
+  "name": "mimalloc reserved 1GiB huge OS pages at the fixed 32TiB base (mi_reserve_huge_os_pages_at, 4 pages)",
+  "component": "mimalloc: mi_os_claim_huge_pages / _mi_os_alloc_huge_os_pages (64-bit branch, MI_INTPTR_SIZE >= 8)",
+  "operation": "virtual_memory_reserve",
+  "request": {
+    "address": "0x200000000000",
+    "size": 4294967296,
+    "exact_address_required": false,
+    "required_alignment": 33554432,
+    "protection": { "read": true, "write": true, "execute": false }
+  },
+  "assumptions": {
+    "guest_host_identity_required": true,
+    "translation_layer_available": false,
+    "retries_on_failure": false
+  },
+  "required_postconditions": [
+    "each of the 4 successive 1GiB huge-page mappings returns exactly the address it was asked for (start + page*MI_HUGE_OS_PAGE_SIZE)",
+    "the 4 pages are contiguous: the reservation is one unbroken [start, start+4GiB) region",
+    "end % MI_SEGMENT_SIZE == 0, so every huge page is also MI_SEGMENT_ALIGN aligned",
+    "the claimed region does not collide with the 2TiB-30TiB aligned-hint area used by _mi_os_get_aligned_hint"
+  ],
+  "permitted_fallbacks": ["smaller_size"],
+  "failure_sink": {
+    "kind": "error_return",
+    "location": {
+      "file": "microsoft/mimalloc@a3ca0e5:src/os.c",
+      "line": 681,
+      "symbol": "_mi_os_alloc_huge_os_pages"
+    },
+    "description": "on a non-identical return address the loop calls _mi_warning_message(\"could not allocate contiguous huge OS page %zu at %p\\n\", page, addr) at os.c:684, frees the relocated page at os.c:685 and `break`s at os.c:687. The caller keeps whatever prefix was contiguous and reports it through *pages_reserved (os.c:712). There is no abort and no retry: a relocation silently degrades the reservation instead of failing it."
+  },
+  "source_locations": [
+    {
+      "file": "microsoft/mimalloc@a3ca0e5:src/os.c",
+      "line": 632,
+      "symbol": "mi_os_claim_huge_pages: start = ((uintptr_t)32 << 40);  // 32TiB virtual start address"
+    },
+    {
+      "file": "microsoft/mimalloc@a3ca0e5:src/os.c",
+      "line": 613,
+      "symbol": "#define MI_HUGE_OS_PAGE_SIZE  (MI_GiB)"
+    },
+    {
+      "file": "microsoft/mimalloc@a3ca0e5:src/os.c",
+      "line": 639,
+      "symbol": "mi_assert_internal(end % MI_SEGMENT_SIZE == 0) - compiled out when MI_DEBUG <= 1"
+    },
+    {
+      "file": "microsoft/mimalloc@a3ca0e5:src/os.c",
+      "line": 673,
+      "symbol": "int err = _mi_prim_alloc_huge_os_pages(addr, MI_HUGE_OS_PAGE_SIZE, numa_node, &is_zero, &p);"
+    },
+    {
+      "file": "microsoft/mimalloc@a3ca0e5:src/os.c",
+      "line": 681,
+      "symbol": "if (p != addr) { ... break; } - the identity check"
+    },
+    {
+      "file": "microsoft/mimalloc@a3ca0e5:src/prim/unix/prim.c",
+      "line": 556,
+      "symbol": "*addr = unix_mmap(hint_addr, size, MI_SEGMENT_SIZE, PROT_READ | PROT_WRITE, true, true, &is_large); - hint_addr is an mmap hint, MAP_FIXED is never used"
+    }
+  ],
+  "assumption_evidence": "statically_inferred",
+  "extraction_limitations": [
+    "the number of huge pages is a runtime option (mi_option_reserve_huge_os_pages); 4 pages / 4GiB is modelled as a representative configuration, the base address 0x200000000000 is the compile-time constant",
+    "when MI_SECURE>0 or MI_DEBUG==0 the base is randomised upward by up to 4TiB at os.c:635, so the exact address is only the lower bound of a 4TiB window; this document models the unrandomised base",
+    "'guest_host_identity_required' is used to express 'returned address must equal requested address'; mimalloc has no guest, the field is the only one in this schema that carries that postcondition",
+    "the contiguity postcondition (4 separate mmap calls must abut) has no field in this schema and is carried only as free text"
+  ],
+  "x_campaign": {
+    "project": "mimalloc",
+    "commit": "a3ca0e5",
+    "source": "src/os.c:632",
+    "quote": "      start = ((uintptr_t)32 << 40);  // 32TiB virtual start address",
+    "expected_verdict": "UNSUPPORTED",
+    "rationale": "The address is a plain mmap hint (prim.c:556 never sets MAP_FIXED) while the program compares the result for equality at os.c:681, and the measured host profile records hinted_mapping_may_relocate=true, so RS-VM-0007 should fire as Unsupported. I expect the range query to come back Unknown as well, since the probe only observed 4MiB of availability at 0x200000000000."
+  }
+}

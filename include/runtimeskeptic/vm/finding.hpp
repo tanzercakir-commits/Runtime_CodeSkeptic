@@ -65,6 +65,17 @@ struct Finding {
     // How this finding contributes to the overall verdict.
     SupportLevel support_impact = SupportLevel::Unknown;
 
+    // Does this finding mean "no execution can succeed", as opposed to "one
+    // legal outcome fails" or "the contract is internally confused"?
+    //
+    // Rules that reason ABOUT other findings need this. Asking "did anything
+    // prove impossibility?" by testing `confidence == Proven` looked
+    // equivalent and is not: confidence is clamped by evidence, so a
+    // statically extracted requirement can never reach Proven, and the
+    // question "is this retry loop futile?" would go permanently unanswered
+    // for exactly the inputs a static extractor produces.
+    bool structural_impossibility = false;
+
     std::string required;             // what the program requires
     std::string host_capability;      // what the environment provides
     std::string adapter_capability;   // what the compatibility layer provides
@@ -126,6 +137,8 @@ inline constexpr const char* kRequiredFactUnknown = "RS-VM-0017";
 inline constexpr const char* kFileMappingBeyondEof = "RS-VM-0018";
 inline constexpr const char* kAnonymousMappingUnavailable = "RS-VM-0019";
 inline constexpr const char* kAddressHintNotHonourable = "RS-VM-0020";
+inline constexpr const char* kSizeExceedsAddressSpace = "RS-VM-0021";
+inline constexpr const char* kReservationAlignmentUnguaranteed = "RS-VM-0022";
 }  // namespace ids
 
 }  // namespace rs::vm

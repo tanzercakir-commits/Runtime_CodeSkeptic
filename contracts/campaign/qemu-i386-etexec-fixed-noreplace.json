@@ -1,0 +1,76 @@
+{
+  "schema": "runtime-skeptic.application-requirements.v1",
+  "name": "QEMU linux-user: non-PIE ET_EXEC guest image reserved with MAP_FIXED_NOREPLACE at the ELF's own load address (i386 default 0x08048000)",
+  "component": "qemu-i386 linux-user: load_elf_image, ehdr->e_type == ET_EXEC branch",
+  "operation": "virtual_memory_reserve",
+  "request": {
+    "address": "0x8048000",
+    "size": 1048576,
+    "exact_address_required": true,
+    "protection": {
+      "read": false,
+      "write": false,
+      "execute": false
+    },
+    "reserve_then_commit": true
+  },
+  "assumptions": {
+    "guest_host_identity_required": false,
+    "translation_layer_available": true,
+    "retries_on_failure": false
+  },
+  "required_postconditions": [
+    "MAP_FIXED_NOREPLACE must actually refuse a collision; if the kernel silently degrades it to a hint, the 'extra check' the comment relies on is gone and QEMU will map the guest image over a host object",
+    "the whole ELF load range [range.lo, range.hi] is reserved in one call before any segment is mapped over it"
+  ],
+  "permitted_fallbacks": [],
+  "failure_sink": {
+    "kind": "error_return",
+    "location": {
+      "file": "qemu/qemu@300438f:linux-user/elfload.c",
+      "line": 1077,
+      "symbol": "load_elf_image"
+    },
+    "description": "load_addr == -1 takes 'goto exit_mmap', which reports the mmap failure and ultimately terminates the guest load. Not an assert: the error is propagated."
+  },
+  "source_locations": [
+    {
+      "file": "qemu/qemu@300438f:linux-user/elfload.c",
+      "line": 1074,
+      "symbol": "(ehdr->e_type == ET_EXEC ? MAP_FIXED_NOREPLACE : 0)"
+    },
+    {
+      "file": "qemu/qemu@300438f:linux-user/elfload.c",
+      "line": 1051,
+      "symbol": "comment: 'In the case of ET_EXEC, we supply MAP_FIXED_NOREPLACE so that we get exactly the address range that is required.'"
+    },
+    {
+      "file": "qemu/qemu@300438f:linux-user/elfload.c",
+      "line": 1054,
+      "symbol": "comment: 'using MAP_FIXED_NOREPLACE instead of MAP_FIXED provides an extra check.'"
+    },
+    {
+      "file": "qemu/qemu@300438f:common-user/probe-guest-base.c",
+      "line": 40,
+      "symbol": "MAP_FIXED_NOREPLACE is also the primitive probe_guest_base uses to test whether a host range is free"
+    },
+    {
+      "file": "qemu/qemu@300438f:common-user/probe-guest-base.c",
+      "line": 19,
+      "symbol": "#ifdef __FreeBSD__ #define MAP_FIXED_NOREPLACE (MAP_FIXED | MAP_EXCL) - the same contract is spelled differently per host OS"
+    }
+  ],
+  "assumption_evidence": "statically_inferred",
+  "extraction_limitations": [
+    "size 1048576 is representative. The real size is range.hi - range.lo + 1, a property of the guest ELF file, not a source constant.",
+    "address 0x8048000 is the conventional i386 non-PIE link base, taken from the guest binary's p_vaddr, not from QEMU's source. QEMU adds guest_base to it before calling the host mmap."
+  ],
+  "x_campaign": {
+    "project": "qemu",
+    "commit": "300438f",
+    "source": "linux-user/elfload.c:1072-1078",
+    "quote": "    load_addr = target_mmap(load_addr, align_size, PROT_NONE,\n                            MAP_PRIVATE | MAP_ANON | MAP_NORESERVE |\n                            (ehdr->e_type == ET_EXEC ? MAP_FIXED_NOREPLACE : 0),\n                            -1, 0);\n    if (load_addr == -1) {\n        goto exit_mmap;\n    }",
+    "expected_verdict": "SUPPORTED",
+    "rationale": "The probe measured fixed_noreplace_available=true and exact placement works for free page-aligned ranges; 0x08048000 is not occupied in a normal x86-64 Linux process, whose own image sits at 0x400000 or in the 0x55.. PIE band."
+  }
+}

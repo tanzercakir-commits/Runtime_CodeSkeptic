@@ -1,0 +1,73 @@
+{
+  "schema": "runtime-skeptic.application-requirements.v1",
+  "name": "QEMU linux-user aarch64: -R accepts up to MAX_RESERVED_VA = (1<<52)-1 because TARGET_VIRT_ADDR_SPACE_BITS is 52, so a 4 PiB reservation passes QEMU's own bound check",
+  "component": "qemu-aarch64 linux-user: handle_arg_reserved_va + pgb_addr_set (aarch64 does not override MAX_RESERVED_VA)",
+  "operation": "virtual_memory_reserve",
+  "request": {
+    "size": 4503599627370496,
+    "exact_address_required": false,
+    "required_alignment": 4096,
+    "protection": {
+      "read": false,
+      "write": false,
+      "execute": false
+    },
+    "reserve_then_commit": true
+  },
+  "assumptions": {
+    "guest_host_identity_required": false,
+    "translation_layer_available": true,
+    "retries_on_failure": true
+  },
+  "required_postconditions": [
+    "one contiguous PROT_NONE range of 2^52 bytes exists at guest_base",
+    "reserved_va <= MAX_RESERVED_VA(cpu) == (1ul << 52) - 1 is QEMU's only compiled-in ceiling; the host's own ceiling is not consulted"
+  ],
+  "permitted_fallbacks": [
+    "relocate"
+  ],
+  "failure_sink": {
+    "kind": "process_exit",
+    "location": {
+      "file": "qemu/qemu@300438f:common-user/probe-guest-base.c",
+      "line": 319,
+      "symbol": "pgb_dynamic"
+    },
+    "description": "main.c:839 only rejects reserved_va > max_reserved_va, and max_reserved_va is (1<<52)-1 for aarch64, so -R 4P survives argument validation. The failure surfaces later as 'Unable to find a guest_base to satisfy all guest address mapping requirements' + exit(EXIT_FAILURE)."
+  },
+  "source_locations": [
+    {
+      "file": "qemu/qemu@300438f:linux-user/main.c",
+      "line": 115,
+      "symbol": "MAX_RESERVED_VA(CPU) ((1ul << TARGET_VIRT_ADDR_SPACE_BITS) - 1)"
+    },
+    {
+      "file": "qemu/qemu@300438f:target/arm/cpu-param.h",
+      "line": 12,
+      "symbol": "#ifdef TARGET_AARCH64: TARGET_VIRT_ADDR_SPACE_BITS 52"
+    },
+    {
+      "file": "qemu/qemu@300438f:linux-user/main.c",
+      "line": 839,
+      "symbol": "if (max_reserved_va && reserved_va > max_reserved_va) -> 'Reserved virtual address too big' + exit"
+    },
+    {
+      "file": "qemu/qemu@300438f:linux-user/arm/target_cpu.h",
+      "line": 42,
+      "symbol": "#define MAX_RESERVED_VA arm_max_reserved_va - 32-bit ARM overrides the ceiling to 0xffffffff; aarch64 has no such override, so the generic 2^52 formula applies"
+    }
+  ],
+  "assumption_evidence": "statically_inferred",
+  "extraction_limitations": [
+    "the 2^52 size is the maximum the code accepts, not a value QEMU picks by default: for a 64-bit target on a 64-bit host reserved_va stays 0 unless the user passes -R. This document models the -R 4P invocation.",
+    "the size given is 2^52 exactly; QEMU stores reserved_va as size-1 (main.c:403), so the actual reservation is [0, 2^52-1]."
+  ],
+  "x_campaign": {
+    "project": "qemu",
+    "commit": "300438f",
+    "source": "linux-user/main.c:115 + target/arm/cpu-param.h:12",
+    "quote": "#   define MAX_RESERVED_VA(CPU)  ((1ul << TARGET_VIRT_ADDR_SPACE_BITS) - 1)\n---\n#ifdef TARGET_AARCH64\n# define TARGET_VIRT_ADDR_SPACE_BITS  52",
+    "expected_verdict": "UNSUPPORTED",
+    "rationale": "x86-64 Linux gives a user process at most 47 bits of address space (probe measured max_user_address 0x7ffffffff000); a 2^52-byte contiguous reservation is 32x larger than the entire address space and can never succeed."
+  }
+}

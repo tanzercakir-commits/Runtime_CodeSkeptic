@@ -5,6 +5,7 @@
 
 #if defined(RS_PLATFORM_LINUX)
 
+#include <algorithm>
 #include <cerrno>
 #include <cstdio>
 #include <cstdlib>
@@ -364,13 +365,29 @@ ScanOutcome scan_address_space(std::size_t page_size, std::uint64_t probe_length
 
     std::vector<std::uint64_t> candidates;
     for (unsigned bit = 16; bit < 63; ++bit) {
-        candidates.push_back(std::uint64_t{1} << bit);
+        const std::uint64_t boundary = std::uint64_t{1} << bit;
+        candidates.push_back(boundary);
+        // Also sample JUST BELOW each boundary. The ladder used to climb only
+        // powers of two, and it systematically missed the addresses that
+        // emulators actually use: guard pages, commpages and rollover
+        // barriers are placed just under a boundary, never on it. QEMU's ARM
+        // commpage at 0xffff0f00 and Box64's 4 GiB rollover guard both sit in
+        // that blind spot, so both came back UNKNOWN for no better reason
+        // than where the probe happened to look.
+        if (boundary > probe_length) {
+            const std::uint64_t below = boundary - probe_length;
+            if (below % page_size == 0) candidates.push_back(below);
+        }
     }
     // The ROADMAP's motivating address, and the band around it.
     candidates.push_back(0x1000000000ull);
     candidates.push_back(0x4000000000ull);
     candidates.push_back(0x6fffff0000ull);
     candidates.push_back(0x7fff00000000ull);
+
+    std::sort(candidates.begin(), candidates.end());
+    candidates.erase(std::unique(candidates.begin(), candidates.end()),
+                     candidates.end());
 
     for (std::uint64_t base : candidates) {
         if (base % page_size != 0) continue;

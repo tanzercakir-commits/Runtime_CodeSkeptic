@@ -48,6 +48,23 @@ enum class FailureSinkKind {
 };
 
 // What the program is willing to accept instead of the exact request.
+// How a program's page-size requirement relates to the host's.
+//
+// Equality was the only option in the first draft, and it produced confident
+// false positives: a jemalloc built with --with-lg-page=16 checks
+// `if (os_page > PAGE) error;` - it demands the host page be AT MOST 64 KiB
+// and runs perfectly on a 4 KiB kernel. Reporting that as an impossibility,
+// and advising the user to find "a host whose page size is 65536", was worse
+// than saying nothing.
+enum class SizeRelation {
+    Equal,    // the host page size must be exactly this
+    AtMost,   // the host page size must not exceed this
+    AtLeast,  // the host page size must be at least this
+};
+
+std::string_view to_string(SizeRelation v);
+bool size_relation_from_string(std::string_view s, SizeRelation& out);
+
 enum class FallbackKind {
     Relocate,             // a different address is acceptable
     SmallerSize,
@@ -97,6 +114,13 @@ struct MappingRequest {
     // The program hard-codes a page size (common in emulators that mirror a
     // guest MMU). A host with a different page size breaks it.
     std::optional<std::uint64_t> required_page_size;
+    SizeRelation required_page_size_relation = SizeRelation::Equal;
+
+    // The program validates the address it got back against its own
+    // constraint and rejects a bad one, rather than storing it and hoping.
+    // LuaJIT, Box64 and jemalloc all do this; without the field they look
+    // like programs that silently truncate.
+    bool validates_returned_address = false;
 
     Protection protection;
 

@@ -1,0 +1,68 @@
+{
+  "schema": "runtime-skeptic.application-requirements.v1",
+  "name": "Redis bundled jemalloc built with --with-lg-page=16 (64KiB PAGE) running on a 4KiB-page kernel",
+  "component": "jemalloc (deps/jemalloc): pages_boot, portable multi-page-size build",
+  "operation": "virtual_memory_map",
+  "request": {
+    "size": 65536,
+    "exact_address_required": false,
+    "required_page_size": 65536,
+    "protection": {
+      "read": true,
+      "write": true,
+      "execute": false
+    },
+    "required_page_size_relation": "at_most"
+  },
+  "assumptions": {
+    "guest_host_identity_required": false,
+    "translation_layer_available": false,
+    "retries_on_failure": false
+  },
+  "required_postconditions": [
+    "os_page_detect() <= PAGE, with PAGE == 65536 - a kernel page of 4096 satisfies this and jemalloc boots normally",
+    "the allocator rounds everything to 64KiB, wasting address space and RSS but remaining correct on a 4KiB kernel",
+    "the configuration is only rejected when the kernel page is LARGER than the compiled-in PAGE"
+  ],
+  "permitted_fallbacks": [],
+  "failure_sink": {
+    "kind": "process_exit",
+    "location": {
+      "file": "redis/redis@b53f65d:deps/jemalloc/src/pages.c",
+      "line": 761,
+      "symbol": "pages_boot"
+    },
+    "description": "same sink as the default build - abort() at pages.c:763 - but on this host the guard at pages.c:760 is not taken, because 4096 > 65536 is false. The sink is declared so the severity model sees it; it is not reached."
+  },
+  "source_locations": [
+    {
+      "file": "redis/redis@b53f65d:deps/jemalloc/src/pages.c",
+      "line": 760,
+      "symbol": "if (os_page > PAGE) {"
+    },
+    {
+      "file": "redis/redis@b53f65d:deps/jemalloc/include/jemalloc/internal/pages.h",
+      "line": 8,
+      "symbol": "#define PAGE ((size_t)(1U << LG_PAGE))"
+    },
+    {
+      "file": "redis/redis@b53f65d:deps/jemalloc/configure.ac",
+      "line": 1687,
+      "symbol": "[AS_HELP_STRING([--with-lg-page=<lg-page>], [Base 2 log of system page size])] - the build knob that makes PAGE differ from the host page"
+    }
+  ],
+  "assumption_evidence": "statically_inferred",
+  "extraction_limitations": [
+    "this is the crux: required_page_size can only encode 'page size == N'. The program's actual predicate is 'host page size <= N'. Encoding the 64KiB build faithfully in this schema forces a claim the program never makes",
+    "no Redis build script in this tree passes --with-lg-page; this models the configuration distributions use to ship one aarch64 binary across 4KiB/16KiB/64KiB kernels, which is the documented purpose of the option"
+  ],
+  "x_campaign": {
+    "project": "redis (deps/jemalloc)",
+    "commit": "b53f65d",
+    "source": "deps/jemalloc/src/pages.c:760",
+    "quote": "\tif (os_page > PAGE) {",
+    "expected_verdict": "UNSUPPORTED",
+    "rationale": "rule_page_size compares 65536 against the probed 4096 for equality and fires RS-VM-0006 Proven/Unsupported. I expect that to be wrong: jemalloc's own guard is an inequality that this host passes, so a --with-lg-page=16 build runs correctly on a 4KiB kernel.",
+    "note_after_fix": "Rewritten to at_most once the relation field existed. jemalloc pages.c checks  - it demands the host page be AT MOST the compiled size and runs correctly on a smaller one. The equality-only reading produced a critical false positive."
+  }
+}

@@ -1,0 +1,79 @@
+{
+  "schema": "runtime-skeptic.application-requirements.v1",
+  "name": "V8 pointer-compression cage: a 4GiB reservation whose base must be 4GiB aligned",
+  "component": "V8: IsolateGroup::Initialize -> PtrComprCageReservationParams -> VirtualMemoryCage::InitReservation (V8_COMPRESS_POINTERS, no sandbox)",
+  "operation": "virtual_memory_reserve",
+  "request": {
+    "size": 4294967296,
+    "exact_address_required": false,
+    "required_alignment": 4294967296,
+    "protection": { "read": false, "write": false, "execute": false },
+    "reserve_then_commit": true
+  },
+  "assumptions": {
+    "guest_host_identity_required": false,
+    "translation_layer_available": false,
+    "retries_on_failure": false
+  },
+  "required_postconditions": [
+    "returned_base % 4294967296 == 0 - the cage base must be 4GiB aligned so that cage_base = addr & ~(kPtrComprCageBaseAlignment-1) recovers it from any tagged pointer in the cage",
+    "the cage is exactly 4GiB and contiguous, so a 32-bit compressed offset can address every object in it",
+    "kPtrComprCageReservationSize == kPtrComprCageBaseAlignment (static_assert at src/heap/memory-chunk.cc:86): the size and the alignment are the same number, and neither implies the other",
+    "the whole 4GiB is reserved with kNoAccess and committed page by page later"
+  ],
+  "permitted_fallbacks": [],
+  "failure_sink": {
+    "kind": "process_exit",
+    "location": {
+      "file": "v8/v8@2dc7d00:src/init/isolate-group.cc",
+      "line": 213,
+      "symbol": "IsolateGroup::Initialize"
+    },
+    "description": "InitReservation failing calls V8::FatalProcessOutOfMemory(nullptr, \"Failed to reserve virtual memory for process-wide V8 pointer compression cage\") at isolate-group.cc:214-216. If the reservation succeeds but is misaligned, the earlier CHECK(IsAligned(base_, params.base_alignment)) at src/utils/allocation.cc:363 aborts instead - a release-mode CHECK, not a DCHECK. Either way the process dies before running any script."
+  },
+  "source_locations": [
+    {
+      "file": "v8/v8@2dc7d00:include/v8-internal.h",
+      "line": 167,
+      "symbol": "constexpr size_t kPtrComprCageReservationSize = size_t{1} << 32;"
+    },
+    {
+      "file": "v8/v8@2dc7d00:include/v8-internal.h",
+      "line": 168,
+      "symbol": "constexpr size_t kPtrComprCageBaseAlignment = size_t{1} << 32;"
+    },
+    {
+      "file": "v8/v8@2dc7d00:src/init/isolate-group.cc",
+      "line": 96,
+      "symbol": "reservation_size = kPtrComprCageReservationSize;"
+    },
+    {
+      "file": "v8/v8@2dc7d00:src/init/isolate-group.cc",
+      "line": 97,
+      "symbol": "base_alignment = kPtrComprCageBaseAlignment;"
+    },
+    {
+      "file": "v8/v8@2dc7d00:src/utils/allocation.cc",
+      "line": 363,
+      "symbol": "CHECK(IsAligned(base_, params.base_alignment));"
+    },
+    {
+      "file": "v8/v8@2dc7d00:src/common/ptr-compr-inl.h",
+      "line": 41,
+      "symbol": "return RoundDown<kPtrComprCageBaseAlignment>(on_heap_addr); - the mask that consumes the alignment on every decompression"
+    }
+  ],
+  "assumption_evidence": "statically_inferred",
+  "extraction_limitations": [
+    "V8 passes a randomised hint (GetRandomMmapAddr rounded down to base_alignment, isolate-group.cc:103-105) and does not require any particular address. The requirement is purely on the alignment of whatever the host returns, and it is not derivable from an address because there is no address",
+    "the schema has no way to say 'a 4GiB reservation aligned to 4GiB'; required_alignment exists but analyzer.cpp:316 makes it unreachable unless request.address is also set, which would misrepresent the program"
+  ],
+  "x_campaign": {
+    "project": "v8",
+    "commit": "2dc7d00",
+    "source": "include/v8-internal.h:167",
+    "quote": "constexpr size_t kPtrComprCageReservationSize = size_t{1} << 32;\nconstexpr size_t kPtrComprCageBaseAlignment = size_t{1} << 32;",
+    "expected_verdict": "CONDITIONAL",
+    "rationale": "I expect the 4GiB-alignment requirement to be dropped on the floor (rule_address_alignment needs an address) and the verdict to come from rule_reserve_commit instead: the profile records reserve_commit_model=posix_lazy, so RS-VM-0012 should fire ConditionallySupported. The one constraint that can actually abort V8 will not be mentioned."
+  }
+}

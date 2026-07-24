@@ -1,0 +1,62 @@
+{
+  "schema": "runtime-skeptic.application-requirements.v1",
+  "name": "Redis bundled jemalloc: compiled-in PAGE must be >= the running kernel's page size (default x86-64 build, LG_PAGE=12)",
+  "component": "jemalloc (deps/jemalloc): pages_boot",
+  "operation": "virtual_memory_map",
+  "request": {
+    "size": 4096,
+    "exact_address_required": false,
+    "required_page_size": 4096,
+    "protection": { "read": true, "write": true, "execute": false }
+  },
+  "assumptions": {
+    "guest_host_identity_required": false,
+    "translation_layer_available": false,
+    "retries_on_failure": false
+  },
+  "required_postconditions": [
+    "os_page_detect() <= PAGE, where PAGE == 1U << LG_PAGE is fixed when jemalloc is configured, not when it runs",
+    "every ALIGNMENT_CEILING(size, PAGE) rounding in the allocator is a valid rounding for the kernel's real page size",
+    "PAGE_ADDR2BASE masking yields an address the kernel also regards as a page base"
+  ],
+  "permitted_fallbacks": [],
+  "failure_sink": {
+    "kind": "process_exit",
+    "location": {
+      "file": "redis/redis@b53f65d:deps/jemalloc/src/pages.c",
+      "line": 761,
+      "symbol": "pages_boot"
+    },
+    "description": "pages_boot writes \"<jemalloc>: Unsupported system page size\\n\" at pages.c:761 and calls abort() at pages.c:763 when opt_abort is set; otherwise it returns true, which fails malloc_init_hard and leaves the process without a working allocator. Redis links jemalloc as its allocator, so this is a startup abort, not a recoverable error."
+  },
+  "source_locations": [
+    {
+      "file": "redis/redis@b53f65d:deps/jemalloc/include/jemalloc/internal/pages.h",
+      "line": 8,
+      "symbol": "#define PAGE ((size_t)(1U << LG_PAGE))  - 'LG_PAGE is determined by the configure script' (pages.h:4)"
+    },
+    {
+      "file": "redis/redis@b53f65d:deps/jemalloc/src/pages.c",
+      "line": 759,
+      "symbol": "os_page = os_page_detect();  - sysconf(_SC_PAGESIZE) on Linux (pages.c:581)"
+    },
+    {
+      "file": "redis/redis@b53f65d:deps/jemalloc/src/pages.c",
+      "line": 760,
+      "symbol": "if (os_page > PAGE) {  - the comparison is >, not !="
+    }
+  ],
+  "assumption_evidence": "statically_inferred",
+  "extraction_limitations": [
+    "the real constraint is the inequality os_page <= PAGE. This schema's required_page_size is an equality, so the document has to state the stronger claim 'page size == 4096'. For the default x86-64 build the two happen to agree; they do not agree in general (see redis-jemalloc-page-size-lg16.json)",
+    "LG_PAGE is a configure-time value and is not visible in the checked-in source; 12 is the value autoconf derives on an x86-64 host"
+  ],
+  "x_campaign": {
+    "project": "redis (deps/jemalloc)",
+    "commit": "b53f65d",
+    "source": "deps/jemalloc/src/pages.c:760",
+    "quote": "\tif (os_page > PAGE) {\n\t\tmalloc_write(\"<jemalloc>: Unsupported system page size\\n\");",
+    "expected_verdict": "SUPPORTED",
+    "rationale": "The probe measured page_size 4096 and this build declares 4096, so rule_page_size returns without a finding and nothing else in the request is contentious. This is the control case: the analyzer should be right and quiet."
+  }
+}

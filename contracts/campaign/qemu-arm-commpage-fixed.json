@@ -1,0 +1,81 @@
+{
+  "schema": "runtime-skeptic.application-requirements.v1",
+  "name": "QEMU linux-user arm: kernel commpage mapped MAP_FIXED at guest 0xffff0000 (COMMPAGE 0xffff0f00 rounded down to the host page)",
+  "component": "qemu-arm linux-user: init_guest_commpage (!ARM_FEATURE_M)",
+  "operation": "virtual_memory_map",
+  "request": {
+    "address": "0xffff0000",
+    "size": 4096,
+    "exact_address_required": true,
+    "protection": {
+      "read": true,
+      "write": true,
+      "execute": false
+    }
+  },
+  "assumptions": {
+    "guest_host_identity_required": false,
+    "translation_layer_available": true,
+    "retries_on_failure": false
+  },
+  "required_postconditions": [
+    "the mapping lands at exactly g2h_untagged(COMMPAGE & -host_page_size), i.e. guest_base + 0xffff0000",
+    "the page is later mprotect'ed to PROT_READ, so it must survive a protection downgrade in place",
+    "COMMPAGE + TARGET_PAGE_SIZE - 1 <= arm_max_reserved_va() == 0xffffffff, which is why 32-bit ARM overrides MAX_RESERVED_VA"
+  ],
+  "permitted_fallbacks": [],
+  "failure_sink": {
+    "kind": "process_exit",
+    "location": {
+      "file": "qemu/qemu@300438f:linux-user/arm/elfload.c",
+      "line": 234,
+      "symbol": "init_guest_commpage"
+    },
+    "description": "mmap failure is perror('Allocating guest commpage') + exit(EXIT_FAILURE) at lines 233-234. A mapping that succeeds at the WRONG address returns false (line 236), and the caller then hits g_assert_not_reached() at linux-user/elfload.c:775 - a fatal assert, because probe_guest_base already proved the range was free."
+  },
+  "source_locations": [
+    {
+      "file": "qemu/qemu@300438f:linux-user/arm/target_elf.h",
+      "line": 23,
+      "symbol": "#define COMMPAGE ((intptr_t)0xffff0f00u)"
+    },
+    {
+      "file": "qemu/qemu@300438f:linux-user/arm/elfload.c",
+      "line": 223,
+      "symbol": "commpage = COMMPAGE & -host_page_size"
+    },
+    {
+      "file": "qemu/qemu@300438f:linux-user/arm/elfload.c",
+      "line": 227,
+      "symbol": "(commpage < reserved_va ? MAP_FIXED : MAP_FIXED_NOREPLACE) - MAP_FIXED is used when the page is inside QEMU's own reservation"
+    },
+    {
+      "file": "qemu/qemu@300438f:linux-user/elfload.c",
+      "line": 775,
+      "symbol": "g_assert_not_reached() when init_guest_commpage returns false"
+    },
+    {
+      "file": "qemu/qemu@300438f:linux-user/arm/elfload.c",
+      "line": 240,
+      "symbol": "mprotect(addr, host_page_size, PROT_READ) after writing the helper version word"
+    },
+    {
+      "file": "qemu/qemu@300438f:linux-user/arm/target_cpu.h",
+      "line": 37,
+      "symbol": "arm_max_reserved_va returns 0xfffffffful with the comment 'We need to be able to map the commpage.'"
+    }
+  ],
+  "assumption_evidence": "statically_inferred",
+  "extraction_limitations": [
+    "size 4096 is qemu_real_host_page_size() on the probe host, not a source constant; the source uses the runtime host page size.",
+    "the address is a GUEST address. The host address actually requested is guest_base + 0xffff0000; guest_base is 0 only when the identity map succeeded. Modelling it as a host address is exact only for the identity case."
+  ],
+  "x_campaign": {
+    "project": "qemu",
+    "commit": "300438f",
+    "source": "linux-user/arm/elfload.c:223-234",
+    "quote": "    commpage = COMMPAGE & -host_page_size;\n    want = g2h_untagged(commpage);\n    addr = mmap(want, host_page_size, PROT_READ | PROT_WRITE,\n                MAP_ANONYMOUS | MAP_PRIVATE |\n                (commpage < reserved_va ? MAP_FIXED : MAP_FIXED_NOREPLACE),\n                -1, 0);\n\n    if (addr == MAP_FAILED) {\n        perror(\"Allocating guest commpage\");\n        exit(EXIT_FAILURE);\n    }",
+    "expected_verdict": "SUPPORTED",
+    "rationale": "0xffff0000 is a page-aligned address well inside the x86-64 Linux user address space and above mmap_min_addr; nothing normally occupies 4 GiB - 64 KiB, and MAP_FIXED makes placement unconditional anyway."
+  }
+}

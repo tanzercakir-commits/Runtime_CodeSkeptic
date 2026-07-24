@@ -156,6 +156,18 @@ const std::vector<FindingDefinition>& registry_storage() {
          "Anonymous memory mapping is unavailable on this host", Severity::Critical,
          "The host cannot create an ordinary anonymous mapping at all. Nothing "
          "further about placement or protection can matter."},
+        {ids::kSizeExceedsAddressSpace,
+         "Requested size does not fit in the usable address space",
+         Severity::Critical,
+         "The reservation is larger than the whole user-mode virtual address "
+         "space this host provides, so it cannot succeed at any address."},
+        {ids::kReservationAlignmentUnguaranteed,
+         "Reservation alignment exceeds what the mapping API guarantees",
+         Severity::High,
+         "The program needs the reservation itself aligned more strictly than "
+         "page granularity. The mapping call does not provide that; it has to "
+         "be achieved by over-allocating and trimming, and nothing in the "
+         "profile can confirm the program does so."},
         {ids::kAddressHintNotHonourable,
          "Address hint points into a range the host cannot provide", Severity::Low,
          "The requested address is a hint rather than a demand, and it falls "
@@ -206,6 +218,7 @@ json::Value Finding::to_json() const {
     v["severity"] = std::string(rs::to_string(severity));
     v["confidence"] = std::string(rs::to_string(confidence));
     v["support_impact"] = std::string(rs::to_string(support_impact));
+    v["structural_impossibility"] = structural_impossibility;
     v["required"] = required;
     v["host_capability"] = host_capability;
     v["adapter_capability"] = adapter_capability;

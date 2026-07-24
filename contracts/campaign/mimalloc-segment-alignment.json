@@ -1,0 +1,77 @@
+{
+  "schema": "runtime-skeptic.application-requirements.v1",
+  "name": "mimalloc segment reservation must itself be 32MiB (MI_SEGMENT_ALIGN) aligned",
+  "component": "mimalloc: mi_segment_os_alloc -> _mi_arena_alloc_aligned (64-bit, MI_SEGMENT_SHIFT = 9 + 13 + 3 = 25)",
+  "operation": "virtual_memory_reserve",
+  "request": {
+    "size": 33554432,
+    "exact_address_required": false,
+    "required_alignment": 33554432,
+    "protection": { "read": true, "write": true, "execute": false }
+  },
+  "assumptions": {
+    "guest_host_identity_required": false,
+    "translation_layer_available": false,
+    "retries_on_failure": false
+  },
+  "required_postconditions": [
+    "returned_address % 33554432 == 0 - the base of the reservation, wherever the host puts it, must be a multiple of MI_SEGMENT_ALIGN",
+    "the address may be anything the host likes; only its alignment is constrained",
+    "for every block pointer p inside the segment, (p - 1) & ~MI_SEGMENT_MASK must equal the segment header address - this is how mi_free() finds the owning segment in O(1) with no lookup table"
+  ],
+  "permitted_fallbacks": ["relocate"],
+  "failure_sink": {
+    "kind": "unchecked",
+    "location": {
+      "file": "microsoft/mimalloc@a3ca0e5:src/segment.c",
+      "line": 887,
+      "symbol": "mi_assert_internal(segment != NULL && (uintptr_t)segment % MI_SEGMENT_SIZE == 0)"
+    },
+    "description": "the only check is mi_assert_internal, which internal.h:340-344 defines as `#define mi_assert_internal(x)` (empty) whenever MI_DEBUG <= 1 - i.e. in every release build. A misaligned segment therefore passes silently, and _mi_ptr_segment (internal.h:531) then masks every freed pointer down to a segment header that is not the real one: mi_free walks a bogus header. The failure is heap corruption at an arbitrary later free, not an error at the reservation."
+  },
+  "source_locations": [
+    {
+      "file": "microsoft/mimalloc@a3ca0e5:include/mimalloc/types.h",
+      "line": 192,
+      "symbol": "#define MI_SEGMENT_SIZE (MI_ZU(1)<<MI_SEGMENT_SHIFT)  // 32MiB on 64-bit"
+    },
+    {
+      "file": "microsoft/mimalloc@a3ca0e5:include/mimalloc/types.h",
+      "line": 193,
+      "symbol": "#define MI_SEGMENT_ALIGN MI_SEGMENT_SIZE"
+    },
+    {
+      "file": "microsoft/mimalloc@a3ca0e5:include/mimalloc/types.h",
+      "line": 194,
+      "symbol": "#define MI_SEGMENT_MASK ((uintptr_t)(MI_SEGMENT_ALIGN - 1))"
+    },
+    {
+      "file": "microsoft/mimalloc@a3ca0e5:include/mimalloc/internal.h",
+      "line": 531,
+      "symbol": "_mi_ptr_segment: (mi_segment_t*)(((uintptr_t)p - 1) & ~MI_SEGMENT_MASK) - the masking that consumes the alignment"
+    },
+    {
+      "file": "microsoft/mimalloc@a3ca0e5:src/segment.c",
+      "line": 851,
+      "symbol": "size_t alignment = MI_SEGMENT_ALIGN;"
+    },
+    {
+      "file": "microsoft/mimalloc@a3ca0e5:src/segment.c",
+      "line": 866,
+      "symbol": "_mi_arena_alloc_aligned(segment_size, alignment, align_offset, commit, allow_large, req_arena_id, &memid)"
+    }
+  ],
+  "assumption_evidence": "statically_inferred",
+  "extraction_limitations": [
+    "this requirement constrains the alignment of the returned base only; it names no address at all, because mimalloc genuinely does not care where the segment lands",
+    "MI_SEGMENT_SHIFT is overridable at build time (types.h:176 `#ifndef MI_SEGMENT_SHIFT`); 32MiB is the default 64-bit value"
+  ],
+  "x_campaign": {
+    "project": "mimalloc",
+    "commit": "a3ca0e5",
+    "source": "include/mimalloc/types.h:193",
+    "quote": "#define MI_SEGMENT_ALIGN                  MI_SEGMENT_SIZE",
+    "expected_verdict": "SUPPORTED",
+    "rationale": "rule_address_alignment (analyzer.cpp:316) begins with `if (!req_.request.address) return;`, so a required_alignment with no address is never read by any rule. I expect a clean SUPPORTED with no finding - which would be the analyzer reporting support for a constraint it never evaluated."
+  }
+}

@@ -1,0 +1,81 @@
+{
+  "schema": "runtime-skeptic.application-requirements.v1",
+  "name": "Box64 BOX32 mode: every guest allocation must land below 2^32 because guest pointers are stored in 32 bits",
+  "component": "Box64 BOX32: 64-byte block allocator, is32bits path (custommem.c)",
+  "operation": "virtual_memory_map",
+  "request": {
+    "size": 4096,
+    "exact_address_required": false,
+    "protection": {
+      "read": true,
+      "write": true,
+      "execute": false
+    }
+  },
+  "assumptions": {
+    "guest_host_identity_required": true,
+    "translation_layer_available": false,
+    "pointer_storage_width_bits": 32,
+    "retries_on_failure": false
+  },
+  "required_postconditions": [
+    "returned_address + size <= 0x100000000",
+    "Box64 achieves this negatively: reverveHigMem32 first mmaps and holds EVERY free range above 4 GiB, in chunks from 1 TiB down to 64 KiB, so that later unhinted host mmaps have nowhere else to go",
+    "the guest address space is therefore defined by what Box64 has NOT reserved, not by any range it requested"
+  ],
+  "permitted_fallbacks": [],
+  "failure_sink": {
+    "kind": "error_return",
+    "location": {
+      "file": "box64/box64@a2ae050:src/custommem.c",
+      "line": 846,
+      "symbol": "64-byte block allocator"
+    },
+    "description": "if a block for 32-bit use comes back above 0xffffffff the allocator clears is32bits, sets errno = ENOMEM and returns NULL. The guest sees an out-of-memory condition rather than a truncated pointer, so the failure is loud but the allocation is simply lost."
+  },
+  "source_locations": [
+    {
+      "file": "box64/box64@a2ae050:src/custommem.c",
+      "line": 843,
+      "symbol": "if (is32bits && p > (void*)0xffffffffLL) { ... errno = ENOMEM; return NULL; }"
+    },
+    {
+      "file": "box64/box64@a2ae050:src/custommem.c",
+      "line": 3020,
+      "symbol": "reverveHigMem32: uintptr_t cur_size = 1024LL*1024*1024*1024; // start with 1TB check"
+    },
+    {
+      "file": "box64/box64@a2ae050:src/custommem.c",
+      "line": 3022,
+      "symbol": "while(cur_size>=65536) { cur = InternalMmap(NULL, cur_size, 0, MAP_ANONYMOUS|MAP_PRIVATE|MAP_NORESERVE, -1, 0); ... }"
+    },
+    {
+      "file": "box64/box64@a2ae050:src/custommem.c",
+      "line": 3024,
+      "symbol": "if((cur==MAP_FAILED) || (cur<(void*)0x100000000LL)) - anything the kernel hands back BELOW 4 GiB is rejected and released, because that space belongs to the guest"
+    },
+    {
+      "file": "box64/box64@a2ae050:src/custommem.c",
+      "line": 3046,
+      "symbol": "PersonalityAddrLimit32Bit() - Box64 additionally asks the kernel for ADDR_LIMIT_32BIT"
+    },
+    {
+      "file": "box64/box64@a2ae050:src/custommem.c",
+      "line": 1629,
+      "symbol": "int isReserved = box64_is32bits && (uintptr_t)addr>0xffffffffLL - freed dynarec memory above 4 GiB is immediately re-reserved so it cannot leak back to the guest"
+    }
+  ],
+  "assumption_evidence": "statically_inferred",
+  "extraction_limitations": [
+    "size 4096 is a representative guest allocation; the requirement applies to every guest mapping regardless of size.",
+    "the real requirement is a bound on the RETURNED address ('< 2^32'), which this schema has no field for. pointer_storage_width_bits=32 is the closest available encoding and is justified by the ENOMEM test at line 843, but it is not the same statement: 32-bit storage would truncate, whereas Box64 detects and refuses."
+  ],
+  "x_campaign": {
+    "project": "box64",
+    "commit": "a2ae050",
+    "source": "src/custommem.c:843-848 and src/custommem.c:3020-3034",
+    "quote": "    if (is32bits && p > (void*)0xffffffffLL) {\n        p_blocks[i].maxfree = allocsize - mapsize;\n        p_blocks[i].is32bits = 0;\n        errno = ENOMEM;\n        return NULL;\n    }",
+    "expected_verdict": "UNSUPPORTED",
+    "rationale": "An unhinted mmap on x86-64 Linux returns an address near 0x7f.., far above 2^32; without Box64's pre-reservation trick a 32-bit guest pointer slot cannot hold what the host returns."
+  }
+}

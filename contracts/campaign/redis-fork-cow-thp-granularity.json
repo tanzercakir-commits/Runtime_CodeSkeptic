@@ -1,0 +1,73 @@
+{
+  "schema": "runtime-skeptic.application-requirements.v1",
+  "name": "Redis dataset heap: copy-on-write after fork() must fault at 4KiB granularity, not at THP granularity",
+  "component": "Redis: keyspace heap shared with the BGSAVE/AOF-rewrite child; checkTHPEnabled / linuxMemoryWarnings",
+  "operation": "virtual_memory_map",
+  "request": {
+    "size": 1073741824,
+    "exact_address_required": false,
+    "required_page_size": 4096,
+    "protection": { "read": true, "write": true, "execute": false }
+  },
+  "assumptions": {
+    "guest_host_identity_required": false,
+    "translation_layer_available": false,
+    "retries_on_failure": false
+  },
+  "required_postconditions": [
+    "after fork(), a write by the parent to one key copies one 4KiB page, not one 2MiB transparent huge page",
+    "peak RSS during a background save stays proportional to the bytes written, not to 512x the bytes written",
+    "/sys/kernel/mm/transparent_hugepage/enabled must not read [always]; madvise or never are both acceptable",
+    "sysconf(_SC_PAGESIZE) reporting 4096 is NOT sufficient - THP changes the copy-on-write unit without changing the reported page size"
+  ],
+  "permitted_fallbacks": [],
+  "failure_sink": {
+    "kind": "error_return",
+    "location": {
+      "file": "redis/redis@b53f65d:src/server.c",
+      "line": 7218,
+      "symbol": "linuxMemoryWarnings"
+    },
+    "description": "checkTHPEnabled returns -1 when /sys/kernel/mm/transparent_hugepage/enabled contains [always] (syscheck.c:159). linuxMemoryWarnings then tries prctl(PR_SET_THP_DISABLE, 1, ...) for the calling thread (server.c:7206) and, if that fails, logs a warning at server.c:7223 and CONTINUES. The server starts either way; the consequence is a latency and RSS blowup during the next fork, far from this check."
+  },
+  "source_locations": [
+    {
+      "file": "redis/redis@b53f65d:src/syscheck.c",
+      "line": 148,
+      "symbol": "int checkTHPEnabled(sds *error_msg)"
+    },
+    {
+      "file": "redis/redis@b53f65d:src/syscheck.c",
+      "line": 159,
+      "symbol": "if (strstr(buf,\"[always]\") != NULL) { ... return -1; }"
+    },
+    {
+      "file": "redis/redis@b53f65d:src/syscheck.c",
+      "line": 146,
+      "symbol": "comment: 'Make sure transparent huge pages aren't always enabled. When they are this can cause copy-on-write logic to consume much more memory and reduce performance during forks.'"
+    },
+    {
+      "file": "redis/redis@b53f65d:src/server.c",
+      "line": 7206,
+      "symbol": "ret = prctl(PR_SET_THP_DISABLE, 1, 0, 0, 0);"
+    },
+    {
+      "file": "redis/redis@b53f65d:src/zmalloc.c",
+      "line": 692,
+      "symbol": "zmadvise_dontneed: 'We do that in a fork child process to avoid CoW when the parent modifies these shared pages.'"
+    }
+  ],
+  "assumption_evidence": "statically_inferred",
+  "extraction_limitations": [
+    "the constraint is on fork()'s copy-on-write granularity, which this schema has no field for. required_page_size: 4096 is the closest available encoding and it is NOT the same predicate: on a THP=always host sysconf(_SC_PAGESIZE) still returns 4096 while the COW unit is 2MiB, so a page-size check cannot detect the condition Redis is checking for",
+    "1GiB is a representative dataset size; the requirement holds for any size"
+  ],
+  "x_campaign": {
+    "project": "redis",
+    "commit": "b53f65d",
+    "source": "src/syscheck.c:146",
+    "quote": "/* Make sure transparent huge pages aren't always enabled. When they are this can cause copy-on-write logic\n * to consume much more memory and reduce performance during forks. */",
+    "expected_verdict": "SUPPORTED",
+    "rationale": "The probed page_size is 4096 and this document declares 4096, so rule_page_size stays silent and every other rule is inapplicable. SUPPORTED will be a true statement about the wrong fact: the analyzer has no way to look at THP or at fork semantics at all."
+  }
+}

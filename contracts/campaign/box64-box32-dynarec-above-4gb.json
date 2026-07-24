@@ -1,0 +1,75 @@
+{
+  "schema": "runtime-skeptic.application-requirements.v1",
+  "name": "Box64 BOX32 mode: dynarec code buffer is hinted at 0x100000000 so it does NOT consume the guest's 32-bit address space",
+  "component": "Box64 BOX32: box32_dynarec_mmap fallback path (custommem.c)",
+  "operation": "virtual_memory_map",
+  "request": {
+    "address": "0x100000000",
+    "size": 2097152,
+    "exact_address_required": false,
+    "protection": {
+      "read": true,
+      "write": true,
+      "execute": true
+    },
+    "write_then_execute": true,
+    "simultaneous_write_execute": true
+  },
+  "assumptions": {
+    "guest_host_identity_required": false,
+    "translation_layer_available": false,
+    "retries_on_failure": true
+  },
+  "required_postconditions": [
+    "the code buffer must be at or above 4 GiB, the exact complement of the guest requirement that everything be below 4 GiB",
+    "the preferred path walks Box64's own MEM_RESERVED ranges from a static cursor starting at 0x100000000 and MAP_FIXEDs into them",
+    "the buffer is RWX and is never flipped"
+  ],
+  "permitted_fallbacks": [
+    "relocate"
+  ],
+  "failure_sink": {
+    "kind": "error_return",
+    "location": {
+      "file": "box64/box64@a2ae050:src/custommem.c",
+      "line": 1382,
+      "symbol": "box32_dynarec_mmap"
+    },
+    "description": "the MAP_FIXED path logs 'Error allocating Dynarec memory: %s' and returns MAP_FAILED to the caller, which then reports 'Cannot create dynamic map' and disables dynarec for that block."
+  },
+  "source_locations": [
+    {
+      "file": "box64/box64@a2ae050:src/custommem.c",
+      "line": 1372,
+      "symbol": "static uintptr_t cur = 0x100000000LL; - the search cursor starts exactly at 4 GiB"
+    },
+    {
+      "file": "box64/box64@a2ae050:src/custommem.c",
+      "line": 1374,
+      "symbol": "while(bend<0x800000000000LL) - the search stops at 2^47"
+    },
+    {
+      "file": "box64/box64@a2ae050:src/custommem.c",
+      "line": 1376,
+      "symbol": "uint32_t map_flags = MAP_FIXED | ((fd==-1)?MAP_ANONYMOUS:0) | MAP_PRIVATE"
+    },
+    {
+      "file": "box64/box64@a2ae050:src/custommem.c",
+      "line": 1393,
+      "symbol": "InternalMmap(box64_isAddressSpace32?NULL:(void*)0x100000000ULL, size, PROT_READ | PROT_WRITE | PROT_EXEC, map_flags, fd, offset) - fallback hint"
+    }
+  ],
+  "assumption_evidence": "statically_inferred",
+  "extraction_limitations": [
+    "the 2 MiB size comes from DYNMMAPSZ at the caller, not from box32_dynarec_mmap itself.",
+    "'must be >= 4 GiB' is not expressible in this schema. It is encoded here only as a non-binding hint address; the analyzer has no way to know a lower placement would be a correctness failure rather than a harmless relocation."
+  ],
+  "x_campaign": {
+    "project": "box64",
+    "commit": "a2ae050",
+    "source": "src/custommem.c:1372 and src/custommem.c:1393",
+    "quote": "    static uintptr_t cur = 0x100000000LL;\n---\n    void* ret = InternalMmap(box64_isAddressSpace32?NULL:(void*)0x100000000ULL, size, PROT_READ | PROT_WRITE | PROT_EXEC, map_flags, fd, offset);",
+    "expected_verdict": "SUPPORTED",
+    "rationale": "A hinted RWX mapping at 4 GiB is unremarkable on x86-64 Linux, and the code accepts relocation, so nothing here can fail."
+  }
+}

@@ -1,0 +1,71 @@
+{
+  "schema": "runtime-skeptic.application-requirements.v1",
+  "name": "Box64: 64 KiB guard reservation at 0xffff0000 to stop guest allocations rolling over the 32-bit boundary",
+  "component": "Box64: preserve_highest32 (custommem.c)",
+  "operation": "virtual_memory_reserve",
+  "request": {
+    "address": "0xffff0000",
+    "size": 65536,
+    "exact_address_required": true,
+    "protection": {
+      "read": false,
+      "write": false,
+      "execute": false
+    },
+    "reserve_then_commit": true
+  },
+  "assumptions": {
+    "guest_host_identity_required": true,
+    "translation_layer_available": false,
+    "retries_on_failure": false
+  },
+  "required_postconditions": [
+    "the last 64 KiB below 2^32 is occupied by Box64 itself so no guest object can be placed there",
+    "the mapping is requested WITHOUT MAP_FIXED: the kernel is only hinted, and the code tests cur == (void*)(0x100000000LL-65536) afterwards",
+    "if the hint is not honoured the guard does not exist and guest pointer arithmetic near 0xffffffff can wrap"
+  ],
+  "permitted_fallbacks": [],
+  "failure_sink": {
+    "kind": "unchecked",
+    "location": {
+      "file": "box64/box64@a2ae050:src/custommem.c",
+      "line": 3009,
+      "symbol": "preserve_highest32"
+    },
+    "description": "if the mapping lands anywhere else the code logs ' Tried to reserve high %p+>%p' at LOG_INFO, unmaps it and returns. Nothing is retried and no caller is told. The stated purpose - 'to avoid roll over on some opcodes' - is then simply not achieved, silently."
+  },
+  "source_locations": [
+    {
+      "file": "box64/box64@a2ae050:src/custommem.c",
+      "line": 3003,
+      "symbol": "comment: '// reserve area close to 0xffffffff too, to avoid roll over on some opcodes...'"
+    },
+    {
+      "file": "box64/box64@a2ae050:src/custommem.c",
+      "line": 3004,
+      "symbol": "InternalMmap((void*)(0x100000000LL-65536), 65536, 0, MAP_ANONYMOUS | MAP_PRIVATE | MAP_NORESERVE, -1, 0) - note prot=0 and no MAP_FIXED"
+    },
+    {
+      "file": "box64/box64@a2ae050:src/custommem.c",
+      "line": 3005,
+      "symbol": "if(cur!=MAP_FAILED && (cur==(void*)(0x100000000LL-65536))) - exactness is tested, not enforced"
+    },
+    {
+      "file": "box64/box64@a2ae050:src/custommem.c",
+      "line": 3006,
+      "symbol": "rb_set(mapallmem, cur, cur+65536, MEM_RESERVED) - only on the exact-address path"
+    }
+  ],
+  "assumption_evidence": "statically_inferred",
+  "extraction_limitations": [
+    "the source expresses the address as the arithmetic 0x100000000LL-65536 rather than a literal 0xffff0000."
+  ],
+  "x_campaign": {
+    "project": "box64",
+    "commit": "a2ae050",
+    "source": "src/custommem.c:3003-3006",
+    "quote": "    // reserve area close to 0xffffffff too, to avoid roll over on some opcodes...\n    void* cur = InternalMmap((void*)(0x100000000LL-65536), 65536, 0, MAP_ANONYMOUS | MAP_PRIVATE | MAP_NORESERVE, -1, 0);\n    if(cur!=MAP_FAILED && (cur==(void*)(0x100000000LL-65536))) {\n        rb_set(mapallmem, (uintptr_t)cur, (uintptr_t)cur+65536, MEM_RESERVED);",
+    "expected_verdict": "CONDITIONAL",
+    "rationale": "The address is free on a normal x86-64 Linux process so the hint is usually honoured, but the request carries no MAP_FIXED and the probe measured hinted_mapping_may_relocate=true, so exact placement is not guaranteed."
+  }
+}

@@ -1,0 +1,79 @@
+{
+  "schema": "runtime-skeptic.application-requirements.v1",
+  "name": "Box64: emulating the guest's MAP_32BIT requires a free HOST block below 2^31, found by find31bitBlockNearHint",
+  "component": "Box64: my_mmap64 / MAP_32BIT translation (custommem.c)",
+  "operation": "virtual_memory_map",
+  "request": {
+    "size": 4096,
+    "exact_address_required": false,
+    "protection": {
+      "read": true,
+      "write": true,
+      "execute": false
+    }
+  },
+  "assumptions": {
+    "guest_host_identity_required": true,
+    "translation_layer_available": false,
+    "retries_on_failure": true,
+    "max_retries": 1
+  },
+  "required_postconditions": [
+    "returned_address + size < 0x80000000 whenever the guest passed MAP_32BIT",
+    "Box64 strips MAP_32BIT from the host flags and substitutes its own search, because the host may not be x86-64 and MAP_32BIT only exists there",
+    "if the first attempt still lands above 0xffffffff Box64 unmaps it, reloads /proc/self/maps and retries once with MAP_FIXED into a block it believes free"
+  ],
+  "permitted_fallbacks": [
+    "relocate"
+  ],
+  "failure_sink": {
+    "kind": "unchecked",
+    "location": {
+      "file": "box64/box64@a2ae050:src/custommem.c",
+      "line": 3305,
+      "symbol": "my_mmap64"
+    },
+    "description": "if find31bitBlockNearHint returns nothing usable, MAP_FIXED is not added and the plain mmap result is returned to the guest as-is. A guest that asked for MAP_32BIT can therefore receive a high address with no error; the truncation happens in the guest, not in Box64."
+  },
+  "source_locations": [
+    {
+      "file": "box64/box64@a2ae050:src/custommem.c",
+      "line": 3282,
+      "symbol": "new_flags&=~MAP_32BIT;   // remove MAP_32BIT"
+    },
+    {
+      "file": "box64/box64@a2ae050:src/custommem.c",
+      "line": 3283,
+      "symbol": "if((flags&MAP_32BIT) && !(flags&MAP_FIXED)) { // MAP_32BIT only exist on x86_64!"
+    },
+    {
+      "file": "box64/box64@a2ae050:src/custommem.c",
+      "line": 3285,
+      "symbol": "addr = find31bitBlockNearHint(old_addr, length, 0) - the function name states the 2^31 bound"
+    },
+    {
+      "file": "box64/box64@a2ae050:src/custommem.c",
+      "line": 3300,
+      "symbol": "if((ret!=MAP_FAILED) && (flags&MAP_32BIT) && (((uintptr_t)ret>0xffffffffLL) || ...)) - the post-check uses 2^32, not 2^31"
+    },
+    {
+      "file": "box64/box64@a2ae050:src/custommem.c",
+      "line": 3305,
+      "symbol": "new_flags = (addr && isBlockFree(addr, length) )? (new_flags|MAP_FIXED) : new_flags"
+    }
+  ],
+  "assumption_evidence": "statically_inferred",
+  "extraction_limitations": [
+    "the '< 2^31' requirement is stated only by the helper's name and by Linux's MAP_32BIT semantics; the post-check at line 3300 tests against 0xffffffff, so the source is internally inconsistent about which bound it enforces. Neither bound is expressible in this schema.",
+    "size 4096 is representative; the requirement is independent of size.",
+    "find31bitBlockNearHint is not in the file excerpt read; its bound was not verified by reading its body."
+  ],
+  "x_campaign": {
+    "project": "box64",
+    "commit": "a2ae050",
+    "source": "src/custommem.c:3282-3286",
+    "quote": "    new_flags&=~MAP_32BIT;   // remove MAP_32BIT\n    if((flags&MAP_32BIT) && !(flags&MAP_FIXED)) {\n        // MAP_32BIT only exist on x86_64!\n        addr = find31bitBlockNearHint(old_addr, length, 0);",
+    "expected_verdict": "SUPPORTED",
+    "rationale": "Nothing in the expressible part of this request can fail on x86-64 Linux - it is a 4 KiB anonymous RW mapping with no address. I expect the tool to miss the below-2GiB constraint entirely, which is the point of including it."
+  }
+}

@@ -1,0 +1,77 @@
+{
+  "schema": "runtime-skeptic.application-requirements.v1",
+  "name": "Box64 dynarec: self-modifying-code detection needs a 4096-byte host page, because it mprotects individual guest pages",
+  "component": "Box64: protectDB / protectDBJumpTable + FillBlock exec-protection check",
+  "operation": "virtual_memory_protect",
+  "request": {
+    "size": 4096,
+    "exact_address_required": false,
+    "required_page_size": 4096,
+    "protection": {
+      "read": true,
+      "write": false,
+      "execute": true
+    }
+  },
+  "assumptions": {
+    "guest_host_identity_required": true,
+    "translation_layer_available": false,
+    "retries_on_failure": false
+  },
+  "required_postconditions": [
+    "a single 4 KiB x86-64 guest page can be write-protected without affecting neighbouring guest pages",
+    "PROT_EXEC on the host reflects the guest's own exec permission at 4 KiB granularity, so req_prot can include PROT_EXEC",
+    "when box64_pagesize > 4096 both properties are lost: a host page holding both code and data cannot be write-protected, and the block is tagged PROT_NEVERCLEAN so every entry re-tests the code instead"
+  ],
+  "permitted_fallbacks": [
+    "weaker_protection"
+  ],
+  "failure_sink": {
+    "kind": "unchecked",
+    "location": {
+      "file": "box64/box64@a2ae050:src/custommem.c",
+      "line": 2293,
+      "symbol": "protectDBJumpTable"
+    },
+    "description": "there is no failure: the code silently takes a different correctness model. With a >4K page it logs 'mixed code+data host page %p, using always_test instead of mprotect' at LOG_INFO and sets PROT_NEVERCLEAN, and FillBlock stops requiring PROT_EXEC at all (req_prot becomes PROT_READ). The dirty-code guarantee is traded for a re-test on every entry."
+  },
+  "source_locations": [
+    {
+      "file": "box64/box64@a2ae050:src/dynarec/dynarec_native.c",
+      "line": 456,
+      "symbol": "const uint32_t req_prot = (box64_pagesize==4096)?(PROT_EXEC|PROT_READ):PROT_READ;"
+    },
+    {
+      "file": "box64/box64@a2ae050:src/dynarec/dynablock.c",
+      "line": 278,
+      "symbol": "identical req_prot expression on the block-lookup path"
+    },
+    {
+      "file": "box64/box64@a2ae050:src/custommem.c",
+      "line": 2290,
+      "symbol": "if(box64_pagesize > 4096) { ... hostPageHasExternalWrite_locked ... }"
+    },
+    {
+      "file": "box64/box64@a2ae050:src/dynarec/dynarec_native.c",
+      "line": 492,
+      "symbol": "if(box64_pagesize>4096) prot = getProtection_fast(addr); // re-read because protectDB may have added NEVERCLEAN"
+    },
+    {
+      "file": "box64/box64@a2ae050:src/core.c",
+      "line": 851,
+      "symbol": "if(!box64_pagesize) box64_pagesize = 4096; // 4096 is also the fallback when sysconf fails"
+    }
+  ],
+  "assumption_evidence": "statically_inferred",
+  "extraction_limitations": [
+    "box64_pagesize is a runtime value from sysconf(_SC_PAGESIZE), not a compile-time constant; the 4096 modelled here is the value the fast path is conditioned on, taken from the equality test itself."
+  ],
+  "x_campaign": {
+    "project": "box64",
+    "commit": "a2ae050",
+    "source": "src/dynarec/dynarec_native.c:456 and src/custommem.c:2290-2295",
+    "quote": "const uint32_t req_prot = (box64_pagesize==4096)?(PROT_EXEC|PROT_READ):PROT_READ;\n---\n                    if(box64_pagesize > 4096) {\n                        uintptr_t host_page = cur & ~(box64_pagesize-1);\n                        if(hostPageHasExternalWrite_locked(host_page, addr, addr+size)) {\n                            dynarec_log(LOG_INFO, \"protectDBJumpTable: mixed code+data host page %p, using always_test instead of mprotect\\n\", (void*)host_page);\n                            prot |= PROT_NEVERCLEAN;",
+    "expected_verdict": "SUPPORTED",
+    "rationale": "The probe measured page_size 4096 on this x86-64 Linux host, which is exactly the value the fast path requires; this contract is the one that should flip to UNSUPPORTED on a 16K Apple Silicon or 64K ARM host."
+  }
+}

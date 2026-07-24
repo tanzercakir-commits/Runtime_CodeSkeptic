@@ -1,0 +1,101 @@
+{
+  "schema": "runtime-skeptic.application-requirements.v1",
+  "name": "LuaJIT x64 without GC64: every GC allocation must satisfy (addr >> 31) == 0, i.e. the whole Lua heap lives below 2 GiB",
+  "component": "LuaJIT: mmap_probe / mmap_map32 (lj_alloc.c, LJ_64 && !LJ_GC64 && LJ_TARGET_X64)",
+  "operation": "virtual_memory_map",
+  "request": {
+    "size": 131072,
+    "exact_address_required": false,
+    "protection": {
+      "read": true,
+      "write": true,
+      "execute": false
+    }
+  },
+  "assumptions": {
+    "guest_host_identity_required": false,
+    "translation_layer_available": false,
+    "pointer_storage_width_bits": 32,
+    "retries_on_failure": true,
+    "max_retries": 30
+  },
+  "required_postconditions": [
+    "returned_address >= 0x4000 (LJ_ALLOC_MMAP_PROBE_LOWER)",
+    "(returned_address >> 31) == 0 and ((returned_address + size) >> 31) == 0, so the arena ends strictly below 0x80000000",
+    "any mapping that violates this is munmapped again and the probe retries, up to 30 times",
+    "the first strategy is mmap(NULL-ish, MAP_32BIT); the source itself notes 'This only allows 1GB on Linux. So fallback to probing to get 2GB.'"
+  ],
+  "permitted_fallbacks": [
+    "relocate"
+  ],
+  "failure_sink": {
+    "kind": "error_return",
+    "location": {
+      "file": "LuaJIT/LuaJIT@346ab58:src/lj_alloc.c",
+      "line": 274,
+      "symbol": "mmap_probe"
+    },
+    "description": "after 30 failed probes mmap_probe returns MFAIL ((void*)~0). The allocator turns that into an allocation failure, which surfaces to the script as a Lua out-of-memory error. Recoverable in principle, fatal to the VM in practice."
+  },
+  "source_locations": [
+    {
+      "file": "LuaJIT/LuaJIT@346ab58:src/lj_alloc.c",
+      "line": 105,
+      "symbol": "#define LJ_ALLOC_MBITS 31 /* 2 GB on x64 with !LJ_GC64. */  (guard: #elif LJ_TARGET_X64, inside #if LJ_64, under #if LJ_GC64/#elif)"
+    },
+    {
+      "file": "LuaJIT/LuaJIT@346ab58:src/lj_alloc.c",
+      "line": 104,
+      "symbol": "comment: '/* Due to limitations in the x64 non-GC64 VM. */'"
+    },
+    {
+      "file": "LuaJIT/LuaJIT@346ab58:src/lj_alloc.c",
+      "line": 102,
+      "symbol": "#define LJ_ALLOC_MBITS 47 /* 128 TB in LJ_GC64 mode. */ - the SAME program is a completely different contract when built with GC64"
+    },
+    {
+      "file": "LuaJIT/LuaJIT@346ab58:src/lj_alloc.c",
+      "line": 231,
+      "symbol": "#define LJ_ALLOC_MMAP_PROBE_LOWER ((uintptr_t)0x4000)"
+    },
+    {
+      "file": "LuaJIT/LuaJIT@346ab58:src/lj_alloc.c",
+      "line": 228,
+      "symbol": "#define LJ_ALLOC_MMAP_PROBE_MAX 30"
+    },
+    {
+      "file": "LuaJIT/LuaJIT@346ab58:src/lj_alloc.c",
+      "line": 242,
+      "symbol": "if ((addr >> LJ_ALLOC_MBITS) == 0 && addr >= LJ_ALLOC_MMAP_PROBE_LOWER && ((addr + size) >> LJ_ALLOC_MBITS) == 0)"
+    },
+    {
+      "file": "LuaJIT/LuaJIT@346ab58:src/lj_alloc.c",
+      "line": 299,
+      "symbol": "mmap((void *)LJ_ALLOC_MMAP32_START, size, MMAP_PROT, MAP_32BIT|MMAP_FLAGS, -1, 0) - LJ_ALLOC_MMAP32_START is 0 except on Solaris (0x1000)"
+    },
+    {
+      "file": "LuaJIT/LuaJIT@346ab58:src/lj_alloc.c",
+      "line": 41,
+      "symbol": "#define DEFAULT_GRANULARITY ((size_t)128U * (size_t)1024U)"
+    },
+    {
+      "file": "LuaJIT/LuaJIT@346ab58:src/lj_obj.h",
+      "line": 58,
+      "symbol": "uint32_t gcptr32; /* Pseudo 32 bit pointer. */ - the storage slot that forces the 2 GiB bound"
+    }
+  ],
+  "assumption_evidence": "statically_inferred",
+  "extraction_limitations": [
+    "the constants MMAP_REGION_START and MMAP_REGION_END do NOT exist at this commit; they were the LuaJIT 2.0 spelling. The live mechanism is LJ_ALLOC_MBITS plus the probe loop, and that is what is modelled here.",
+    "the real requirement is an upper bound on the returned address (< 2^31), which this schema cannot state. pointer_storage_width_bits=32 is the closest field and is only an approximation: the true bound is 2^31, not 2^32, and LuaJIT rejects-and-retries rather than truncating.",
+    "size 131072 is DEFAULT_GRANULARITY, the unit the allocator requests; individual Lua objects are carved out of it."
+  ],
+  "x_campaign": {
+    "project": "luajit",
+    "commit": "346ab58",
+    "source": "src/lj_alloc.c:104-105 and src/lj_alloc.c:239-247",
+    "quote": "/* Due to limitations in the x64 non-GC64 VM. */\n#define LJ_ALLOC_MBITS\t\t31\t/* 2 GB on x64 with !LJ_GC64. */\n---\n    void *p = mmap((void *)hint_addr, size, MMAP_PROT, MMAP_FLAGS_PROBE, -1, 0);\n    uintptr_t addr = (uintptr_t)p;\n    if ((addr >> LJ_ALLOC_MBITS) == 0 && addr >= LJ_ALLOC_MMAP_PROBE_LOWER &&\n\t((addr + size) >> LJ_ALLOC_MBITS) == 0) {",
+    "expected_verdict": "CONDITIONAL",
+    "rationale": "x86-64 Linux does provide MAP_32BIT and honours low hints, so this configuration ships and works; but an unconstrained mmap returns ~0x7f.. and the program depends entirely on its probe loop landing low, which is a conditional property of the host, not a guarantee."
+  }
+}

@@ -1,0 +1,67 @@
+{
+  "schema": "runtime-skeptic.application-requirements.v1",
+  "name": "mimalloc large-OS-page mapping backed by 2MiB pages (MAP_HUGETLB | MAP_HUGE_2MB)",
+  "component": "mimalloc: unix_mmap large-page branch (Linux, mi_option_allow_large_os_pages enabled)",
+  "operation": "virtual_memory_map",
+  "request": {
+    "size": 16777216,
+    "exact_address_required": false,
+    "required_page_size": 2097152,
+    "protection": { "read": true, "write": true, "execute": false }
+  },
+  "assumptions": {
+    "guest_host_identity_required": false,
+    "translation_layer_available": false,
+    "retries_on_failure": false
+  },
+  "required_postconditions": [
+    "the mapping is backed by 2MiB pages, not by the 4KiB base page - this is the entire purpose of the branch",
+    "the returned region is 2MiB-aligned, since MAP_HUGETLB forces huge-page alignment",
+    "a failure here is not an error: p == NULL falls through to the regular mmap at prim.c:390 and mimalloc runs with base pages"
+  ],
+  "permitted_fallbacks": ["smaller_size"],
+  "failure_sink": {
+    "kind": "none",
+    "location": {
+      "file": "microsoft/mimalloc@a3ca0e5:src/prim/unix/prim.c",
+      "line": 381,
+      "symbol": "if (p == NULL) { mi_atomic_store_release(&large_page_try_ok, (size_t)8); }  (the store is on line 382)"
+    },
+    "description": "when the huge-page mmap fails mimalloc sets large_page_try_ok to 8, which suppresses the next 8 attempts (prim.c:334-341), and then falls through to the regular mmap at prim.c:390. The allocator keeps working on 4KiB pages. Nothing is reported to the caller and nothing aborts."
+  },
+  "source_locations": [
+    {
+      "file": "microsoft/mimalloc@a3ca0e5:src/prim/unix/prim.c",
+      "line": 349,
+      "symbol": "lflags |= MAP_HUGETLB;  (inside #ifdef MAP_HUGETLB)"
+    },
+    {
+      "file": "microsoft/mimalloc@a3ca0e5:src/prim/unix/prim.c",
+      "line": 360,
+      "symbol": "lflags |= MAP_HUGE_2MB;  (inside #ifdef MAP_HUGE_2MB)"
+    },
+    {
+      "file": "microsoft/mimalloc@a3ca0e5:src/prim/unix/prim.c",
+      "line": 344,
+      "symbol": "int lflags = flags & ~MAP_NORESERVE;  // using NORESERVE on huge pages seems to fail on Linux"
+    },
+    {
+      "file": "microsoft/mimalloc@a3ca0e5:src/os.c",
+      "line": 221,
+      "symbol": "size >= 8*large_page_size gate: mimalloc only tries large pages for allocations of at least 8 large pages (16MiB when large_page_size is 2MiB)"
+    }
+  ],
+  "assumption_evidence": "statically_inferred",
+  "extraction_limitations": [
+    "there is no field in this schema for 'this mapping must be backed by pages of size N'; required_page_size is documented as the page size the program has compiled into its own MMU model, which is not what MAP_HUGE_2MB expresses. It is used here because it is the only field that mentions a page size at all - the mismatch is the point of this case",
+    "the fallback mimalloc actually takes is 'the same mapping backed by smaller pages', which is not one of the FallbackKind values; smaller_size is the nearest and is still wrong (the size does not shrink)"
+  ],
+  "x_campaign": {
+    "project": "mimalloc",
+    "commit": "a3ca0e5",
+    "source": "src/prim/unix/prim.c:349",
+    "quote": "      lflags |= MAP_HUGETLB;",
+    "expected_verdict": "UNSUPPORTED",
+    "rationale": "rule_page_size does an equality test against the profile's page_size fact, which the probe measured as 4096, so 2097152 != 4096 fires RS-VM-0006 as Proven/Unsupported. I expect that verdict to be wrong about the program: mimalloc treats a failed huge-page mmap as a non-event and falls through to base pages at prim.c:390."
+  }
+}

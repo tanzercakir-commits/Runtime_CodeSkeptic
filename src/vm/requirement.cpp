@@ -49,6 +49,12 @@ constexpr std::array<std::pair<std::string_view, FailureSinkKind>, 7> kSink{{
     {"unknown", FailureSinkKind::Unknown},
 }};
 
+constexpr std::array<std::pair<std::string_view, SizeRelation>, 3> kSizeRelation{{
+    {"equal", SizeRelation::Equal},
+    {"at_most", SizeRelation::AtMost},
+    {"at_least", SizeRelation::AtLeast},
+}};
+
 constexpr std::array<std::pair<std::string_view, FallbackKind>, 6> kFallback{{
     {"relocate", FallbackKind::Relocate},
     {"smaller_size", FallbackKind::SmallerSize},
@@ -95,6 +101,11 @@ bool fallback_from_string(std::string_view s, FallbackKind& out) {
     return lookup(kFallback, s, out);
 }
 
+std::string_view to_string(SizeRelation v) { return name_of(kSizeRelation, v); }
+bool size_relation_from_string(std::string_view s, SizeRelation& out) {
+    return lookup(kSizeRelation, s, out);
+}
+
 std::string Protection::to_string() const {
     std::string s;
     s.push_back(read ? 'r' : '-');
@@ -137,6 +148,9 @@ json::Value MappingRequest::to_json() const {
     v["required_page_size"] =
         required_page_size ? json::Value(static_cast<unsigned long long>(*required_page_size))
                            : json::Value();
+    v["required_page_size_relation"] =
+        std::string(rs::vm::to_string(required_page_size_relation));
+    v["validates_returned_address"] = validates_returned_address;
     v["protection"] = protection.to_json();
     v["write_then_execute"] = write_then_execute;
     v["simultaneous_write_execute"] = simultaneous_write_execute;
@@ -301,6 +315,16 @@ std::optional<Requirement> Requirement::from_json(const json::Value& v,
 
     r.request.required_alignment = read_optional_uint(req->find("required_alignment"));
     r.request.required_page_size = read_optional_uint(req->find("required_page_size"));
+    if (const json::Value* rel = req->find("required_page_size_relation");
+        rel != nullptr && !rel->is_null()) {
+        if (!rel->is_string() ||
+            !size_relation_from_string(rel->as_string(),
+                                       r.request.required_page_size_relation)) {
+            error = "request.required_page_size_relation must be one of "
+                    "equal / at_most / at_least";
+            return std::nullopt;
+        }
+    }
 
     if (const json::Value* prot = req->find("protection"); prot != nullptr) {
         if (!read_flag(prot, "read", r.request.protection.read, error)) {
@@ -320,6 +344,8 @@ std::optional<Requirement> Requirement::from_json(const json::Value& v,
         !read_flag(req, "file_backed", r.request.file_backed, error) ||
         !read_flag(req, "accesses_beyond_eof", r.request.accesses_beyond_eof,
                    error) ||
+        !read_flag(req, "validates_returned_address",
+                   r.request.validates_returned_address, error) ||
         !read_flag(req, "reserve_then_commit", r.request.reserve_then_commit,
                    error)) {
         return std::nullopt;

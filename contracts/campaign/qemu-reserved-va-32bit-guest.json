@@ -1,0 +1,86 @@
+{
+  "schema": "runtime-skeptic.application-requirements.v1",
+  "name": "QEMU linux-user: default 4 GiB contiguous guest reservation for a 32-bit target on a 64-bit host (reserved_va = MAX_RESERVED_VA = 0xffffffff)",
+  "component": "qemu-i386 / qemu-arm linux-user: pgb_addr_set + pgb_try_mmap (HOST_LONG_BITS==64 && TARGET_VIRT_ADDR_SPACE_BITS<=32)",
+  "operation": "virtual_memory_reserve",
+  "request": {
+    "size": 4294967296,
+    "exact_address_required": false,
+    "required_alignment": 4096,
+    "protection": {
+      "read": false,
+      "write": false,
+      "execute": false
+    },
+    "reserve_then_commit": true
+  },
+  "assumptions": {
+    "guest_host_identity_required": false,
+    "translation_layer_available": true,
+    "retries_on_failure": true
+  },
+  "required_postconditions": [
+    "the reservation is one contiguous range [guest_base + 0, guest_base + reserved_va] with reserved_va == 0xffffffff",
+    "guest_base is aligned to MAX(SHMLBA, TARGET_PAGE_SIZE), asserted after selection",
+    "no host object may be placed inside the reservation for the life of the process",
+    "the reservation is PROT_NONE and MAP_NORESERVE: address space only, no committed memory"
+  ],
+  "permitted_fallbacks": [
+    "relocate"
+  ],
+  "failure_sink": {
+    "kind": "process_exit",
+    "location": {
+      "file": "qemu/qemu@300438f:common-user/probe-guest-base.c",
+      "line": 319,
+      "symbol": "pgb_dynamic"
+    },
+    "description": "when no guest_base satisfies every bound, pgb_dynamic prints 'Unable to find a guest_base to satisfy all guest address mapping requirements', lists the bounds and calls exit(EXIT_FAILURE). The -B (fixed guest_base) path fails earlier via pgb_fail_in_use at line 164, also exit(EXIT_FAILURE)."
+  },
+  "source_locations": [
+    {
+      "file": "qemu/qemu@300438f:linux-user/main.c",
+      "line": 113,
+      "symbol": "MAX_RESERVED_VA(CPU) 0xfffffffful (TARGET_VIRT_ADDR_SPACE_BITS==32 && (TARGET_LONG_BITS==32 || TARGET_ABI32))"
+    },
+    {
+      "file": "qemu/qemu@300438f:linux-user/main.c",
+      "line": 845,
+      "symbol": "reserved_va = max_reserved_va, taken when HOST_LONG_BITS==64 && TARGET_VIRT_ADDR_SPACE_BITS<=32"
+    },
+    {
+      "file": "qemu/qemu@300438f:linux-user/main.c",
+      "line": 833,
+      "symbol": "if ((reserved_va + 1) % host_page_size) -> 'Reserved virtual address not aligned' + exit"
+    },
+    {
+      "file": "qemu/qemu@300438f:common-user/probe-guest-base.c",
+      "line": 131,
+      "symbol": "pgb_addr_set: ga->bounds[n].hi = reserved_va (one bound covering the whole guest space)"
+    },
+    {
+      "file": "qemu/qemu@300438f:common-user/probe-guest-base.c",
+      "line": 38,
+      "symbol": "pgb_try_mmap: mmap(addr, size, PROT_NONE, MAP_ANONYMOUS|MAP_PRIVATE|MAP_NORESERVE|MAP_FIXED_NOREPLACE)"
+    },
+    {
+      "file": "qemu/qemu@300438f:common-user/probe-guest-base.c",
+      "line": 328,
+      "symbol": "uintptr_t align = MAX(SHMLBA, TARGET_PAGE_SIZE); asserted at line 344"
+    }
+  ],
+  "assumption_evidence": "statically_inferred",
+  "extraction_limitations": [
+    "required_alignment 4096 is MAX(SHMLBA, TARGET_PAGE_SIZE) evaluated for an x86-64 Linux host, where SHMLBA == PAGE_SIZE == 4096. On MIPS hosts SHMLBA is larger and the constant changes; the source does not name a literal.",
+    "'the reservation must be contiguous' is a postcondition of the code but is not expressible as a field in this schema; it is carried as free text only.",
+    "the 30-retry probe loop in pgb_find_itree/pgb_find_fallback is a search over guest_base, not a retry of the same request, so max_retries is left unset."
+  ],
+  "x_campaign": {
+    "project": "qemu",
+    "commit": "300438f",
+    "source": "linux-user/main.c:842-846, common-user/probe-guest-base.c:129-132",
+    "quote": "} else if (HOST_LONG_BITS == 64 && TARGET_VIRT_ADDR_SPACE_BITS <= 32) {\n        /* MAX_RESERVED_VA + 1 is a large power of 2, so is aligned. */\n        reserved_va = max_reserved_va;\n    }\n---\n    if (reserved_va) {\n        ga->bounds[n].lo = try_identity ? mmap_min_addr : 0;\n        ga->bounds[n].hi = reserved_va;\n        n++;",
+    "expected_verdict": "SUPPORTED",
+    "rationale": "A 4 GiB PROT_NONE MAP_NORESERVE reservation is routine on x86-64 Linux, whose user address space is ~128 TiB; QEMU also permits relocation via guest_base, so no exact address is needed."
+  }
+}

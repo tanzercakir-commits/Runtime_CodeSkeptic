@@ -1,0 +1,79 @@
+{
+  "schema": "runtime-skeptic.application-requirements.v1",
+  "name": "V8 TrustedRange: 1GiB reservation that must be 4GiB aligned and must not lie in the first 4GiB of address space",
+  "component": "V8: TrustedRange::InitReservation (V8_ENABLE_SANDBOX)",
+  "operation": "virtual_memory_reserve",
+  "request": {
+    "size": 1073741824,
+    "exact_address_required": false,
+    "required_alignment": 4294967296,
+    "protection": { "read": false, "write": false, "execute": false },
+    "reserve_then_commit": true
+  },
+  "assumptions": {
+    "guest_host_identity_required": false,
+    "translation_layer_available": false,
+    "retries_on_failure": false
+  },
+  "required_postconditions": [
+    "returned_base % 4294967296 == 0",
+    "returned_base >= 4294967296 - the range must NOT be inside the first 4GiB, which is the region a sandbox escape can reach. V8 gets this by requiring 4GiB alignment and assuming the zeroth page can never be mapped, so the only 4GiB-aligned base below 2^32 is 0 and is unreachable",
+    "no address in the range has its upper 32 bits clear, or V8's stack-spill-slot scanner would mistake a trusted pointer for a compressed one and decompress it with the main cage base",
+    "the first 1MiB of the range is separately mapped kNoAccess as a null-dereference guard"
+  ],
+  "permitted_fallbacks": [],
+  "failure_sink": {
+    "kind": "process_exit",
+    "location": {
+      "file": "v8/v8@2dc7d00:src/init/isolate-group.cc",
+      "line": 187,
+      "symbol": "IsolateGroup::Initialize"
+    },
+    "description": "if (!trusted_range_.InitReservation(kMaximalTrustedRangeSize)) calls V8::FatalProcessOutOfMemory(nullptr, \"Failed to reserve virtual memory for TrustedRange\") at isolate-group.cc:188-189. A reservation that succeeds at a base that is not 4GiB aligned dies earlier, at the release-mode CHECK(IsAligned(base_, params.base_alignment)) in src/utils/allocation.cc:363."
+  },
+  "source_locations": [
+    {
+      "file": "v8/v8@2dc7d00:src/heap/trusted-range.cc",
+      "line": 36,
+      "symbol": "const size_t base_alignment = size_t{4} * GB;"
+    },
+    {
+      "file": "v8/v8@2dc7d00:src/heap/trusted-range.cc",
+      "line": 34,
+      "symbol": "comment: 'To achieve this, we simply require 4GB alignment of the allocation and assume that we can never map the zeroth page.'"
+    },
+    {
+      "file": "v8/v8@2dc7d00:src/heap/trusted-range.cc",
+      "line": 25,
+      "symbol": "comment: 'Certain (sandbox) bugs allow access to (only) the first 4GB of the address space, so we don't want sensitive objects to live there.'"
+    },
+    {
+      "file": "v8/v8@2dc7d00:src/common/globals.h",
+      "line": 540,
+      "symbol": "constexpr size_t kMaximalTrustedRangeSize = 1 * GB;"
+    },
+    {
+      "file": "v8/v8@2dc7d00:src/utils/allocation.cc",
+      "line": 363,
+      "symbol": "CHECK(IsAligned(base_, params.base_alignment));"
+    },
+    {
+      "file": "v8/v8@2dc7d00:src/init/isolate-group.cc",
+      "line": 187,
+      "symbol": "if (!trusted_range_.InitReservation(kMaximalTrustedRangeSize)) { ... FatalProcessOutOfMemory ... }"
+    }
+  ],
+  "assumption_evidence": "statically_inferred",
+  "extraction_limitations": [
+    "two constraints here have no field: (a) the 4GiB alignment of a reservation with no fixed address, and (b) the lower bound 'base must be >= 2^32'. The schema's address-space reasoning is built around a single requested address and its containment in available ranges, not around bounds on an address the host is free to choose",
+    "V8 derives (b) from (a) plus 'the zeroth page is never mappable'. The profile does record min_map_address = 0x1000, which is exactly the fact that discharges that assumption on this host - but no rule connects an alignment to a minimum address, so the fact is never used"
+  ],
+  "x_campaign": {
+    "project": "v8",
+    "commit": "2dc7d00",
+    "source": "src/heap/trusted-range.cc:36",
+    "quote": "  // To achieve this, we simply require 4GB alignment of the allocation and\n  // assume that we can never map the zeroth page.\n  const size_t base_alignment = size_t{4} * GB;",
+    "expected_verdict": "CONDITIONAL",
+    "rationale": "Same shape as the pointer-compression cage: required_alignment is unreachable without an address, so I expect the only finding to be RS-VM-0012 reserve/commit against posix_lazy, giving CONDITIONAL. Neither the alignment nor the 'must be above 2^32' bound will be evaluated."
+  }
+}

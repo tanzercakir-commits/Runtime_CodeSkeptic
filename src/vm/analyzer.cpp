@@ -26,6 +26,13 @@ Severity adjust_severity(Severity base, FailureSinkKind sink) {
         case FailureSinkKind::ErrorReturn:
             return base == Severity::Critical ? Severity::High : base;
         case FailureSinkKind::None:
+            // The program declared that nothing happens when this fails - it
+            // degrades and carries on. mimalloc's huge-page loop keeps the
+            // contiguous prefix it did get and warns. Leaving such a finding
+            // at Critical made a graceful fallback look like an abort.
+            return static_cast<int>(base) < static_cast<int>(Severity::Medium)
+                       ? Severity::Medium
+                       : base;
         case FailureSinkKind::Unknown:
             return base;
     }
@@ -94,11 +101,18 @@ private:
                            : req_.source_locations.front().to_string());
     }
 
-    bool proven_unsupported() const {
+    // "Has any rule concluded that no execution can succeed?"
+    //
+    // This used to test `confidence == Proven`, which looked equivalent and
+    // was not. Confidence is clamped by evidence, so a statically extracted
+    // requirement can never reach Proven - and every document a static
+    // extractor produces is in that class. The retry rule was therefore dead
+    // on exactly the input it was written for. Structural impossibility is a
+    // property of the reasoning, not of how well-attested the facts are.
+    bool established_impossibility() const {
         return std::any_of(result_.findings.begin(), result_.findings.end(),
                            [](const Finding& f) {
-                               return f.support_impact == SupportLevel::Unsupported &&
-                                      f.confidence == Confidence::Proven;
+                               return f.structural_impossibility;
                            });
     }
 
@@ -115,8 +129,7 @@ private:
         EvidenceClass w = EvidenceClass::SpecifiedGuarantee;
         bool found = false;
         for (const auto& f : result_.findings) {
-            if (f.support_impact == SupportLevel::Unsupported &&
-                f.confidence == Confidence::Proven) {
+            if (f.structural_impossibility) {
                 w = rs::weakest(w, f.evidence.weakest_class());
                 found = true;
             }
@@ -127,6 +140,8 @@ private:
     // ---- rules ----------------------------------------------------------
     void rule_internal_fallback_contradiction();
     void rule_baseline_mapping_capability();
+    void rule_size_feasibility();
+    void rule_reservation_alignment();
     void rule_page_size();
     void rule_address_alignment();
     void rule_size_granularity();
@@ -238,6 +253,7 @@ void Analysis::rule_baseline_mapping_capability() {
 
     Finding f = start(ids::kAnonymousMappingUnavailable, Confidence::Proven,
                       SupportLevel::Unsupported);
+    f.structural_impossibility = true;
     f.required = "an anonymous mapping of " + dec(req_.request.size) + " bytes";
     f.host_capability = "this host refused an anonymous mapping outright";
     f.conclusion = "No placement, protection or size adjustment can help: the "
@@ -248,6 +264,133 @@ void Analysis::rule_baseline_mapping_capability() {
                    "anonymous mapping is unavailable", profile_.profile_name);
     f.remediations.push_back(
         {RemediationClass::SelectDifferentHostConfiguration, ""});
+    emit(std::move(f));
+}
+
+// ---------------------------------------------------------------------------
+// RS-VM-0021: does the request even fit?
+//
+// Found by running real projects through the analyzer. QEMU's aarch64
+// user-mode reserves MAX_RESERVED_VA = (1ul << 52) - 1 - four petabytes - and
+// the tool called it SUPPORTED with no findings, because every placement rule
+// began with `if (!request.address) return;` and nothing ever compared the
+// SIZE against the address space. A request for eight exabytes was
+// indistinguishable from a request for one page.
+//
+// Address-less-but-enormous is not an exotic case. It is how emulators,
+// allocators and JITs make their largest requests.
+// ---------------------------------------------------------------------------
+void Analysis::rule_size_feasibility() {
+    if (req_.request.size == 0) return;
+    if (!profile_.vm.max_user_address.is_known()) return;
+
+    const std::uint64_t top = profile_.vm.max_user_address.value().value;
+    const std::uint64_t bottom =
+        profile_.vm.min_map_address.is_known()
+            ? profile_.vm.min_map_address.value().value
+            : 0;
+    if (top <= bottom) return;
+    const std::uint64_t usable = top - bottom;
+    if (req_.request.size <= usable) return;
+
+    Finding f = start(ids::kSizeExceedsAddressSpace, Confidence::Proven,
+                      SupportLevel::Unsupported);
+    f.structural_impossibility = true;
+    f.required = "a single reservation of " + dec(req_.request.size) +
+                 " bytes (" + json::to_hex(req_.request.size) + ")";
+    f.host_capability = "the entire usable user address space is " +
+                        dec(usable) + " bytes, from " + json::to_hex(bottom) +
+                        " to " + json::to_hex(top);
+    f.modeled_fallback =
+        "the reservation fails regardless of where it is attempted; there is "
+        "no address at which it could fit";
+    f.conclusion =
+        "The request is larger than the address space itself. Placement, "
+        "alignment and protection are all irrelevant.";
+    add_application_claim(f, "program reserves " + dec(req_.request.size) +
+                                 " bytes in one call");
+    f.evidence.add(Layer::OperatingSystem,
+                   profile_.vm.max_user_address.evidence(),
+                   "usable user address space is " + dec(usable) + " bytes",
+                   profile_.profile_name);
+    f.evidence.add(Layer::Analyzer, EvidenceClass::SpecifiedGuarantee,
+                   dec(req_.request.size) + " > " + dec(usable),
+                   "analyzer: size arithmetic");
+    f.remediations.push_back(
+        {RemediationClass::SelectDifferentHostConfiguration,
+         "a host with a wider virtual address space, or a build configured for "
+         "a smaller reservation"});
+    f.rejected_fixes.push_back(
+        {"Retry, or wait for memory pressure to ease",
+         "The limit is the width of the address space, not the amount of free "
+         "memory in it."});
+    emit(std::move(f));
+}
+
+// ---------------------------------------------------------------------------
+// RS-VM-0022: alignment of the reservation itself.
+//
+// Also found by running real projects. `required_alignment` was only ever
+// consulted when an address was also given, so the constraint that matters
+// most to allocators and runtimes - "give me 4 GiB, aligned to 4 GiB, I do
+// not care where" - fell straight through. Deleting the field from a V8 cage
+// contract produced a byte-identical verdict, which is the definition of dead
+// code.
+//
+// mmap guarantees page alignment and nothing more. Stronger alignment is
+// reachable only by over-allocating and trimming, and whether the program
+// does that is not something a host profile can answer - so this is a
+// conditional finding, not a refusal.
+// ---------------------------------------------------------------------------
+void Analysis::rule_reservation_alignment() {
+    if (!req_.request.required_alignment) return;
+    if (req_.request.address) return;  // covered by rule_address_alignment
+    const std::uint64_t alignment = *req_.request.required_alignment;
+    if (!is_power_of_two(alignment)) {
+        result_.analyzer_limitations.push_back(
+            "required_alignment " + dec(alignment) +
+            " is not a power of two; the alignment rules were skipped");
+        return;
+    }
+    if (!profile_.vm.allocation_granularity.is_known()) return;
+    const std::uint64_t granularity = profile_.vm.allocation_granularity.value();
+    if (alignment <= granularity) return;  // the API already guarantees it
+
+    Finding f = start(ids::kReservationAlignmentUnguaranteed, Confidence::Proven,
+                      SupportLevel::ConditionallySupported);
+    f.required = "a reservation of " + dec(req_.request.size) +
+                 " bytes aligned to " + dec(alignment) + " bytes";
+    f.host_capability = "the mapping API guarantees alignment to " +
+                        dec(granularity) + " bytes and no more";
+    f.modeled_fallback =
+        "the reservation lands page-aligned at an address of the host's "
+        "choosing; the stronger alignment holds only if the program "
+        "over-allocates " + dec(alignment) + " extra bytes and trims, or "
+        "retries until it gets a lucky address";
+    f.conclusion =
+        "Nothing in the platform delivers this alignment. If the program does "
+        "not implement over-allocate-and-trim, the misalignment is silent: "
+        "pointer-masking arithmetic keeps working and simply addresses the "
+        "wrong object.";
+    add_application_claim(f, "program requires the reservation itself to be " +
+                                 dec(alignment) + "-byte aligned");
+    f.evidence.add(Layer::SystemCallInterface,
+                   profile_.vm.allocation_granularity.evidence(),
+                   "allocation granularity is " + dec(granularity) + " bytes",
+                   profile_.profile_name);
+    f.evidence.add(Layer::Analyzer, EvidenceClass::SpecifiedGuarantee,
+                   dec(alignment) + " > " + dec(granularity) +
+                       ", so the API cannot promise it",
+                   "analyzer: alignment arithmetic");
+    f.remediations.push_back(
+        {RemediationClass::ReserveAddressSpaceEarlier,
+         "reserve " + dec(alignment) + " extra bytes and unmap the unaligned "
+         "head and tail"});
+    f.rejected_fixes.push_back(
+        {"Assert the alignment after the call",
+         "An assert catches it only when it happens to fire. Many builds "
+         "compile assertions out, and the corruption that follows a silently "
+         "misaligned base is not attributable to this call site."});
     emit(std::move(f));
 }
 
@@ -277,11 +420,22 @@ void Analysis::rule_page_size() {
     }
 
     const std::uint64_t actual = profile_.vm.page_size.value();
-    if (actual == required) return;
+    const SizeRelation relation = req_.request.required_page_size_relation;
+    const char* relation_text = relation == SizeRelation::AtMost   ? "<= "
+                                : relation == SizeRelation::AtLeast ? ">= "
+                                                                    : "== ";
+    bool satisfied = false;
+    switch (relation) {
+        case SizeRelation::Equal:   satisfied = actual == required; break;
+        case SizeRelation::AtMost:  satisfied = actual <= required; break;
+        case SizeRelation::AtLeast: satisfied = actual >= required; break;
+    }
+    if (satisfied) return;
 
     Finding f = start(ids::kPageSizeMismatch, Confidence::Proven,
                       SupportLevel::Unsupported);
-    f.required = "page size == " + dec(required);
+    f.structural_impossibility = true;
+    f.required = std::string("page size ") + relation_text + dec(required);
     f.host_capability = "page size == " + dec(actual);
     f.modeled_fallback =
         actual > required
@@ -353,6 +507,7 @@ void Analysis::rule_address_alignment() {
 
     Finding f = start(ids::kAddressAlignmentMismatch, Confidence::Proven,
                       SupportLevel::Unsupported);
+    f.structural_impossibility = true;
     f.required = "mapping placed exactly at " + json::to_hex(address);
     f.host_capability =
         "exact mappings must be aligned to the allocation granularity of " +
@@ -502,6 +657,7 @@ void Analysis::rule_range_availability() {
     }
 
     Finding f = start(id, Confidence::Proven, SupportLevel::Unsupported);
+    f.structural_impossibility = true;
     f.required = "mapping placed exactly at " + range->to_string();
     if (req_.assumptions.guest_host_identity_required) {
         f.required += "; guest address must equal host address";
@@ -581,6 +737,7 @@ void Analysis::rule_exact_mapping_capability() {
 
     Finding f = start(ids::kExactAddressUnavailable, Confidence::Proven,
                       SupportLevel::Unsupported);
+    f.structural_impossibility = true;
     f.required = "the mapping must be placed at an exactly specified address";
     f.host_capability = "this host does not support exact address placement at all";
     f.modeled_fallback = "the address is treated as a hint";
@@ -699,7 +856,7 @@ void Analysis::rule_identity_without_translation() {
     // behind it and a stronger confidence class.
     if (already_emitted(ids::kHintedMappingMayRelocate)) return;
 
-    if (proven_unsupported()) return;  // already stated more precisely
+    if (established_impossibility()) return;  // already stated more precisely
 
     Finding f = start(ids::kIdentityWithoutTranslation, Confidence::Hypothesis,
                       SupportLevel::ConditionallySupported);
@@ -763,6 +920,7 @@ void Analysis::rule_write_execute() {
 
     Finding f = start(ids::kWriteExecuteRestricted, Confidence::Proven,
                       SupportLevel::Unsupported);
+    f.structural_impossibility = true;
     f.required = "a mapping that is writable and executable at the same time";
     f.host_capability = "this host enforces write-xor-execute";
     f.modeled_fallback =
@@ -810,6 +968,7 @@ void Analysis::rule_executable_mapping() {
 
     Finding f = start(ids::kExecutableMappingUnsupported, Confidence::Proven,
                       SupportLevel::Unsupported);
+    f.structural_impossibility = true;
     f.required = "executable anonymous memory";
     f.host_capability = "anonymous mappings cannot be made executable in this "
                         "process configuration";
@@ -924,15 +1083,46 @@ void Analysis::rule_pointer_truncation() {
     }
     if (highest <= limit) return;
 
+    // A program that CHECKS the address it got back does not truncate: it
+    // rejects and tries again. LuaJIT, Box64 and jemalloc all do exactly
+    // this, and reporting silent truncation for them was not merely the wrong
+    // severity, it was the wrong mechanism - the described failure cannot
+    // occur in that code.
+    const bool rejects_bad_addresses =
+        req_.request.validates_returned_address ||
+        req_.permits(FallbackKind::Relocate) ||
+        req_.assumptions.retries_on_failure;
+
     Finding f = start(ids::kPointerTruncation, Confidence::Proven,
-                      SupportLevel::Unsupported);
+                      rejects_bad_addresses ? SupportLevel::ConditionallySupported
+                                            : SupportLevel::Unsupported);
+    f.structural_impossibility = !rejects_bad_addresses;
     f.required = "the returned address must round-trip through " + dec(width) +
                  "-bit storage";
     f.host_capability = "addresses in this request reach " + json::to_hex(highest);
-    f.modeled_fallback =
-        "the high bits are discarded on assignment and the truncated pointer "
-        "refers to unrelated memory";
-    f.conclusion = "The address does not fit the storage the program keeps it in.";
+    if (rejects_bad_addresses) {
+        f.modeled_fallback =
+            "the program checks the returned address and rejects one it cannot "
+            "store" +
+            std::string(req_.assumptions.max_retries
+                            ? ", retrying up to " +
+                                  dec(*req_.assumptions.max_retries) + " times"
+                            : ", retrying") +
+            ". The reachable failure is exhaustion of those attempts, not a "
+            "truncated pointer.";
+        f.conclusion =
+            "The program cannot use most of this host's address space, so it "
+            "depends on the allocator handing it a low address. That is a "
+            "probabilistic dependency on address-space layout, not a "
+            "guarantee: it degrades as the process fragments and it can fail "
+            "outright under a different ASLR configuration.";
+    } else {
+        f.modeled_fallback =
+            "the high bits are discarded on assignment and the truncated "
+            "pointer refers to unrelated memory";
+        f.conclusion =
+            "The address does not fit the storage the program keeps it in.";
+    }
     add_application_claim(f, "program stores the returned address in a " +
                                  dec(width) + "-bit slot");
     f.evidence.add(Layer::Application, evidence,
@@ -943,6 +1133,13 @@ void Analysis::rule_pointer_truncation() {
     f.remediations.push_back({RemediationClass::WidenPointerStorage, ""});
     f.remediations.push_back({RemediationClass::ChooseDifferentBaseAddress,
                               "keep every mapping below " + json::to_hex(limit)});
+    if (rejects_bad_addresses) {
+        f.rejected_fixes.push_back(
+            {"Raise the retry count",
+             "More attempts help only while low addresses remain free. They do "
+             "not create any, and the loop gets slower exactly as the address "
+             "space fills up."});
+    }
     emit(std::move(f));
 }
 
@@ -1059,7 +1256,7 @@ void Analysis::rule_file_mapping_beyond_eof() {
 // ---------------------------------------------------------------------------
 void Analysis::rule_retry_of_permanent_error() {
     if (!req_.assumptions.retries_on_failure) return;
-    if (!proven_unsupported()) return;
+    if (!established_impossibility()) return;
 
     Finding f = start(ids::kPermanentErrorRetried, Confidence::Proven,
                       SupportLevel::Unsupported);
@@ -1126,6 +1323,8 @@ AnalysisResult Analysis::run() {
 
     rule_internal_fallback_contradiction();
     rule_baseline_mapping_capability();
+    rule_size_feasibility();
+    rule_reservation_alignment();
     rule_page_size();
     rule_address_alignment();
     rule_size_granularity();

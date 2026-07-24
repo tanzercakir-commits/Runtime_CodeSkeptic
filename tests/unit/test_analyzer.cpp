@@ -389,6 +389,165 @@ RS_TEST(a_hint_that_the_host_can_honour_is_silent) {
 }
 
 // ---------------------------------------------------------------------------
+// Defects found by running real projects through the analyzer.
+//
+// Each of these is a bug that shipped and was caught by a campaign over QEMU,
+// Box64, LuaJIT, mimalloc, jemalloc and V8 - not by an author imagining what
+// might go wrong. The test names say what was wrong.
+// ---------------------------------------------------------------------------
+
+RS_TEST(a_reservation_larger_than_the_address_space_is_refused) {
+    // QEMU's aarch64 user mode reserves MAX_RESERVED_VA = (1<<52)-1. Every
+    // placement rule began with "if no address, return", and nothing compared
+    // the SIZE against anything, so four petabytes came back SUPPORTED with
+    // no findings at all.
+    Requirement r = plain_anonymous_mapping();
+    r.operation = OperationKind::VirtualMemoryReserve;
+    r.request.size = std::uint64_t{1} << 52;
+
+    const auto result = analyze(r, permissive_host());
+    RS_CHECK_MESSAGE(result.overall == SupportLevel::Unsupported,
+                     "a 4 PiB reservation was not refused");
+    RS_CHECK(has_finding(result, ids::kSizeExceedsAddressSpace));
+
+    const Finding* f = get_finding(result, ids::kSizeExceedsAddressSpace);
+    if (f != nullptr) {
+        RS_CHECK(f->confidence == Confidence::Proven);
+        RS_CHECK(f->structural_impossibility);
+    }
+}
+
+RS_TEST(a_reservation_that_fits_is_not_refused) {
+    Requirement r = plain_anonymous_mapping();
+    r.request.size = std::uint64_t{1} << 30;  // 1 GiB, fits comfortably
+    const auto result = analyze(r, permissive_host());
+    RS_CHECK(!has_finding(result, ids::kSizeExceedsAddressSpace));
+}
+
+RS_TEST(alignment_of_the_reservation_is_checked_without_an_address) {
+    // V8's pointer-compression cage is 4 GiB aligned to 4 GiB, placed
+    // anywhere. mimalloc needs 32 MiB segment alignment. required_alignment
+    // was only consulted when an address was ALSO given, so deleting the
+    // field from those contracts changed nothing - the definition of dead
+    // code.
+    Requirement r = plain_anonymous_mapping();
+    r.operation = OperationKind::VirtualMemoryReserve;
+    r.request.size = std::uint64_t{4} << 30;
+    r.request.required_alignment = std::uint64_t{4} << 30;
+    RS_CHECK(!r.request.address.has_value());
+
+    const auto result = analyze(r, permissive_host());
+    RS_CHECK(has_finding(result, ids::kReservationAlignmentUnguaranteed));
+    RS_CHECK(result.overall == SupportLevel::ConditionallySupported);
+}
+
+RS_TEST(alignment_within_the_api_guarantee_is_silent) {
+    Requirement r = plain_anonymous_mapping();
+    r.request.required_alignment = 4096;  // the host already guarantees this
+    const auto result = analyze(r, permissive_host());
+    RS_CHECK(!has_finding(result, ids::kReservationAlignmentUnguaranteed));
+}
+
+RS_TEST(a_page_size_upper_bound_is_satisfied_by_a_smaller_page) {
+    // jemalloc built with --with-lg-page=16 checks `if (os_page > PAGE)`.
+    // It demands AT MOST 64 KiB and runs correctly on a 4 KiB kernel. The
+    // equality-only rule called that a critical impossibility and advised
+    // finding "a host whose page size is 65536".
+    Requirement r = plain_anonymous_mapping();
+    r.request.required_page_size = 65536;
+    r.request.required_page_size_relation = SizeRelation::AtMost;
+
+    const auto result = analyze(r, permissive_host());  // host is 4096
+    RS_CHECK_MESSAGE(!has_finding(result, ids::kPageSizeMismatch),
+                     "an at-most page-size bound was reported as a mismatch");
+    RS_CHECK(result.overall == SupportLevel::Supported);
+}
+
+RS_TEST(a_page_size_lower_bound_that_the_host_misses_is_reported) {
+    Requirement r = plain_anonymous_mapping();
+    r.request.required_page_size = 16384;
+    r.request.required_page_size_relation = SizeRelation::AtLeast;
+    const auto result = analyze(r, permissive_host());
+    RS_CHECK(has_finding(result, ids::kPageSizeMismatch));
+}
+
+RS_TEST(the_retry_rule_is_reachable_for_statically_inferred_requirements) {
+    // proven_unsupported() tested `confidence == Proven`. Confidence is
+    // clamped by evidence, so a statically inferred requirement can never
+    // reach Proven - which made this rule dead on exactly the input a static
+    // extractor produces. Every document CodeSkeptic emits is in that class.
+    Requirement r = exact_mapping_requirement();
+    r.assumption_evidence = EvidenceClass::StaticallyInferred;
+    r.assumptions.retries_on_failure = true;
+    r.assumptions.max_retries = 30;
+
+    const auto result = analyze(r, host_with_reserved_band());
+    RS_CHECK_MESSAGE(has_finding(result, ids::kPermanentErrorRetried),
+                     "the retry rule did not fire for a statically inferred "
+                     "requirement");
+
+    const Finding* f = get_finding(result, ids::kPermanentErrorRetried);
+    if (f != nullptr) {
+        // Reachable, but still honest about its evidence.
+        RS_CHECK(f->confidence != Confidence::Proven);
+    }
+}
+
+RS_TEST(a_program_that_validates_its_address_is_not_accused_of_truncation) {
+    // LuaJIT tests (addr >> 31) == 0 and munmaps anything that fails, thirty
+    // times. It never stores an un-vetted address, so "the high bits are
+    // discarded and the pointer refers to unrelated memory" describes a
+    // failure that cannot occur in that program.
+    Requirement r = exact_mapping_requirement(0x1000000000ull);
+    r.assumptions.pointer_storage_width_bits = 31;
+    r.request.validates_returned_address = true;
+    r.assumptions.retries_on_failure = true;
+    r.assumptions.max_retries = 30;
+
+    const auto result = analyze(r, permissive_host());
+    const Finding* f = get_finding(result, ids::kPointerTruncation);
+    RS_CHECK(f != nullptr);
+    if (f == nullptr) return;
+
+    RS_CHECK_MESSAGE(f->support_impact == SupportLevel::ConditionallySupported,
+                     "a test-and-reject program was reported as impossible");
+    RS_CHECK(!f->structural_impossibility);
+    RS_CHECK_MESSAGE(
+        f->modeled_fallback.find("exhaustion") != std::string::npos,
+        "the finding still describes truncation rather than retry exhaustion");
+}
+
+RS_TEST(a_program_that_does_not_validate_is_still_accused_of_truncation) {
+    Requirement r = exact_mapping_requirement(0x1000000000ull);
+    r.assumptions.pointer_storage_width_bits = 31;
+    const auto result = analyze(r, permissive_host());
+    const Finding* f = get_finding(result, ids::kPointerTruncation);
+    RS_CHECK(f != nullptr);
+    if (f != nullptr) {
+        RS_CHECK(f->support_impact == SupportLevel::Unsupported);
+        RS_CHECK(f->structural_impossibility);
+    }
+}
+
+RS_TEST(a_declared_no_op_failure_sink_caps_severity) {
+    // mimalloc's huge-page loop keeps whatever contiguous prefix it got and
+    // warns. Reporting that at Critical made a graceful fallback look like an
+    // abort.
+    Requirement r = plain_anonymous_mapping();
+    r.request.required_page_size = 16384;
+    r.failure_sink.kind = FailureSinkKind::None;
+
+    const auto result = analyze(r, permissive_host());
+    const Finding* f = get_finding(result, ids::kPageSizeMismatch);
+    RS_CHECK(f != nullptr);
+    if (f != nullptr) {
+        RS_CHECK_MESSAGE(f->severity != Severity::Critical,
+                         "a declared no-op failure sink still produced a "
+                         "critical finding");
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Determinism and structure of the result.
 // ---------------------------------------------------------------------------
 RS_TEST(analysis_is_deterministic) {
