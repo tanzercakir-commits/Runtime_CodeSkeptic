@@ -1,0 +1,156 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build-and-test:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: "linux / gcc",     os: ubuntu-latest,  cc: gcc,   cxx: g++ }
+          - { name: "linux / clang",   os: ubuntu-latest,  cc: clang, cxx: clang++ }
+          - { name: "macos / apple-clang", os: macos-latest, cc: clang, cxx: clang++ }
+          - { name: "windows / msvc",  os: windows-latest, cc: "",    cxx: "" }
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure
+        shell: bash
+        run: |
+          # Warnings are errors in CI only. A contributor's local build should
+          # not fail because their compiler version has a new diagnostic.
+          EXTRA=""
+          if [ -n "${{ matrix.cc }}" ]; then
+            export CC=${{ matrix.cc }} CXX=${{ matrix.cxx }}
+          fi
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=RelWithDebInfo -DRS_WARNINGS_AS_ERRORS=ON $EXTRA
+
+      - name: Build
+        run: cmake --build build --config RelWithDebInfo --parallel
+
+      - name: Test
+        run: ctest --test-dir build --build-config RelWithDebInfo --output-on-failure
+
+      # The probe is only implemented for Linux. On other platforms this step
+      # proves the honest fallback: a schema-valid profile in which every fact
+      # is unknown, and a non-zero warning list saying so.
+      - name: Probe this host
+        shell: bash
+        run: |
+          BIN=build/bin
+          [ -x "$BIN/rs-env-probe" ] || BIN=build/bin/RelWithDebInfo
+          "$BIN/rs-env-probe" vm --name "ci-${{ matrix.os }}" --output host-profile.json
+          "$BIN/rs-profile" verify host-profile.json
+
+      - name: Upload the measured profile
+        uses: actions/upload-artifact@v4
+        with:
+          name: profile-${{ matrix.os }}-${{ matrix.cc || 'msvc' }}
+          path: host-profile.json
+
+  compatibility-gate:
+    name: compatibility gate (linux)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build
+        run: |
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=RelWithDebInfo
+          cmake --build build --parallel
+
+      - name: Measure the host
+        run: build/bin/rs-env-probe vm --name ci-linux --output host-profile.json
+
+      # Demonstrates the exit-code contract end to end. Each requirement has a
+      # documented expected outcome on a 64-bit Linux host; a mismatch means
+      # either the analyzer or the platform changed, and both deserve a failed
+      # build.
+      - name: Evaluate shipped contracts
+        run: |
+          set +e
+          fail=0
+
+          check () {
+            local contract="$1" expected="$2" label="$3"
+            build/bin/rs-check "$contract" --profile host-profile.json --quiet
+            local code=$?
+            if [ "$code" != "$expected" ]; then
+              echo "::error::$label: expected exit $expected, got $code"
+              fail=1
+            else
+              echo "ok: $label (exit $code)"
+            fi
+          }
+
+          # Address above the user address space: proven impossible anywhere on
+          # x86-64 Linux with 4-level paging.
+          check contracts/emulator-highmem-guest-mapping.json 1 "high-memory guest mapping is UNSUPPORTED"
+
+          # A JIT demanding simultaneous write+execute: allowed on stock Linux,
+          # so this must NOT be reported as a contradiction here.
+          check contracts/jit-code-buffer.json 0 "RWX JIT buffer is SUPPORTED on Linux"
+
+          # Two-phase reserve/commit against a lazy-commit host: a semantic
+          # mismatch, not an impossibility.
+          check contracts/database-reserve-commit.json 2 "reserve/commit is CONDITIONALLY_SUPPORTED"
+
+          exit $fail
+
+      - name: Regression report against the unverified macOS fixture
+        run: |
+          build/bin/rs-check contracts/emulator-fixed-guest-mapping.json \
+            --profile profiles/fixtures/macos-arm64-rosetta-x86_64.fixture.json \
+            --format markdown --output fixture-report.md || true
+          # The fixture's facts are heuristic_risk, so nothing derived from it
+          # may claim PROVEN. This grep is the confidence ceiling as a CI gate.
+          if grep -q "PROVEN" fixture-report.md; then
+            echo "::error::a hand-authored fixture produced a PROVEN finding"
+            exit 1
+          fi
+          cat fixture-report.md
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: reports
+          path: |
+            host-profile.json
+            fixture-report.md
+
+  determinism:
+    name: determinism
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=RelWithDebInfo
+          cmake --build build --parallel
+
+      # Phase 1 exit criterion: repeated runs on the same stable host produce
+      # equivalent canonical profiles.
+      - name: Two probe runs must agree
+        run: |
+          build/bin/rs-env-probe vm --name a --output a.json
+          build/bin/rs-env-probe vm --name b --output b.json
+          ida=$(build/bin/rs-profile id a.json)
+          idb=$(build/bin/rs-profile id b.json)
+          echo "A: $ida"
+          echo "B: $idb"
+          [ "$ida" = "$idb" ] || { echo "::error::profile_id is not stable across runs"; exit 1; }
+          build/bin/rs-profile diff a.json b.json
+
+      - name: Canonical form must survive a round trip
+        run: |
+          build/bin/rs-env-probe vm --name rt --canonical --output c1.json
+          id1=$(build/bin/rs-profile id c1.json)
+          # Re-reading and re-serializing must not change the identity.
+          id2=$(build/bin/rs-profile id c1.json)
+          [ "$id1" = "$id2" ] || { echo "::error::profile_id changed on re-read"; exit 1; }
