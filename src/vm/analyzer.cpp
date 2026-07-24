@@ -1,0 +1,1107 @@
+// SPDX-License-Identifier: Apache-2.0
+#include "runtimeskeptic/vm/analyzer.hpp"
+
+#include <algorithm>
+#include <string>
+
+namespace rs::vm {
+namespace {
+
+std::string dec(std::uint64_t v) { return std::to_string(v); }
+
+// A finding whose failure sink is fatal is worse than the same finding whose
+// failure sink returns an error. Severity therefore depends on the program,
+// not only on the platform.
+Severity adjust_severity(Severity base, FailureSinkKind sink) {
+    switch (sink) {
+        case FailureSinkKind::FatalAssert:
+        case FailureSinkKind::ProcessExit:
+            return Severity::Critical;
+        case FailureSinkKind::Unchecked:
+            // Silent misbehavior is not milder than a crash; it is usually
+            // worse, because the failure surfaces far from its cause.
+            return base == Severity::Info ? Severity::Info : Severity::Critical;
+        case FailureSinkKind::RetryLoop:
+            return base == Severity::Info ? Severity::Info : Severity::High;
+        case FailureSinkKind::ErrorReturn:
+            return base == Severity::Critical ? Severity::High : base;
+        case FailureSinkKind::None:
+        case FailureSinkKind::Unknown:
+            return base;
+    }
+    return base;
+}
+
+std::string describe_sink(const FailureSink& sink) {
+    std::string s(rs::vm::to_string(sink.kind));
+    if (sink.location) s += " at " + sink.location->to_string();
+    if (!sink.description.empty()) s += " - " + sink.description;
+    return s;
+}
+
+class Analysis {
+public:
+    Analysis(const Requirement& requirement, const EnvironmentProfile& profile,
+             const AnalysisOptions& options)
+        : req_(requirement), profile_(profile), options_(options) {}
+
+    AnalysisResult run();
+
+private:
+    const Requirement& req_;
+    const EnvironmentProfile& profile_;
+    const AnalysisOptions& options_;
+    AnalysisResult result_;
+
+    // Creates a finding pre-filled from the registry. `desired` is what the
+    // rule believes; the engine clamps it against the evidence chain in
+    // `emit()`.
+    Finding start(const char* id, Confidence desired, SupportLevel impact) {
+        Finding f;
+        const FindingDefinition* def = find_definition(id);
+        f.id = id;
+        f.title = def != nullptr ? def->title : "(unregistered finding)";
+        f.severity = def != nullptr ? def->default_severity : Severity::Medium;
+        f.confidence = desired;
+        f.support_impact = impact;
+        f.failure_sink = describe_sink(req_.failure_sink);
+        f.source_locations = req_.source_locations;
+        f.profile_id = result_.profile_id;
+        f.requirement_id = result_.requirement_id;
+        f.adapter_capability =
+            req_.assumptions.translation_layer_available
+                ? "guest-to-host address translation available"
+                : "no guest-to-host address translation";
+        return f;
+    }
+
+    void emit(Finding f) {
+        f.severity = adjust_severity(f.severity, req_.failure_sink.kind);
+        // The single place where overclaiming is prevented.
+        f.confidence = clamp_confidence(f.confidence, f.evidence.weakest_class());
+        result_.overall = combine(result_.overall, f.support_impact);
+        result_.findings.push_back(std::move(f));
+    }
+
+    // The application's own claim about what it requires. Every finding starts
+    // from one of these so the report always says who asked for what.
+    void add_application_claim(Finding& f, std::string claim) {
+        f.evidence.add(Layer::Application, req_.assumption_evidence,
+                       std::move(claim),
+                       req_.source_locations.empty()
+                           ? (req_.name.empty() ? "requirement document"
+                                                : req_.name)
+                           : req_.source_locations.front().to_string());
+    }
+
+    bool proven_unsupported() const {
+        return std::any_of(result_.findings.begin(), result_.findings.end(),
+                           [](const Finding& f) {
+                               return f.support_impact == SupportLevel::Unsupported &&
+                                      f.confidence == Confidence::Proven;
+                           });
+    }
+
+    bool already_emitted(const char* id) const {
+        return std::any_of(
+            result_.findings.begin(), result_.findings.end(),
+            [id](const Finding& f) { return f.id == id; });
+    }
+
+    // The weakest evidence class among the findings that proved impossibility.
+    // A rule that reasons *about* other findings must inherit their evidence
+    // rather than inventing its own: the retry rule knows nothing first-hand.
+    EvidenceClass proven_unsupported_evidence() const {
+        EvidenceClass w = EvidenceClass::SpecifiedGuarantee;
+        bool found = false;
+        for (const auto& f : result_.findings) {
+            if (f.support_impact == SupportLevel::Unsupported &&
+                f.confidence == Confidence::Proven) {
+                w = rs::weakest(w, f.evidence.weakest_class());
+                found = true;
+            }
+        }
+        return found ? w : EvidenceClass::Unknown;
+    }
+
+    // ---- rules ----------------------------------------------------------
+    void rule_internal_fallback_contradiction();
+    void rule_page_size();
+    void rule_address_alignment();
+    void rule_size_granularity();
+    void rule_range_availability();
+    void rule_exact_mapping_capability();
+    void rule_non_destructive_exact_mapping();
+    void rule_hinted_relocation();
+    void rule_identity_without_translation();
+    void rule_write_execute();
+    void rule_executable_mapping();
+    void rule_jit_entitlement();
+    void rule_reserve_commit();
+    void rule_pointer_truncation();
+    void rule_file_mapping_beyond_eof();
+    void rule_retry_of_permanent_error();
+};
+
+// ---------------------------------------------------------------------------
+// RS-VM-0014: the requirement contradicts itself.
+//
+// Checked first and without consulting the profile, because a self-
+// contradictory contract is host-independent. ROADMAP MVP demonstration 7,
+// "invalid fallback reported as success".
+// ---------------------------------------------------------------------------
+void Analysis::rule_internal_fallback_contradiction() {
+    if (!req_.permits(FallbackKind::Relocate)) return;
+
+    const bool requires_identity =
+        req_.request.exact_address_required ||
+        req_.assumptions.guest_host_identity_required;
+    if (!requires_identity) return;
+
+    Finding f = start(ids::kInvalidFallbackContract, Confidence::Proven,
+                      SupportLevel::Unsupported);
+    f.required =
+        "the returned address must equal the requested address"
+        + std::string(req_.assumptions.guest_host_identity_required
+                          ? " (guest/host identity)"
+                          : " (exact address)");
+    f.host_capability = "not consulted: the contradiction is internal to the "
+                        "requirement and holds on every host";
+    f.modeled_fallback = "relocation is listed as a permitted fallback";
+    f.conclusion =
+        "The requirement permits relocation and simultaneously demands address "
+        "identity. Any relocated mapping satisfies the fallback while violating "
+        "the postcondition, so a 'successful' fallback still fails the caller.";
+
+    add_application_claim(f, "exact address / identity is required");
+    f.evidence.add(Layer::Application, req_.assumption_evidence,
+                   "relocation is declared an acceptable fallback",
+                   "requirement.permitted_fallbacks");
+    f.evidence.add(Layer::Analyzer, EvidenceClass::SpecifiedGuarantee,
+                   "a relocated mapping cannot satisfy "
+                   "returned_address == requested_address",
+                   "analyzer: definition of relocation");
+
+    f.remediations.push_back({RemediationClass::RelaxExactAddressRequirement, ""});
+    f.remediations.push_back({RemediationClass::HandleRelocationInCaller, ""});
+    f.rejected_fixes.push_back(
+        {"Keep both and let the runtime decide",
+         "The two clauses are mutually exclusive; no runtime choice satisfies "
+         "both."});
+    emit(std::move(f));
+}
+
+// ---------------------------------------------------------------------------
+// RS-VM-0006: hard-coded page size versus host page size.
+// ---------------------------------------------------------------------------
+void Analysis::rule_page_size() {
+    if (!req_.request.required_page_size) return;
+    const std::uint64_t required = *req_.request.required_page_size;
+
+    if (!profile_.vm.page_size.is_known()) {
+        if (!options_.report_unknowns) return;
+        // The id (and therefore the title) stays stable across every "we never
+        // established this" outcome; the specific fact is named in the body so
+        // CI can filter the whole class with one rule.
+        Finding f = start(ids::kRequiredFactUnknown, Confidence::Hypothesis,
+                          SupportLevel::Unknown);
+        f.required = "page size == " + dec(required);
+        f.host_capability = "unknown: the profile carries no page-size fact";
+        f.conclusion = "Run rs-env-probe on the target host to establish the "
+                       "page size before trusting this analysis.";
+        add_application_claim(f, "program assumes a page size of " + dec(required));
+        f.evidence.add(Layer::OperatingSystem, EvidenceClass::Unknown,
+                       "page size not present in profile", profile_.profile_name);
+        emit(std::move(f));
+        return;
+    }
+
+    const std::uint64_t actual = profile_.vm.page_size.value();
+    if (actual == required) return;
+
+    Finding f = start(ids::kPageSizeMismatch, Confidence::Proven,
+                      SupportLevel::Unsupported);
+    f.required = "page size == " + dec(required);
+    f.host_capability = "page size == " + dec(actual);
+    f.modeled_fallback =
+        actual > required
+            ? "mappings are rounded up to the larger host page, so distinct "
+              "guest pages share one host page and their protections collide"
+            : "one guest page spans several host pages, so protection changes "
+              "are not atomic with respect to the guest model";
+    f.conclusion = "The host page size differs from the size the program has "
+                   "compiled in. No mapping request can repair this.";
+
+    add_application_claim(f, "program requires a page size of " + dec(required));
+    f.evidence.add(Layer::OperatingSystem, profile_.vm.page_size.evidence(),
+                   "host page size is " + dec(actual),
+                   profile_.vm.page_size.source().empty()
+                       ? profile_.profile_name
+                       : profile_.vm.page_size.source());
+
+    f.remediations.push_back({RemediationClass::MatchHostPageSize, ""});
+    f.remediations.push_back({RemediationClass::SelectDifferentHostConfiguration,
+                              "a host whose page size is " + dec(required)});
+    f.rejected_fixes.push_back(
+        {"Round the mapping size up to the host page size",
+         "Rounding fixes the allocation but not the program's page-granularity "
+         "model: protection and dirty tracking still operate on host pages."});
+    emit(std::move(f));
+}
+
+// ---------------------------------------------------------------------------
+// RS-VM-0004: exact address versus allocation granularity.
+// ---------------------------------------------------------------------------
+void Analysis::rule_address_alignment() {
+    if (!req_.request.address) return;
+    const std::uint64_t address = *req_.request.address;
+
+    // Explicit program-declared alignment first: it is host-independent.
+    if (req_.request.required_alignment) {
+        const std::uint64_t alignment = *req_.request.required_alignment;
+        if (!is_power_of_two(alignment)) {
+            result_.analyzer_limitations.push_back(
+                "required_alignment " + dec(alignment) +
+                " is not a power of two; alignment rules were skipped");
+        } else if (!is_aligned(address, alignment)) {
+            Finding f = start(ids::kAddressAlignmentMismatch, Confidence::Proven,
+                              SupportLevel::Unsupported);
+            f.required = "address aligned to " + dec(alignment);
+            f.host_capability = "not consulted: the request is internally "
+                                "inconsistent";
+            f.conclusion = "The requested address does not satisfy the "
+                           "alignment the program itself declares.";
+            add_application_claim(
+                f, "program requires " + dec(alignment) + "-byte alignment but "
+                   "requests " + json::to_hex(address));
+            f.evidence.add(Layer::Analyzer, EvidenceClass::SpecifiedGuarantee,
+                           json::to_hex(address) + " % " + dec(alignment) +
+                               " != 0",
+                           "analyzer: alignment arithmetic");
+            f.remediations.push_back(
+                {RemediationClass::ChooseDifferentBaseAddress, ""});
+            emit(std::move(f));
+            return;
+        }
+    }
+
+    if (!req_.request.exact_address_required) return;
+    if (!profile_.vm.allocation_granularity.is_known()) return;
+
+    const std::uint64_t granularity = profile_.vm.allocation_granularity.value();
+    if (is_aligned(address, granularity)) return;
+
+    Finding f = start(ids::kAddressAlignmentMismatch, Confidence::Proven,
+                      SupportLevel::Unsupported);
+    f.required = "mapping placed exactly at " + json::to_hex(address);
+    f.host_capability =
+        "exact mappings must be aligned to the allocation granularity of " +
+        dec(granularity) + " bytes";
+    f.modeled_fallback =
+        "the request is rejected, or the base is rounded down and the mapping "
+        "starts below the requested address";
+    f.conclusion = "The requested base address is not a multiple of this host's "
+                   "allocation granularity, so an exact placement is impossible.";
+
+    add_application_claim(f, "program requires an exact mapping at " +
+                                 json::to_hex(address));
+    f.evidence.add(Layer::OperatingSystem,
+                   profile_.vm.allocation_granularity.evidence(),
+                   "allocation granularity is " + dec(granularity) + " bytes",
+                   profile_.vm.allocation_granularity.source().empty()
+                       ? profile_.profile_name
+                       : profile_.vm.allocation_granularity.source());
+    f.evidence.add(Layer::Analyzer, EvidenceClass::SpecifiedGuarantee,
+                   json::to_hex(address) + " % " + dec(granularity) + " != 0",
+                   "analyzer: alignment arithmetic");
+
+    f.remediations.push_back({RemediationClass::ChooseDifferentBaseAddress,
+                              "round the base down to " +
+                                  json::to_hex(align_down(address, granularity)
+                                                   .value_or(0))});
+    emit(std::move(f));
+}
+
+// ---------------------------------------------------------------------------
+// RS-VM-0005: size versus allocation granularity.
+// ---------------------------------------------------------------------------
+void Analysis::rule_size_granularity() {
+    if (!profile_.vm.allocation_granularity.is_known()) return;
+    const std::uint64_t granularity = profile_.vm.allocation_granularity.value();
+    if (granularity == 0 || is_aligned(req_.request.size, granularity)) return;
+
+    const auto rounded = round_up_to(req_.request.size, granularity);
+    if (!rounded) return;
+
+    Finding f = start(ids::kSizeGranularityMismatch, Confidence::Proven,
+                      SupportLevel::ConditionallySupported);
+    f.required = "a mapping of exactly " + dec(req_.request.size) + " bytes";
+    f.host_capability = "reservations are rounded up to " + dec(granularity) +
+                        "-byte units";
+    f.modeled_fallback = "the host reserves " + dec(*rounded) +
+                         " bytes; the extra " + dec(*rounded - req_.request.size) +
+                         " bytes are addressable and will not fault";
+    f.conclusion =
+        "The mapping succeeds but covers more address space than requested. "
+        "This is only a defect if the program relies on the bytes past its "
+        "requested size being unmapped.";
+
+    add_application_claim(f, "program requests " + dec(req_.request.size) +
+                                 " bytes");
+    f.evidence.add(Layer::OperatingSystem,
+                   profile_.vm.allocation_granularity.evidence(),
+                   "allocation granularity is " + dec(granularity) + " bytes",
+                   profile_.profile_name);
+    f.remediations.push_back(
+        {RemediationClass::ReserveAddressSpaceEarlier,
+         "request " + dec(*rounded) + " bytes explicitly so the program's model "
+         "matches the reservation"});
+    emit(std::move(f));
+}
+
+// ---------------------------------------------------------------------------
+// RS-VM-0001 / 0002 / 0003 / 0017: is the requested range available at all?
+//
+// This is the rule that diagnoses the ROADMAP's motivating incident.
+// ---------------------------------------------------------------------------
+void Analysis::rule_range_availability() {
+    if (!req_.request.address) return;
+    if (!req_.request.exact_address_required &&
+        !req_.assumptions.guest_host_identity_required) {
+        // The program does not care where the mapping lands, so range
+        // availability at this particular address does not decide anything.
+        return;
+    }
+
+    const auto range = req_.request.range();
+    if (!range) {
+        result_.analyzer_limitations.push_back(
+            "requested range wraps past the end of the address space");
+        return;
+    }
+
+    const RangeVerdict verdict = profile_.query_range(*range);
+
+    if (verdict.level == SupportLevel::Supported) return;
+
+    if (verdict.level == SupportLevel::Unknown) {
+        if (!options_.report_unknowns) {
+            result_.overall = combine(result_.overall, SupportLevel::Unknown);
+            return;
+        }
+        Finding f = start(ids::kRequiredFactUnknown, Confidence::Hypothesis,
+                          SupportLevel::Unknown);
+        f.required = "mapping placed exactly at " + range->to_string();
+        f.host_capability = verdict.reason;
+        f.conclusion =
+            "The analyzer cannot decide this request. Extend the probe to cover "
+            "the range, or supply a profile that specifies it.";
+        add_application_claim(f, "program requires an exact mapping at " +
+                                     range->to_string());
+        f.evidence.add(Layer::OperatingSystem, EvidenceClass::Unknown,
+                       verdict.reason, profile_.profile_name);
+        emit(std::move(f));
+        return;
+    }
+
+    // Unsupported. Pick the finding id that names the actual obstacle.
+    const char* id = ids::kExactAddressUnavailable;
+    if (profile_.vm.min_map_address.is_known() &&
+        range->start < profile_.vm.min_map_address.value().value) {
+        id = ids::kAddressBelowMinimum;
+    } else if (profile_.vm.max_user_address.is_known() &&
+               range->end > profile_.vm.max_user_address.value().value) {
+        id = ids::kAddressAboveUserSpace;
+    }
+
+    Finding f = start(id, Confidence::Proven, SupportLevel::Unsupported);
+    f.required = "mapping placed exactly at " + range->to_string();
+    if (req_.assumptions.guest_host_identity_required) {
+        f.required += "; guest address must equal host address";
+    }
+    f.host_capability = verdict.reason;
+    f.modeled_fallback =
+        req_.assumptions.translation_layer_available
+            ? "a translation layer could rebase the mapping"
+            : "the mapping is placed elsewhere and reported as success, or the "
+              "call fails outright";
+    f.conclusion =
+        req_.assumptions.translation_layer_available
+            ? "The host cannot place the mapping at the requested address. A "
+              "translation layer is available, so the outcome depends on "
+              "whether that layer is actually engaged for this mapping."
+            : "No execution satisfying all constraints exists on this host "
+              "profile. The address is unavailable and no translation layer "
+              "can absorb the difference.";
+
+    add_application_claim(f, "program requires an exact mapping at " +
+                                 json::to_hex(range->start) + " of " +
+                                 dec(req_.request.size) + " bytes");
+    if (req_.assumptions.guest_host_identity_required) {
+        f.evidence.add(Layer::CompatibilityLayer, req_.assumption_evidence,
+                       req_.assumptions.translation_layer_available
+                           ? "a guest-to-host translation layer is available"
+                           : "no guest-to-host translation layer exists, so the "
+                             "guest address must equal the host address",
+                       "requirement.assumptions");
+    }
+    f.evidence.add(Layer::OperatingSystem, verdict.evidence, verdict.reason,
+                   profile_.profile_name.empty() ? result_.profile_id
+                                                 : profile_.profile_name);
+    if (verdict.conflicting_range) {
+        f.evidence.add(Layer::Kernel, verdict.evidence,
+                       "conflicting range " + verdict.conflicting_range->to_string(),
+                       profile_.profile_name);
+    }
+
+    if (!req_.assumptions.translation_layer_available) {
+        f.remediations.push_back(
+            {RemediationClass::AddAddressTranslationLayer, ""});
+    }
+    f.remediations.push_back({RemediationClass::ChooseDifferentBaseAddress, ""});
+    f.remediations.push_back({RemediationClass::RelaxExactAddressRequirement, ""});
+    f.remediations.push_back({RemediationClass::ReserveAddressSpaceEarlier,
+                              "only helps if the range is free at startup and "
+                              "merely contended later"});
+    f.remediations.push_back(
+        {RemediationClass::SelectDifferentHostConfiguration, ""});
+
+    f.rejected_fixes.push_back(
+        {"Retry the mapping",
+         "The obstacle is a property of this host's address space, not a "
+         "transient resource shortage. Every attempt fails identically."});
+    f.rejected_fixes.push_back(
+        {"Request a smaller size at the same address",
+         "The start address itself is unavailable; reducing the length does not "
+         "make it available."});
+    if (!req_.assumptions.translation_layer_available) {
+        f.rejected_fixes.push_back(
+            {"Ignore the returned address and continue",
+             "The program compares the returned address against the requested "
+             "one and treats a mismatch as fatal."});
+    }
+    emit(std::move(f));
+}
+
+// ---------------------------------------------------------------------------
+// RS-VM-0001 (capability form): the host does not support exact placement.
+// ---------------------------------------------------------------------------
+void Analysis::rule_exact_mapping_capability() {
+    if (!req_.request.exact_address_required) return;
+    if (!profile_.vm.exact_mapping.is_known()) return;
+    const SupportLevel level = profile_.vm.exact_mapping.value();
+    if (level != SupportLevel::Unsupported) return;
+
+    Finding f = start(ids::kExactAddressUnavailable, Confidence::Proven,
+                      SupportLevel::Unsupported);
+    f.required = "the mapping must be placed at an exactly specified address";
+    f.host_capability = "this host does not support exact address placement at all";
+    f.modeled_fallback = "the address is treated as a hint";
+    f.conclusion = "Exact placement is unavailable as a capability on this host, "
+                   "independently of which address is requested.";
+    add_application_claim(f, "program requires exact address placement");
+    f.evidence.add(Layer::OperatingSystem, profile_.vm.exact_mapping.evidence(),
+                   "exact_mapping is UNSUPPORTED in the profile",
+                   profile_.profile_name);
+    f.remediations.push_back({RemediationClass::AddAddressTranslationLayer, ""});
+    f.remediations.push_back({RemediationClass::RelaxExactAddressRequirement, ""});
+    emit(std::move(f));
+}
+
+// ---------------------------------------------------------------------------
+// RS-VM-0016: exact placement exists, but only destructively.
+//
+// Without MAP_FIXED_NOREPLACE (or an equivalent), the only way to demand an
+// address is to overwrite whatever is already there. That is a silent
+// contract degradation waiting to happen: the call succeeds and something
+// else in the process loses its memory.
+// ---------------------------------------------------------------------------
+void Analysis::rule_non_destructive_exact_mapping() {
+    if (!req_.request.exact_address_required) return;
+    if (!profile_.vm.fixed_noreplace_available.is_known()) return;
+    if (profile_.vm.fixed_noreplace_available.value()) return;
+
+    Finding f = start(ids::kExactMappingNonDestructiveUnavailable,
+                      Confidence::Proven, SupportLevel::ConditionallySupported);
+    f.required = "an exact mapping that does not disturb existing mappings";
+    f.host_capability =
+        "this host offers no non-destructive exact-placement primitive";
+    f.modeled_fallback =
+        "a forced exact mapping silently unmaps whatever already occupied the "
+        "range, or the address is downgraded to a hint and may relocate";
+    f.conclusion =
+        "Exact placement is only reachable through a destructive operation. "
+        "Success does not imply that the range was free.";
+    add_application_claim(f, "program requires exact address placement");
+    f.evidence.add(Layer::SystemCallInterface,
+                   profile_.vm.fixed_noreplace_available.evidence(),
+                   "no non-destructive fixed-mapping primitive is available",
+                   profile_.profile_name);
+    f.remediations.push_back({RemediationClass::ReserveAddressSpaceEarlier, ""});
+    f.rejected_fixes.push_back(
+        {"Check the range with a preliminary query, then map it",
+         "The check and the mapping are not atomic; another thread or the "
+         "allocator can take the range in between."});
+    emit(std::move(f));
+}
+
+// ---------------------------------------------------------------------------
+// RS-VM-0007: hinted mapping may relocate while the caller assumes identity.
+// ROADMAP MVP demonstration 2, and the Phase 6 "latent portability failure".
+// ---------------------------------------------------------------------------
+void Analysis::rule_hinted_relocation() {
+    if (req_.request.exact_address_required) return;   // covered elsewhere
+    if (!req_.request.address) return;
+    if (!req_.assumptions.guest_host_identity_required) return;
+    if (!profile_.vm.hinted_mapping_may_relocate.is_known()) return;
+    if (!profile_.vm.hinted_mapping_may_relocate.value()) return;
+
+    Finding f = start(ids::kHintedMappingMayRelocate, Confidence::Counterexample,
+                      SupportLevel::Unsupported);
+    f.required = "returned_address == requested_address";
+    f.host_capability =
+        "the requested address is a hint; the host may return a different one";
+    f.modeled_fallback =
+        "the call succeeds with a relocated address and the caller's identity "
+        "assumption is violated without any error being reported";
+    f.conclusion =
+        "This request may succeed today and fail on the next run, kernel "
+        "version or address-space layout. The observed success is weaker than "
+        "the required success.";
+
+    add_application_claim(
+        f, "program requires the returned address to equal " +
+               json::to_hex(*req_.request.address));
+    f.evidence.add(Layer::OperatingSystem,
+                   profile_.vm.hinted_mapping_may_relocate.evidence(),
+                   "a hinted mapping is permitted to relocate on this host",
+                   profile_.profile_name);
+    f.evidence.add(Layer::Analyzer, EvidenceClass::BoundedCounterexample,
+                   "a platform-legal outcome (relocation) reaches the caller's "
+                   "failure sink",
+                   "analyzer: outcome enumeration for hinted mappings");
+
+    f.remediations.push_back({RemediationClass::HandleRelocationInCaller, ""});
+    f.remediations.push_back({RemediationClass::AddAddressTranslationLayer, ""});
+    f.rejected_fixes.push_back(
+        {"It works on our machines, so ship it",
+         "Relocation is permitted rather than forbidden. Absence of relocation "
+         "in observed runs is not a guarantee about future runs."});
+    emit(std::move(f));
+}
+
+// ---------------------------------------------------------------------------
+// RS-VM-0008: identity assumption with no translation layer.
+//
+// This is the residual case: the program relies on guest/host address
+// identity but does not demand exact placement, and nothing more specific has
+// already been said. It is suppressed whenever a sharper rule covers the same
+// ground, so the report never states the same problem twice.
+// ---------------------------------------------------------------------------
+void Analysis::rule_identity_without_translation() {
+    if (!req_.assumptions.guest_host_identity_required) return;
+    if (req_.assumptions.translation_layer_available) return;
+
+    // Exact placement, when the host honours it, delivers identity by
+    // construction: the call either lands at the requested address or fails.
+    // If the host cannot honour it, rule_range_availability has already said
+    // so, with the actual obstacle named.
+    if (req_.request.exact_address_required) return;
+
+    // The hinted-relocation rule states the same risk with a measured fact
+    // behind it and a stronger confidence class.
+    if (already_emitted(ids::kHintedMappingMayRelocate)) return;
+
+    if (proven_unsupported()) return;  // already stated more precisely
+
+    Finding f = start(ids::kIdentityWithoutTranslation, Confidence::Hypothesis,
+                      SupportLevel::ConditionallySupported);
+    f.required = "guest addresses must equal host addresses";
+    f.host_capability =
+        "the host chooses addresses; nothing binds it to the guest layout";
+    f.modeled_fallback =
+        "any future address-space change (ASLR, loader, allocator, kernel "
+        "version) can break the identity";
+    f.conclusion =
+        "The identity assumption currently holds but is not guaranteed by "
+        "anything. It is a structural fragility rather than a present defect.";
+    add_application_claim(f, "program requires guest/host address identity");
+    f.evidence.add(Layer::CompatibilityLayer, req_.assumption_evidence,
+                   "no translation layer is available to absorb a mismatch",
+                   "requirement.assumptions");
+    f.evidence.add(Layer::Analyzer, EvidenceClass::HeuristicRisk,
+                   "identity is preserved by circumstance, not by contract",
+                   "analyzer: structural assessment");
+    f.remediations.push_back({RemediationClass::AddAddressTranslationLayer, ""});
+    emit(std::move(f));
+}
+
+// ---------------------------------------------------------------------------
+// RS-VM-0009: W^X.
+// ---------------------------------------------------------------------------
+void Analysis::rule_write_execute() {
+    const bool wants_simultaneous = req_.request.simultaneous_write_execute ||
+                                    req_.request.protection.write_and_execute();
+    if (!wants_simultaneous) {
+        // The RW -> RX flip is the well-behaved JIT pattern; check that the
+        // host permits it when the program relies on it.
+        if (!req_.request.write_then_execute) return;
+        if (!profile_.vm.protection.write_then_execute_transition.is_known()) return;
+        if (profile_.vm.protection.write_then_execute_transition.value()) return;
+
+        Finding f = start(ids::kWriteExecuteRestricted, Confidence::Proven,
+                          SupportLevel::Unsupported);
+        f.required = "write code into a mapping, then make it executable";
+        f.host_capability = "this host rejects the write-then-execute transition";
+        f.conclusion = "Neither simultaneous nor sequential write/execute is "
+                       "available for this mapping.";
+        add_application_claim(f, "program writes code and then executes it");
+        f.evidence.add(Layer::OperatingSystem,
+                       profile_.vm.protection.write_then_execute_transition.evidence(),
+                       "the RW to RX protection transition is not permitted",
+                       profile_.profile_name);
+        f.remediations.push_back({RemediationClass::RequestPlatformEntitlement, ""});
+        f.remediations.push_back(
+            {RemediationClass::UseSeparateWriteAndExecuteMappings, ""});
+        emit(std::move(f));
+        return;
+    }
+
+    if (!profile_.vm.protection.write_execute_simultaneous.is_known()) return;
+    if (profile_.vm.protection.write_execute_simultaneous.value()) return;
+
+    const bool flip_available =
+        profile_.vm.protection.write_then_execute_transition.is_known() &&
+        profile_.vm.protection.write_then_execute_transition.value();
+
+    Finding f = start(ids::kWriteExecuteRestricted, Confidence::Proven,
+                      SupportLevel::Unsupported);
+    f.required = "a mapping that is writable and executable at the same time";
+    f.host_capability = "this host enforces write-xor-execute";
+    f.modeled_fallback =
+        flip_available
+            ? "the protection can be flipped between writable and executable, "
+              "but never both at once"
+            : "the request fails";
+    f.conclusion =
+        "Write-xor-execute is a security policy, not a defect. The program's "
+        "memory model has to change; the platform's will not.";
+    add_application_claim(f, "program requires simultaneous write and execute "
+                             "permission");
+    f.evidence.add(Layer::OperatingSystem,
+                   profile_.vm.protection.write_execute_simultaneous.evidence(),
+                   "simultaneous write+execute is not available",
+                   profile_.profile_name);
+    if (flip_available) {
+        f.evidence.add(Layer::OperatingSystem,
+                       profile_.vm.protection.write_then_execute_transition.evidence(),
+                       "the RW to RX transition is available",
+                       profile_.profile_name);
+    }
+    f.remediations.push_back(
+        {RemediationClass::UseSeparateWriteAndExecuteMappings, ""});
+    if (flip_available) {
+        f.remediations.push_back(
+            {RemediationClass::UseSeparateWriteAndExecuteMappings,
+             "or serialize the JIT into write, flush, then flip to executable"});
+    }
+    f.rejected_fixes.push_back(
+        {"Disable the platform's W^X enforcement",
+         "RuntimeSkeptic does not treat a security control as a defect, and "
+         "disabling it is not a portable remediation."});
+    emit(std::move(f));
+}
+
+// ---------------------------------------------------------------------------
+// RS-VM-0010: executable anonymous memory at all.
+// ---------------------------------------------------------------------------
+void Analysis::rule_executable_mapping() {
+    if (!req_.request.protection.execute && !req_.request.write_then_execute) return;
+    if (req_.request.file_backed) return;
+    if (!profile_.vm.protection.anonymous_executable_mapping.is_known()) return;
+    if (profile_.vm.protection.anonymous_executable_mapping.value()) return;
+
+    Finding f = start(ids::kExecutableMappingUnsupported, Confidence::Proven,
+                      SupportLevel::Unsupported);
+    f.required = "executable anonymous memory";
+    f.host_capability = "anonymous mappings cannot be made executable in this "
+                        "process configuration";
+    f.conclusion = "Code generated at runtime cannot be executed on this host "
+                   "profile.";
+    add_application_claim(f, "program requires executable anonymous memory");
+    f.evidence.add(Layer::OperatingSystem,
+                   profile_.vm.protection.anonymous_executable_mapping.evidence(),
+                   "anonymous executable mapping is unavailable",
+                   profile_.profile_name);
+    f.remediations.push_back({RemediationClass::RequestPlatformEntitlement, ""});
+    f.remediations.push_back(
+        {RemediationClass::SelectDifferentHostConfiguration, ""});
+    emit(std::move(f));
+}
+
+// ---------------------------------------------------------------------------
+// RS-VM-0011: JIT entitlement.
+// ---------------------------------------------------------------------------
+void Analysis::rule_jit_entitlement() {
+    if (!req_.request.protection.execute && !req_.request.write_then_execute) return;
+    if (!profile_.vm.protection.jit_entitlement_required.is_known()) return;
+    if (!profile_.vm.protection.jit_entitlement_required.value()) return;
+
+    Finding f = start(ids::kJitEntitlementRequired, Confidence::Proven,
+                      SupportLevel::ConditionallySupported);
+    f.required = "executable memory for generated code";
+    f.host_capability =
+        "executable memory is granted only to processes carrying the platform's "
+        "JIT entitlement or policy opt-in";
+    f.modeled_fallback =
+        "without the entitlement the mapping fails, or succeeds without execute "
+        "permission and faults on first execution";
+    f.conclusion = "The capability exists but is gated by process policy rather "
+                   "than by the mapping call.";
+    add_application_claim(f, "program generates and executes code at runtime");
+    f.evidence.add(Layer::OperatingSystem,
+                   profile_.vm.protection.jit_entitlement_required.evidence(),
+                   "the host requires a JIT entitlement for executable memory",
+                   profile_.profile_name);
+    f.remediations.push_back({RemediationClass::RequestPlatformEntitlement, ""});
+    emit(std::move(f));
+}
+
+// ---------------------------------------------------------------------------
+// RS-VM-0012: reserve/commit.
+// ---------------------------------------------------------------------------
+void Analysis::rule_reserve_commit() {
+    if (!req_.request.reserve_then_commit) return;
+    if (!profile_.vm.reserve_commit_model.is_known()) return;
+    if (profile_.vm.reserve_commit_model.value() !=
+        ReserveCommitModel::PosixLazy) {
+        return;
+    }
+
+    Finding f = start(ids::kReserveCommitSemanticMismatch, Confidence::Proven,
+                      SupportLevel::ConditionallySupported);
+    f.required = "reservation and commitment are distinct, observable states";
+    f.host_capability =
+        "this host reserves address space lazily; there is no separate commit "
+        "step and no failure point at commit time";
+    f.modeled_fallback =
+        "the reservation appears to succeed for the full size and the shortage "
+        "surfaces later, at first touch, as a fault or an out-of-memory kill "
+        "rather than as a commit failure";
+    f.conclusion =
+        "The program's two-phase model maps onto a one-phase host. Failures "
+        "move from a checked call site to an unchecked memory access.";
+    add_application_claim(f, "program reserves address space and commits it later");
+    f.evidence.add(Layer::OperatingSystem,
+                   profile_.vm.reserve_commit_model.evidence(),
+                   "reserve/commit model is posix_lazy", profile_.profile_name);
+    f.remediations.push_back(
+        {RemediationClass::ReserveAddressSpaceEarlier,
+         "pre-fault or explicitly populate the range if the program needs the "
+         "shortage to surface at a checkable point"});
+    emit(std::move(f));
+}
+
+// ---------------------------------------------------------------------------
+// RS-VM-0013: pointer truncation.
+// ---------------------------------------------------------------------------
+void Analysis::rule_pointer_truncation() {
+    std::uint64_t width = 0;
+    EvidenceClass evidence = EvidenceClass::Unknown;
+    std::string source;
+
+    if (req_.assumptions.pointer_storage_width_bits) {
+        width = *req_.assumptions.pointer_storage_width_bits;
+        evidence = req_.assumption_evidence;
+        source = "requirement.assumptions.pointer_storage_width_bits";
+    } else if (profile_.process_pointer_width() != 0) {
+        width = profile_.process_pointer_width();
+        evidence = EvidenceClass::SpecifiedGuarantee;
+        source = "profile.platform.process_arch";
+    } else {
+        return;
+    }
+    if (width == 0 || width >= 64) return;
+
+    const std::uint64_t limit =
+        width >= 64 ? UINT64_MAX : (std::uint64_t{1} << width);
+
+    // The highest address the request could involve.
+    std::uint64_t highest = 0;
+    if (const auto range = req_.request.range(); range) {
+        highest = range->end;
+    } else if (profile_.vm.max_user_address.is_known()) {
+        highest = profile_.vm.max_user_address.value().value;
+    } else {
+        return;
+    }
+    if (highest <= limit) return;
+
+    Finding f = start(ids::kPointerTruncation, Confidence::Proven,
+                      SupportLevel::Unsupported);
+    f.required = "the returned address must round-trip through " + dec(width) +
+                 "-bit storage";
+    f.host_capability = "addresses in this request reach " + json::to_hex(highest);
+    f.modeled_fallback =
+        "the high bits are discarded on assignment and the truncated pointer "
+        "refers to unrelated memory";
+    f.conclusion = "The address does not fit the storage the program keeps it in.";
+    add_application_claim(f, "program stores the returned address in a " +
+                                 dec(width) + "-bit slot");
+    f.evidence.add(Layer::Application, evidence,
+                   "pointer storage width is " + dec(width) + " bits", source);
+    f.evidence.add(Layer::Analyzer, EvidenceClass::SpecifiedGuarantee,
+                   json::to_hex(highest) + " >= 2^" + dec(width),
+                   "analyzer: width arithmetic");
+    f.remediations.push_back({RemediationClass::WidenPointerStorage, ""});
+    f.remediations.push_back({RemediationClass::ChooseDifferentBaseAddress,
+                              "keep every mapping below " + json::to_hex(limit)});
+    emit(std::move(f));
+}
+
+// ---------------------------------------------------------------------------
+// RS-VM-0018: file-backed mapping extending past end of file.
+//
+// Mapping past EOF is legal everywhere; *touching* those bytes is where hosts
+// diverge. The rule therefore fires on the access, not on the mapping.
+// ---------------------------------------------------------------------------
+void Analysis::rule_file_mapping_beyond_eof() {
+    if (!req_.request.file_backed) return;
+    if (!req_.request.file_length) return;
+
+    const std::uint64_t file_length = *req_.request.file_length;
+    const std::uint64_t offset = req_.request.file_offset;
+    if (offset > UINT64_MAX - req_.request.size) return;  // caught elsewhere
+    const std::uint64_t mapping_end = offset + req_.request.size;
+    if (mapping_end <= file_length) return;
+
+    const std::uint64_t overhang = mapping_end - file_length;
+
+    if (!profile_.vm.file_map_beyond_eof.is_known()) {
+        if (!options_.report_unknowns) {
+            result_.overall = combine(result_.overall, SupportLevel::Unknown);
+            return;
+        }
+        Finding f = start(ids::kRequiredFactUnknown, Confidence::Hypothesis,
+                          SupportLevel::Unknown);
+        f.required = "defined behavior for the " + dec(overhang) +
+                     " bytes mapped past end of file";
+        f.host_capability =
+            "unknown: the profile carries no beyond-EOF behavior fact";
+        f.conclusion = "Run rs-env-probe on the target host to establish how "
+                       "this platform treats accesses past end of file.";
+        add_application_claim(f, "program maps " + dec(overhang) +
+                                     " bytes past end of file");
+        f.evidence.add(Layer::OperatingSystem, EvidenceClass::Unknown,
+                       "file_map_beyond_eof not present in profile",
+                       profile_.profile_name);
+        emit(std::move(f));
+        return;
+    }
+
+    const BeyondEofBehavior behavior = profile_.vm.file_map_beyond_eof.value();
+
+    // Zero-fill of the trailing partial page is universal and harmless; only
+    // whole pages entirely past EOF are the problem. Without page size we
+    // cannot tell the two apart, so we stay conservative and report.
+    if (behavior == BeyondEofBehavior::ZeroFill &&
+        !req_.request.accesses_beyond_eof) {
+        return;
+    }
+    if (!req_.request.accesses_beyond_eof) {
+        // Mapped but never touched: no fault can occur.
+        return;
+    }
+
+    Finding f = start(ids::kFileMappingBeyondEof, Confidence::Proven,
+                      behavior == BeyondEofBehavior::ZeroFill
+                          ? SupportLevel::ConditionallySupported
+                          : SupportLevel::Unsupported);
+    f.required = "readable memory for the " + dec(overhang) +
+                 " bytes past end of file";
+    switch (behavior) {
+        case BeyondEofBehavior::Sigbus:
+            f.host_capability =
+                "accessing whole pages past end of file raises a bus fault";
+            f.modeled_fallback =
+                "the process takes SIGBUS at the access site, far from the "
+                "mapping call that appeared to succeed";
+            break;
+        case BeyondEofBehavior::Error:
+            f.host_capability =
+                "the mapping call itself refuses to extend past end of file";
+            f.modeled_fallback = "the mapping call fails";
+            break;
+        case BeyondEofBehavior::ZeroFill:
+            f.host_capability = "bytes past end of file read as zero";
+            f.modeled_fallback =
+                "reads succeed and return zeros; writes may or may not extend "
+                "the file. The program cannot distinguish a zero byte in the "
+                "file from a byte past its end.";
+            break;
+        case BeyondEofBehavior::Unknown:
+            break;
+    }
+    f.conclusion =
+        "The mapping call succeeds while the access does not. This is the "
+        "classic shape of a silent contract degradation: the success code "
+        "describes the reservation, not the readability.";
+    add_application_claim(f, "program accesses " + dec(overhang) +
+                                 " bytes past end of file (file length " +
+                                 dec(file_length) + ", mapping ends at " +
+                                 dec(mapping_end) + ")");
+    f.evidence.add(Layer::OperatingSystem,
+                   profile_.vm.file_map_beyond_eof.evidence(),
+                   "beyond-EOF behavior is " +
+                       std::string(rs::vm::to_string(behavior)),
+                   profile_.profile_name);
+    f.remediations.push_back(
+        {RemediationClass::SelectDifferentHostConfiguration,
+         "extend the file to at least " + dec(mapping_end) +
+             " bytes before mapping it"});
+    f.rejected_fixes.push_back(
+        {"Check the mapping call's return value more carefully",
+         "The mapping call succeeds. There is nothing in its result to check."});
+    emit(std::move(f));
+}
+
+// ---------------------------------------------------------------------------
+// RS-VM-0015: retrying something that can never succeed.
+//
+// Runs last: it needs to know whether any other rule proved impossibility.
+// ---------------------------------------------------------------------------
+void Analysis::rule_retry_of_permanent_error() {
+    if (!req_.assumptions.retries_on_failure) return;
+    if (!proven_unsupported()) return;
+
+    Finding f = start(ids::kPermanentErrorRetried, Confidence::Proven,
+                      SupportLevel::Unsupported);
+    f.required = "the operation eventually succeeds after retrying";
+    f.host_capability = "the failure is structural on this host";
+    f.modeled_fallback =
+        req_.assumptions.max_retries
+            ? "the program exhausts " + dec(*req_.assumptions.max_retries) +
+                  " attempts and then takes its failure path"
+            : "the program retries without bound and never makes progress";
+    f.conclusion =
+        "A permanently impossible operation is being treated as a retryable "
+        "error. This is error-code laundering: the platform's permanent "
+        "refusal is reinterpreted as transient.";
+    add_application_claim(f, "program retries the operation after failure");
+    f.evidence.add(Layer::Analyzer, proven_unsupported_evidence(),
+                   "another rule proved this request cannot succeed on this host",
+                   "analyzer: cross-rule aggregation");
+    f.remediations.push_back({RemediationClass::TreatErrorAsPermanent, ""});
+    f.rejected_fixes.push_back(
+        {"Increase the retry count or add a backoff",
+         "Neither changes the outcome; the operation is impossible on this "
+         "host, not contended."});
+    emit(std::move(f));
+}
+
+AnalysisResult Analysis::run() {
+    result_.profile_id = profile_.profile_id();
+    result_.requirement_id = req_.requirement_id();
+    result_.profile_name = profile_.profile_name;
+    result_.requirement_name = req_.name;
+    result_.profile_origin = profile_.origin;
+    result_.overall = SupportLevel::Supported;
+
+    // Origin is not an evidence class: it describes where the *document* came
+    // from, while each fact carries how that fact is established. A profile
+    // that did not come off a real host is flagged regardless of how confident
+    // its individual facts claim to be.
+    if (profile_.origin != ProfileOrigin::Measured) {
+        result_.analyzer_limitations.push_back(
+            "profile origin is '" +
+            std::string(rs::vm::to_string(profile_.origin)) +
+            "': these facts did not come from rs-env-probe running on a real "
+            "host. Re-run the analysis against a measured profile before "
+            "acting on this verdict.");
+    }
+
+    if (req_.operation != OperationKind::VirtualMemoryMap &&
+        req_.operation != OperationKind::VirtualMemoryReserve &&
+        req_.operation != OperationKind::VirtualMemoryCommit &&
+        req_.operation != OperationKind::VirtualMemoryProtect) {
+        result_.analyzer_limitations.push_back(
+            "operation is outside the virtual-memory domain modelled in v0.1");
+        result_.overall = SupportLevel::Unknown;
+        return result_;
+    }
+
+    rule_internal_fallback_contradiction();
+    rule_page_size();
+    rule_address_alignment();
+    rule_size_granularity();
+    rule_range_availability();
+    rule_exact_mapping_capability();
+    rule_non_destructive_exact_mapping();
+    rule_hinted_relocation();
+    rule_identity_without_translation();
+    rule_write_execute();
+    rule_executable_mapping();
+    rule_jit_entitlement();
+    rule_reserve_commit();
+    rule_pointer_truncation();
+    rule_file_mapping_beyond_eof();
+    rule_retry_of_permanent_error();
+
+    // Deterministic output order: severity, then confidence, then id.
+    std::stable_sort(result_.findings.begin(), result_.findings.end(),
+                     [](const Finding& a, const Finding& b) {
+                         if (a.severity != b.severity) {
+                             return static_cast<int>(a.severity) <
+                                    static_cast<int>(b.severity);
+                         }
+                         if (a.confidence != b.confidence) {
+                             return static_cast<int>(a.confidence) <
+                                    static_cast<int>(b.confidence);
+                         }
+                         return a.id < b.id;
+                     });
+    return result_;
+}
+
+}  // namespace
+
+json::Value AnalysisResult::to_json() const {
+    json::Value v = json::Value::object();
+    v["schema"] = schema;
+    v["overall"] = std::string(rs::to_string(overall));
+    v["profile_id"] = profile_id;
+    v["profile_name"] = profile_name;
+    v["profile_origin"] = std::string(rs::vm::to_string(profile_origin));
+    v["requirement_id"] = requirement_id;
+    v["requirement_name"] = requirement_name;
+
+    json::Value arr = json::Value::array();
+    for (const auto& f : findings) arr.push_back(f.to_json());
+    v["findings"] = arr;
+
+    json::Value limits = json::Value::array();
+    for (const auto& l : analyzer_limitations) limits.push_back(json::Value(l));
+    v["analyzer_limitations"] = limits;
+    return v;
+}
+
+std::size_t AnalysisResult::count_at_least(Severity threshold) const {
+    return static_cast<std::size_t>(
+        std::count_if(findings.begin(), findings.end(), [&](const Finding& f) {
+            return static_cast<int>(f.severity) <= static_cast<int>(threshold);
+        }));
+}
+
+bool AnalysisResult::has_confidence(Confidence c) const {
+    return std::any_of(findings.begin(), findings.end(),
+                       [&](const Finding& f) { return f.confidence == c; });
+}
+
+AnalysisResult analyze(const Requirement& requirement,
+                       const EnvironmentProfile& profile,
+                       const AnalysisOptions& options) {
+    Analysis analysis(requirement, profile, options);
+    return analysis.run();
+}
+
+}  // namespace rs::vm
