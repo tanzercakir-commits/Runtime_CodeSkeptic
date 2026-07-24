@@ -1,0 +1,70 @@
+{
+  "schema": "runtime-skeptic.application-requirements.v1",
+  "name": "shadPS4 guest user area reservation at USER_MIN, Apple/x86-64 workaround already applied (USER_MIN=0x7000000000, USER_MAX=0x5FFFFFFFFFFF)",
+  "component": "shadPS4: Core::AddressSpace::Impl::Impl (POSIX branch, __APPLE__ && ARCH_X86_64)",
+  "operation": "virtual_memory_reserve",
+  "request": {
+    "address": "0x7000000000",
+    "size": 105072079929344,
+    "exact_address_required": true,
+    "protection": { "read": true, "write": true, "execute": false }
+  },
+  "assumptions": {
+    "guest_host_identity_required": true,
+    "translation_layer_available": false,
+    "retries_on_failure": false
+  },
+  "required_postconditions": [
+    "mapping_success => returned_address == requested_address",
+    "the guest user area occupies exactly [USER_MIN, USER_MAX] with no host object inside it",
+    "USER_MIN is raised above the band shadPS4's own comment describes as GPU-reserved, so the reservation must start at or after 0x7000000000"
+  ],
+  "permitted_fallbacks": [],
+  "failure_sink": {
+    "kind": "process_exit",
+    "location": {
+      "file": "shadps4-emu/shadPS4@d392abe:src/core/address_space.cpp",
+      "line": 680,
+      "symbol": "Core::AddressSpace::Impl::Impl"
+    },
+    "description": "identical sink to the non-Apple variant: MAP_FAILED is tested at lines 677-678 and the constructor executes `throw std::bad_alloc{}` at line 680. On this path the user area gets its own mmap at line 654-655 rather than being carved out of one combined reservation, because the Apple layout has two holes in it (see the comment at lines 645-647)."
+  },
+  "source_locations": [
+    {
+      "file": "shadps4-emu/shadPS4@d392abe:src/core/address_space.cpp",
+      "line": 39,
+      "symbol": "comment: \"GPU-reserved memory ranges from 0x1000000000 - 0x6FFFFFFFFF, so increase the user minimum.\" (this is shadPS4's own comment, not a verified platform fact)"
+    },
+    {
+      "file": "shadps4-emu/shadPS4@d392abe:src/core/address_space.cpp",
+      "line": 40,
+      "symbol": "Core::USER_MIN (Apple/x86-64 branch: 0x7000000000ULL)"
+    },
+    {
+      "file": "shadps4-emu/shadPS4@d392abe:src/core/address_space.cpp",
+      "line": 52,
+      "symbol": "Core::USER_MAX (neither __linux__ nor __FreeBSD__, so macOS takes this branch: 0x5FFFFFFFFFFFULL)"
+    },
+    {
+      "file": "shadps4-emu/shadPS4@d392abe:src/core/address_space.cpp",
+      "line": 58,
+      "symbol": "Core::UserSize = USER_MAX - USER_MIN + 1 = 0x5F9000000000"
+    },
+    {
+      "file": "shadps4-emu/shadPS4@d392abe:src/core/address_space.cpp",
+      "line": 27,
+      "symbol": ".zerofill USER_AREA,...,0x5F9000000000 - Apple-only directive that independently confirms the computed size"
+    },
+    {
+      "file": "shadps4-emu/shadPS4@d392abe:src/core/address_space.cpp",
+      "line": 654,
+      "symbol": "Impl::Impl - dedicated mmap(USER_MIN, user_size, ..., MAP_FIXED) on the Apple/x86-64 path"
+    },
+    {
+      "file": "shadps4-emu/shadPS4@d392abe:src/core/memory.h",
+      "line": 196,
+      "symbol": "MemoryManager::IsValidGpuMapping - max_gpu_address = 0x10000000000; raising USER_MIN to 0x7000000000 shrinks the GPU-addressable slice of the user area from 0xF000000000 (960 GiB) to 0x9000000000 (576 GiB)"
+    }
+  ],
+  "assumption_evidence": "statically_inferred"
+}

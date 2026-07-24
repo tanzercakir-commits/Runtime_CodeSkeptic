@@ -1,0 +1,68 @@
+{
+  "schema": "runtime-skeptic.application-requirements.v1",
+  "name": "shadPS4 default guest mapping placement at DEFAULT_MAPPING_BASE = 0x200000000 (SIZE NOT DETERMINABLE FROM SOURCE: DEFAULT_MAPPING_BASE is a search start, not a sized mapping; a modest 16 KiB probe size equal to shadPS4's own default alignment is used here and is an authoring choice, not a source fact)",
+  "component": "shadPS4: Core::MemoryManager::MapMemory / MapFile (non-Fixed placement path)",
+  "operation": "virtual_memory_map",
+  "request": {
+    "address": "0x200000000",
+    "size": 16384,
+    "exact_address_required": false,
+    "required_alignment": 16384,
+    "protection": { "read": true, "write": true, "execute": false }
+  },
+  "assumptions": {
+    "guest_host_identity_required": false,
+    "translation_layer_available": false,
+    "retries_on_failure": false
+  },
+  "required_postconditions": [
+    "the returned address is >= SystemManagedVirtualBase() and < UserVirtualBase() + UserVirtualSize()",
+    "the returned address is aligned up to the requested alignment (default 16 KiB)",
+    "guest code receives whatever address SearchFree() chose and uses it as-is",
+    "NOTE ON guest_host_identity_required=false: shadPS4 has no translation layer anywhere, so guest pointers are always host pointers. But on THIS path the guest supplied address 0 (memory.cpp:563), so there is no caller-chosen address for the host address to be identical to - shadPS4 picks the address itself and reports it back through out_addr. Identity holds trivially rather than being a requirement the host can violate. Setting this flag true would also contradict permitted_fallbacks=[relocate], which is exactly what SearchFree does.",
+    "NOTE ON exact_address_required=false: the host never sees a bare hint either. SearchFree only ever returns an address inside a region shadPS4 already reserved at startup, and AddressSpace::Impl::Map then places it with MAP_FIXED (address_space.cpp:751). This requirement is therefore subordinate to the reservation contracts: DEFAULT_MAPPING_BASE 0x200000000 lies inside the system-managed area [0x400000, 0x7FFFFC000), so if shadps4-system-managed-area.json is satisfiable this one is too."
+  ],
+  "permitted_fallbacks": ["relocate"],
+  "failure_sink": {
+    "kind": "error_return",
+    "location": {
+      "file": "shadps4-emu/shadPS4@d392abe:src/core/memory.cpp",
+      "line": 567,
+      "symbol": "Core::MemoryManager::MapMemory"
+    },
+    "description": "unlike the reservation paths, this one degrades gracefully. When SearchFree() cannot place the mapping it returns -1 (memory.cpp:1443, after LOG_ERROR at 1441-1442) and MapMemory returns ORBIS_KERNEL_ERROR_ENOMEM to the guest at memory.cpp:567; MapFile does the same at memory.cpp:744. No assert, no throw. This is the one shadPS4 placement path that models a third outcome."
+  },
+  "source_locations": [
+    {
+      "file": "shadps4-emu/shadPS4@d392abe:src/core/memory.h",
+      "line": 31,
+      "symbol": "Core::DEFAULT_MAPPING_BASE = 0x200000000"
+    },
+    {
+      "file": "shadps4-emu/shadPS4@d392abe:src/core/memory.cpp",
+      "line": 563,
+      "symbol": "MemoryManager::MapMemory - virtual_addr = virtual_addr == 0 ? DEFAULT_MAPPING_BASE : virtual_addr (only when MemoryMapFlags::Fixed is NOT set)"
+    },
+    {
+      "file": "shadps4-emu/shadPS4@d392abe:src/core/memory.cpp",
+      "line": 564,
+      "symbol": "MemoryManager::MapMemory - virtual_addr = SearchFree(virtual_addr, size, alignment); the base is a starting hint that SearchFree walks past when occupied"
+    },
+    {
+      "file": "shadps4-emu/shadPS4@d392abe:src/core/memory.cpp",
+      "line": 740,
+      "symbol": "MemoryManager::MapFile - same DEFAULT_MAPPING_BASE fallback, alignment hard-coded to 16_KB at line 741"
+    },
+    {
+      "file": "shadps4-emu/shadPS4@d392abe:src/core/memory.cpp",
+      "line": 1383,
+      "symbol": "MemoryManager::SearchFree - bounded by SystemManagedVirtualBase() and UserVirtualBase() + UserVirtualSize()"
+    },
+    {
+      "file": "shadps4-emu/shadPS4@d392abe:src/core/memory.cpp",
+      "line": 560,
+      "symbol": "guard: `} else if (False(flags & MemoryMapFlags::Fixed)) {` - this path is taken only when the guest did not demand fixed placement (MapFile's equivalent guard is at line 739)"
+    }
+  ],
+  "assumption_evidence": "statically_inferred"
+}

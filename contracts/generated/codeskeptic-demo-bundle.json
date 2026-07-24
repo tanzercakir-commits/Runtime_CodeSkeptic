@@ -1,0 +1,95 @@
+{
+  "producer": {
+    "rule": "runtime-assumption",
+    "tool": "CodeSkeptic",
+    "version": "0.4.7"
+  },
+  "requirement_count": 2,
+  "requirements": [
+    {
+      "assumption_evidence": "statically_inferred",
+      "assumptions": {
+        "guest_host_identity_required": true,
+        "retries_on_failure": false,
+        "translation_layer_available": false
+      },
+      "component": "MapGuestBase",
+      "extraction_limitations": [
+        "translation_layer_available was not determined by static analysis and defaults to false; set it by hand if an address translation layer exists",
+        "the call uses the destructive MAP_FIXED rather than MAP_FIXED_NOREPLACE: success does not imply the range was free"
+      ],
+      "failure_sink": {
+        "kind": "fatal_assert",
+        "location": {
+          "file": "guest_memory.c",
+          "line": 14
+        }
+      },
+      "name": "mmap at MapGuestBase (returned address is compared to the requested one)",
+      "operation": "virtual_memory_map",
+      "permitted_fallbacks": [],
+      "request": {
+        "address": "0x1000000000",
+        "exact_address_required": true,
+        "file_backed": false,
+        "protection": {
+          "execute": false,
+          "read": true,
+          "write": true
+        },
+        "size": 65536
+      },
+      "required_postconditions": [
+        "mapping_success => returned_address == requested_address"
+      ],
+      "schema": "runtime-skeptic.application-requirements.v1",
+      "source_locations": [
+        {
+          "file": "guest_memory.c",
+          "line": 11,
+          "symbol": "MapGuestBase"
+        }
+      ]
+    },
+    {
+      "assumption_evidence": "statically_inferred",
+      "assumptions": {
+        "guest_host_identity_required": false,
+        "retries_on_failure": false,
+        "translation_layer_available": false
+      },
+      "component": "MapCodeBuffer",
+      "extraction_limitations": [
+        "translation_layer_available was not determined by static analysis and defaults to false; set it by hand if an address translation layer exists"
+      ],
+      "failure_sink": {
+        "kind": "unchecked",
+        "location": null
+      },
+      "name": "mmap in MapCodeBuffer",
+      "operation": "virtual_memory_map",
+      "permitted_fallbacks": [],
+      "request": {
+        "address": null,
+        "exact_address_required": false,
+        "file_backed": false,
+        "protection": {
+          "execute": true,
+          "read": true,
+          "write": true
+        },
+        "size": 1048576
+      },
+      "required_postconditions": [],
+      "schema": "runtime-skeptic.application-requirements.v1",
+      "source_locations": [
+        {
+          "file": "guest_memory.c",
+          "line": 23,
+          "symbol": "MapCodeBuffer"
+        }
+      ]
+    }
+  ],
+  "schema": "runtime-skeptic.application-requirements-bundle.v1"
+}

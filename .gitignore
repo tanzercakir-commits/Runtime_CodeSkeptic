@@ -21,3 +21,7 @@ reports/*.txt
 *.swp
 .DS_Store
 compile_commands.json
+
+# The demo bundle in contracts/generated/ IS tracked (it is a fixture), but
+# anything else produced by a CodeSkeptic run is not.
+contracts/generated/*.local.json

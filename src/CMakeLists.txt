@@ -47,3 +47,13 @@ add_library(rs_probe STATIC
 
 target_link_libraries(rs_probe PUBLIC rs_vm PRIVATE rs_warnings)
 add_library(RuntimeSkeptic::probe ALIAS rs_probe)
+
+# ---------------------------------------------------------------------------
+# rs_server - Model Context Protocol. Depends on everything else; nothing
+# depends on it.
+# ---------------------------------------------------------------------------
+add_library(rs_server STATIC
+    server/mcp_server.cpp)
+
+target_link_libraries(rs_server PUBLIC rs_probe rs_reports PRIVATE rs_warnings)
+add_library(RuntimeSkeptic::server ALIAS rs_server)

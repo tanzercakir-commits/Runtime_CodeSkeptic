@@ -32,12 +32,21 @@
       "evidence": "unknown",
       "note": "never established for this fixture"
     },
+    "anonymous_mapping_supported": {
+      "value": true,
+      "evidence": "heuristic_risk",
+      "source": "hand-authored fixture",
+      "note": "assumed, not measured: this platform family plainly supports anonymous mmap, but nothing here established it on a real host"
+    },
     "exact_mapping": {
       "value": "CONDITIONALLY_SUPPORTED",
       "evidence": "heuristic_risk",
       "source": "hand-authored fixture"
     },
-    "exact_mapping_failure_codes": ["ENOMEM", "EINVAL"],
+    "exact_mapping_failure_codes": [
+      "ENOMEM",
+      "EINVAL"
+    ],
     "hinted_mapping_may_relocate": {
       "value": true,
       "evidence": "specified_guarantee",

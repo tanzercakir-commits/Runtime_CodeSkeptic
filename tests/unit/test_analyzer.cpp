@@ -329,6 +329,66 @@ RS_TEST(accessing_past_eof_on_a_sigbus_host_is_unsupported) {
 }
 
 // ---------------------------------------------------------------------------
+// Baseline capability. Regression tests for a real defect: a request that did
+// not care where its mapping landed came out SUPPORTED, exit code 0, against
+// a profile that had established nothing at all. No rule objected, and the
+// absence of objections was being reported as support.
+// ---------------------------------------------------------------------------
+RS_TEST(a_profile_that_knows_nothing_can_never_yield_supported) {
+    Requirement r = plain_anonymous_mapping();  // no address, no exotic needs
+    const auto result = analyze(r, unknown_host());
+
+    RS_CHECK_MESSAGE(result.overall != SupportLevel::Supported,
+                     "an empty profile produced a SUPPORTED verdict");
+    RS_CHECK(result.overall == SupportLevel::Unknown);
+    RS_CHECK(has_finding(result, ids::kRequiredFactUnknown));
+}
+
+RS_TEST(suppressing_unknown_findings_still_cannot_yield_supported) {
+    // The quiet path had its own copy of the verdict logic; make sure it did
+    // not keep the old behaviour.
+    AnalysisOptions quiet;
+    quiet.report_unknowns = false;
+    const auto result = analyze(plain_anonymous_mapping(), unknown_host(), quiet);
+    RS_CHECK(result.overall == SupportLevel::Unknown);
+}
+
+RS_TEST(a_host_that_cannot_map_at_all_is_proven_unsupported) {
+    EnvironmentProfile p = permissive_host();
+    p.vm.anonymous_mapping_supported = Fact<bool>::known(
+        false, EvidenceClass::MeasuredCapability, "fixture: mmap refused");
+
+    const auto result = analyze(plain_anonymous_mapping(), p);
+    RS_CHECK(has_finding(result, ids::kAnonymousMappingUnavailable));
+    RS_CHECK(result.overall == SupportLevel::Unsupported);
+}
+
+RS_TEST(a_wasted_hint_is_reported_without_failing_the_request) {
+    // The address is a hint, the caller tolerates relocation, and the hint
+    // points into an unavailable range. The mapping still succeeds - but the
+    // hint is silently useless, which is worth one quiet line.
+    Requirement r = plain_anonymous_mapping();
+    r.request.address = 0x2000000000ull;  // inside the reserved band
+    const auto result = analyze(r, host_with_reserved_band());
+
+    RS_CHECK(has_finding(result, ids::kAddressHintNotHonourable));
+    const Finding* f = get_finding(result, ids::kAddressHintNotHonourable);
+    if (f != nullptr) {
+        RS_CHECK(f->severity == Severity::Low);
+        RS_CHECK(f->support_impact == SupportLevel::Supported);
+    }
+    RS_CHECK_MESSAGE(result.overall != SupportLevel::Unsupported,
+                     "a tolerable hint miss must not fail the request");
+}
+
+RS_TEST(a_hint_that_the_host_can_honour_is_silent) {
+    Requirement r = plain_anonymous_mapping();
+    r.request.address = 0x1000000000ull;  // inside the available range
+    const auto result = analyze(r, permissive_host());
+    RS_CHECK(!has_finding(result, ids::kAddressHintNotHonourable));
+}
+
+// ---------------------------------------------------------------------------
 // Determinism and structure of the result.
 // ---------------------------------------------------------------------------
 RS_TEST(analysis_is_deterministic) {

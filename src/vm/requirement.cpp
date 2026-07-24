@@ -204,6 +204,12 @@ json::Value Requirement::to_json() const {
     v["source_locations"] = locs;
 
     v["assumption_evidence"] = std::string(rs::to_string(assumption_evidence));
+
+    json::Value limitations = json::Value::array();
+    for (const auto& l : extraction_limitations) {
+        limitations.push_back(json::Value(l));
+    }
+    v["extraction_limitations"] = limitations;
     return v;
 }
 
@@ -407,7 +413,80 @@ std::optional<Requirement> Requirement::from_json(const json::Value& v,
         return std::nullopt;
     }
 
+    if (const json::Value* limitations = v.find("extraction_limitations");
+        limitations != nullptr && limitations->is_array()) {
+        for (const auto& item : limitations->as_array()) {
+            if (item.is_string()) {
+                r.extraction_limitations.push_back(item.as_string());
+            }
+        }
+    }
+
     return r;
+}
+
+std::optional<RequirementBundle> load_requirements(const json::Value& v,
+                                                   std::string& error) {
+    if (!v.is_object()) {
+        error = "document must be a JSON object";
+        return std::nullopt;
+    }
+    const json::Value* schema = v.find("schema");
+    if (schema == nullptr || !schema->is_string()) {
+        error = "document requires a 'schema' string";
+        return std::nullopt;
+    }
+
+    // A lone requirement is treated as a bundle of one, so callers never
+    // branch on which shape they were given.
+    if (schema->as_string() == kRequirementSchema) {
+        auto single = Requirement::from_json(v, error);
+        if (!single) return std::nullopt;
+        RequirementBundle bundle;
+        bundle.schema = kRequirementSchema;
+        bundle.requirements.push_back(std::move(*single));
+        return bundle;
+    }
+
+    if (schema->as_string() != kRequirementBundleSchema) {
+        error = "unsupported schema: " + schema->as_string() + " (expected " +
+                kRequirementSchema + " or " + kRequirementBundleSchema + ")";
+        return std::nullopt;
+    }
+
+    RequirementBundle bundle;
+    bundle.schema = schema->as_string();
+    if (const json::Value* producer = v.find("producer"); producer != nullptr) {
+        auto str = [&](const char* key) -> std::string {
+            const json::Value* n = producer->find(key);
+            return n == nullptr ? std::string() : n->as_string();
+        };
+        bundle.producer_tool = str("tool");
+        bundle.producer_version = str("version");
+        bundle.producer_rule = str("rule");
+    }
+
+    const json::Value* requirements = v.find("requirements");
+    if (requirements == nullptr || !requirements->is_array()) {
+        error = "bundle requires a 'requirements' array";
+        return std::nullopt;
+    }
+
+    std::size_t index = 0;
+    for (const auto& item : requirements->as_array()) {
+        std::string item_error;
+        auto parsed = Requirement::from_json(item, item_error);
+        if (parsed) {
+            bundle.requirements.push_back(std::move(*parsed));
+        } else {
+            // Rejected rather than fatal: one malformed entry must not throw
+            // away the rest of a large extraction run.
+            bundle.rejected.push_back("requirements[" + std::to_string(index) +
+                                      "]: " + item_error);
+        }
+        ++index;
+    }
+    return bundle;
 }
 
 }  // namespace rs::vm

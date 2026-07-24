@@ -124,6 +124,8 @@ inline constexpr const char* kExactMappingNonDestructiveUnavailable = "RS-VM-001
 // with one rule instead of chasing a new id per capability.
 inline constexpr const char* kRequiredFactUnknown = "RS-VM-0017";
 inline constexpr const char* kFileMappingBeyondEof = "RS-VM-0018";
+inline constexpr const char* kAnonymousMappingUnavailable = "RS-VM-0019";
+inline constexpr const char* kAddressHintNotHonourable = "RS-VM-0020";
 }  // namespace ids
 
 }  // namespace rs::vm

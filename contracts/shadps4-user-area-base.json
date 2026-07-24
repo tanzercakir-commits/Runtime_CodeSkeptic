@@ -1,0 +1,65 @@
+{
+  "schema": "runtime-skeptic.application-requirements.v1",
+  "name": "shadPS4 guest user area reservation at USER_MIN (Linux x86-64 configuration: USER_MIN=0x1000000000, USER_MAX=0x54FFFFFFFFFF)",
+  "component": "shadPS4: Core::AddressSpace::Impl::Impl (POSIX branch)",
+  "operation": "virtual_memory_reserve",
+  "request": {
+    "address": "0x1000000000",
+    "size": 93389768884224,
+    "exact_address_required": true,
+    "protection": { "read": true, "write": true, "execute": false }
+  },
+  "assumptions": {
+    "guest_host_identity_required": true,
+    "translation_layer_available": false,
+    "retries_on_failure": false
+  },
+  "required_postconditions": [
+    "mapping_success => returned_address == requested_address",
+    "the guest user area occupies exactly [USER_MIN, USER_MAX] with no host object inside it",
+    "every guest pointer in the user area is dereferenced directly as a host pointer"
+  ],
+  "permitted_fallbacks": [],
+  "failure_sink": {
+    "kind": "process_exit",
+    "location": {
+      "file": "shadps4-emu/shadPS4@d392abe:src/core/address_space.cpp",
+      "line": 680,
+      "symbol": "Core::AddressSpace::Impl::Impl"
+    },
+    "description": "if any of the three reservation mmaps returns MAP_FAILED the constructor logs LOG_CRITICAL(Kernel_Vmm, \"mmap failed: {}\") at line 679 and executes `throw std::bad_alloc{}` at line 680. NOTE: this is a throw, not an ASSERT. The ASSERT_MSG sinks in this file guard the *per-mapping* path (ASSERT_MSG(ret != MAP_FAILED) at line 753 in Impl::Map, line 775 in Impl::Unmap, line 792 in Impl::Protect), not this reservation. The reservation path also never compares the returned pointer to the requested address: lines 677-678 test only `== MAP_FAILED`."
+  },
+  "source_locations": [
+    {
+      "file": "shadps4-emu/shadPS4@d392abe:src/core/address_space.cpp",
+      "line": 43,
+      "symbol": "Core::USER_MIN (non-Apple branch: 0x1000000000ULL)"
+    },
+    {
+      "file": "shadps4-emu/shadPS4@d392abe:src/core/address_space.cpp",
+      "line": 47,
+      "symbol": "Core::USER_MAX (__linux__ branch: 0x54FFFFFFFFFFULL)"
+    },
+    {
+      "file": "shadps4-emu/shadPS4@d392abe:src/core/address_space.cpp",
+      "line": 58,
+      "symbol": "Core::UserSize = USER_MAX - USER_MIN + 1 (inclusive maximum)"
+    },
+    {
+      "file": "shadps4-emu/shadPS4@d392abe:src/core/address_space.cpp",
+      "line": 639,
+      "symbol": "map_flags = MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED (destructive; no MAP_FIXED_NOREPLACE appears anywhere in the tree)"
+    },
+    {
+      "file": "shadps4-emu/shadPS4@d392abe:src/core/address_space.cpp",
+      "line": 660,
+      "symbol": "Impl::Impl - single combined mmap at SYSTEM_MANAGED_MIN covering managed+reserved+user"
+    },
+    {
+      "file": "shadps4-emu/shadPS4@d392abe:src/core/address_space.cpp",
+      "line": 664,
+      "symbol": "user_base = reinterpret_cast<u8*>(USER_MIN) - identity is asserted by construction, never verified"
+    }
+  ],
+  "assumption_evidence": "statically_inferred"
+}

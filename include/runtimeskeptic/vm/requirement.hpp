@@ -171,6 +171,13 @@ public:
     // How we know the program requires this.
     EvidenceClass assumption_evidence = EvidenceClass::Unknown;
 
+    // What the producer of this document could NOT establish. A static
+    // extractor knows things about itself that no consumer can infer - that
+    // an address was not a compile-time constant, that a flags expression was
+    // computed at runtime. Carrying those forward keeps a silent gap from
+    // reading as a clean bill.
+    std::vector<std::string> extraction_limitations;
+
     bool permits(FallbackKind kind) const;
 
     json::Value to_json() const;
@@ -179,6 +186,37 @@ public:
     static std::optional<Requirement> from_json(const json::Value& v,
                                                 std::string& error);
 };
+
+// ---------------------------------------------------------------------------
+// Bundles
+// ---------------------------------------------------------------------------
+//
+// A static analyzer does not find one requirement, it finds all of them. The
+// bundle is the interchange format between CodeSkeptic's
+// `--runtime-assumptions` mode and rs-check (ROADMAP 12.1: "Integration
+// should occur through versioned artifacts rather than direct source
+// dependencies" - so neither project links against the other).
+
+inline constexpr const char* kRequirementBundleSchema =
+    "runtime-skeptic.application-requirements-bundle.v1";
+
+struct RequirementBundle {
+    std::string schema = kRequirementBundleSchema;
+    std::string producer_tool;
+    std::string producer_version;
+    std::string producer_rule;
+    std::vector<Requirement> requirements;
+
+    // Requirements the bundle contained but that could not be parsed. They
+    // are reported rather than dropped: a producer emitting documents this
+    // consumer rejects is a fact worth surfacing.
+    std::vector<std::string> rejected;
+};
+
+// Accepts either a single requirement document or a bundle, so a caller
+// never has to know which one it was handed.
+std::optional<RequirementBundle> load_requirements(const json::Value& v,
+                                                   std::string& error);
 
 }  // namespace rs::vm
 

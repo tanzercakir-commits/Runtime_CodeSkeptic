@@ -152,6 +152,17 @@ const std::vector<FindingDefinition>& registry_storage() {
          "File-backed mapping extends beyond end of file", Severity::High,
          "Accessing the portion of a file mapping past end-of-file has "
          "host-specific behavior that the program does not handle."},
+        {ids::kAnonymousMappingUnavailable,
+         "Anonymous memory mapping is unavailable on this host", Severity::Critical,
+         "The host cannot create an ordinary anonymous mapping at all. Nothing "
+         "further about placement or protection can matter."},
+        {ids::kAddressHintNotHonourable,
+         "Address hint points into a range the host cannot provide", Severity::Low,
+         "The requested address is a hint rather than a demand, and it falls "
+         "in a range the profile records as unavailable. The mapping will "
+         "succeed somewhere else, so this is a wasted hint rather than a "
+         "failure - unless something downstream quietly assumes the hint was "
+         "taken."},
     };
     return kRegistry;
 }

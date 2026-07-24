@@ -148,7 +148,34 @@ Binaries land in `build/bin/`.
 | `rs-env-probe vm` | Measure this host's virtual-memory behavior; emit a profile |
 | `rs-profile verify` | Validate a profile and report how many facts it actually knows |
 | `rs-profile diff` | Compare two profiles' facts - did the platform change? |
-| `rs-check` | Evaluate a requirement against a profile; emit text, JSON or Markdown |
+| `rs-check` | Evaluate a requirement (or a bundle) against a profile |
+| `rs-mcp` | The same capabilities over the Model Context Protocol |
+
+### With CodeSkeptic
+
+[CodeSkeptic](https://github.com/tanzercakir-commits/CodeSkeptic) answers the
+static half of the question. Its `--runtime-assumptions` mode extracts what a
+program assumes about its machine; `rs-check` decides whether a measured host
+can satisfy it.
+
+```console
+$ codeskeptic --source src/ --build-path build --runtime-assumptions assumptions.json
+$ rs-env-probe vm --output host-profile.json
+$ rs-check assumptions.json --profile host-profile.json
+```
+
+Given the shape real emulators have -
+
+```c
+void* p = mmap(guest_base, size, prot, MAP_FIXED, -1, 0);
+if (p == MAP_FAILED) return error;
+assert(p == guest_base);
+```
+
+\- the extractor records the identity requirement **from the assert, not from
+the error check**. `mmap` returns success whether or not it honoured the
+address, so no error code will ever report that violation. See
+[docs/integrations.md](docs/integrations.md).
 
 ### Exit codes
 

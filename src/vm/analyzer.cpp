@@ -126,6 +126,7 @@ private:
 
     // ---- rules ----------------------------------------------------------
     void rule_internal_fallback_contradiction();
+    void rule_baseline_mapping_capability();
     void rule_page_size();
     void rule_address_alignment();
     void rule_size_granularity();
@@ -188,6 +189,65 @@ void Analysis::rule_internal_fallback_contradiction() {
         {"Keep both and let the runtime decide",
          "The two clauses are mutually exclusive; no runtime choice satisfies "
          "both."});
+    emit(std::move(f));
+}
+
+// ---------------------------------------------------------------------------
+// RS-VM-0019 / RS-VM-0017: can this host map memory at all?
+//
+// This rule exists because of a bug found while checking a real emulator's
+// requirements against a hand-authored profile. A request that did not care
+// where its mapping landed came out SUPPORTED with exit code 0 against a
+// profile that had established nothing at all - not one available range, not
+// one measurement. No rule objected, and "no objections" was being reported
+// as support.
+//
+// That is the exact failure this project exists to catch, committed by the
+// analyzer itself. SUPPORTED must rest on a fact that says mapping works
+// here, not on the absence of facts that say it does not.
+// ---------------------------------------------------------------------------
+void Analysis::rule_baseline_mapping_capability() {
+    if (req_.request.file_backed) return;  // a different capability
+
+    if (!profile_.vm.anonymous_mapping_supported.is_known()) {
+        if (!options_.report_unknowns) {
+            result_.overall = combine(result_.overall, SupportLevel::Unknown);
+            return;
+        }
+        Finding f = start(ids::kRequiredFactUnknown, Confidence::Hypothesis,
+                          SupportLevel::Unknown);
+        f.required = "the host can create an anonymous mapping of " +
+                     dec(req_.request.size) + " bytes";
+        f.host_capability =
+            "unknown: this profile does not record whether anonymous mapping "
+            "works at all";
+        f.conclusion =
+            "Nothing in this profile positively establishes that a mapping can "
+            "succeed on this host, so no request can be reported as SUPPORTED. "
+            "Run rs-env-probe on the target host.";
+        add_application_claim(f, "program creates an anonymous mapping of " +
+                                     dec(req_.request.size) + " bytes");
+        f.evidence.add(Layer::OperatingSystem, EvidenceClass::Unknown,
+                       "anonymous_mapping_supported is absent from the profile",
+                       profile_.profile_name);
+        emit(std::move(f));
+        return;
+    }
+
+    if (profile_.vm.anonymous_mapping_supported.value()) return;
+
+    Finding f = start(ids::kAnonymousMappingUnavailable, Confidence::Proven,
+                      SupportLevel::Unsupported);
+    f.required = "an anonymous mapping of " + dec(req_.request.size) + " bytes";
+    f.host_capability = "this host refused an anonymous mapping outright";
+    f.conclusion = "No placement, protection or size adjustment can help: the "
+                   "operation itself is unavailable in this configuration.";
+    add_application_claim(f, "program creates an anonymous mapping");
+    f.evidence.add(Layer::OperatingSystem,
+                   profile_.vm.anonymous_mapping_supported.evidence(),
+                   "anonymous mapping is unavailable", profile_.profile_name);
+    f.remediations.push_back(
+        {RemediationClass::SelectDifferentHostConfiguration, ""});
     emit(std::move(f));
 }
 
@@ -368,8 +428,35 @@ void Analysis::rule_range_availability() {
     if (!req_.request.address) return;
     if (!req_.request.exact_address_required &&
         !req_.assumptions.guest_host_identity_required) {
-        // The program does not care where the mapping lands, so range
-        // availability at this particular address does not decide anything.
+        // The program does not care where the mapping lands, so availability
+        // at this particular address cannot make the request fail. It can
+        // still make the hint pointless, which is worth one quiet line:
+        // a hint aimed at a range the host cannot provide will certainly be
+        // ignored, and code downstream sometimes assumes otherwise.
+        const auto hint_range = req_.request.range();
+        if (!hint_range) return;
+        const RangeVerdict hint_verdict = profile_.query_range(*hint_range);
+        if (hint_verdict.level != SupportLevel::Unsupported) return;
+
+        Finding f = start(ids::kAddressHintNotHonourable, Confidence::Proven,
+                          SupportLevel::Supported);
+        f.required = "nothing: the address is a hint and relocation is "
+                     "acceptable to this caller";
+        f.host_capability = hint_verdict.reason;
+        f.modeled_fallback =
+            "the mapping is placed at an address of the host's choosing; the "
+            "hint has no effect";
+        f.conclusion =
+            "The request still succeeds. Check that no later code treats the "
+            "hint as the address it got back.";
+        add_application_claim(f, "program hints at " +
+                                     json::to_hex(*req_.request.address));
+        f.evidence.add(Layer::OperatingSystem, hint_verdict.evidence,
+                       hint_verdict.reason, profile_.profile_name);
+        f.remediations.push_back(
+            {RemediationClass::ChooseDifferentBaseAddress,
+             "pick a hint the host can actually honour, or drop it"});
+        emit(std::move(f));
         return;
     }
 
@@ -1020,6 +1107,13 @@ AnalysisResult Analysis::run() {
             "acting on this verdict.");
     }
 
+    // Whatever the producer could not establish about the program is a limit
+    // on this analysis too, and has to travel with the verdict.
+    for (const auto& limitation : req_.extraction_limitations) {
+        result_.analyzer_limitations.push_back("requirement extraction: " +
+                                               limitation);
+    }
+
     if (req_.operation != OperationKind::VirtualMemoryMap &&
         req_.operation != OperationKind::VirtualMemoryReserve &&
         req_.operation != OperationKind::VirtualMemoryCommit &&
@@ -1031,6 +1125,7 @@ AnalysisResult Analysis::run() {
     }
 
     rule_internal_fallback_contradiction();
+    rule_baseline_mapping_capability();
     rule_page_size();
     rule_address_alignment();
     rule_size_granularity();

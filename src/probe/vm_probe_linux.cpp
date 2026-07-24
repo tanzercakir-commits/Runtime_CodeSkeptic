@@ -506,6 +506,28 @@ Result probe_virtual_memory(const Options& options) {
         static_cast<std::uint64_t>(page_size), EvidenceClass::SpecifiedGuarantee,
         "Linux mmap(2): addr is rounded to page granularity");
 
+    // -- can we map anything at all? --------------------------------------
+    // The most basic capability, and the one a profile must carry before any
+    // request may be reported as SUPPORTED. Measured rather than assumed:
+    // seccomp filters, restrictive LSM policy and exhausted map counts all
+    // make this false on real machines.
+    {
+        MapAttempt basic = try_map(nullptr, page_size, PROT_READ | PROT_WRITE,
+                                   MAP_PRIVATE | MAP_ANONYMOUS);
+        profile.vm.anonymous_mapping_supported = Fact<bool>::known(
+            basic.ok(), EvidenceClass::MeasuredCapability,
+            std::string(kSourceProbe) + ": mmap(NULL, page_size, RW, "
+            "MAP_PRIVATE|MAP_ANONYMOUS)" +
+                (basic.ok() ? "" : " failed with " + errno_name(basic.error)));
+        unmap(basic, page_size);
+        if (!basic.ok()) {
+            warnings.emplace_back(
+                "a plain anonymous mapping failed with " +
+                errno_name(basic.error) +
+                "; the remaining measurements are unlikely to be meaningful");
+        }
+    }
+
     // -- minimum mappable address -----------------------------------------
     const std::string mmap_min = read_small_file("/proc/sys/vm/mmap_min_addr");
     if (!mmap_min.empty()) {

@@ -1,0 +1,65 @@
+{
+  "schema": "runtime-skeptic.application-requirements.v1",
+  "name": "shadPS4 system-managed area reservation [SYSTEM_MANAGED_MIN, SYSTEM_MANAGED_MAX] (0x400000..0x7FFFFBFFF)",
+  "component": "shadPS4: Core::AddressSpace::Impl::Impl (POSIX branch)",
+  "operation": "virtual_memory_reserve",
+  "request": {
+    "address": "0x400000",
+    "size": 34355527680,
+    "exact_address_required": true,
+    "protection": { "read": true, "write": true, "execute": false }
+  },
+  "assumptions": {
+    "guest_host_identity_required": true,
+    "translation_layer_available": false,
+    "retries_on_failure": false
+  },
+  "required_postconditions": [
+    "mapping_success => returned_address == requested_address",
+    "the system-managed area occupies exactly [0x400000, 0x7FFFFBFFF]",
+    "SearchFree() treats SystemManagedVirtualBase() as the lowest searchable address, so a relocated base silently moves every default-placed guest mapping"
+  ],
+  "permitted_fallbacks": [],
+  "failure_sink": {
+    "kind": "process_exit",
+    "location": {
+      "file": "shadps4-emu/shadPS4@d392abe:src/core/address_space.cpp",
+      "line": 680,
+      "symbol": "Core::AddressSpace::Impl::Impl"
+    },
+    "description": "reservation failure is detected only as MAP_FAILED at lines 677-678 and terminates via `throw std::bad_alloc{}` at line 680. On the non-Apple POSIX x86-64 path this sub-range is not reserved by its own mmap: lines 657-661 issue ONE mmap at SYSTEM_MANAGED_MIN of size system_managed_size + system_reserved_size + user_size, and system_managed_base is simply the head of it (line 662). Only the Apple/x86-64 path reserves this range with a dedicated mmap (line 649)."
+  },
+  "source_locations": [
+    {
+      "file": "shadps4-emu/shadPS4@d392abe:src/core/address_space.cpp",
+      "line": 33,
+      "symbol": "Core::SYSTEM_MANAGED_MIN = 0x400000ULL"
+    },
+    {
+      "file": "shadps4-emu/shadPS4@d392abe:src/core/address_space.cpp",
+      "line": 34,
+      "symbol": "Core::SYSTEM_MANAGED_MAX = 0x7FFFFBFFFULL"
+    },
+    {
+      "file": "shadps4-emu/shadPS4@d392abe:src/core/address_space.cpp",
+      "line": 56,
+      "symbol": "Core::SystemManagedSize = SYSTEM_MANAGED_MAX - SYSTEM_MANAGED_MIN + 1 = 0x7FFBFC000"
+    },
+    {
+      "file": "shadps4-emu/shadPS4@d392abe:src/core/address_space.cpp",
+      "line": 25,
+      "symbol": ".zerofill SYSTEM_MANAGED,...,0x7FFBFC000 - independently confirms the computed size"
+    },
+    {
+      "file": "shadps4-emu/shadPS4@d392abe:src/core/address_space.cpp",
+      "line": 649,
+      "symbol": "Impl::Impl - dedicated mmap(SYSTEM_MANAGED_MIN, system_managed_size, ..., MAP_FIXED) on the Apple/x86-64 path"
+    },
+    {
+      "file": "shadps4-emu/shadPS4@d392abe:src/core/memory.cpp",
+      "line": 1385,
+      "symbol": "MemoryManager::SearchFree - min_search_address = impl.SystemManagedVirtualBase()"
+    }
+  ],
+  "assumption_evidence": "statically_inferred"
+}

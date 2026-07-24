@@ -34,6 +34,8 @@ inline vm::EnvironmentProfile permissive_host() {
         Fact<Address>::known(Address(0x10000), measured, "fixture");
     p.vm.max_user_address =
         Fact<Address>::known(Address(0x7ffffffff000ull), measured, "fixture");
+    p.vm.anonymous_mapping_supported =
+        Fact<bool>::known(true, measured, "fixture");
     p.vm.exact_mapping = Fact<SupportLevel>::known(
         SupportLevel::ConditionallySupported, measured, "fixture");
     p.vm.hinted_mapping_may_relocate =

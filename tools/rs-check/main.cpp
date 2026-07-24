@@ -4,6 +4,7 @@
 //
 // Answers one question: can this host satisfy this requirement?
 #include <iostream>
+#include <vector>
 #include <string>
 
 #include "runtimeskeptic/core/io.hpp"
@@ -20,6 +21,12 @@ void print_usage() {
 
 USAGE
   rs-check REQUIREMENT.json --profile PROFILE.json [OPTIONS]
+
+REQUIREMENT.json is either a single
+runtime-skeptic.application-requirements.v1 document, or a
+runtime-skeptic.application-requirements-bundle.v1 containing many - the
+shape CodeSkeptic's --runtime-assumptions mode emits. Every requirement in a
+bundle is evaluated, and the run's verdict is the worst of them.
 
 OPTIONS
   --profile FILE       environment profile from rs-env-probe (required)
@@ -131,10 +138,19 @@ int main(int argc, char** argv) {
     if (!profile_json) return reports::exit_code::kInput;
 
     std::string error;
-    auto requirement = vm::Requirement::from_json(*requirement_json, error);
-    if (!requirement) {
+    auto bundle = vm::load_requirements(*requirement_json, error);
+    if (!bundle) {
         std::cerr << "rs-check: requirement '" << requirement_path
                   << "' is invalid: " << error << "\n";
+        return reports::exit_code::kInput;
+    }
+    for (const auto& rejected : bundle->rejected) {
+        std::cerr << "rs-check: skipped " << rejected << "\n";
+    }
+    if (bundle->requirements.empty()) {
+        std::cerr << "rs-check: '" << requirement_path
+                  << "' contains no usable requirements. An empty bundle is "
+                     "not a clean result.\n";
         return reports::exit_code::kInput;
     }
     auto profile = vm::EnvironmentProfile::from_json(*profile_json, error);
@@ -144,18 +160,51 @@ int main(int argc, char** argv) {
         return reports::exit_code::kInput;
     }
 
-    const vm::AnalysisResult result =
-        vm::analyze(*requirement, *profile, analysis_options);
-
+    // A bundle is evaluated requirement by requirement, and the run's verdict
+    // is the worst of them: one proven contradiction condemns the build even
+    // if a hundred other mappings are fine.
+    SupportLevel overall = SupportLevel::Supported;
+    std::vector<vm::AnalysisResult> results;
+    results.reserve(bundle->requirements.size());
     std::string rendered;
+
+    for (const auto& requirement : bundle->requirements) {
+        vm::AnalysisResult result =
+            vm::analyze(requirement, *profile, analysis_options);
+        overall = combine(overall, result.overall);
+
+        if (format == "markdown") {
+            if (!rendered.empty()) rendered += "\n---\n\n";
+            rendered += reports::render_markdown(result, requirement, *profile,
+                                                 report_options);
+        } else if (format == "text") {
+            if (!rendered.empty()) rendered += "\n";
+            rendered +=
+                reports::render_text(result, requirement, *profile, report_options);
+        }
+        results.push_back(std::move(result));
+    }
+
     if (format == "json") {
-        rendered = json::serialize_pretty(result.to_json());
-    } else if (format == "markdown") {
-        rendered = reports::render_markdown(result, *requirement, *profile,
-                                            report_options);
-    } else {
-        rendered =
-            reports::render_text(result, *requirement, *profile, report_options);
+        json::Value document = json::Value::object();
+        document["schema"] = std::string("runtime-skeptic.compatibility-run.v1");
+        document["overall"] = std::string(rs::to_string(overall));
+        document["requirement_count"] =
+            static_cast<unsigned long long>(results.size());
+        if (!bundle->producer_tool.empty()) {
+            json::Value producer = json::Value::object();
+            producer["tool"] = bundle->producer_tool;
+            producer["version"] = bundle->producer_version;
+            producer["rule"] = bundle->producer_rule;
+            document["producer"] = producer;
+        }
+        json::Value entries = json::Value::array();
+        for (const auto& result : results) entries.push_back(result.to_json());
+        document["results"] = entries;
+        json::Value skipped = json::Value::array();
+        for (const auto& r : bundle->rejected) skipped.push_back(json::Value(r));
+        document["rejected_requirements"] = skipped;
+        rendered = json::serialize_pretty(document);
     }
 
     if (!io::write_file(output_path, rendered, error)) {
@@ -163,5 +212,10 @@ int main(int argc, char** argv) {
         return reports::exit_code::kInput;
     }
 
-    return reports::exit_code_for(result.overall);
+    if (results.size() > 1 && output_path != "-") {
+        std::cerr << "rs-check: evaluated " << results.size()
+                  << " requirement(s); overall " << rs::to_string(overall)
+                  << "\n";
+    }
+    return reports::exit_code_for(overall);
 }

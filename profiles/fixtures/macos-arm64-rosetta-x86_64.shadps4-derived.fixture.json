@@ -1,0 +1,122 @@
+{
+  "schema": "runtime-skeptic.environment-profile.v1",
+  "origin": "hand_authored_fixture",
+  "profile_name": "macos-arm64-rosetta-x86_64 shadPS4-derived (UNVERIFIED FIXTURE)",
+  "platform": {
+    "os": "macos",
+    "os_version": "unspecified",
+    "kernel_version": "unspecified",
+    "host_arch": "aarch64",
+    "process_arch": "x86_64",
+    "translation_mode": "rosetta2"
+  },
+  "virtual_memory": {
+    "page_size": {
+      "value": 16384,
+      "evidence": "heuristic_risk",
+      "source": "hand-authored fixture",
+      "note": "Apple Silicon hosts commonly use 16 KiB pages. NOT measured here."
+    },
+    "allocation_granularity": {
+      "value": 16384,
+      "evidence": "heuristic_risk",
+      "source": "hand-authored fixture"
+    },
+    "min_map_address": {
+      "value": "0x1000",
+      "evidence": "heuristic_risk",
+      "source": "hand-authored fixture"
+    },
+    "max_user_address": {
+      "value": "0x600000000000",
+      "evidence": "heuristic_risk",
+      "source": "shadps4-emu/shadPS4@d392abe src/core/address_space.cpp:52",
+      "note": "This is NOT a measurement and NOT an Apple platform fact. It is shadPS4's own USER_MAX constant for the branch macOS takes (neither __linux__ nor __FreeBSD__), which is the INCLUSIVE maximum 0x5FFFFFFFFFFF; this project's ranges are half-open, so the exclusive end is 0x5FFFFFFFFFFF + 1 = 0x600000000000. shadPS4 chose this number as a self-imposed ceiling for its own address space, so treating it as the host's ceiling is an inference on top of a third-party constant. A real rs-env-probe run on Apple Silicon must replace it."
+    },
+    "anonymous_mapping_supported": {
+      "value": true,
+      "evidence": "heuristic_risk",
+      "source": "hand-authored fixture",
+      "note": "assumed, not measured: this platform family plainly supports anonymous mmap, but nothing here established it on a real host"
+    },
+    "exact_mapping": {
+      "value": "CONDITIONALLY_SUPPORTED",
+      "evidence": "heuristic_risk",
+      "source": "hand-authored fixture"
+    },
+    "exact_mapping_failure_codes": [
+      "ENOMEM",
+      "EINVAL"
+    ],
+    "hinted_mapping_may_relocate": {
+      "value": true,
+      "evidence": "specified_guarantee",
+      "source": "POSIX mmap: addr is a hint and the implementation may place the mapping elsewhere"
+    },
+    "fixed_noreplace_available": {
+      "value": null,
+      "evidence": "unknown",
+      "note": "no equivalent of MAP_FIXED_NOREPLACE was established for this platform. Note separately that shadPS4 itself never uses one: a tree-wide search of shadps4-emu/shadPS4@d392abe finds no MAP_FIXED_NOREPLACE, MAP_EXCL or NOREPLACE token, only plain destructive MAP_FIXED (src/core/address_space.cpp:639, :751, :774). That is a fact about the application, not about this host, and is recorded here only as context."
+    },
+    "reserve_commit_model": {
+      "value": "posix_lazy",
+      "evidence": "heuristic_risk",
+      "source": "hand-authored fixture"
+    },
+    "file_map_beyond_eof": {
+      "value": null,
+      "evidence": "unknown"
+    },
+    "protection": {
+      "write_execute_simultaneous": {
+        "value": false,
+        "evidence": "heuristic_risk",
+        "source": "hand-authored fixture",
+        "note": "this platform family is documented to enforce write-xor-execute for most processes"
+      },
+      "write_then_execute_transition": {
+        "value": true,
+        "evidence": "heuristic_risk",
+        "source": "hand-authored fixture"
+      },
+      "anonymous_executable_mapping": {
+        "value": true,
+        "evidence": "heuristic_risk",
+        "source": "hand-authored fixture"
+      },
+      "jit_entitlement_required": {
+        "value": true,
+        "evidence": "heuristic_risk",
+        "source": "hand-authored fixture"
+      }
+    },
+    "unavailable_ranges": [
+      {
+        "start": "0x1000000000",
+        "end": "0x7000000000",
+        "evidence": "heuristic_risk",
+        "source": "shadps4-emu/shadPS4@d392abe src/core/address_space.cpp:39-40",
+        "note": "THIRD-PARTY WORKAROUND COMMENT, NOT A MEASUREMENT. Line 39 of that file reads: \"// GPU-reserved memory ranges from 0x1000000000 - 0x6FFFFFFFFF, so increase the user minimum.\" and line 40 raises USER_MIN to 0x7000000000 under #if defined(__APPLE__) && defined(ARCH_X86_64). The claim that macOS reserves 0x1000000000-0x6FFFFFFFFF for the GPU is shadPS4's comment about the platform, not a verified platform fact and not an Apple statement; RuntimeSkeptic has not confirmed it. It is transcribed here because a shipped workaround is evidence that its authors believed the band to be unusable, which is weak evidence and is classified as heuristic_risk accordingly. The band is shadPS4's inclusive [0x1000000000, 0x6FFFFFFFFF] rewritten half-open. A real rs-env-probe run on Apple Silicon under Rosetta 2 must replace this entry."
+      }
+    ],
+    "available_ranges": []
+  },
+  "probe_run": {
+    "tool_version": "hand-authored",
+    "probe_version": "none",
+    "run_id": "fixture",
+    "timestamp_utc": "",
+    "probe_binary_hash": "",
+    "duration_ms": 0,
+    "warnings": [
+      "NOTHING IN THIS PROFILE WAS MEASURED. Two facts (the unavailable band and max_user_address) are transcribed from constants and a comment in a third-party emulator's source; the rest are the same hand-authored guesses as in macos-arm64-rosetta-x86_64.fixture.json. Every finding derived from these heuristic_risk facts is capped at PREDICTIVE, never PROVEN.",
+      "available_ranges is empty. This is deliberate: nothing here was positively observed to be mappable, so no range may be listed as available. Requests that fall outside the unavailable band therefore resolve to UNKNOWN rather than SUPPORTED."
+    ]
+  },
+  "notes": [
+    "Replace this file with the output of `rs-env-probe vm` run on a real Apple Silicon host before using it as evidence.",
+    "This is the shadPS4-derived sibling of macos-arm64-rosetta-x86_64.fixture.json. It differs in exactly two facts: the unavailable band now cites shadps4-emu/shadPS4@d392abe src/core/address_space.cpp:39-40 instead of the ROADMAP narrative, and max_user_address is populated from that project's USER_MAX (src/core/address_space.cpp:52).",
+    "Inclusive-vs-half-open conversion: shadPS4's constants are inclusive maxima and its own size arithmetic is MAX - MIN + 1 (src/core/address_space.cpp:56-58). RuntimeSkeptic ranges are half-open [start, end). Both values here were converted by adding 1 to the inclusive maximum.",
+    "No GitHub issue, CVE, bug number, game title or user report is cited anywhere in this file, because none was verified. The only claim made is about what the cited source lines say."
+  ]
+}

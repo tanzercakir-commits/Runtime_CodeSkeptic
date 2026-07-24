@@ -211,6 +211,7 @@ json::Value VirtualMemoryModel::to_json() const {
     v["allocation_granularity"] = allocation_granularity.to_json();
     v["min_map_address"] = min_map_address.to_json();
     v["max_user_address"] = max_user_address.to_json();
+    v["anonymous_mapping_supported"] = anonymous_mapping_supported.to_json();
     v["exact_mapping"] = exact_mapping.to_json();
     v["exact_mapping_failure_codes"] = string_array(exact_mapping_failure_codes);
     v["hinted_mapping_may_relocate"] = hinted_mapping_may_relocate.to_json();
@@ -364,6 +365,12 @@ std::optional<EnvironmentProfile> EnvironmentProfile::from_json(
                                                     read_address, local_error);
     if (!local_error.empty()) {
         error = "virtual_memory.max_user_address: " + local_error;
+        return std::nullopt;
+    }
+    p.vm.anonymous_mapping_supported = fact_from_json<bool>(
+        mem->find("anonymous_mapping_supported"), read_bool, local_error);
+    if (!local_error.empty()) {
+        error = "virtual_memory.anonymous_mapping_supported: " + local_error;
         return std::nullopt;
     }
     p.vm.exact_mapping = fact_from_json<SupportLevel>(

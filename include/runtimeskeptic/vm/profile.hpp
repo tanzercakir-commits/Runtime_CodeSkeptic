@@ -93,6 +93,16 @@ struct VirtualMemoryModel {
     // Exclusive upper bound of the usable user-mode virtual address space.
     Fact<Address> max_user_address;
 
+    // Can this host create an ordinary anonymous mapping at all, with the
+    // operating system choosing the address?
+    //
+    // This looks trivially true and that is exactly why it must be recorded.
+    // Without it, a profile that established nothing whatsoever would let a
+    // don't-care mapping request come out SUPPORTED, because no rule would
+    // have anything to object to. Absence of objections is not evidence of
+    // support: something has to positively assert that mapping works here.
+    Fact<bool> anonymous_mapping_supported;
+
     // Can a mapping be placed at an exactly specified address at all?
     // CONDITIONALLY_SUPPORTED is the common answer: possible, but only for
     // ranges that are free and within bounds.
