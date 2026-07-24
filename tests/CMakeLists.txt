@@ -1,0 +1,35 @@
+# SPDX-License-Identifier: Apache-2.0
+
+add_library(rs_test_support INTERFACE)
+target_include_directories(rs_test_support INTERFACE ${CMAKE_CURRENT_SOURCE_DIR})
+
+function(rs_add_test name)
+    cmake_parse_arguments(ARG "" "" "SOURCES;LIBRARIES" ${ARGN})
+    add_executable(${name} ${ARG_SOURCES})
+    target_link_libraries(${name} PRIVATE
+        rs_test_support rs_warnings ${ARG_LIBRARIES})
+    add_test(NAME ${name} COMMAND ${name})
+    set_tests_properties(${name} PROPERTIES TIMEOUT 120)
+endfunction()
+
+# -- unit -------------------------------------------------------------------
+rs_add_test(test_json          SOURCES unit/test_json.cpp          LIBRARIES rs_core)
+rs_add_test(test_sha256        SOURCES unit/test_sha256.cpp        LIBRARIES rs_core)
+rs_add_test(test_evidence      SOURCES unit/test_evidence.cpp      LIBRARIES rs_core)
+rs_add_test(test_address_range SOURCES unit/test_address_range.cpp LIBRARIES rs_vm)
+rs_add_test(test_profile       SOURCES unit/test_profile.cpp       LIBRARIES rs_vm)
+rs_add_test(test_analyzer      SOURCES unit/test_analyzer.cpp      LIBRARIES rs_vm)
+rs_add_test(test_mutation      SOURCES unit/test_mutation.cpp      LIBRARIES rs_vm)
+rs_add_test(test_report        SOURCES unit/test_report.cpp        LIBRARIES rs_reports)
+
+# -- conformance ------------------------------------------------------------
+# The probe conformance suite measures the real host, so it is only meaningful
+# where a probe is implemented. On other platforms it asserts the honest
+# fallback behaviour instead.
+rs_add_test(test_probe SOURCES conformance/test_probe.cpp LIBRARIES rs_probe)
+
+# -- incidents --------------------------------------------------------------
+# Golden tests over the on-disk fixtures in profiles/ and contracts/.
+rs_add_test(test_incidents SOURCES incidents/test_incidents.cpp LIBRARIES rs_reports)
+target_compile_definitions(test_incidents PRIVATE
+    RS_REPO_ROOT="${CMAKE_SOURCE_DIR}")
