@@ -1,0 +1,27 @@
+{
+  "schema": "runtime-skeptic.application-requirements.v1",
+  "name": "JIT code buffer",
+  "component": "language runtime: baseline compiler",
+  "operation": "virtual_memory_map",
+  "request": {
+    "size": 1048576,
+    "exact_address_required": false,
+    "protection": { "read": true, "write": true, "execute": true },
+    "write_then_execute": true,
+    "simultaneous_write_execute": true
+  },
+  "assumptions": {
+    "guest_host_identity_required": false,
+    "translation_layer_available": false,
+    "retries_on_failure": false
+  },
+  "required_postconditions": [
+    "the buffer is writable and executable at the same time, so patching does not require a protection change"
+  ],
+  "permitted_fallbacks": [],
+  "failure_sink": {
+    "kind": "process_exit",
+    "description": "the runtime cannot start without a code buffer"
+  },
+  "assumption_evidence": "specified_guarantee"
+}

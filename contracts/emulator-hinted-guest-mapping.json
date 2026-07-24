@@ -1,0 +1,26 @@
+{
+  "schema": "runtime-skeptic.application-requirements.v1",
+  "name": "guest memory base mapping (hinted variant)",
+  "component": "emulator: guest address space setup",
+  "operation": "virtual_memory_map",
+  "request": {
+    "address": "0x1000000000",
+    "size": 16384,
+    "exact_address_required": false,
+    "protection": { "read": true, "write": true, "execute": false }
+  },
+  "assumptions": {
+    "guest_host_identity_required": true,
+    "translation_layer_available": false,
+    "retries_on_failure": false
+  },
+  "required_postconditions": [
+    "returned_address == requested_address"
+  ],
+  "permitted_fallbacks": [],
+  "failure_sink": {
+    "kind": "fatal_assert",
+    "description": "the guest pointer arithmetic assumes identity and traps otherwise"
+  },
+  "assumption_evidence": "specified_guarantee"
+}

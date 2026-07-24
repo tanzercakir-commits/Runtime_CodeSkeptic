@@ -1,0 +1,31 @@
+{
+  "schema": "runtime-skeptic.application-requirements.v1",
+  "name": "guest memory base mapping at a 128 TiB guest address",
+  "component": "emulator: 64-bit guest with a high fixed base",
+  "operation": "virtual_memory_map",
+  "request": {
+    "address": "0x800000000000",
+    "size": 65536,
+    "exact_address_required": true,
+    "protection": { "read": true, "write": true, "execute": false }
+  },
+  "assumptions": {
+    "guest_host_identity_required": true,
+    "translation_layer_available": false,
+    "retries_on_failure": true,
+    "max_retries": 5
+  },
+  "required_postconditions": [
+    "mapping_success => returned_address == requested_address"
+  ],
+  "permitted_fallbacks": [],
+  "failure_sink": {
+    "kind": "fatal_assert",
+    "location": { "file": "src/guest_memory.cpp", "line": 142, "symbol": "GuestMemory::Init" },
+    "description": "assert(result == requested) terminates the process"
+  },
+  "source_locations": [
+    { "file": "src/guest_memory.cpp", "line": 138, "symbol": "GuestMemory::Init" }
+  ],
+  "assumption_evidence": "specified_guarantee"
+}

@@ -1,0 +1,28 @@
+{
+  "schema": "runtime-skeptic.application-requirements.v1",
+  "name": "buffer pool reservation",
+  "component": "database: buffer pool manager",
+  "operation": "virtual_memory_reserve",
+  "request": {
+    "size": 8589934592,
+    "exact_address_required": false,
+    "protection": { "read": true, "write": true, "execute": false },
+    "reserve_then_commit": true
+  },
+  "assumptions": {
+    "guest_host_identity_required": false,
+    "translation_layer_available": false,
+    "retries_on_failure": true,
+    "max_retries": 3
+  },
+  "required_postconditions": [
+    "reservation succeeds without backing storage",
+    "a later commit of each region either succeeds or reports a checkable error"
+  ],
+  "permitted_fallbacks": ["smaller_size"],
+  "failure_sink": {
+    "kind": "error_return",
+    "description": "startup fails with a diagnosable error"
+  },
+  "assumption_evidence": "specified_guarantee"
+}

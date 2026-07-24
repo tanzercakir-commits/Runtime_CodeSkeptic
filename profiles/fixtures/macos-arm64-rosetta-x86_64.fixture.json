@@ -1,0 +1,108 @@
+{
+  "schema": "runtime-skeptic.environment-profile.v1",
+  "origin": "hand_authored_fixture",
+  "profile_name": "macos-arm64-rosetta-x86_64 (UNVERIFIED FIXTURE)",
+  "platform": {
+    "os": "macos",
+    "os_version": "unspecified",
+    "kernel_version": "unspecified",
+    "host_arch": "aarch64",
+    "process_arch": "x86_64",
+    "translation_mode": "rosetta2"
+  },
+  "virtual_memory": {
+    "page_size": {
+      "value": 16384,
+      "evidence": "heuristic_risk",
+      "source": "hand-authored fixture",
+      "note": "Apple Silicon hosts commonly use 16 KiB pages. NOT measured here."
+    },
+    "allocation_granularity": {
+      "value": 16384,
+      "evidence": "heuristic_risk",
+      "source": "hand-authored fixture"
+    },
+    "min_map_address": {
+      "value": "0x1000",
+      "evidence": "heuristic_risk",
+      "source": "hand-authored fixture"
+    },
+    "max_user_address": {
+      "value": null,
+      "evidence": "unknown",
+      "note": "never established for this fixture"
+    },
+    "exact_mapping": {
+      "value": "CONDITIONALLY_SUPPORTED",
+      "evidence": "heuristic_risk",
+      "source": "hand-authored fixture"
+    },
+    "exact_mapping_failure_codes": ["ENOMEM", "EINVAL"],
+    "hinted_mapping_may_relocate": {
+      "value": true,
+      "evidence": "specified_guarantee",
+      "source": "POSIX mmap: addr is a hint and the implementation may place the mapping elsewhere"
+    },
+    "fixed_noreplace_available": {
+      "value": null,
+      "evidence": "unknown",
+      "note": "no equivalent of MAP_FIXED_NOREPLACE was established for this platform"
+    },
+    "reserve_commit_model": {
+      "value": "posix_lazy",
+      "evidence": "heuristic_risk",
+      "source": "hand-authored fixture"
+    },
+    "file_map_beyond_eof": {
+      "value": null,
+      "evidence": "unknown"
+    },
+    "protection": {
+      "write_execute_simultaneous": {
+        "value": false,
+        "evidence": "heuristic_risk",
+        "source": "hand-authored fixture",
+        "note": "this platform family is documented to enforce write-xor-execute for most processes"
+      },
+      "write_then_execute_transition": {
+        "value": true,
+        "evidence": "heuristic_risk",
+        "source": "hand-authored fixture"
+      },
+      "anonymous_executable_mapping": {
+        "value": true,
+        "evidence": "heuristic_risk",
+        "source": "hand-authored fixture"
+      },
+      "jit_entitlement_required": {
+        "value": true,
+        "evidence": "heuristic_risk",
+        "source": "hand-authored fixture"
+      }
+    },
+    "unavailable_ranges": [
+      {
+        "start": "0x1000000000",
+        "end": "0x7000000000",
+        "evidence": "heuristic_risk",
+        "note": "the ROADMAP's motivating incident reports this band as unavailable to a translated x86-64 process. Transcribed, NOT measured."
+      }
+    ],
+    "available_ranges": []
+  },
+  "probe_run": {
+    "tool_version": "hand-authored",
+    "probe_version": "none",
+    "run_id": "fixture",
+    "timestamp_utc": "",
+    "probe_binary_hash": "",
+    "duration_ms": 0,
+    "warnings": [
+      "NOTHING IN THIS PROFILE WAS MEASURED. It exists so that the analyzer's behaviour on a hostile address-space layout can be regression-tested, and so that the confidence ceiling can be demonstrated: every finding derived from these heuristic_risk facts is capped at PREDICTIVE, never PROVEN."
+    ]
+  },
+  "notes": [
+    "Replace this file with the output of `rs-env-probe vm` run on a real Apple Silicon host before using it as evidence.",
+    "The half-open range [0x1000000000, 0x7000000000) is the ROADMAP's inclusive [0x1000000000, 0x6fffffffff] rewritten in this project's convention."
+  ]
+}
