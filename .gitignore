@@ -1,0 +1,23 @@
+# Build output
+build/
+build-*/
+cmake-build-*/
+out/
+
+# Generated profiles are machine-specific. The directory is tracked (see its
+# .gitkeep) but its contents are not, because a profile measured on one host is
+# evidence about that host only. Check one in deliberately, with a name that
+# says which machine it came from, if you want it as a fixture.
+profiles/generated/*.json
+
+# Generated reports
+reports/*.md
+reports/*.json
+reports/*.txt
+
+# Editor and OS noise
+.vscode/
+.idea/
+*.swp
+.DS_Store
+compile_commands.json
