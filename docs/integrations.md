@@ -1,7 +1,18 @@
 # Integrations
 
-Status: v0.1. The MCP server and the CodeSkeptic bridge are implemented and
-tested. Everything else on this page is marked with the phase it belongs to.
+Status: v0.1.
+
+**RuntimeSkeptic has no required integrations.** It builds, tests and runs
+against nothing but a C++20 compiler and CMake, and the whole vertical slice
+- probe, evaluate, report - works with hand-authored requirement documents.
+Everything on this page is optional.
+
+| | State |
+|---|---|
+| MCP server (`rs-mcp`) | implemented, 17 protocol tests |
+| Bundle consumption (`rs-check`) | implemented, 11 tests, fixture checked in |
+| CodeSkeptic producer side | **written but not merged upstream** - see below |
+| SARIF, GitHub Action, runtime monitor | later phases |
 
 ---
 
@@ -50,7 +61,14 @@ because an agent reading a verdict needs to know that `PROVEN` and
 
 ---
 
-## With CodeSkeptic
+## With a static extractor (CodeSkeptic)
+
+> **Not yet available upstream.** The consumer side described here - the
+> bundle format, `rs-check` accepting it, the fixture, the tests - is
+> implemented in this repository and works today against any producer that
+> emits the schema. The *producer* side is a `--runtime-assumptions` mode
+> written for CodeSkeptic that has not been merged into that project. Until
+> it is, write requirement documents by hand; nothing here blocks on it.
 
 [CodeSkeptic](https://github.com/tanzercakir-commits/CodeSkeptic) is the
 static half of the same question:

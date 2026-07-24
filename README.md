@@ -127,9 +127,9 @@ still refuses to call it proven.
 
 ## Build
 
-No external dependencies. A C++20 compiler and CMake 3.20 are enough - by
-design, because canonical output must be byte-identical across toolchains and
-CI must work without network access.
+No external dependencies, and no companion tool required. A C++20 compiler
+and CMake 3.20 are enough - by design, because canonical output must be
+byte-identical across toolchains and CI must work without network access.
 
 ```console
 $ cmake -S . -B build -G Ninja
@@ -151,31 +151,10 @@ Binaries land in `build/bin/`.
 | `rs-check` | Evaluate a requirement (or a bundle) against a profile |
 | `rs-mcp` | The same capabilities over the Model Context Protocol |
 
-### With CodeSkeptic
-
-[CodeSkeptic](https://github.com/tanzercakir-commits/CodeSkeptic) answers the
-static half of the question. Its `--runtime-assumptions` mode extracts what a
-program assumes about its machine; `rs-check` decides whether a measured host
-can satisfy it.
-
-```console
-$ codeskeptic --source src/ --build-path build --runtime-assumptions assumptions.json
-$ rs-env-probe vm --output host-profile.json
-$ rs-check assumptions.json --profile host-profile.json
-```
-
-Given the shape real emulators have -
-
-```c
-void* p = mmap(guest_base, size, prot, MAP_FIXED, -1, 0);
-if (p == MAP_FAILED) return error;
-assert(p == guest_base);
-```
-
-\- the extractor records the identity requirement **from the assert, not from
-the error check**. `mmap` returns success whether or not it honoured the
-address, so no error code will ever report that violation. See
-[docs/integrations.md](docs/integrations.md).
+Requirement documents are written by hand. `rs-check` also accepts a
+*bundle* of many at once, which is what a static extractor would emit; see
+[docs/integrations.md](docs/integrations.md). No extractor is required, and
+none is bundled - the vertical slice above is the whole tool.
 
 ### Exit codes
 

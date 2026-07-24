@@ -21,6 +21,8 @@ rs_add_test(test_profile       SOURCES unit/test_profile.cpp       LIBRARIES rs_
 rs_add_test(test_analyzer      SOURCES unit/test_analyzer.cpp      LIBRARIES rs_vm)
 rs_add_test(test_mutation      SOURCES unit/test_mutation.cpp      LIBRARIES rs_vm)
 rs_add_test(test_report        SOURCES unit/test_report.cpp        LIBRARIES rs_reports)
+rs_add_test(test_bundle        SOURCES unit/test_bundle.cpp        LIBRARIES rs_vm)
+target_compile_definitions(test_bundle PRIVATE RS_REPO_ROOT="${CMAKE_SOURCE_DIR}")
 
 rs_add_test(test_mcp           SOURCES unit/test_mcp.cpp           LIBRARIES rs_server)
 
