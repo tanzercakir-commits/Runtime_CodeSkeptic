@@ -25,7 +25,16 @@ permissions:
 
 concurrency:
   group: macos-probe-${{ github.ref }}
-  cancel-in-progress: true
+  # NOT cancel-in-progress. This workflow's output is a measurement, and the
+  # measurement IS the artifact - killing a run partway through measuring a real
+  # Apple Silicon host, in order to start a newer one, throws away evidence that
+  # cannot be reconstructed from the development sandbox.
+  #
+  # It also explains a gap in the record: 8dd6834 published no measurement and
+  # no status refs, because the next push landed while it was still running.
+  # A queued second run costs runner minutes; a discarded measurement costs a
+  # data point.
+  cancel-in-progress: false
 
 jobs:
   native-arm64:

@@ -18,6 +18,8 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 ROOT="$(cd "$HERE/../.." && pwd)"
 RS_CHECK="${RS_CHECK:-$ROOT/build/bin/rs-check}"
 BIN="${GT_BIN:-$ROOT/build/groundtruth}"
+CASES="${GT_CASES:-$HERE/cases}"
+MANIFEST="${GT_MANIFEST:-$HERE/manifest.json}"
 PROFILE="${1:-}"
 
 if [ -z "$PROFILE" ]; then
@@ -34,12 +36,13 @@ fi
 # itself in a more expensive way.
 mkdir -p "$BIN"
 CC="${CC:-cc}"
+CONTRACT_ROOT="${GT_CONTRACT_ROOT:-$HERE}"
 # -Werror is load-bearing, not tidiness. The first version of this harness
 # compiled a case with an implicit declaration of strsignal(), the compiler
 # assumed it returned int, printf("%s", ...) got an integer where a pointer
 # belonged, and the case segfaulted while reporting the very signal it existed
 # to observe. The warning was printed and thrown away.
-for src in "$HERE"/cases/*.c; do
+for src in "$CASES"/*.c; do
     out="$BIN/$(basename "$src" .c)"
     if ! "$CC" -std=gnu11 -O1 -Wall -Wextra -Werror -o "$out" "$src" \
             2>"$BIN/build.log"; then
@@ -72,19 +75,19 @@ printf '%.0s-' {1..108}; echo
 total=0; held=0; contradicted=0; unasserted=0
 declare -a failures=()
 
-count=$(python3 -c "import json;print(len(json.load(open('$HERE/manifest.json'))['cases']))")
+count=$(python3 -c "import json;print(len(json.load(open('$MANIFEST'))['cases']))")
 for i in $(seq 0 $((count - 1))); do
     read -r name contract program <<<"$(python3 -c "
 import json
-c = json.load(open('$HERE/manifest.json'))['cases'][$i]
+c = json.load(open('$MANIFEST'))['cases'][$i]
 print(c['case'], c['contract'], c['program'])
 ")"
     mapfile -t args < <(python3 -c "
 import json
-for a in json.load(open('$HERE/manifest.json'))['cases'][$i]['args']: print(a)
+for a in json.load(open('$MANIFEST'))['cases'][$i]['args']: print(a)
 ")
 
-    "$RS_CHECK" "$HERE/$contract" --profile "$PROFILE" --format json >/dev/null 2>&1
+    "$RS_CHECK" "$CONTRACT_ROOT/$contract" --profile "$PROFILE" --format json >/dev/null 2>&1
     predicted=$(verdict_of $?)
 
     if ! observed_json=$("$BIN/$program" "$name" "${args[@]}" 2>/dev/null); then

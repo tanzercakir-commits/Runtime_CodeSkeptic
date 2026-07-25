@@ -42,6 +42,12 @@ jobs:
       - name: Probe is reproducible across processes
         run: bash tools/campaign/check_reproducible.sh
 
+      # Before trusting the comparison, test the comparator. This exercises the
+      # rows a real host never produces - `relocated`, a SUPPORTED prediction
+      # meeting a refusal, a case that dies without printing.
+      - name: Ground-truth harness selftest
+        run: bash tests/groundtruth/selftest.sh
+
       - name: Ground truth vs prediction
         run: |
           build/bin/rs-env-probe vm --name ci-linux --output /tmp/ci-linux.json
