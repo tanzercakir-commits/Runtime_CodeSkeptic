@@ -16,7 +16,7 @@ finding_ids:
   - RS-VM-0008
   - RS-VM-0017
 status: draft
-provenance: source_citation
+provenance: public_report
 source: shadps4-emu/shadPS4@d392abe — src/core/address_space.cpp:45-53
 ---
 
@@ -24,7 +24,7 @@ source: shadps4-emu/shadPS4@d392abe — src/core/address_space.cpp:45-53
 
 ## Provenance notice
 
-This entry uses `provenance: source_citation`, a value **not yet listed in `README.md` section 3.6**. Every claim about program behavior below is a claim about the contents of `shadps4-emu/shadPS4@d392abe`, cited with `file:line` and checkable by reading the file.
+This entry uses `provenance: public_report`; its source is a specific public commit, which section 3.6 covers. Every claim about program behavior below is a claim about the contents of `shadps4-emu/shadPS4@d392abe`, cited with `file:line` and checkable by reading the file.
 
 - **Verified:** what the shadPS4 source says and does; and the `max_user_address` value measured by `rs-env-probe` on this CI host.
 - **NOT verified:** that any bug report, GitHub issue, CVE, forum post, user report, or affected game title exists. **None is cited here**, because none was confirmed.

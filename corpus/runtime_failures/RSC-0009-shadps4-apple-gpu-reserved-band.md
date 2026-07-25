@@ -15,7 +15,7 @@ finding_ids:
   - RS-VM-0001
   - RS-VM-0017
 status: draft
-provenance: source_citation
+provenance: public_report
 source: shadps4-emu/shadPS4@d392abe — src/core/address_space.cpp:36-44
 ---
 
@@ -23,7 +23,7 @@ source: shadps4-emu/shadPS4@d392abe — src/core/address_space.cpp:36-44
 
 ## Provenance notice
 
-This entry uses `provenance: source_citation`, a value **not yet listed in `README.md` section 3.6**. It means: every claim about program behavior in this entry is a claim about the contents of a specific, publicly readable source file at a specific commit, and can be checked by reading that file.
+This entry uses `provenance: public_report`. Its source is a specific commit in a public repository, which section 3.6 lists as a public report. It means: every claim about program behavior in this entry is a claim about the contents of a specific, publicly readable source file at a specific commit, and can be checked by reading that file.
 
 What that does **and does not** license:
 

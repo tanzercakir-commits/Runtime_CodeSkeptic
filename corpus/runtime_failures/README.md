@@ -4,10 +4,47 @@ The incident corpus: one Markdown file per cross-layer runtime failure, classifi
 
 **Status:** ROADMAP Phase 0 deliverable (`corpus/runtime_failures/`). **Incomplete, and none of its current contents count toward the Phase 0 exit criteria.**
 
-> ### Current state, stated plainly
+<!-- counting: 44/30 vm: 35/10 -->
+
+> ### Current state, computed, not claimed
 >
-> | | Required by Phase 0 | Present | Counting |
+> The numbers below are recomputed from the files by
+> `tools/guards/check_corpus.py`, which fails CI when this table and the
+> directory disagree. They were prose for the project's whole life, and prose
+> is how a corpus comes to say 0/30 while holding forty entries - or the
+> reverse, which is worse.
+>
+> | | Required by Phase 0 | Present | **Counting** |
 > | --- | --- | --- | --- |
+> | Classified real incidents | >= 30 | 54 files | **44** |
+> | In the virtual-memory categories | >= 10 | | **35** |
+>
+> **Both exit criteria are met.** What is *not* met, and matters more than the
+> count: every counting entry is `sourced`, none is `reproduced`, and none has
+> an automated test under `tests/incidents/`. A cited incident proves the
+> contradiction is real; it does not prove this analyzer diagnoses it.
+>
+> Ten entries remain `draft` with `provenance: pattern_reconstruction` -
+> RSC-0001 through RSC-0008 - and count toward nothing, by the rule in section
+> 5. They are kept because they informed the taxonomy, and they are marked so
+> that they cannot be mistaken for evidence.
+>
+> **On verification, stated as a bound rather than a boast.** The 43 entries
+> added on 2026-07-25 were each fetched and read before being written; each
+> carries `verified: 2026-07-25` and a line quoted from the fetched page. Six
+> were then independently re-fetched by a second reader and all six matched -
+> RSC-0011, RSC-0018, RSC-0020, RSC-0035, RSC-0047 and RSC-0052.
+>
+> **That is 6 of 44 confirmed twice. It is a sample, not a proof.**
+> `tools/campaign/verify_corpus_sources.py` exists to close the gap by
+> re-fetching every `source:` and checking the quote is still present - but it
+> cannot run in the environment these entries were written in, where the
+> network proxy returns `403` to every plain HTTP client. It reports that
+> honestly (exit 2, "nothing was checkable") rather than passing vacuously.
+> Until it has been run somewhere with ordinary network access, six is the
+> number, and anybody relying on this corpus should know it.
+
+--- | --- | --- | --- |
 > | Classified real incidents | ≥ 30 | 8 files | **0** |
 > | In the virtual-memory category | ≥ 10 | 8 files | **0** |
 >

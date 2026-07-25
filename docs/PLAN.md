@@ -24,7 +24,7 @@ must name a test, a tool invocation, or a committed artifact.
 **Phases 0-3 are the built surface. Phase 4 and beyond are not started.**
 
 ```
-Phase 0  taxonomy + corpus        PARTIAL   docs complete, corpus 1/30
+Phase 0  taxonomy + corpus        DONE      corpus 44/30, vm 35/10
 Phase 1  environment probe        PARTIAL   Linux + macOS x2 measured; Windows is a stub
 Phase 2  semantic IR + evaluator  DONE
 Phase 3  VM analyzer MVP          PARTIAL   one exit criterion never measured
@@ -47,18 +47,23 @@ Phase 10 productization           OPEN
 - `[done]` `docs/failure_taxonomy.md` — committed, ten categories
 - `[done]` `docs/evidence_model.md` — committed; enforced by `tests/unit/test_evidence.cpp`
 - `[done]` `docs/non_goals.md` — committed, normative
-- `[partial]` `corpus/runtime_failures/` — 11 entries, of which 1 is
-  `reported_incident` and 2 are `source_citation`; 8 are
-  `pattern_reconstruction` and count toward nothing (T-003)
+- `[done]` `corpus/runtime_failures/` — 54 entries, **44 counting**
+  (`sourced`, each with a fetched `source:` and a quoted line); 10 remain
+  `pattern_reconstruction` and count toward nothing by rule.
+  `tools/guards/check_corpus.py` recomputes both numbers rather than trusting
+  the README
 - `[done]` finding-ID registry — `docs/findings/registry.md`, 25 ids
 
 ### Exit criteria
 
-- `[open]` **at least 30 classified real incidents** — 1 counts
-  (`RSC-0011`, shadPS4 issue #4157). The corpus README's own accounting says
-  0/30; that is now stale by one, and the entry it turns on rests on a
-  citation this environment cannot re-fetch. (T-003)
-- `[open]` **at least 10 in the virtual-memory category** — 1 counts (T-003)
+- `[done]` **at least 30 classified real incidents** — **44 count**, from
+  emulators, JITs, allocators, sanitizers, Windows/Wine and kernel changes.
+  Every one cites a public report, commit or vendor document that was fetched
+  and read; `tools/guards/check_corpus.py` computes the number from the files.
+  Caveat recorded in the corpus README: only 6 of the 44 have been re-fetched
+  by a second reader.
+- `[done]` **at least 10 in the virtual-memory category** — **35 count**,
+  computed by `tools/guards/check_corpus.py` from the `category:` field
 - `[done]` each category has a concrete evidence model —
   `docs/failure_taxonomy.md`, cross-checked by `tools/guards/check_registry.py`
 - `[done]` terminology stable enough to publish — `docs/evidence_model.md`
@@ -66,13 +71,21 @@ Phase 10 productization           OPEN
   entry in `corpus/runtime_failures/` carries `provenance:`, and
   `pattern_reconstruction` entries are excluded from the count by rule
 
-**The gap that matters:** this is the largest single hole in the project. The
-taxonomy is derived from imagination, not from incidents, and until 30 real
-ones exist nobody can say whether the ten categories are the right ten.
+**What the corpus changed.** The taxonomy was derived from imagination and is
+now testable against 44 real incidents. All ten categories have entries. Two
+findings from the set itself:
 
-`docs/scenarios/assessment.md` S5 and S2 name the cheapest way in: mimalloc,
-jemalloc and V8 publish their shipped configurations, and "a customer said it
-broke on Mac" is a real incident with a real artifact behind it.
+- **The dominant shape is not refusal, it is a misleading success.** Roughly a
+  third of the entries are a call that returned success and gave the program
+  something other than what it asked for - a relocated mapping, an ignored
+  alignment hint, a decommit that did nothing, an `mmap` honouring `MAP_32BIT`
+  with a 47-bit address. That is the category the project was built around and
+  the corpus supports it.
+- **The model has four gaps the corpus names.** No field expresses the
+  granularity of a W^X toggle (RSC-0027), the VMA-count limit (RSC-0040), "the
+  same address in a *future* process" (RSC-0041, RSC-0047), or a program that
+  *requires* destructive `MAP_FIXED` (RSC-0052). Each is a concrete extension
+  with a citation behind it rather than a guess.
 
 ---
 

@@ -43,28 +43,8 @@ completes without leaving a trace in the log is work that will be redone.
 
 ## Now
 
-### T-003 — Corpus: 30 classified real incidents `[now]`
-
-**Serves:** S5 (allocators), S2 (page size), and the honesty of the taxonomy
-**Plan:** `docs/PLAN.md` Phase 0, both exit criteria
-**Done when:** `corpus/runtime_failures/` holds 30 entries whose `provenance:`
-is `reported_incident` or `source_citation`, at least 10 of them virtual-memory,
-and the README's own accounting agrees with the count.
-
-**The largest single hole in the project.** One entry counts today. The ten
-failure categories were derived from imagination rather than from incidents, so
-nobody can yet say whether they are the right ten — and every rule in the
-analyzer inherits that uncertainty.
-
-**First step:** the cheapest sources are named in `docs/scenarios/assessment.md`
-S5 and S2 — mimalloc, jemalloc and V8 publish their shipped configurations and
-their bug trackers are public, and "a customer said it broke on Mac" is a real
-incident with a real artifact behind it. Emulators (Box64, QEMU, Wine) are the
-richest vein for the virtual-memory ten.
-
-**Trap to avoid:** `pattern_reconstruction` entries are pleasant to write and
-count toward nothing, by rule. Eight of the eleven current entries are that.
-Writing a ninth is motion, not progress.
+*(`Now` is empty. The next item is `T-004`, the Windows probe — promote it
+deliberately rather than by drift.)*
 
 ---
 
@@ -229,6 +209,40 @@ Each needs a reason, so this cannot quietly become a way to empty the list.
 Items land here with the commit that finished them, and they are not deleted:
 a compass with no wake behind it cannot show whether the heading has been
 holding.
+
+### T-003 — Corpus: 30 classified real incidents `[done]`
+
+**Serves:** S5 (allocators), S2 (page size), and the honesty of the taxonomy
+**Plan:** `docs/PLAN.md` Phase 0, both exit criteria
+**Done when:** 30 entries whose `provenance:` is a real report, at least 10
+virtual-memory, and the README's accounting agrees with the count.
+**Met:** **44 counting, 35 virtual-memory**, 54 files.
+`tools/guards/check_corpus.py` computes both numbers from the files and fails
+when the README disagrees, so the accounting cannot drift back.
+
+43 entries added on 2026-07-25, each fetched and read before being written,
+each carrying a quoted line: emulators (FEX, QEMU, box64, Dolphin), JITs and
+runtimes (LuaJIT, V8, Mono, ART, YJIT, HotSpot, Dart, SpiderMonkey), Apple
+Silicon W^X, allocators and sanitizers (ASan, mimalloc, jemalloc, Go,
+ClickHouse), Windows and Wine (PostgreSQL, Firefox, WSL 1, Cygwin), and kernel
+changes (`mmap_min_addr`, LA57, the stack guard gap, `MAP_FIXED_NOREPLACE`
+introduced *and* reverted).
+
+**What it changed.** All ten taxonomy categories now have real entries, and the
+dominant shape across the set is not refusal but **misleading success** —
+roughly a third are a call that returned success and gave the program something
+else. The corpus also names four concrete gaps in the model: W^X toggle
+granularity (RSC-0027), the VMA-count limit (RSC-0040), "the same address in a
+future process" (RSC-0041, RSC-0047), and a program that *requires* destructive
+`MAP_FIXED` (RSC-0052).
+
+**The honest bound.** Only 6 of the 44 have been re-fetched by a second reader.
+`tools/campaign/verify_corpus_sources.py` exists to close that and **cannot run
+in the authoring environment**, whose proxy returns 403 to every plain HTTP
+client — it reports exit 2 rather than passing vacuously. Six is the number
+until it runs somewhere with ordinary network access.
+
+---
 
 ### T-013 — Probe the region where programs actually map `[done]`
 

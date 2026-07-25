@@ -4,9 +4,9 @@ title: Fixed GPU-buffer mapping lands in the Rosetta 2 GPU carveout and aborts t
 category: unsupported exact capability
 secondary_category: semantic success violation
 layers_involved: [application, compatibility_layer, operating_system, kernel]
-evidence_available: [reported_measurement, source_citation, log_excerpt]
+evidence_available: [specified_guarantee, measured_capability, unknown]
 finding_ids: [RS-VM-0001]
-provenance: reported_incident
+provenance: public_report
 status: sourced
 source: shadps4-emu/shadPS4 issue #4157
 ---

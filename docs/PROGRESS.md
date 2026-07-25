@@ -16,6 +16,84 @@ re-litigated; a mistake recorded here does not need to be re-made.
 
 ---
 
+## 2026-07-25 — T-003: the corpus, 1 of 30 to 44 of 30
+
+**Changed.** 43 new entries in `corpus/runtime_failures/`, each citing a public
+report, commit or vendor document that was fetched and read.
+`tools/guards/check_corpus.py` and `tools/campaign/verify_corpus_sources.py`
+are new. Phase 0's two blocking exit criteria are met: **44 counting against a
+requirement of 30, and 35 virtual-memory against a requirement of 10.**
+
+**The method, because the number is worthless without it.** Six readers worked
+in parallel over six domains - emulators, JITs and language runtimes, Apple
+Silicon, allocators and sanitizers, Windows and Wine, kernel changes - under
+one rule: fetch the page, read it, quote a line from it, and if you cannot,
+report nothing. They also reported what they rejected and why, which is how the
+gaps below are known rather than guessed.
+
+**What the corpus says about the project's central claim.** The dominant shape
+across 44 real incidents is **not refusal**. Roughly a third are a call that
+returned success and handed the program something else:
+
+| Entry | Asked for | Got, successfully |
+|---|---|---|
+| RSC-0013 | a reservation at 0x1000 | one at 0x10000, and an error message ending in `(Success)` |
+| RSC-0020 | `MAP_32BIT` | 0x7fa21f5cb000 |
+| RSC-0036 | a 64 MiB-aligned region | an unaligned one, silently, every time |
+| RSC-0031 | a decommit | a no-op, with the bookkeeping flag set anyway |
+| RSC-0029 | RWX, and the API agreed | a hardware mask that denies the write |
+
+That is the category this project was built around, and the corpus supports it
+rather than merely illustrating it.
+
+**Four gaps in the model, each with a citation rather than a guess.**
+
+1. **W^X toggle granularity** (RSC-0027) — `pthread_jit_write_protect_np`
+   controls *every* page on the thread, so unprotecting one region unprotects
+   the code that is running. The model records that W and X are not
+   simultaneous; it has no field for how coarse the switch is.
+2. **The VMA-count limit** (RSC-0040) — a 4 KiB mapping failing with ENOMEM
+   because `vm.max_map_count` was reached. A topology constraint that is not
+   about addresses at all.
+3. **"The same address in a future process"** (RSC-0041, RSC-0047) —
+   PostgreSQL's shared segment and Cygwin's `fork()` both require an address to
+   be identical in a process that does not exist yet. Not expressible today.
+4. **A program that *requires* destructive `MAP_FIXED`** (RSC-0052) — the flag
+   that was added to make placement safe had to be reverted from the ELF loader
+   because real binaries have overlapping segments. `fixed_noreplace_available`
+   is necessary and not sufficient.
+
+**The guard found the drift it was written for, immediately.** `RSC-0011` - the
+single entry the exit criteria had turned on for the project's whole life -
+carried `provenance: reported_incident` and `evidence_available:
+[reported_measurement, source_citation, log_excerpt]`, and **not one of those
+four values exists in the corpus README's own tables.** RSC-0009 and RSC-0010
+were malformed the same way. The entry the criteria depended on was invalid
+against the rules of the file that defines them, and nothing had ever looked.
+The README's counting table is now a `<!-- counting: N/30 vm: M/10 -->` marker
+recomputed from the files.
+
+**The honest bound, and it is the important part.** Only **6 of the 44** have
+been re-fetched by a second reader (RSC-0011, 0018, 0020, 0035, 0047, 0052; all
+six matched). `verify_corpus_sources.py` exists to close that gap and **cannot
+run here** - this environment's proxy returns 403 to every plain HTTP client,
+so the tool exits 2 with "nothing was checkable; this says nothing about the
+corpus" rather than passing vacuously. Six is the number until it runs
+somewhere with ordinary network access, and the corpus README says so where a
+reader will see it.
+
+**Also recorded, from the researchers' own rejection lists.** WineHQ's bugzilla
+is unfetchable behind a proof-of-work wall and Apple's developer documentation
+is JavaScript-rendered and returns no body - so the two richest sources for
+this domain are absent, and the Wine and Apple coverage here comes from LKML,
+box64 and Apple's own forums instead. A gap caused by infrastructure is still a
+gap.
+
+**Next.** `Now` is empty by design. `T-004`, the Windows probe, is the ranked
+next item and should be promoted deliberately rather than by drift.
+
+---
+
 ## 2026-07-25 — T-013: the probe was looking in the wrong place
 
 **Changed.** `src/probe/vm_probe_linux.cpp` samples two allocation arenas;

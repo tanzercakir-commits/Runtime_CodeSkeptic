@@ -61,6 +61,7 @@ run "normative non-goals"   python3 "$HERE/check_non_goals.py"
 run "dates against git"     python3 "$HERE/check_dates.py"
 run "compass vs map"        python3 "$HERE/check_todo.py"
 run "published numbers"     python3 "$HERE/check_campaign.py"
+run "corpus rules"          python3 "$HERE/check_corpus.py"
 
 echo
 if [ "$failed" -eq 0 ]; then
