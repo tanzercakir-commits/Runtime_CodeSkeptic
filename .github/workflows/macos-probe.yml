@@ -19,6 +19,14 @@ on:
   pull_request:
   workflow_dispatch:
 
+# Publishing measurements and job status as git refs needs push rights.
+permissions:
+  contents: write
+
+concurrency:
+  group: macos-probe-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   native-arm64:
     name: native arm64
@@ -41,6 +49,7 @@ jobs:
           sysctl -n kern.osproductversion
 
       - name: Measure
+        id: measure
         run: |
           build/bin/rs-env-probe vm --name "macos-arm64-native-ci" \
             --output macos-arm64-native.json
@@ -71,9 +80,56 @@ jobs:
           PY
 
       - uses: actions/upload-artifact@v4
+        if: always() && steps.measure.outcome == 'success'
         with:
           name: macos-arm64-native-profile
           path: macos-arm64-native.json
+
+      # The development sandbox for this project can reach the repository over
+      # the git protocol only - no Actions REST API, no artifact downloads. So
+      # the two things worth reading are published as namespaced refs, which
+      # are invisible as branches and trigger nothing:
+      #
+      #   refs/measurements/<sha>/<job>   the measured profile itself
+      #   refs/status/<sha>/<job>/<state> the job's conclusion
+      #
+      # Fetch one with:
+      #   git fetch origin "refs/measurements/<sha>/<job>:refs/heads/m" && git show m:PROFILE.json
+      - name: Publish the measurement to refs/measurements/*
+        if: always() && steps.measure.outcome == 'success'
+        run: |
+          git config user.name "ci-measurements"
+          git config user.email "ci-measurements@localhost"
+          git checkout --detach -q
+          git add -f macos-arm64-native.json
+          git commit -qm "native arm64 measured @ ${{ github.sha }}"
+          git push --force origin \
+            "HEAD:refs/measurements/${{ github.sha }}/native-arm64"
+
+      - name: Failure diagnostics -> refs/ci-logs/*
+        if: failure()
+        env:
+          STEPS_JSON: ${{ toJSON(steps) }}
+        run: |
+          mkdir -p /tmp/diag
+          echo "$STEPS_JSON" > /tmp/diag/steps.json
+          ctest --test-dir build --rerun-failed --output-on-failure \
+            > /tmp/diag/ctest_failed.txt 2>&1 || true
+          tail -c 30000 /tmp/diag/ctest_failed.txt > /tmp/diag/ctest_tail.txt || true
+          git config user.name "ci-logs"
+          git config user.email "ci-logs@localhost"
+          git checkout --detach -q
+          cp /tmp/diag/steps.json /tmp/diag/ctest_tail.txt .
+          git add -f steps.json ctest_tail.txt
+          git commit -qm "macos diagnostics @ ${{ github.sha }}"
+          git push --force origin \
+            "HEAD:refs/ci-logs/${{ github.sha }}/native-arm64"
+
+      - name: Mirror job status to refs/status/*
+        if: always()
+        run: |
+          git push --force origin \
+            "HEAD:refs/status/${{ github.sha }}/native-arm64/${{ job.status }}"
 
   rosetta-x86_64:
     name: x86-64 under Rosetta 2
@@ -115,6 +171,7 @@ jobs:
 
       # This is the measurement the whole project has been waiting for.
       - name: Measure the translated address space
+        id: measure
         if: steps.rosetta.outputs.available == 'true'
         run: |
           build-x64/bin/rs-env-probe vm --name "macos-arm64-rosetta-x86_64-ci" \
@@ -203,7 +260,53 @@ jobs:
             profiles/fixtures/macos-arm64-rosetta-x86_64.reported.fixture.json || true
 
       - uses: actions/upload-artifact@v4
-        if: steps.rosetta.outputs.available == 'true'
+        if: always() && steps.measure.outcome == 'success'
         with:
           name: macos-rosetta-x86_64-profile
           path: macos-rosetta-x86_64.json
+
+      # The development sandbox for this project can reach the repository over
+      # the git protocol only - no Actions REST API, no artifact downloads. So
+      # the two things worth reading are published as namespaced refs, which
+      # are invisible as branches and trigger nothing:
+      #
+      #   refs/measurements/<sha>/<job>   the measured profile itself
+      #   refs/status/<sha>/<job>/<state> the job's conclusion
+      #
+      # Fetch one with:
+      #   git fetch origin "refs/measurements/<sha>/<job>:refs/heads/m" && git show m:PROFILE.json
+      - name: Publish the measurement to refs/measurements/*
+        if: always() && steps.measure.outcome == 'success'
+        run: |
+          git config user.name "ci-measurements"
+          git config user.email "ci-measurements@localhost"
+          git checkout --detach -q
+          git add -f macos-rosetta-x86_64.json
+          git commit -qm "rosetta x86_64 measured @ ${{ github.sha }}"
+          git push --force origin \
+            "HEAD:refs/measurements/${{ github.sha }}/rosetta-x86_64"
+
+      - name: Failure diagnostics -> refs/ci-logs/*
+        if: failure()
+        env:
+          STEPS_JSON: ${{ toJSON(steps) }}
+        run: |
+          mkdir -p /tmp/diag
+          echo "$STEPS_JSON" > /tmp/diag/steps.json
+          ctest --test-dir build-x64 --rerun-failed --output-on-failure \
+            > /tmp/diag/ctest_failed.txt 2>&1 || true
+          tail -c 30000 /tmp/diag/ctest_failed.txt > /tmp/diag/ctest_tail.txt || true
+          git config user.name "ci-logs"
+          git config user.email "ci-logs@localhost"
+          git checkout --detach -q
+          cp /tmp/diag/steps.json /tmp/diag/ctest_tail.txt .
+          git add -f steps.json ctest_tail.txt
+          git commit -qm "macos diagnostics @ ${{ github.sha }}"
+          git push --force origin \
+            "HEAD:refs/ci-logs/${{ github.sha }}/rosetta-x86_64"
+
+      - name: Mirror job status to refs/status/*
+        if: always()
+        run: |
+          git push --force origin \
+            "HEAD:refs/status/${{ github.sha }}/rosetta-x86_64/${{ job.status }}"
