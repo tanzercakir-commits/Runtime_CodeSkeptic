@@ -1,0 +1,27 @@
+{
+  "schema": "runtime-skeptic.environment-profile.v1",
+  "profile_name": "unknown-host",
+  "origin": "synthetic",
+  "platform": {
+    "os": "unknown",
+    "os_version": "unknown",
+    "host_arch": "unknown",
+    "process_arch": "unknown",
+    "pointer_width_bits": 64,
+    "translation_mode": "unknown"
+  },
+  "probe_run": {
+    "tool_version": "runtimeskeptic/0.1.0",
+    "probe_version": "hand-authored",
+    "timestamp_utc": "2026-07-25T00:00:00Z",
+    "run_id": "0000000000000000",
+    "probe_binary_hash": "",
+    "duration_ms": 0,
+    "warnings": ["every fact in this profile is deliberately unknown"]
+  },
+  "virtual_memory": {
+    "available_ranges": [],
+    "unavailable_ranges": [],
+    "exact_mapping_failure_codes": []
+  }
+}

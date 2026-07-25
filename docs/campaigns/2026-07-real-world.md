@@ -145,6 +145,51 @@ no information beyond restating its own rule list. This is not a bug with a
 patch; it is the honest measure of how much of the analysis is currently
 platform-sensitive, and it is the number to move.
 
+#### Measured, July 25 — `tools/campaign/host_sensitivity.sh`
+
+The number could not be measured in July because measuring it needs a second
+host and there was one. There are now three, so it has been.
+
+**The test.** Run every contract twice: once against a measured profile, once
+against `profiles/fixtures/unknown-host.synthetic.json`, in which 0 of 14
+facts are known. Same verdict *and* same findings both times means the profile
+was not consulted - the answer came out of the rule list. This is a
+demonstration, not an inference from two hosts happening to agree.
+
+| host | consulted the host | did not |
+|---|---|---|
+| `linux/x86_64+unknown` | 24 / 26 (92%) | 2 |
+| `macos/x86_64+rosetta2` | 24 / 26 (92%) | 2 |
+| `macos/aarch64+none` | 25 / 26 (96%) | 1 |
+
+Both rows that answer without a host turn out to be entitled to:
+
+- `redis-jemalloc-hinted-identity` → `UNSUPPORTED`, `RS-VM-0014`. The contract
+  requires guest/host address identity *and* lists relocation as a permitted
+  fallback. That contradiction is internal to the requirement and holds on
+  every host - and the finding **says so in its own output**: "Host
+  capability: not consulted: the contradiction is internal to the requirement
+  and holds on every host."
+- `luajit-mcode-jumprange-x64` → `UNKNOWN`, `RS-VM-0024`. A profile records
+  what the address space looks like, not where a future process will place its
+  interpreter. Correctly unevaluatable, correctly reported as unknown, and it
+  *becomes* host-sensitive on native arm64.
+
+**This is a different question from the one the reviewer answered, and the
+result does not refute them.** A reviewer predicting a verdict from
+`analyzer.cpp` shows the rules are simple enough to run in your head once you
+also know the host - "page size must equal 4096" is easy to predict if you
+know the host is 4 KiB. The script asks the stricter question: did the profile
+change the answer? Both are real measurements of different things, and the
+reviewer's version is the harder standard.
+
+The first version of this script reported 100% and was wrong. `RS-VM-0017`
+("a platform fact this request depends on was never established") fires on the
+empty profile by construction, so every signature differed. `--no-unknowns`
+suppresses it without changing verdicts. Worth recording because the failure
+mode was a metric that flattered the tool, produced by the tool's own author,
+on the metric measuring whether the tool is honest.
+
 ---
 
 ## Results after the fixes
