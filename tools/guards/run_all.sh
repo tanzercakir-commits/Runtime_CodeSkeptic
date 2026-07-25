@@ -26,6 +26,8 @@
 #   check_todo       four documents carry this project - the spirit, the
 #                    compass, the map and the past - and the way it gets lost
 #                    is two of them quietly disagreeing
+#   check_campaign   a measured number is a claim like any other, and prose
+#                    drifts from data exactly the way prose drifts from code
 #
 # `selftest` runs FIRST and is not one of them. All five pass on a repository
 # that has already been fixed - and so would five guards whose patterns never
@@ -58,6 +60,7 @@ run "schemas vs code"       python3 "$HERE/validate_schemas.py"
 run "normative non-goals"   python3 "$HERE/check_non_goals.py"
 run "dates against git"     python3 "$HERE/check_dates.py"
 run "compass vs map"        python3 "$HERE/check_todo.py"
+run "published numbers"     python3 "$HERE/check_campaign.py"
 
 echo
 if [ "$failed" -eq 0 ]; then

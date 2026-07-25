@@ -143,10 +143,17 @@ broke on Mac" is a real incident with a real artifact behind it.
   `tests/conformance/test_probe.cpp`
 - `[done]` each finding contains an evidence chain — an empty chain collapses
   to HYPOTHESIS by construction; `tests/unit/test_evidence.cpp`
-- `[open]` **expected false-positive rate is low on curated examples** —
-  NEVER MEASURED. This is also ROADMAP Gate B. Nothing in the repository
-  establishes it, and the campaign's expectations were written by the same
-  author as the rules. (T-002)
+- `[partial]` **expected false-positive rate is low on curated examples** —
+  **MEASURED: 0 false positives in 1292 requests** that 13 real programs were
+  observed to perform successfully on a measured Linux host
+  (`docs/campaigns/2026-07-false-positive-rate.md`,
+  `campaigns/false-positive/2026-07-linux-x86_64.json`, reproduce with
+  `tools/campaign/run_false_positive.sh`). The contracts were transcribed from
+  `strace`, not authored, so the tool is not grading its own homework. **The
+  gap:** the address rules were not exercised — 99.7% of the address population
+  came back `UNKNOWN` because the Linux probe scans 224 MiB of a 128 TiB space
+  and misses `mmap_base` entirely. The rate is low for page size, granularity
+  and protection; it is unmeasured for `RS-VM-0001`/`0002`/`0003`. (T-013)
 - `[done]` runs in CI without launching the application — `.github/workflows/ci.yml`
 
 ### The MVP's seven demonstrations (ROADMAP §14)
@@ -227,10 +234,13 @@ that risk materialising.
   platforms (16 KiB vs 4 KiB pages, W^X refused vs permitted, SIGBUS vs
   zero-fill on ONE machine — `profiles/measured/`), and expose real
   constraints (the 384 GiB carveout).
-- `[open]` **Gate B** (after Phase 3) — it diagnoses real failures and its
-  evidence beats ordinary logs, but the **false-positive rate has never been
-  measured**, so Gate B is NOT passed. See `docs/PROGRESS.md` for why this is
-  the highest-value open item. (T-002)
+- `[partial]` **Gate B** (after Phase 3) — it diagnoses real failures, its
+  evidence beats ordinary logs, and the false-positive rate is now **measured
+  at 0 of 1292** on observed real requests
+  (`docs/campaigns/2026-07-false-positive-rate.md`). Not yet passed, because
+  the population that would exercise the address rules answered `UNKNOWN`
+  99.7% of the time. The blocker moved from "never measured" to "measured,
+  with a named hole", which is a different and much better problem. (T-013)
 - `[blocked]` **Gate C** — Phase 5 is blocked. (T-011)
 - `[n/a]` **Gate D** — no new domain is proposed.
 

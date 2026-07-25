@@ -43,33 +43,42 @@ completes without leaving a trace in the log is work that will be redone.
 
 ## Now
 
-### T-002 — Measure the false-positive rate `[now]`
+### T-013 — Probe the region where programs actually map `[now]`
 
-**Serves:** S6 (CI gate — the commercially interesting one)
-**Plan:** `docs/PLAN.md` Phase 3 exit criterion, and Gate B
-**Done when:** a documented count exists: N real shipped configurations
-evaluated against a measured host, M returned `UNSUPPORTED`, and each of the M
-is examined and classified as a true or false positive with a reason.
+**Serves:** S9, S7, and the credibility of `RS-VM-0001` on Linux
+**Plan:** `docs/PLAN.md` Phase 1 — the scan, and Phase 3's false-positive rate
+**Done when:** a re-run of `tools/campaign/run_false_positive.sh` answers
+something other than `UNKNOWN` for the majority of the 639 observed MAP_FIXED
+addresses, and `tools/campaign/check_reproducible.sh` still passes.
 
-**Why it matters more than any feature.** This is not a capability, it is the
-**permission to be believed**. S6 blocks a merge on this tool's verdict; doing
-that on an unmeasured false-positive rate is how a tool gets switched off in its
-first week, and a switched-off guard is worse than none — the project has
-already made that argument to itself about `tools/guards/check_docs.py`.
+**Found by T-002, and it is the most valuable thing that campaign produced.**
+`scan_address_space()` in `src/probe/vm_probe_linux.cpp` establishes 56 windows
+of 4 MiB — 224 MiB of a 128 TiB space — at powers of two plus four hand-picked
+landmarks. Every landmark is a plausible *emulator* base, because the profile
+was built for the shadPS4 question. None is near `mmap_base`.
 
-It is also the last unmeasured Phase 3 exit criterion and the only thing
-standing between the project and Gate B.
+```
+observed MAP_FIXED addresses by 1 TiB bucket:
+  0x7f0000000000   629      <- where the dynamic loader actually works
+  0x7e0000000000     7
+  0x000000000000     3
+inside a probe window:  2 of 639
+```
 
-**First step:** the method has to be honest about who wrote the expectations.
-The campaign's current expectations were written by the same author as the
-rules, which makes them a consistency check, not a measurement. Take software
-**known to run correctly** on the measured Linux host, write or extract its real
-shipped configuration, and count. Every `UNSUPPORTED` is a false positive unless
-that configuration genuinely does not ship.
+So on Linux the address rules — the project's flagship — are not wrong against
+real software, they are **silent**. That is honest behaviour (`RS-VM-0017`) and
+a useless answer.
 
-**Trap to avoid:** counting `UNKNOWN` as a pass. It is not a false positive, but
-a tool that answers `UNKNOWN` for everything has a perfect false-positive rate
-and no value. Report the `UNKNOWN` share next to the number, always.
+**First step:** add the `mmap_base` region to the candidate set. It is
+derivable: `/proc/self/maps` shows where this process's own libraries landed,
+and the probe already reads that file. Sampling near it is a few lines.
+
+**Trap to avoid:** the reproducibility gate. `min_map_address` was once the
+probe's own ASLR slide, and removing the scan's `min_address` filter made
+reproducibility *worse* rather than better — the filter was suppressing the
+dependency, not creating it. Anything derived from `/proc/self/maps` is derived
+from this process's layout, so it must be rounded to something stable before it
+reaches the profile, and `check_reproducible.sh` decides whether it worked.
 
 ---
 
@@ -259,6 +268,30 @@ Each needs a reason, so this cannot quietly become a way to empty the list.
 Items land here with the commit that finished them, and they are not deleted:
 a compass with no wake behind it cannot show whether the heading has been
 holding.
+
+### T-002 — Measure the false-positive rate `[done]`
+
+**Serves:** S6 (CI gate)
+**Plan:** `docs/PLAN.md` Phase 3 exit criterion, and Gate B
+**Done when:** a documented count exists: N real configurations evaluated
+against a measured host, M returned `UNSUPPORTED`, each of the M examined.
+**Met:** `docs/campaigns/2026-07-false-positive-rate.md`,
+`campaigns/false-positive/2026-07-linux-x86_64.json`,
+`tools/campaign/run_false_positive.sh`.
+
+**N = 1292, M = 0.** Zero false positives in 1292 mapping requests that 13 real
+programs were **observed** to perform successfully on the measured host. The
+contracts were not written by anyone — `tools/campaign/observe_requirements.py`
+transcribes them from `strace`, keeping only calls that succeeded in all three
+runs. There is nothing to examine because nothing was refused.
+
+Two things belong next to that number and are in the report: 42% of real
+mappings trip `RS-VM-0005` (allocation granularity), which is correct and
+noisy; and the address population is 99.7% `UNKNOWN`, which produced `T-013`.
+
+The Phase 3 criterion and Gate B are `[partial]`, not `[done]`: the rate is
+measured and low **for the rules this population exercises**, and the address
+rules were not among them.
 
 ### T-001 — Verdict diff: which contracts change between two profiles `[done]`
 

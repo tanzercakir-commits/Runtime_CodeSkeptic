@@ -16,6 +16,80 @@ re-litigated; a mistake recorded here does not need to be re-made.
 
 ---
 
+## 2026-07-25 — T-002: the false-positive rate, and what measuring it found
+
+**Changed.** `tools/campaign/observe_requirements.py`,
+`false_positive_rate.py`, `run_false_positive.sh`;
+`docs/campaigns/2026-07-false-positive-rate.md` and the data behind it in
+`campaigns/false-positive/`; `tools/guards/check_campaign.py`.
+
+**The number: 0 false positives in 1292 requests.** Thirteen real programs
+(python3, perl, ruby, php, git, openssl, jq, redis, gzip, xz, ffmpeg, node
+with a hot loop, java with a hot loop), all exiting 0 on a measured Linux host.
+
+**Why it counts, which is the whole difficulty.** The obvious method is
+disqualified: the campaign's contracts and the analyzer's rules have the same
+author, so their agreement measures consistency. The way out was to stop
+writing contracts. `strace` the programs, keep only calls that **succeeded**
+and appear in all three runs, transcribe each mechanically. Then a false
+positive has a definition nobody can argue with: an `UNSUPPORTED` verdict on a
+request the kernel performed on this host, minutes ago.
+
+The harness asserts only what the syscall carried. `exact_address_required`
+comes from `MAP_FIXED` and nothing else; `guest_host_identity_required` is
+**always false**, because a trace does not reveal whether the program cared
+where the mapping landed — setting it would manufacture `RS-VM-0007`, one of
+the findings under test.
+
+**And the measurement found a defect — in the probe, not the analyzer.**
+
+```
+probe establishes 56 windows x 4 MiB  =  224 MiB of a 128 TiB space
+observed MAP_FIXED addresses:  629 in the 0x7f... TiB, 7 in 0x7e..., 3 low
+inside a probe window:  2 of 639
+```
+
+`scan_address_space()` samples powers of two plus four landmarks
+(`0x1000000000`, `0x4000000000`, `0x6fffff0000`, `0x7fff00000000`) — every one
+a plausible **emulator** base, because the profile was built for the shadPS4
+question. None is near `mmap_base`, where every ordinary program maps. So on
+Linux the address rules are not wrong against real software; they are
+**silent**, 99.7% `UNKNOWN`. Correct behaviour (`RS-VM-0017` exists for exactly
+this) and a useless answer. That is now `T-013`, and it is in `Now`.
+
+**Second finding: 42% of real mappings trip `RS-VM-0005`.** All 544
+`CONDITIONALLY_SUPPORTED` verdicts are the granularity rule. It is not wrong —
+`mmap(NULL, 53867, ...)` really does reserve 56 KiB — but real software passes
+unrounded sizes constantly, because that is how `mmap` is specified to work. A
+rule that fires on 42% of everything is noise in a CI gate, and this project
+has already written down what happens to a noisy guard.
+
+**Third: no false negatives were measurable.** Across 13 programs and three
+runs each there was not one *failing* `mmap` or `mprotect`. Healthy software on
+a healthy host is not refused, so this population contains no case where the
+analyzer could have wrongly said `SUPPORTED`. The other half of correctness is
+untouched.
+
+**The harness's first output was wrong and the analyzer said so.** 16
+requirements rejected: `exact_address_required` true with no address — the
+shape contracts were setting the flag from `MAP_FIXED` while omitting the
+address. An internally inconsistent document, refused rather than guessed at.
+First time in this project that a new tool's first run was caught by something
+else immediately.
+
+**Guard added.** `check_campaign.py`: a published number must still match the
+committed data it came from. Deliberately no threshold — a guard with one would
+turn a measurement into a target, on one host's data. The judgement stays in
+the document, signed and dated.
+
+**Verdict.** Phase 3's criterion and Gate B are `[partial]`, not `[done]`. The
+rate is measured and low **for the rules this population exercises**. Saying
+otherwise would be the overclaiming the whole project exists to prevent.
+
+**Next.** `T-013` — probe the region where programs actually map.
+
+---
+
 ## 2026-07-25 — T-001: which of the 138 differences actually matter
 
 **Changed.** `rs-profile impact OLD NEW CONTRACT...` —
