@@ -76,6 +76,33 @@ condition is the reason. Asserting either way would be reading more out of a
 single run than it contains. The outcome is printed and carried into the
 report; it just does not pass or fail anything.
 
+## Coverage
+
+Case count is not coverage. What matters is which rules an execution has ever
+checked, and `tools/campaign/groundtruth_coverage.py` counts what the analyzer
+actually emits rather than what a manifest claims:
+
+```console
+$ tools/campaign/groundtruth_coverage.py PROFILE.json [PROFILE.json ...]
+rules exercised by an execution: 9/25
+of the 20 rules an execution could check, 9 are checked (45%)
+```
+
+Five rules are **not checkable this way at all**, and the tool prints the reason
+for each rather than leaving them as an unexplained gap. `RS-VM-0012` claims
+failures *move* from a checked call to an unchecked access under memory
+pressure, and provoking that means exhausting the runner. `RS-VM-0014` is an
+internal contradiction in a requirement, so no host is consulted and there is
+nothing to execute. "Not yet written" and "not checkable" are different facts
+and only one of them is a backlog item.
+
+That number was wrong the first time it was printed, in the flattering
+direction: the check grepped the manifest for rule ids mentioned in prose and
+believed a commit message that claimed `RS-VM-0012` was covered. It is not -
+the contract sets `commit_is_checked_call: true`, which is the POSIX idiom, and
+the rule correctly returns early. The case and the contract were consistent
+with each other; only the coverage claim was false.
+
 ## Running
 
 ```console
