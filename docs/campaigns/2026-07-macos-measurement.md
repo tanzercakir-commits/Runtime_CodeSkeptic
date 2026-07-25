@@ -61,16 +61,36 @@ its job.
 
 ---
 
-## The band, and four rounds of being wrong about it
+## The band
 
-Every run agrees on the observation: `mach_vm_allocate(VM_FLAGS_FIXED)`
-refuses **every** probed address from `0xFC0000000` through `0x6FC0000000`
-with `KERN_NO_SPACE`, in both lanes, while `0x7000000000` succeeds. That is
-the commpage plus the GPU carveout, to the address, exactly as shadPS4
-describes them.
+`mach_vm_region` reports, identically in both lanes:
 
-Classifying that refusal took four iterations, and each wrong answer was found
-by reading a measurement rather than by reasoning about the code:
+```
+region [0xfc0000000,  0x1000000000)   reserved=0   protection ---
+region [0x1000000000, 0x7000000000)   reserved=0   protection ---
+```
+
+The Rosetta 2 commpage and the Apple GPU carveout, to the byte, exactly as
+shadPS4's source comment describes them. `mach_vm_allocate(VM_FLAGS_FIXED)`
+refuses every probed address inside them with `KERN_NO_SPACE`, while
+`0x7000000000` succeeds.
+
+macOS does not express these as `reserved` placeholders. It expresses them as
+ordinary map entries that grant **no access at all**, and both now appear in
+`unavailable_ranges` at their full extent, `measured_capability`. Recording
+the entries rather than the probe windows also shortened the list, because
+many probe points and every ladder hole in the band fall inside them:
+
+| | ranges before | ranges after |
+|---|---|---|
+| native arm64 | 60 | 48 |
+| Rosetta x86-64 | 59 | 47 |
+
+### Six rounds of being wrong about it
+
+The observation was stable from the first run. Only its label kept moving,
+and every wrong label was corrected by reading a measurement rather than by
+reasoning about the code:
 
 1. **The search stopped at the first hole and called it the ceiling.**
    `max_user_address` came back `0xFC0000000` - the *bottom* of the commpage -
@@ -84,33 +104,120 @@ by reading a measurement rather than by reasoning about the code:
    nothing about who holds it. A fresh process does not own 400 GiB at 64 GiB.
 4. **"Is there a region covering it?" came back true.** macOS places the
    commpage and the carveout in *every* task's map, so the presence of a
-   region proves nothing. The field that distinguishes them is
-   `vm_region_basic_info.reserved`.
+   region proves nothing.
+5. **"Is it reserved?" came back false.** The `reserved` flag is 0 on both
+   entries. The signal that distinguishes them is `protection == VM_PROT_NONE`
+   - and it is the better signal anyway, because a program asking for that
+   address does not care who nominally owns the entry, only that nothing can
+   be mapped there.
+6. **The extent was the probe window, not the entry.** Steps 1-5 were wrong
+   about what the kernel said. This one was wrong about writing it down.
 
-The current probe classifies a refusal as a host limitation unless a
-**non-reserved** region covers the address, and records what `vm_region`
-actually reported - bounds, coverage, reserved flag, protection - in the
-range's note. The instrument now explains itself; four rounds of inferring a
-remote platform's behaviour from this end was three too many.
+Step 4 is where the instrument started recording what `vm_region` actually
+reported - bounds, coverage, reserved flag, protection - in each range's note,
+instead of only its own conclusion. Step 5 then took one round instead of
+another guess, and step 6 was visible in the measurement's own text.
 
-> **Open at the time of writing.** Whether that classification finally lands
-> the band in `unavailable_ranges` is pending the next CI run. The
-> *observation* is stable across three runs and is not in doubt; only its
-> label is. Check
-> `refs/measurements/<sha>/rosetta-x86_64` for the current answer, and read
-> the `note` on each unavailable range - it now carries the raw `vm_region`
-> report.
+### What the sixth round cost
 
-### A finding for shadPS4, if it holds
+The probe recorded the 4 MiB window it happened to test while the note beside
+it quoted the kernel describing a 384 GiB entry:
 
-The band is refused **on native arm64 as well as under Rosetta**. shadPS4
-guards its `USER_MIN` workaround with
-`#if defined(__APPLE__) && defined(ARCH_X86_64)` - x86-64 only. If the
-reservation applies natively too, that guard is narrower than the condition.
+```
+[0x1307200000, 0x1307600000)
+  "...region [0x1000000000, 0x7000000000) covers it,
+    and is a real mapping (reserved=0), protection ---"
+```
 
-This is stated as an observation from a GitHub-hosted runner, not as advice.
-It has not been reproduced on physical hardware, the runner is virtualised,
-and one machine is not a platform.
+Nine addresses in the band were hard-coded in the scan. For any *other*
+address inside the same measured entry:
+
+| | verdict | confidence |
+|---|---|---|
+| before | `UNKNOWN` | `HYPOTHESIS` |
+| after | `UNSUPPORTED` | `COUNTEREXAMPLE` |
+
+`UNKNOWN` on the one question this project exists to answer, with the evidence
+to answer it already in the profile. The evidence model is why it read
+`UNKNOWN` rather than `SUPPORTED` - it will not claim safety it cannot source
+- but declining to conclude from a fact you measured and then discarded is not
+skepticism, it is a dropped measurement.
+
+The widening is not extrapolation from the sample: `mach_vm_region` reports
+the entry's bounds directly, and an entry granting no access refuses placement
+everywhere inside itself by construction. Each note now states which address
+was probed *and* that the extent came from `vm_region`, so the two can never
+be confused again. Adjacent entries are deliberately **not** merged - the
+commpage ends exactly where the carveout begins, the kernel reports them
+separately, and fusing them would manufacture a 400 GiB entry that
+`vm_region` never described.
+
+---
+
+## The GTA V contract against a measured host
+
+`contracts/gtav-rage-direct-memory-mapping.json`, transcribed from
+shadps4-emu/shadPS4 issue #4157, against the measured Rosetta profile:
+
+```
+UNSUPPORTED
+
+RS-VM-0001  Exact virtual-memory mapping cannot be satisfied
+  severity critical  |  confidence COUNTEREXAMPLE  |  impact UNSUPPORTED
+
+  Required        mapping placed exactly at [0x1307200000, 0x1307220000);
+                  guest address must equal host address
+  Host capability requested range intersects unavailable range
+                  [0x1000000000, 0x7000000000)
+  Failure sink    fatal_assert at src/core/memory.cpp:1467
+```
+
+The address from the issue is measured-unavailable, on a real macOS host, in
+both lanes. The report names the assertion the title dies on and rejects
+"retry", "map less", and "ignore the returned address" by name.
+
+### The doc predicted `PROVEN`. It was wrong, and the reason matters
+
+The previous revision of this file said a measured profile "would take it to
+`PROVEN`". It does not, and the cap is right.
+
+`PROVEN` requires that *every* fact in the chain support it. The host facts
+are now `measured_capability`, which permits `PROVEN`. But two links are not
+host facts:
+
+```
+[application]          exact mapping at 0x1307200000 of 131072 bytes
+                       statically_inferred  <- memory.cpp:1467
+[compatibility_layer]  no guest-to-host translation layer exists
+                       statically_inferred  <- requirement.assumptions
+```
+
+`statically_inferred` ceilings at `COUNTEREXAMPLE`. Those parameters were read
+out of a log excerpt in a GitHub issue, not out of the title's binary - the
+contract says so in its own `extraction_limitations`. Measuring the host
+raised the host's half of the argument and left the program's half exactly
+where it was.
+
+So the honest reading of `UNSUPPORTED / COUNTEREXAMPLE` is: *a platform-legal
+execution reaches a fatal assertion, given a requirement we believe but have
+not verified against the binary.* Reaching `PROVEN` needs the other half
+measured too. The ceiling caught a claim this document had already made in
+prose, which is the second time on this page that the cap has been right and
+the surrounding confidence has not.
+
+---
+
+## A finding for shadPS4
+
+The band is refused **on native arm64 as well as under Rosetta**, with
+byte-identical bounds. shadPS4 guards its `USER_MIN` workaround with
+`#if defined(__APPLE__) && defined(ARCH_X86_64)` - x86-64 only. The
+reservation this project measured is not x86-64-only, so that guard is
+narrower than the condition it defends against.
+
+This is an observation from one GitHub-hosted runner, not advice. It has not
+been reproduced on physical hardware, the runner is virtualised, and one
+machine is not a platform.
 
 ---
 
@@ -128,11 +235,24 @@ and one machine is not a platform.
   and the loader's own mappings end, which depends on how the binary was
   linked. It is not a platform policy the way Linux's `vm.mmap_min_addr` is,
   and the profile should probably say so more loudly than it does.
-- **The GTA V contract has not been re-run against these profiles** in a way
-  that is meaningful until the band is classified. Against the
-  reported-measurement fixture it is `UNSUPPORTED` / `OBSERVED_INVARIANT`;
-  a measured profile that classifies the band would take it to `PROVEN`.
+- **The program side of the GTA V contract is still `statically_inferred`,**
+  as the section above sets out. The verdict is `COUNTEREXAMPLE`, not proof.
+- **Widening applies to macOS only.** A structural refusal on Linux is refused
+  *because* nothing is mapped there, so `/proc/self/maps` has nothing to widen
+  to. Same-looking gap, no measurement behind it, left alone on purpose.
 - **Nothing here was reproduced independently.** One runner, one workflow.
+
+### Known-open, found while doing this
+
+`run_campaign.sh` compares every verdict against the `expected_verdict` stored
+in the contract, but that field has no host qualifier - it was recorded against
+the Linux reference host. Running the 26-contract campaign against a macOS
+profile therefore marks 12 rows `!` where most are simply a different host
+giving a different, correct answer. On the reference host the count is the
+same four rows the July campaign already documents, so nothing here regressed;
+the runner is just comparing against an expectation that does not say which
+machine it was written for. Expectations need to be keyed by host before the
+campaign means anything on a second platform.
 
 ## Reproducing
 
