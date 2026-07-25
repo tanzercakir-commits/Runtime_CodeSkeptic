@@ -1,0 +1,30 @@
+Test project /Users/runner/work/Runtime_CodeSkeptic/Runtime_CodeSkeptic/build
+    Start 11: test_probe
+1/1 Test #11: test_probe .......................***Failed    0.01 sec
+== probe conformance (13 cases)
+  ok   probe_produces_a_schema_valid_profile_on_every_platform
+  ok   probe_never_attaches_a_value_to_unknown_evidence
+  ok   unimplemented_platforms_report_synthetic_origin
+  ok   repeated_runs_produce_the_same_profile_id
+  ok   profile_id_survives_a_write_read_round_trip
+  ok   range_order_does_not_affect_identity
+  ok   canonical_serialization_is_byte_stable
+  ok   measured_page_size_is_a_power_of_two
+  ok   measured_bounds_are_ordered
+  ok   no_recorded_range_carries_unknown_evidence
+  ok   available_and_unavailable_ranges_do_not_overlap
+  FAIL disabling_the_scan_removes_range_facts_but_keeps_the_rest
+    /Users/runner/work/Runtime_CodeSkeptic/Runtime_CodeSkeptic/tests/conformance/test_probe.cpp:180
+    expected: result.profile.vm.unavailable_ranges.empty()
+  ok   probe_leaves_the_process_address_space_usable
+
+1 failure(s) in probe conformance
+
+
+0% tests passed, 1 tests failed out of 1
+
+Total Test time (real) =   0.03 sec
+
+The following tests FAILED:
+	 11 - test_probe (Failed)
+Errors while running CTest
