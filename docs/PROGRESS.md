@@ -21,19 +21,38 @@ re-litigated; a mistake recorded here does not need to be re-made.
 **Changed.** `.github/workflows/windows-probe.yml` gained a path-filtered
 `push` trigger. Commit `8ddfd4a`. **No measurement arrived.**
 
-**Why the button could not be pressed.** `workflow_dispatch` needs the GitHub
-REST API, and this development sandbox cannot reach it for this repository:
+**Why the button could not be pressed, isolated to one layer.** There are two
+places this could fail and it is worth knowing which, because only one of them
+is fixable by changing a token.
 
 ```
-$ curl https://api.github.com/repos/tanzercakir-commits/Runtime_CodeSkeptic
-403 {"message":"GitHub access to this repository is not enabled for this
-     session. Use add_repo to request access..."}
+$ curl -H "Authorization: Bearer <the same PAT that pushes every commit>" \
+       https://api.github.com/repos/tanzercakir-commits/Runtime_CodeSkeptic
+HTTP 403
+{"message":"GitHub access to this repository is not enabled for this session.
+  Use add_repo to request access. If add_repo answers that read access is
+  already available and you need GitHub API or write access, call add_repo
+  again with access:\"push\" to attach the repository with credentials."}
 ```
 
-`add_repo` is not a tool available here. The git protocol works - that is how
-every commit in this log was pushed, and it is why the measurement channel is
-`refs/measurements/*` rather than an artifact download. But an API-only
-operation is simply out of reach from inside.
+That 403 is from **the sandbox proxy, not from GitHub** - the message is
+Anthropic's and it names its own remedy. So:
+
+| Layer | State |
+|---|---|
+| sandbox proxy allowlist for `api.github.com` + this repo | **blocking**; `add_repo` is the documented fix and is not in this session's tool set (checked, not assumed) |
+| the GitHub PAT's scopes | **untested and untestable** - no request ever reaches GitHub, so whether it carries `Actions: write` is unknown |
+
+The git protocol is unaffected: it is how every commit in this log was pushed,
+and it is why the measurement channel is `refs/measurements/*` rather than an
+artifact download. An API-only operation is simply out of reach from inside.
+
+A first attempt at this diagnosis got 000 rather than 403 and nearly became
+"the API is unreachable". The cause was mine: `~/.rs-cred` is a script that
+*prints* `username=`/`password=` lines for git's credential helper, and reading
+it with `. ~/.rs-cred; echo $password` captured the whole printed block - a
+93-character token became a 126-character string with a newline in it, which
+curl could not put in a header. A malformed request looked like a blocked one.
 
 **What was done instead, and why it is not a workaround.** The workflow now
 also fires on a push touching `.github/workflows/windows-probe.yml`,
