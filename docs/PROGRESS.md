@@ -16,6 +16,71 @@ re-litigated; a mistake recorded here does not need to be re-made.
 
 ---
 
+## 2026-07-25 — T-001: which of the 138 differences actually matter
+
+**Changed.** `rs-profile impact OLD NEW CONTRACT...` —
+`include/runtimeskeptic/vm/impact.hpp`, `src/vm/impact.cpp`,
+`tests/unit/test_impact.cpp` (13 cases). First item closed under the compass.
+
+**What it is for.** `rs-profile diff` reports 138 differences between the two
+measured Apple Silicon lanes, one line per JSON pointer. That is precise and
+nearly unreadable, and it does not answer the question a team asks when a
+kernel ships: *does any of this matter to us?* This does — same contracts, two
+profiles, report only the verdicts that moved.
+
+```
+$ rs-profile impact ROSETTA NATIVE tests/groundtruth/contracts/*.json
+14 contract(s): 5 regressed, 0 improved, 0 never answered, 9 unchanged
+```
+
+**Five of 138. And one of the five is a finding about the platform.** On a
+single Apple Silicon machine, minutes apart:
+
+| Fact | native arm64 | x86-64 under Rosetta |
+|---|---|---|
+| `write_execute_simultaneous` | **false** | **true** |
+| `jit_entitlement_required` | **true** | **false** |
+| `page_size` | 16384 | 4096 |
+
+All `measured_capability`. So a JIT *ported* from x86-64 to native arm64 **on
+the same Mac** loses RWX and gains an entitlement requirement — which is
+scenario S2 ("Apple Silicon port"), measured rather than imagined, and the
+opposite of the intuition that native is the permissive case.
+
+**Three design decisions, each of which could have gone the easy way.**
+
+1. **UNKNOWN on both sides is `NEVER ANSWERED`, not `unchanged`.** A contract
+   nobody could answer before and nobody can answer now has not stayed the
+   same. Counting it as unchanged is how "3 of 40 affected" gets read as "37
+   are fine".
+2. **No finding is named "responsible".** That is a causal claim, and with
+   several rules firing it is often the wrong one. What is reported is which
+   ids *appeared* and which *disappeared*. When one appears next to a
+   regression the reader draws the conclusion, and it is theirs.
+3. **A bundle is compared requirement by requirement, not by its worst-of.**
+   If one requirement improves while another regresses, the worst-of is
+   identical on both sides and a whole-file comparison prints *nothing*. That
+   is the silence-reads-as-success failure this project has already shipped
+   twice — a crashing ground-truth case counted as a confirmed refusal, and a
+   comparison table green while discarding compiler warnings. There is a test
+   named for it.
+
+**Also.** An unreadable contract exits 65, not 0: a file that failed to parse
+is not a file that passed. Two identical profiles are called out by
+`profile_id` before any result is printed, because a diff of a thing with
+itself is not a measurement of anything.
+
+**Learned while writing the tests.** The first version of the opposite-moves
+test used two addresses on the existing fixtures and did not actually invert —
+one side came out `UNKNOWN` rather than `SUPPORTED`, so nothing improved and
+the test passed for the wrong reason until it was checked. Fixtures that
+*look* like they exercise a case are the quietest way to test nothing.
+
+**Next.** `T-002`, the false-positive rate. Not a feature — the permission to
+be believed, and the last unmeasured Phase 3 exit criterion.
+
+---
+
 ## 2026-07-25 — four documents, four jobs, and a guard between two of them
 
 **Changed.** `docs/TODO.md` is new and is now **the file to follow**: 12 items,

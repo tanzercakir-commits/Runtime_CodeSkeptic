@@ -264,3 +264,8 @@ that risk materialising.
 - `[done]` the owner's use cases are written down and assessed against real
   runs — `docs/scenarios/`, ten scenarios, statuses checked by
   `tools/guards/check_plan.py` on the same vocabulary as this file
+- `[done]` **verdict diff across profiles** — `rs-profile impact`,
+  `src/vm/impact.cpp`, `tests/unit/test_impact.cpp`. Answers "did this kernel
+  change break any of OUR contracts?" where `rs-profile diff` only answers
+  "did the platform change?". Two of the 13 cases run against
+  `profiles/measured/`. (T-001)

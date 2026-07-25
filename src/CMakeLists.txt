@@ -22,7 +22,8 @@ add_library(rs_vm STATIC
     vm/profile.cpp
     vm/requirement.cpp
     vm/finding.cpp
-    vm/analyzer.cpp)
+    vm/analyzer.cpp
+    vm/impact.cpp)
 
 target_link_libraries(rs_vm PUBLIC rs_core PRIVATE rs_warnings)
 add_library(RuntimeSkeptic::vm ALIAS rs_vm)

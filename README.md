@@ -148,6 +148,7 @@ Binaries land in `build/bin/`.
 | `rs-env-probe vm` | Measure this host's virtual-memory behavior; emit a profile |
 | `rs-profile verify` | Validate a profile and report how many facts it actually knows |
 | `rs-profile diff` | Compare two profiles' facts - did the platform change? |
+| `rs-profile impact` | Re-evaluate a set of contracts against two profiles - did the change break any of *ours*? |
 | `rs-check` | Evaluate a requirement (or a bundle) against a profile |
 | `rs-mcp` | The same capabilities over the Model Context Protocol |
 

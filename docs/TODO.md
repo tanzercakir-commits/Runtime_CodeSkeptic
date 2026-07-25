@@ -43,34 +43,6 @@ completes without leaving a trace in the log is work that will be redone.
 
 ## Now
 
-### T-001 — Verdict diff: which contracts change between two profiles `[now]`
-
-**Serves:** S9 (new kernel — who is affected?), most of S7 (platform matrix)
-**Plan:** `docs/PLAN.md` cross-cutting, "verdict diff across profiles"
-**Done when:** a command takes a set of contracts and two profiles and prints
-only the contracts whose verdict *changed*, with both verdicts and the finding
-id responsible; a test pins at least one real change using the two committed
-macOS profiles, which differ in 138 places.
-
-**Why this one first.** It is the only genuinely new capability in the ten
-scenarios that needs **no new probe, no new rule and no new evidence**. Every
-part already exists: contracts are files, profiles are files, the analyzer is
-deterministic and its output is JSON. What is missing is a loop and a
-comparison. Everything else on this list needs measurement, a platform, or
-research.
-
-**First step:** `rs-profile diff` already computes fact-level differences.
-This is the verdict-level equivalent, and it belongs next to it — probably
-`rs-check --profile A --against B` over a directory of contracts, emitting the
-changed set. Decide the interface before writing it; a second tool with a third
-argument convention would be worse than no tool.
-
-**Trap to avoid:** a contract whose verdict is `UNKNOWN` on both profiles has
-not "not changed" — it has never been answered. Report those separately or the
-output will read as reassurance.
-
----
-
 ### T-002 — Measure the false-positive rate `[now]`
 
 **Serves:** S6 (CI gate — the commercially interesting one)
@@ -284,6 +256,34 @@ Each needs a reason, so this cannot quietly become a way to empty the list.
 
 ## Done
 
-Nothing yet under this system. Items land here with the commit that finished
-them, and the reason they are not deleted is that a compass with no wake behind
-it cannot show whether the heading has been holding.
+Items land here with the commit that finished them, and they are not deleted:
+a compass with no wake behind it cannot show whether the heading has been
+holding.
+
+### T-001 — Verdict diff: which contracts change between two profiles `[done]`
+
+**Serves:** S9 (new kernel — who is affected?), most of S7
+**Plan:** `docs/PLAN.md` cross-cutting, "verdict diff across profiles"
+**Done when:** a command takes a set of contracts and two profiles and prints
+only the contracts whose verdict *changed*; a test pins at least one real change
+using the two committed macOS profiles. **Met:** `rs-profile impact`,
+`src/vm/impact.cpp`, and `tests/unit/test_impact.cpp` — 13 cases, two of them
+against the measured profiles.
+
+```
+$ rs-profile impact ROSETTA.json NATIVE.json tests/groundtruth/contracts/*.json
+REGRESSED  tests/groundtruth/contracts/page-size-at-most-4kib.json
+    SUPPORTED -> UNSUPPORTED   A build assuming PAGE == 4096
+      findings appeared    : RS-VM-0005 RS-VM-0006
+...
+14 contract(s): 5 regressed, 0 improved, 0 never answered, 9 unchanged
+```
+
+**What it found on its first run.** `rs-profile diff` reports 138 fact-level
+differences between the two Apple Silicon lanes. Five of them move a verdict —
+and one is a claim about the platform worth keeping: on **one machine**, a
+translated x86-64 process is granted simultaneous write+execute that the native
+arm64 process is refused. Both `measured_capability`. A JIT ported from x86-64
+to native arm64 on the same Mac loses RWX and gains an entitlement requirement.
+
+Full account in `docs/PROGRESS.md`.
