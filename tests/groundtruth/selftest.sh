@@ -105,7 +105,11 @@ import json, sys
 out = sys.argv[3]
 json.dump({"schema": "runtime-skeptic.groundtruth-manifest.v1", "cases": [{
     "case": "selftest", "contract": f"contracts/{sys.argv[2]}.json",
-    "program": "stub", "args": [out], "why": "harness selftest"}]},
+    "program": "stub", "args": [out], "why": "harness selftest",
+    # The selftest is testing the comparison table, so its rows must be
+    # assertable; without this every row becomes RECORD-ONLY and the selftest
+    # silently stops testing anything.
+    "verifies_all_postconditions": True}]},
     open(sys.argv[1], "w"))
 PY
 

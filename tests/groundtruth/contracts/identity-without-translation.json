@@ -1,7 +1,7 @@
 {
   "schema": "runtime-skeptic.application-requirements.v1",
-  "name": "A hinted mapping whose caller requires the returned address to equal the hint",
-  "component": "ground-truth pairing for QEMU user mode and shadPS4's direct-memory path",
+  "name": "Guest/host address identity required with no translation layer and no stated address",
+  "component": "ground-truth pairing for RS-VM-0008",
   "operation": "virtual_memory_map",
   "request": {
     "size": 131072,
@@ -10,8 +10,7 @@
       "read": true,
       "write": true,
       "execute": false
-    },
-    "address": "0x7000000000"
+    }
   },
   "assumptions": {
     "guest_host_identity_required": true,
@@ -19,7 +18,7 @@
     "retries_on_failure": false
   },
   "required_postconditions": [
-    "the address mmap returns equals the address that was hinted"
+    "the address the allocator returns is the address the guest asked for, with no translation layer in between"
   ],
   "permitted_fallbacks": [],
   "failure_sink": {
@@ -35,5 +34,5 @@
   "extraction_limitations": [
     "Single-claim contract written to pair with a ground-truth case. It asserts exactly one thing so that a whole-contract verdict can be compared against a single observation without ambiguity."
   ],
-  "x_groundtruth": "mmap's addr is advisory. The case occupies an address and then hints at it without MAP_FIXED, which is the only case here that produces `relocated` against a real kernel."
+  "x_groundtruth": "The same unsound assumption as the hinted case, stated without an address. RS-VM-0008 is about the assumption itself; RS-VM-0007 is about a specific hint. Keeping both means neither rule loses its only execution when the other contract is edited."
 }

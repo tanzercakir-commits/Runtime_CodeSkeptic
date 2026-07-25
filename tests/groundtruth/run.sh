@@ -90,6 +90,18 @@ for a in json.load(open('$MANIFEST'))['cases'][$i]['args']: print(a)
     "$RS_CHECK" "$CONTRACT_ROOT/$contract" --profile "$PROFILE" --format json >/dev/null 2>&1
     predicted=$(verdict_of $?)
 
+    # A case may only settle a prediction if it checks EVERY postcondition its
+    # contract states. exact-mapping-misaligned reported `satisfied` having
+    # verified placement and ignored the alignment clause next to it, which
+    # would have contradicted a correct UNSUPPORTED. Anything not declaring
+    # full coverage is recorded, never asserted.
+    full=$(python3 -c "
+import json
+c = json.load(open('$MANIFEST'))['cases'][$i]
+print('yes' if c.get('verifies_all_postconditions') is True else 'no')
+")
+    if [ "$full" != "yes" ]; then predicted="RECORD-ONLY"; fi
+
     if ! observed_json=$("$BIN/$program" "$name" "${args[@]}" 2>/dev/null); then
         observed_json=""
     fi

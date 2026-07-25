@@ -1,6 +1,6 @@
 {
   "schema": "runtime-skeptic.groundtruth-manifest.v1",
-  "note": "Each entry pairs one single-claim contract with the program that performs that claim on the real host. The program's argv is fixed here so the request the analyzer reads and the request the kernel receives cannot drift apart.",
+  "note": "Each entry pairs one single-claim contract with the program that performs that claim on the real host. The program's argv is fixed here so the request the analyzer reads and the request the kernel receives cannot drift apart.\n\nEvery entry must declare `verifies_all_postconditions`. A case may only settle a prediction if it checks EVERY postcondition its contract states - otherwise `satisfied` overstates, and a pairing could confirm a prediction it never tested. run.sh refuses to assert on an entry where this is false or absent. It was added after exact-mapping-misaligned reported `satisfied` having checked placement and ignored the alignment clause beside it.",
   "cases": [
     {
       "case": "exact-mapping-in-carveout",
@@ -10,7 +10,8 @@
         "1307200000",
         "131072"
       ],
-      "why": "The address from shadPS4 issue #4157. On the measured macOS profiles it falls inside a 384 GiB no-access entry, so the analyzer says UNSUPPORTED and the mmap must not succeed there. On a Linux host nothing is reserved at that address and both should agree it works."
+      "why": "The address from shadPS4 issue #4157. On the measured macOS profiles it falls inside a 384 GiB no-access entry, so the analyzer says UNSUPPORTED and the mmap must not succeed there. On a Linux host nothing is reserved at that address and both should agree it works.",
+      "verifies_all_postconditions": true
     },
     {
       "case": "exact-mapping-at-a-free-address",
@@ -20,7 +21,8 @@
         "7000000000",
         "131072"
       ],
-      "why": "The control. shadPS4 uses 0x7000000000 as USER_MIN on Apple x86-64 precisely because it is placeable, and the probe measured it placeable in both lanes. A tool that reports UNSUPPORTED here is crying wolf, and no amount of correct UNSUPPORTED verdicts elsewhere makes up for that."
+      "why": "The control. shadPS4 uses 0x7000000000 as USER_MIN on Apple x86-64 precisely because it is placeable, and the probe measured it placeable in both lanes. A tool that reports UNSUPPORTED here is crying wolf, and no amount of correct UNSUPPORTED verdicts elsewhere makes up for that.",
+      "verifies_all_postconditions": true
     },
     {
       "case": "rwx-anonymous-2mib",
@@ -29,7 +31,8 @@
       "args": [
         "2097152"
       ],
-      "why": "Box64's dynarec block and LuaJIT's LUAJIT_SECURITY_MCODE=0 machine-code area. The case writes a function through the mapping and calls it, because macOS grants RWX pages and then faults on the first instruction fetch without the JIT entitlement - a successful mmap is not the observable."
+      "why": "Box64's dynarec block and LuaJIT's LUAJIT_SECURITY_MCODE=0 machine-code area. The case writes a function through the mapping and calls it, because macOS grants RWX pages and then faults on the first instruction fetch without the JIT entitlement - a successful mmap is not the observable.",
+      "verifies_all_postconditions": true
     },
     {
       "case": "page-size-at-most-4kib",
@@ -38,7 +41,8 @@
       "args": [
         "4096"
       ],
-      "why": "jemalloc's default build. Should be satisfied on a 4 KiB host and refused on native macOS arm64, where sysconf reports 16384 and pages.c:760 aborts."
+      "why": "jemalloc's default build. Should be satisfied on a 4 KiB host and refused on native macOS arm64, where sysconf reports 16384 and pages.c:760 aborts.",
+      "verifies_all_postconditions": true
     },
     {
       "case": "page-size-at-most-64kib",
@@ -47,21 +51,24 @@
       "args": [
         "65536"
       ],
-      "why": "jemalloc built with --with-lg-page=16. Satisfied on every page size measured so far; this is the case that caught defect 4, where the analyzer tested equality and declared a working configuration critically broken."
+      "why": "jemalloc built with --with-lg-page=16. Satisfied on every page size measured so far; this is the case that caught defect 4, where the analyzer tested equality and declared a working configuration critically broken.",
+      "verifies_all_postconditions": true
     },
     {
       "case": "file-map-beyond-eof",
       "contract": "contracts/file-map-beyond-eof.json",
       "program": "file_map_beyond_eof",
       "args": [],
-      "why": "The sharpest difference between the two macOS lanes: native arm64 raises SIGBUS, the same machine under Rosetta 2 returns zero-fill. Identical source, one machine, opposite outcomes."
+      "why": "The sharpest difference between the two macOS lanes: native arm64 raises SIGBUS, the same machine under Rosetta 2 returns zero-fill. Identical source, one machine, opposite outcomes.",
+      "verifies_all_postconditions": true
     },
     {
       "case": "file-map-partial-page",
       "contract": "contracts/file-map-partial-page.json",
       "program": "file_map_partial_page",
       "args": [],
-      "why": "The false positive this harness found on its first run. POSIX requires the partial page at the end of a mapped object to be zero-filled, so this read cannot fault anywhere - but the analyzer called it UNSUPPORTED on any host measuring `sigbus`, because a contract could not distinguish it from a read a whole page past the end. If that regresses, a prediction of UNSUPPORTED will meet an observation of `satisfied` here."
+      "why": "The false positive this harness found on its first run. POSIX requires the partial page at the end of a mapped object to be zero-filled, so this read cannot fault anywhere - but the analyzer called it UNSUPPORTED on any host measuring `sigbus`, because a contract could not distinguish it from a read a whole page past the end. If that regresses, a prediction of UNSUPPORTED will meet an observation of `satisfied` here.",
+      "verifies_all_postconditions": true
     },
     {
       "case": "write-then-execute-2mib",
@@ -70,7 +77,8 @@
       "args": [
         "2097152"
       ],
-      "why": "The pair with rwx-anonymous-2mib is the project's thesis in two programs: on native macOS arm64 the same JIT succeeds written one way and fails written the other, and RS-VM-0009 can only be trusted to tell them apart if both halves have run for real."
+      "why": "The pair with rwx-anonymous-2mib is the project's thesis in two programs: on native macOS arm64 the same JIT succeeds written one way and fails written the other, and RS-VM-0009 can only be trusted to tell them apart if both halves have run for real.",
+      "verifies_all_postconditions": true
     },
     {
       "case": "hinted-mapping-requires-identity",
@@ -79,8 +87,9 @@
       "args": [
         "131072"
       ],
-      "why": "mmap's addr is advisory and reports success wherever it lands, so a program requiring guest/host identity loses silently. The only case that produces `relocated` against a real kernel rather than the selftest stub.\n\nDELIBERATELY NOT ASSERTED, and it is the one pairing where the case is narrower than its contract. The contract says the hint MAY relocate, which is CONDITIONALLY_SUPPORTED and correct: hinting at a free address usually works, and whether it is free depends on a process layout no profile can know. The case forces the unlucky branch by occupying the address first. So it cannot confirm or refute the verdict - what it does is prove the unlucky branch is real on this kernel, and show what the program sees when it happens: success, at the wrong address, with nothing to check.",
-      "asserted": false
+      "why": "RS-VM-0007. mmap's addr is advisory and reports success wherever it lands, so a program requiring guest/host identity loses silently. The only case that produces `relocated` against a real kernel rather than the selftest stub, and the case checks exactly the postcondition the contract states: returned address == hinted address. With the address present the analyzer says the assumption is unsound outright rather than 'may relocate', so forcing the unlucky branch by squatting on the address first is the right test and not a stacked deck.",
+      "asserted": false,
+      "verifies_all_postconditions": true
     },
     {
       "case": "oversized-reservation-4pib",
@@ -89,7 +98,8 @@
       "args": [
         "4503599627370496"
       ],
-      "why": "Campaign defect 1, which the tool answered SUPPORTED with no findings. Address-less-but-enormous is how emulators and allocators make their largest requests."
+      "why": "Campaign defect 1, which the tool answered SUPPORTED with no findings. Address-less-but-enormous is how emulators and allocators make their largest requests.",
+      "verifies_all_postconditions": true
     },
     {
       "case": "reserve-then-commit-1gib",
@@ -98,7 +108,40 @@
       "args": [
         "1073741824"
       ],
-      "why": "Windows makes reservation and commitment distinct observable states; POSIX does not. RS-VM-0012 reads reserve_commit_model, measured posix_lazy on every host probed so far."
+      "why": "Windows makes reservation and commitment distinct observable states; POSIX does not. RS-VM-0012 reads reserve_commit_model, measured posix_lazy on every host probed so far.",
+      "verifies_all_postconditions": true
+    },
+    {
+      "case": "exact-mapping-below-minimum",
+      "contract": "contracts/exact-mapping-below-minimum.json",
+      "program": "exact_mapping",
+      "args": [
+        "800",
+        "131072"
+      ],
+      "why": "RS-VM-0002. Every platform refuses some low band - Linux publishes it as vm.mmap_min_addr - and a program that hard-codes a low base learns this only at the mmap. Same case program as the carveout row; only the address differs, which is the point of keeping the programs parameterised.",
+      "verifies_all_postconditions": true
+    },
+    {
+      "case": "exact-mapping-above-user-space",
+      "contract": "contracts/exact-mapping-above-user-space.json",
+      "program": "exact_mapping",
+      "args": [
+        "800000000000",
+        "131072"
+      ],
+      "why": "RS-VM-0003. The ceiling case, and the ceiling has been wrong before: the first macOS run reported the bottom of the commpage as the top of user address space and skipped the entire band above it.",
+      "verifies_all_postconditions": true
+    },
+    {
+      "case": "identity-without-translation",
+      "contract": "contracts/identity-without-translation.json",
+      "program": "hinted_relocation",
+      "args": [
+        "131072"
+      ],
+      "verifies_all_postconditions": true,
+      "why": "RS-VM-0008, the assumption itself rather than a specific hint. Kept separate so neither rule loses its only execution when the other contract is edited - which is exactly what happened when an address was added to the hinted contract and RS-VM-0008 silently fell out of coverage."
     }
   ]
 }

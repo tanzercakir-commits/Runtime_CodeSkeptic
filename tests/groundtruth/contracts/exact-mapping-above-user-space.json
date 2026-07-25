@@ -1,0 +1,40 @@
+{
+  "schema": "runtime-skeptic.application-requirements.v1",
+  "name": "Exact mapping at 0x800000000000, above the top of user address space",
+  "component": "ground-truth pairing: a bound the host cannot satisfy",
+  "operation": "virtual_memory_map",
+  "request": {
+    "address": "0x800000000000",
+    "size": 131072,
+    "exact_address_required": true,
+    "protection": {
+      "read": true,
+      "write": true,
+      "execute": false
+    },
+    "file_backed": false
+  },
+  "assumptions": {
+    "guest_host_identity_required": false,
+    "translation_layer_available": false,
+    "retries_on_failure": false
+  },
+  "required_postconditions": [
+    "the mapping is placed at exactly 0x800000000000"
+  ],
+  "permitted_fallbacks": [],
+  "failure_sink": {
+    "kind": "fatal_assert",
+    "location": {
+      "file": "tests/groundtruth/cases/exact_mapping.c",
+      "line": 1,
+      "symbol": "attempt"
+    },
+    "description": "the case reports `relocated` or `refused` and the runner fails the pairing"
+  },
+  "assumption_evidence": "specified_guarantee",
+  "extraction_limitations": [
+    "Single-claim contract written to pair with a ground-truth case. It asserts exactly one thing so that a whole-contract verdict can be compared against a single observation without ambiguity."
+  ],
+  "x_groundtruth": "Measured max_user_address on this Linux host is 0x7ffffffff000. This is the ceiling case, and the ceiling was wrong once already - the first macOS run reported the bottom of the commpage as the top of the address space."
+}

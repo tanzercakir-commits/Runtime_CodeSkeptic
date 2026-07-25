@@ -30,6 +30,16 @@ CONTRACTS = sorted((ROOT / "tests" / "groundtruth" / "contracts").glob("*.json")
 # Rules a ground-truth case cannot check, with the reason. Kept here rather than
 # left as an unexplained gap, because "not yet written" and "not checkable this
 # way" are different facts and only one of them is a backlog item.
+#
+# RS-VM-0004 was briefly listed here and should not have been. It has two
+# branches. One compares the address against an alignment the program itself
+# declares - request-internal, and its own output says "not consulted: the
+# request is internally inconsistent", so nothing can be executed for it. The
+# other compares the address against the host's MEASURED allocation
+# granularity, which is a real host question: 0x800 is not a multiple of 4096,
+# and the kernel refuses it with EINVAL. The rule as a whole is checked. A
+# per-branch coverage number would be more honest still, and this tool does not
+# produce one.
 NOT_EXECUTABLE = {
     "RS-VM-0012": "claims failures MOVE from a checked call to an unchecked "
                   "access under memory pressure; provoking that means "
