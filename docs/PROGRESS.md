@@ -16,6 +16,70 @@ re-litigated; a mistake recorded here does not need to be re-made.
 
 ---
 
+## 2026-07-25 — the dispatch that could not be dispatched
+
+**Changed.** `.github/workflows/windows-probe.yml` gained a path-filtered
+`push` trigger. Commit `8ddfd4a`. **No measurement arrived.**
+
+**Why the button could not be pressed.** `workflow_dispatch` needs the GitHub
+REST API, and this development sandbox cannot reach it for this repository:
+
+```
+$ curl https://api.github.com/repos/tanzercakir-commits/Runtime_CodeSkeptic
+403 {"message":"GitHub access to this repository is not enabled for this
+     session. Use add_repo to request access..."}
+```
+
+`add_repo` is not a tool available here. The git protocol works - that is how
+every commit in this log was pushed, and it is why the measurement channel is
+`refs/measurements/*` rather than an artifact download. But an API-only
+operation is simply out of reach from inside.
+
+**What was done instead, and why it is not a workaround.** The workflow now
+also fires on a push touching `.github/workflows/windows-probe.yml`,
+`src/probe/vm_probe_windows.cpp` or the probe header. That is a *better*
+trigger than either of the existing two, for a reason the macOS workflow's own
+comment gets slightly wrong: the HOST does not change between two commits, but
+the PROBE does, and a probe change is exactly when a fresh measurement is worth
+2x billing. It fires when the answer could have changed and stays silent when
+it could not.
+
+**And then nothing happened.** 27 minutes of polling
+`refs/status/8ddfd4a…/*`, `refs/measurements/8ddfd4a…/*` and
+`refs/ci-logs/8ddfd4a…/*` returned empty. The status step carries
+`if: always()`, so a job that starts and fails still publishes - which means
+the job most likely never started.
+
+What can be established from inside, and what cannot:
+
+| | |
+|---|---|
+| the ref channel works | 60 refs exist from previous macOS runs |
+| Actions ran successfully as recently as | `2026-07-25T00:49:40Z`, ~21 hours before this attempt |
+| whether the Actions quota is currently exhausted | **cannot be determined from here** - it is an API fact |
+| whether the run is queued, failed at startup, or never triggered | **cannot be determined from here** |
+
+The quota was exhausted on 2026-07-24 and resets on 1 August. That is the
+leading explanation and it is a hypothesis, not a finding - exactly the
+distinction this project keeps making, applied to itself.
+
+**Status unchanged, deliberately.** `docs/PLAN.md` Phase 1 Windows fixtures
+stay `[open]` and "three platform families" stays `[partial]`. `T-004` stays in
+`Now`. Nothing about the probe became more true because a workflow was
+triggered; the deliverable is a measurement from a real Windows host and there
+is not one.
+
+**Next, and it needs the owner.** Open the Actions tab. If the run is sitting
+in a queue it will land on its own and publish to
+`refs/measurements/8ddfd4a…/windows-x86_64`. If it failed with
+`Billable Time -`, the quota is the blocker and 1 August is the date. Either
+way the two facts to check by hand against Microsoft's documentation before
+believing the result are unchanged: that `lpMaximumApplicationAddress + 1` is
+the right exclusive bound, and that `dwAllocationGranularity` is measured
+rather than assumed.
+
+---
+
 ## 2026-07-25 — T-004: the Windows probe exists and has never run on Windows
 
 **Changed.** `src/probe/vm_probe_windows.cpp`,
