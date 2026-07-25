@@ -1,0 +1,205 @@
+#!/usr/bin/env python3
+# SPDX-License-Identifier: Apache-2.0
+"""The guards are code, so the guards need tests.
+
+Every guard here was written after a real drift incident, and every one of them
+passes on the current repository. That proves nothing on its own: a guard whose
+regex never matches also passes on everything, silently, forever. The project
+has already been bitten twice by exactly that shape - the ground-truth harness
+counted a crashing case as a confirmed refusal, and its comparison table was
+green while discarding compiler warnings. Silence read as success both times.
+
+So each check is run against a throwaway repository that is deliberately wrong,
+and is required to FAIL, with the right message. Then against the corrected
+version, and required to PASS. A guard that cannot be made to fail on demand is
+not protecting anything.
+
+    tools/guards/selftest.py            all cases
+    tools/guards/selftest.py -v         print each case
+
+The fixture is a real directory tree, not a mock: the guards resolve their root
+from their own location, so each case copies the guard under test into
+`<tmp>/tools/guards/` and lets it look at `<tmp>` as if it were the repository.
+That is the same code path CI runs, with different contents underneath it.
+"""
+import shutil
+import subprocess
+import sys
+import tempfile
+from pathlib import Path
+
+HERE = Path(__file__).resolve().parent
+ROOT = HERE.parents[1]
+VERBOSE = "-v" in sys.argv or "--verbose" in sys.argv
+
+# Minimal contents every fixture needs so that a guard fails for the ONE reason
+# a case is about, rather than for a missing prerequisite.
+BASE_NON_GOALS = """# Non-goals
+
+These are commitments, not a description of current limitations.
+
+## 18. We will not duplicate CodeSkeptic
+
+Reserved for CodeSkeptic: contract extraction, fatal-sink identification.
+"""
+
+
+class Case:
+    def __init__(self, guard, name, files, expect_fail, expect_text=""):
+        self.guard = guard
+        self.name = name
+        self.files = files
+        self.expect_fail = expect_fail
+        self.expect_text = expect_text
+
+    def run(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "tools" / "guards").mkdir(parents=True)
+            shutil.copy(HERE / self.guard, root / "tools" / "guards" / self.guard)
+            for rel, content in self.files.items():
+                target = root / rel
+                target.parent.mkdir(parents=True, exist_ok=True)
+                if content is None:          # a directory, or an empty file
+                    target.mkdir(parents=True, exist_ok=True)
+                else:
+                    target.write_text(content)
+            proc = subprocess.run(
+                [sys.executable, str(root / "tools" / "guards" / self.guard)],
+                capture_output=True, text=True)
+            out = proc.stdout + proc.stderr
+            failed = proc.returncode != 0
+
+            if failed != self.expect_fail:
+                want = "fail" if self.expect_fail else "pass"
+                got = "failed" if failed else "passed"
+                return False, (f"expected the guard to {want}; it {got}\n"
+                               f"        --- guard output ---\n"
+                               f"        " + out.strip().replace("\n", "\n        "))
+            if self.expect_text and self.expect_text not in out:
+                return False, (f"guard behaved correctly but said the wrong "
+                               f"thing: expected {self.expect_text!r} in\n"
+                               f"        " + out.strip().replace("\n", "\n        "))
+            return True, ""
+
+
+CASES = [
+    # ---- check_docs: check 3, named paths must exist -------------------
+    Case("check_docs.py", "a doc naming a path that is not there fails",
+         {"docs/x.md": "The extractor lives in `tools/rs-extract` and works.\n",
+          "docs/non_goals.md": BASE_NON_GOALS},
+         expect_fail=True, expect_text="does not exist"),
+
+    Case("check_docs.py", "the same path, once it exists, passes",
+         {"docs/x.md": "The extractor lives in `tools/rs-extract` and works.\n",
+          "tools/rs-extract/main.cpp": "int main(){}\n"},
+         expect_fail=False),
+
+    Case("check_docs.py", "<!-- external --> excuses another project's tree",
+         {"docs/x.md": "Sparse checkout of that project's `src/common`. "
+                       "<!-- external -->\n"},
+         expect_fail=False),
+
+    Case("check_docs.py", "<!-- planned --> excuses a specified, unbuilt path",
+         {"docs/x.md": "<!-- planned -->\nROADMAP 17 specifies "
+                       "`tools/rs-replay`.\n"},
+         expect_fail=False),
+
+    Case("check_docs.py", "a marker does not excuse the line after next",
+         {"docs/x.md": "<!-- external -->\n\nWe also ship `tools/rs-ghost`.\n"},
+         expect_fail=True, expect_text="rs-ghost"),
+
+    Case("check_docs.py", "a glob is not resolved as a path",
+         {"docs/x.md": "The guard globs `tools/*extract*` for this.\n"},
+         expect_fail=False),
+
+    # ---- check_docs: check 1, absence claims must match the filesystem --
+    Case("check_docs.py", "\"is empty\" about a directory that is not fails",
+         {"docs/x.md": "The suites in `tests/unit` are empty. "
+                       "<!-- checked: 2026-07-25 -->\n",
+          "tests/unit/test_a.cpp": "int main(){}\n"},
+         expect_fail=True, expect_text="is empty; it has 1 entry"),
+
+    Case("check_docs.py", "\"does not exist\" about something present fails",
+         {"docs/x.md": "`src/probe` does not exist. <!-- checked: 2026-07-25 -->\n",
+          "src/probe/vm_probe_linux.cpp": "int main(){}\n"},
+         expect_fail=True, expect_text="it exists"),
+
+    # ---- check_docs: check 2, absence claims need a date ----------------
+    Case("check_docs.py", "an undated absence claim fails",
+         {"docs/x.md": "The Windows probe is a stub.\n"},
+         expect_fail=True, expect_text="no `<!-- checked"),
+
+    Case("check_docs.py", "the same claim with a date passes",
+         {"docs/x.md": "The Windows probe is a stub. <!-- checked: 2026-07-25 -->\n"},
+         expect_fail=False),
+
+    # ---- check_non_goals: a removed name may not survive as a claim -----
+    Case("check_non_goals.py", "a removed component named in a schema fails",
+         {"docs/non_goals.md": BASE_NON_GOALS,
+          "schemas/a.v1.json": '{"description": "written by rs-extract"}\n'},
+         expect_fail=True, expect_text="names `rs-extract`"),
+
+    Case("check_non_goals.py", "the same name in the progress log is history",
+         {"docs/non_goals.md": BASE_NON_GOALS,
+          "docs/PROGRESS.md": "rs-extract was removed on 2026-07-25.\n"},
+         expect_fail=False),
+
+    Case("check_non_goals.py", "the underscore spelling is caught too",
+         {"docs/non_goals.md": BASE_NON_GOALS,
+          "src/a.cpp": "// see rs_extract for the recogniser\n"},
+         expect_fail=True, expect_text="rs_extract"),
+
+    # ---- check_non_goals: the capability may not grow back -------------
+    Case("check_non_goals.py", "an extractor reappearing under a new name fails",
+         {"docs/non_goals.md": BASE_NON_GOALS,
+          "tools/rs-contract-extractor/main.cpp": "int main(){}\n"},
+         expect_fail=True, expect_text="extractor growing back"),
+
+    Case("check_non_goals.py", "a dated section-18 exception permits it",
+         {"docs/non_goals.md": BASE_NON_GOALS +
+                               "\nNON-GOAL-18-EXCEPTION: 2026-07-25\n",
+          "tools/rs-contract-extractor/main.cpp": "int main(){}\n"},
+         expect_fail=False, expect_text="reconciled"),
+
+    Case("check_non_goals.py", "deleting section 18 is not a resolution",
+         {"docs/non_goals.md": "# Non-goals\n\nNothing here.\n"},
+         expect_fail=True, expect_text="no longer contains section 18"),
+
+    # ---- check_plan: a [done] is a claim and needs evidence -------------
+    Case("check_plan.py", "a [done] with no evidence fails",
+         {"docs/PLAN.md": "# Plan and status\n\n- `[done]` the probe works\n"},
+         expect_fail=True),
+
+    Case("check_plan.py", "a [done] citing a path that is not there fails",
+         {"docs/PLAN.md": "# Plan and status\n\n- `[done]` the probe works — "
+                          "`tests/unit/test_nothing.cpp`\n"},
+         expect_fail=True),
+]
+
+
+def main() -> int:
+    passed, failures = 0, []
+    for case in CASES:
+        ok, why = case.run()
+        if ok:
+            passed += 1
+            if VERBOSE:
+                print(f"  ok   [{case.guard}] {case.name}")
+        else:
+            failures.append(f"  FAIL [{case.guard}] {case.name}\n        {why}")
+
+    print(f"\nguard selftest: {passed}/{len(CASES)} cases")
+    if failures:
+        print(f"\n{len(failures)} guard(s) did not behave as specified:",
+              file=sys.stderr)
+        for f in failures:
+            print(f, file=sys.stderr)
+        print("\nA guard that cannot be made to fail on demand is not "
+              "protecting anything.", file=sys.stderr)
+        return 1
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

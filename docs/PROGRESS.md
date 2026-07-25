@@ -16,6 +16,44 @@ re-litigated; a mistake recorded here does not need to be re-made.
 
 ---
 
+## 2026-07-25 — what the removal left behind, and a test for the guards
+
+**Changed.** Three documents still described `rs-extract` after the code was
+deleted; fixed. `tools/guards/check_docs.py` gained a third check,
+`tools/guards/check_non_goals.py` a second, and `tools/guards/selftest.py` is
+new: 18 cases that require every check to fail on purpose before it is
+believed.
+
+**Learned — deleting code does not delete the claims about it.** Commit
+`d6276e0` removed the tool, the library, the header, the tests, the fixture and
+the build wiring, and the tree was verified clean. Three sentences survived it:
+
+| Where | Said |
+|---|---|
+| `schemas/application-requirements.v1.json` | requirements may be "written by rs-extract" |
+| `docs/domains/shadps4-case-study.md` | the tool "now recovers a bounded subset from source text" |
+| `docs/PLAN.md` §16 | the differential test is "now possible since rs-extract exists" |
+
+All three were true when written, one day earlier. None was caught, and the
+case-study line was carrying a **fresh `<!-- checked: 2026-07-25 -->` marker**
+— it had been looked at that same day and still passed, because every check in
+the guard keyed on language of ABSENCE. Nothing ever asked whether a path a
+document *claims to have* is there. 196 repository paths are named across the
+documents; 9 did not resolve.
+
+**And the deeper one: the guards had no tests.** Five of them, all green, and
+green is exactly what a guard whose regex matches nothing also reports. This
+project has already been bitten by that shape twice — a crashing ground-truth
+case counted as a confirmed refusal, and the comparison table ran green while
+discarding compiler warnings. Silence read as success both times. `selftest.py`
+builds a deliberately wrong throwaway repository per case and requires the
+guard to fail on it, with the right message, then to pass once it is corrected.
+
+**Next.** Unchanged, and now unblocked of bookkeeping: the false-positive rate
+(Gate B) and the Phase 0 corpus.
+
+---
+
 ## 2026-07-25 — rs-extract removed; the boundary holds
 
 **Changed.** `tools/rs-extract`, `src/extract`, `include/runtimeskeptic/extract`,
@@ -57,10 +95,27 @@ class would let `grep` produce a proof — and every candidate must state what
 the producer could not determine at that specific site, not a generic
 disclaimer.
 
-**Confirmed on request.** CodeSkeptic was never modified. Both local clones
-show zero working-tree changes, zero unpushed commits and no push in the
-reflog; neither has a GitHub remote, and the token grants push to
-`Runtime_CodeSkeptic` only.
+**Confirmed on request — and the first answer was wrong.** The owner asked
+whether CodeSkeptic had been touched. The answer given was "neither clone has a
+GitHub remote", which is false: `/tmp/CodeSkeptic` has
+`origin = github.com/tanzercakir-commits/CodeSkeptic.git`. The conclusion
+survived the correction but the reasoning behind it did not, and a right answer
+resting on a wrong reason is worth less than it looks. What is actually true,
+each line separately checked:
+
+| Checked | Result |
+|---|---|
+| `git ls-remote origin` | GitHub HEAD is `3444ef3` — the commit the clone started from |
+| local `HEAD` | `de8bb69`, on branch `feat/runtime-assumptions`, **1 commit ahead and unpushed** |
+| `git reflog` | three entries: clone, checkout, commit. **No push, ever.** |
+| working tree | clean, in both `/tmp/CodeSkeptic` and `/tmp/cs-verify` |
+| `/tmp/cs-verify` origin | `/tmp/CodeSkeptic` — a local path, not GitHub |
+
+So GitHub's CodeSkeptic is byte-identical to what it was, and the one local
+commit (`--runtime-assumptions`, 2026-07-24 23:09Z, 17 files) predates the
+instruction and has never left this container. The push token grants
+`Runtime_CodeSkeptic` only, but that is now a second line of defence rather
+than the argument.
 
 **Next.** Unchanged: the §18 conflict is closed, so the open items are the
 false-positive rate (ROADMAP Gate B, never measured) and the Phase 0 corpus

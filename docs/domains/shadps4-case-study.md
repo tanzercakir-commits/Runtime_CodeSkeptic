@@ -1,8 +1,8 @@
 # Domain Case Study — shadPS4
 
-**Status:** ROADMAP **Phase 3** (Virtual Memory Compatibility Analyzer MVP), exercising the work item *"accept manually authored application requirements"* and the deliverable *"sample emulator integration"* against real third-party production code instead of a synthetic example. The requirements here were **hand-derived by reading source**; automatic extraction from a real static analyzer is **Phase 5** (CodeSkeptic Static Integration) and remains outside this repository, though `tools/rs-extract` now recovers a bounded subset from source text. <!-- checked: 2026-07-25 --> The environment probe is implemented for Linux and macOS; the macOS profiles in `profiles/measured/` are MEASURED on an Apple Silicon runner, superseding the earlier fixture that existed because no Apple Silicon host was available.
+**Status:** ROADMAP **Phase 3** (Virtual Memory Compatibility Analyzer MVP), exercising the work item *"accept manually authored application requirements"* and the deliverable *"sample emulator integration"* against real third-party production code instead of a synthetic example. The requirements here were **hand-derived by reading source**; automatic extraction is **Phase 5** (CodeSkeptic Static Integration) and remains outside this repository, so nothing here derives a requirement from source text without a person reading it. <!-- checked: 2026-07-25 --> The environment probe is implemented for Linux and macOS; the macOS profiles in `profiles/measured/` are MEASURED on an Apple Silicon runner, superseding the earlier fixture that existed because no Apple Silicon host was available.
 
-**Subject:** `shadps4-emu/shadPS4` at commit `d392abe` (`d392abed77dfa3cfe9a3775f89c6afbe89cc54cd`, *"externals: Update mesa-kosmickrisp to latest (#4606)"*), sparse checkout of `src/core` and `src/common`.
+**Subject:** `shadps4-emu/shadPS4` at commit `d392abe` (`d392abed77dfa3cfe9a3775f89c6afbe89cc54cd`, *"externals: Update mesa-kosmickrisp to latest (#4606)"*), sparse checkout of that project's `src/core` and `src/common` directories. <!-- external -->
 
 ---
 

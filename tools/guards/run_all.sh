@@ -20,6 +20,11 @@
 #   check_plan       a [done] with no evidence is just a claim
 #   check_non_goals  a normative commitment was broken inside one session
 #
+# `selftest` runs FIRST and is not one of them. All five pass on a repository
+# that has already been fixed - and so would five guards whose patterns never
+# match anything at all. It makes each check fail on purpose, against a
+# deliberately wrong throwaway tree, before any of them is believed.
+#
 # Runs on every push. A guard that only runs when someone remembers is a
 # comment.
 set -uo pipefail
@@ -38,6 +43,7 @@ run() {
     broken+=("$name")
 }
 
+run "guards themselves"     python3 "$HERE/selftest.py"
 run "plan structure"        python3 "$HERE/check_plan.py"
 run "documentation drift"   python3 "$HERE/check_docs.py"
 run "finding registry"      python3 "$HERE/check_registry.py"

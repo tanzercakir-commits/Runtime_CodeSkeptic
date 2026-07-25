@@ -240,8 +240,16 @@ that risk materialising.
   `tools/campaign/groundtruth_coverage.py`
 - `[open]` §17 **evidence bundle** — `analysis_bundle/` with manifest, hashes
   and replay status is specified in the ROADMAP and does not exist
-- `[open]` §16 **differential test: hand-written vs statically extracted
-  contract** — now possible since rs-extract exists, not wired as a test
+- `[blocked]` §16 **differential test: hand-written vs statically extracted
+  contract** — needs a second, independent producer of contracts, and by the
+  Phase 5 decision that producer lives in CodeSkeptic. Blocked on the same
+  instruction that blocks Phase 5, not on effort.
 - `[partial]` documentation accuracy — `tools/guards/check_docs.py` exists
   because several documents were found asserting things about the code that
-  had stopped being true
+  had stopped being true. Now checks both directions: an absence claim must
+  match the filesystem, and a named path must exist. Still `[partial]` because
+  only paths and a fixed list of phrases are mechanical; the rest of the prose
+  is unchecked and always will be.
+- `[done]` the guards are tested — `tools/guards/selftest.py`, 18 cases, each
+  requiring a check to fail against a deliberately wrong throwaway repository
+  before it is trusted on this one; first in `tools/guards/run_all.sh`

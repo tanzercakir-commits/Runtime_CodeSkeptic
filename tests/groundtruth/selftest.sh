@@ -19,7 +19,12 @@ set -uo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 ROOT="$(cd "$HERE/../.." && pwd)"
 RS_CHECK="${RS_CHECK:-$ROOT/build/bin/rs-check}"
-[ -x "$RS_CHECK" ] || { echo "$0: build first" >&2; exit 64; }
+# Overridable for the same reason RS_CHECK is. It was not, and a caller aiming
+# at an out-of-tree build overrode one binary while the other still came from
+# ./build - failing with "could not probe this host" when the cause was a path.
+RS_PROBE="${RS_PROBE:-$ROOT/build/bin/rs-env-probe}"
+[ -x "$RS_CHECK" ] || { echo "$0: no rs-check at $RS_CHECK; build first" >&2; exit 64; }
+[ -x "$RS_PROBE" ] || { echo "$0: no rs-env-probe at $RS_PROBE; build first" >&2; exit 64; }
 
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
@@ -43,7 +48,7 @@ PROFILE="$ROOT/profiles/fixtures/unknown-host.synthetic.json"
 
 # Real host facts, to get SUPPORTED and UNSUPPORTED predictions.
 MEASURED="$WORK/measured.json"
-"$ROOT/build/bin/rs-env-probe" vm --output "$MEASURED" >/dev/null 2>&1 || {
+"$RS_PROBE" vm --output "$MEASURED" >/dev/null 2>&1 || {
     echo "$0: could not probe this host" >&2; exit 70; }
 
 # Contracts whose verdict on $MEASURED is known, checked here rather than

@@ -17,7 +17,7 @@ them were found asserting the opposite of the current state:
 None of these was caught by anything, because prose is not compiled. This
 guard compiles the checkable part of it.
 
-TWO CHECKS.
+THREE CHECKS.
 
 1. PATH CLAIMS. A sentence naming a repository path and asserting absence
    ("does not exist", "is empty", "not implemented", "no ... exists") is
@@ -29,6 +29,22 @@ TWO CHECKS.
    line or the line before, or appear in KNOWN. The marker does not prove the
    claim; it proves somebody looked, and it makes an eight-month-old assertion
    visibly eight months old.
+
+3. NAMED PATHS MUST EXIST. Checks 1 and 2 only ever look at claims of ABSENCE,
+   which left the opposite direction wide open: a document naming a path that
+   is not there passed silently. That is how `tools/rs-extract` survived its
+   own deletion in a case study - and it survived carrying a fresh `checked:`
+   marker, because the marker attaches to absence language and there was none.
+   So every backticked repository path in every document is now resolved
+   against the filesystem. 196 were named when this was written and 9 were
+   missing; all but one were in the historical log, which is exempt.
+
+   Two escape valves, because a document legitimately names paths that are not
+   here: `<!-- external -->` for another project's tree (the shadPS4 case study
+   cites that project's `src/common`, which collides with ours), and
+   `<!-- planned -->` for something the ROADMAP specifies and nobody has built.
+   Both must be on the same line or the line before, and both say out loud what
+   was previously left to the reader to guess.
 """
 import re
 import sys
@@ -63,6 +79,10 @@ PATH_CLAIM = re.compile(
 PATH = re.compile(r"`((?:src|tests|tools|include|docs|schemas|profiles|contracts|corpus)/[A-Za-z0-9_./*-]+)`")
 
 CHECKED = re.compile(r"<!--\s*checked:\s*(\d{4}-\d{2}-\d{2})\s*-->")
+# A named path that is not here must say why: it belongs to another project, or
+# it is specified and unbuilt. Anything else is a document describing something
+# that does not exist.
+EXCUSED_PATH = re.compile(r"<!--\s*(?:external|planned)\s*-->")
 
 # Claims that are TRUE and are expected to stay in the documents. Each needs a
 # reason, so the list cannot quietly become a way to silence the guard.
@@ -90,6 +110,25 @@ def main() -> int:
         for i, line in enumerate(lines):
             has_path_claim = PATH_CLAIM.search(line)
             has_absence = ABSENCE.search(line)
+
+            # Check 3: every named path must exist. Runs on EVERY line, before
+            # the two absence checks bail out - a stale presence claim carries
+            # none of the language they look for, which is exactly why one
+            # survived. (docs/PLAN.md is in KNOWN and skipped here; its paths
+            # are resolved by tools/guards/check_plan.py instead, which is
+            # stricter about them.)
+            window = "\n".join(lines[max(0, i - 1):i + 1])
+            if not EXCUSED_PATH.search(window):
+                for p in PATH.findall(line):
+                    if "*" in p or "..." in p:
+                        continue
+                    if not (ROOT / p).exists():
+                        problems.append(
+                            f"{rel}:{i+1}: names `{p}`, which does not exist. "
+                            f"Fix the path, or mark the line "
+                            f"`<!-- external -->` (another project's tree) or "
+                            f"`<!-- planned -->` (specified, unbuilt)")
+
             if not has_path_claim and not has_absence:
                 continue
 

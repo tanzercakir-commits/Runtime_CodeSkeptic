@@ -25,6 +25,14 @@ satisfied by ANY of the three resolutions recorded in docs/PLAN.md:
 
 Resolution 2 is recognised by the marker `NON-GOAL-18-EXCEPTION:` appearing in
 docs/non_goals.md with a date.
+
+The owner chose resolution 1 on 2026-07-25, and that produced a SECOND check.
+Deleting the code did not delete the claims about it: a JSON schema still said
+requirements could be "written by rs-extract", and the shadPS4 case study still
+said the tool "now recovers a bounded subset from source text" - both describing
+a program that no longer exists, both written truthfully the day before. So the
+name of anything removed by decision is now itself checked, everywhere except
+the two files whose job is to remember it.
 """
 import re
 import sys
@@ -32,6 +40,53 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 NON_GOALS = ROOT / "docs" / "non_goals.md"
+
+# Names of components removed by an explicit decision, with the date and the
+# reason. A mention outside the historical record means a document is describing
+# something that is not there.
+REMOVED = {
+    "rs-extract": "removed 2026-07-25 (d6276e0); extraction belongs to "
+                  "CodeSkeptic per non_goals.md section 18",
+    "rs_extract": "same component, underscore spelling",
+}
+
+# The two files that exist to record what was removed. Everywhere else a
+# mention is a false claim. README.md is deliberately NOT here: it says "no
+# extractor is bundled", a statement about the present that must stay true on
+# its own. Anything under tools/guards/ is exempt as a class, because a guard
+# has to name what it forbids in order to forbid it.
+REMEMBERS = {"docs/PROGRESS.md", "docs/PLAN.md"}
+REMEMBERS_DIRS = ("tools/guards/",)
+
+TEXT_SUFFIXES = {".md", ".json", ".yml", ".yaml", ".cpp", ".hpp", ".h", ".c",
+                 ".txt", ".sh", ".py", ".cmake"}
+SKIP_DIRS = {".git", "build", "external", "third_party", "node_modules"}
+
+
+def check_removed_names() -> list:
+    """A removed component may not survive as a claim in a document."""
+    problems = []
+    for path in sorted(ROOT.rglob("*")):
+        if not path.is_file() or path.suffix not in TEXT_SUFFIXES:
+            continue
+        if SKIP_DIRS & set(path.parts):
+            continue
+        rel = str(path.relative_to(ROOT))
+        if rel in REMEMBERS or rel.startswith(REMEMBERS_DIRS):
+            continue
+        try:
+            lines = path.read_text().splitlines()
+        except UnicodeDecodeError:
+            continue
+        for i, line in enumerate(lines, 1):
+            for name, reason in REMOVED.items():
+                if name in line:
+                    problems.append(
+                        f"{rel}:{i}: names `{name}`, which was {reason}. "
+                        f"The code is gone; this claim is not. Fix the "
+                        f"sentence, or record it in docs/PROGRESS.md where "
+                        f"history belongs: \"{line.strip()[:72]}\"")
+    return problems
 # Any extractor, not just the one that was removed. A rename would slip past a
 # single hard-coded path, and the commitment is about the CAPABILITY, not about
 # a name. This does not stop deliberate evasion - no guard does - it stops the
@@ -70,13 +125,16 @@ def main() -> int:
             "non_goals.md no longer contains section 18. A commitment is "
             "withdrawn deliberately and in writing, not by deletion.")
 
-    if problems:
+    stale = check_removed_names()
+
+    if problems or stale:
         print("non-goal guard failed:", file=sys.stderr)
-        for p in problems:
+        for p in problems + stale:
             print(f"  - {p}", file=sys.stderr)
         return 1
-    print("non-goals: section 18 reconciled" if exception
-          else "non-goals: no conflicts")
+    print("non-goals: no conflicts, no stale names"
+          if not exception else
+          "non-goals: section 18 reconciled, no stale names")
     return 0
 
 
