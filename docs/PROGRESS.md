@@ -16,6 +16,54 @@ re-litigated; a mistake recorded here does not need to be re-made.
 
 ---
 
+## 2026-07-25 — four documents, four jobs, and a guard between two of them
+
+**Changed.** `docs/TODO.md` is new and is now **the file to follow**: 12 items,
+each naming what would prove it done. `tools/guards/check_todo.py` keeps it and
+`docs/PLAN.md` from disagreeing. `docs/scenarios/` was reframed as what the
+owner said it was.
+
+**The owner corrected a misreading, and it was mine.** The scenarios were
+handed over as *the project's spirit* — something to read when the direction
+feels unclear — and I had turned the end of the assessment into a ranked
+backlog. That made one document try to be both a compass and a mission
+statement, which is how it ends up being neither. The ranking moved into
+`docs/TODO.md` as tracked items; the assessment now carries only a
+scenario→item mapping, read in one direction.
+
+| Document | Job |
+|---|---|
+| `docs/scenarios/` | the spirit — why, and for whom. Deliberately unchecked against the code. |
+| `docs/TODO.md` | the compass — what we are doing, in order, at most three at once |
+| `docs/PLAN.md` | the map — where we stand against the ROADMAP |
+| `docs/PROGRESS.md` | the past — what changed, and what was wrong |
+
+**The guard that makes it hold.** Every `[open]` and `[blocked]` criterion in
+the plan must now carry the id of a todo item, or be tagged `(untracked)` and
+justified by name. 17 plan entries were tagged. The compass cannot silently
+drop work and the map cannot silently grow work nobody owns.
+
+Four more checks came from asking what would actually go wrong: `Now` is capped
+at three, because a list where everything is urgent is a wall; every item must
+say what RUNS to prove it done, because an item that cannot be finished is a
+mood; a `[blocked]` item must name its blocker, because a blocker nobody wrote
+down is an excuse; and a `[done]` item must appear in this log, because
+crossing something off is not the same as recording what it taught.
+
+**Learned while writing the exemption.** `check_docs.py` fired on the sentence
+"the scenarios are allowed to describe a project that does not exist yet" —
+prose about the future, not a claim about the code. The first fix was to put
+`docs/scenarios/` in `KNOWN`, which would also have stopped checking the paths
+it cites, and the assessment cites real contracts, real profiles and real
+commands that can all rot. The exemption was narrowed to check 2 alone, and a
+selftest case now proves it: a scenario naming a missing path still fails.
+
+**Next.** `T-001` — verdict diff across two profiles. It is the only new
+capability in the ten scenarios that needs no new probe, no new rule and no new
+evidence.
+
+---
+
 ## 2026-07-25 — the scenarios, and a ceiling nobody had noticed
 
 **Changed.** `docs/scenarios/` — the owner's ten use cases, kept byte-for-byte,

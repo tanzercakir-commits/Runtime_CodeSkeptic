@@ -264,18 +264,30 @@ should say so.
 
 ---
 
-## What the ten scenarios ask for that the project does not have
+## What the gaps become
 
-Ranked by value against cost, which is a judgement and is labelled as one:
+**They become items in `docs/TODO.md`, and this document does not track them.**
+That separation is deliberate and it is the owner's: the scenarios are the
+project's spirit, kept to be read when the direction feels unclear, not a
+backlog to be worked through. A document that is both a compass and a mission
+statement ends up serving neither.
 
-1. **Contract-set re-evaluation across two profiles** (S9, and most of S7).
-   Needs no new evidence. A loop and a comparison.
-2. **The false-positive rate** (S6, and ROADMAP Gate B). Not a feature — the
-   permission to be believed. Blocks the most commercially interesting scenario.
-3. **A Windows probe** (S3, S7). The third platform family the ROADMAP names,
-   and Wine is the scenario that makes it unavoidable.
-4. **Real allocator and runtime configurations in the corpus** (S5, S2). Phase 0
-   is 1 of 30 and it is the largest hole in the project.
-5. **Fleet aggregation** (S8). Straightforward, and worth nothing until 2 holds.
-6. **Downstream-consequence modelling** (S2). Needs a new requirement field and
-   is the easiest place to accidentally start inventing prose.
+The mapping, for reading in one direction only — from a scenario to the work
+that would serve it:
+
+| Scenario | Item in `docs/TODO.md` |
+|---|---|
+| S9, S7 | `T-001` verdict diff across two profiles |
+| S6 | `T-002` measure the false-positive rate |
+| S5, S2 | `T-003` corpus: 30 real incidents |
+| S3, S7 | `T-004` Windows probe |
+| S8 | `T-008` fleet aggregation |
+| S2 (second half) | `T-010` downstream-consequence modelling |
+| S10 | `T-011` CodeSkeptic integration — blocked |
+| S3 | `T-012` reserve/commit under pressure — blocked |
+| S4 | `T-009` runtime wrapper; a displacement constraint needs an observation |
+
+`tools/guards/check_todo.py` keeps that list and `docs/PLAN.md` from drifting
+apart. Nothing keeps *this* document in step with either, on purpose — the
+scenarios are allowed to describe a project that does not exist yet. That is
+what they are for.

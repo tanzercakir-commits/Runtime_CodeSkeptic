@@ -43,6 +43,21 @@ These are commitments, not a description of current limitations.
 Reserved for CodeSkeptic: contract extraction, fatal-sink identification.
 """
 
+# A todo list that satisfies every shape rule, so a case about ONE rule fails
+# for that rule and not for a missing prerequisite.
+TODO_OK = """# TODO
+
+## Now
+
+### T-001 — do the thing `[now]`
+
+**Done when:** `ctest` passes and prints the new suite.
+
+## Deliberately not tracked
+
+- **Phases 6-10** — scope risk, deferred deliberately.
+"""
+
 
 class Case:
     def __init__(self, guard, name, files, expect_fail, expect_text="",
@@ -139,6 +154,16 @@ CASES = [
     Case("check_docs.py", "a glob is not resolved as a path",
          {"docs/x.md": "The guard globs `tools/*extract*` for this.\n"},
          expect_fail=False),
+
+    Case("check_docs.py", "the scenarios may describe an unbuilt project",
+         {"docs/scenarios/assessment.md":
+              "A Windows probe does not exist yet, so S3 is dead.\n"},
+         expect_fail=False),
+
+    Case("check_docs.py", "but a scenario citing a missing path still fails",
+         {"docs/scenarios/assessment.md":
+              "Verified by `tests/groundtruth/contracts/gone.json`.\n"},
+         expect_fail=True, expect_text="does not exist"),
 
     # ---- check_docs: check 1, absence claims must match the filesystem --
     Case("check_docs.py", "\"is empty\" about a directory that is not fails",
@@ -251,6 +276,62 @@ CASES = [
                    {"docs/PROGRESS.md": "# Progress log\n\n"
                                         "## 2026-07-24 — written before midnight\n\nbody\n"})],
          expect_fail=False),
+
+    # ---- check_todo: the compass and the map must agree ----------------
+    Case("check_todo.py", "an open plan criterion with no owner fails",
+         {"docs/TODO.md": TODO_OK,
+          "docs/PLAN.md": "# Plan\n\n## Phase 1\n\n- `[open]` the probe\n"},
+         expect_fail=True, expect_text="with no owner"),
+
+    Case("check_todo.py", "the same criterion, owned, passes",
+         {"docs/TODO.md": TODO_OK,
+          "docs/PLAN.md": "# Plan\n\n## Phase 1\n\n- `[open]` the probe (T-001)\n"},
+         expect_fail=False),
+
+    Case("check_todo.py", "a plan tag naming a missing item fails",
+         {"docs/TODO.md": TODO_OK,
+          "docs/PLAN.md": "# Plan\n\n## Phase 1\n\n- `[open]` the probe (T-404)\n"},
+         expect_fail=True, expect_text="not an item in docs/TODO.md"),
+
+    Case("check_todo.py", "a fourth item in Now fails",
+         {"docs/TODO.md": TODO_OK + "".join(
+             f"\n### T-1{n:02d} — filler `[now]`\n\n**Done when:** it runs\n"
+             for n in range(3)),
+          "docs/PLAN.md": "# Plan\n\n## Phase 1\n\n- `[done]` nothing\n"},
+         expect_fail=True, expect_text="is not a compass"),
+
+    Case("check_todo.py", "an item with no \"Done when\" fails",
+         {"docs/TODO.md": "# TODO\n\n## Now\n\n### T-001 — vague `[now]`\n\n"
+                          "We should probably improve things.\n",
+          "docs/PLAN.md": "# Plan\n\n## Phase 1\n\n- `[done]` nothing\n"},
+         expect_fail=True, expect_text="is a mood"),
+
+    Case("check_todo.py", "a blocked item with no blocker named fails",
+         {"docs/TODO.md": "# TODO\n\n## Blocked\n\n### T-001 — waiting `[blocked]`\n\n"
+                          "**Done when:** it runs\n",
+          "docs/PLAN.md": "# Plan\n\n## Phase 1\n\n- `[done]` nothing\n"},
+         expect_fail=True, expect_text="is an excuse"),
+
+    Case("check_todo.py", "a done item the progress log never mentions fails",
+         {"docs/TODO.md": "# TODO\n\n## Done\n\n### T-001 — finished `[done]`\n\n"
+                          "**Done when:** it ran\n",
+          "docs/PLAN.md": "# Plan\n\n## Phase 1\n\n- `[done]` nothing\n",
+          "docs/PROGRESS.md": "# Progress\n\nNothing about it.\n"},
+         expect_fail=True, expect_text="never mentions it"),
+
+    Case("check_todo.py", "the same item, recorded in the log, passes",
+         {"docs/TODO.md": "# TODO\n\n## Done\n\n### T-001 — finished `[done]`\n\n"
+                          "**Done when:** it ran\n",
+          "docs/PLAN.md": "# Plan\n\n## Phase 1\n\n- `[done]` nothing\n",
+          "docs/PROGRESS.md": "# Progress\n\nT-001 shipped, and here is what "
+                              "it taught.\n"},
+         expect_fail=False),
+
+    Case("check_todo.py", "(untracked) needs a section that justifies it",
+         {"docs/TODO.md": "# TODO\n\n## Now\n\n### T-001 — a thing `[now]`\n\n"
+                          "**Done when:** `ctest` passes.\n",
+          "docs/PLAN.md": "# Plan\n\n## Phase 1\n\n- `[open]` later (untracked)\n"},
+         expect_fail=True, expect_text="no \"Deliberately not tracked\""),
 ]
 
 

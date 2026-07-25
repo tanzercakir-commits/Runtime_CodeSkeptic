@@ -1,10 +1,32 @@
-# Scenarios — who this is for, and what it can do for them today
+# Scenarios — the spirit of the project
+
+**This is not a work list, and it must never become one.** The owner's words
+when handing it over:
+
+> Senaryoyu görev olsun diye vermedim. Projenin ruhu olsun, yol gösterici olsun
+> istedim. Kaybolacak olursak bize ruhu hatırlatsın.
+>
+> *(I did not give the scenarios as a task. I meant them as the project's
+> spirit, as a guide. If we get lost, let them remind us of the spirit.)*
+
+So this is what to read when the direction feels unclear — not to find the next
+task. The next task is in `docs/TODO.md`, which is the compass, and where the
+gaps named here have already been turned into tracked items.
+
+| Document | Job |
+|---|---|
+| `docs/scenarios/` | **the spirit** — why, and for whom |
+| `docs/TODO.md` | **the compass** — what we are doing, in order |
+| `docs/PLAN.md` | **the map** — where we stand against the ROADMAP |
+| `docs/PROGRESS.md` | **the past** — what changed, and what was wrong |
 
 **Status: official while this repository is private, and provisional by
 decision.** The owner's instruction on 2026-07-25 was to adopt these as project
 documents now and to replace or withdraw them later. They are not normative:
 `docs/non_goals.md` is a set of commitments, this is a set of *targets*, and a
 target the tool cannot hit is recorded here as one rather than quietly dropped.
+Nothing checks these documents against the code, deliberately — the scenarios
+are allowed to describe a project that does not exist yet.
 
 ## The three files
 

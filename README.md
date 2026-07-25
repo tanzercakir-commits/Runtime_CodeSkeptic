@@ -220,6 +220,21 @@ docs/                     problem statement, taxonomy, evidence model, findings 
 
 ## Documentation
 
+Four documents carry the project, and they have four different jobs. Confusing
+them is how it gets lost:
+
+| Document | Job |
+|---|---|
+| [docs/scenarios/](docs/scenarios/) | **the spirit** — why this exists and who it is for. Read it when the direction feels unclear. Not a work list. |
+| [docs/TODO.md](docs/TODO.md) | **the compass** — what we are doing, in order, at most three at a time. **Start here.** |
+| [docs/PLAN.md](docs/PLAN.md) | **the map** — where the project stands against its own ROADMAP, criterion by criterion |
+| [docs/PROGRESS.md](docs/PROGRESS.md) | **the past** — what changed, what was learned, what was wrong. Append-only. |
+
+`tools/guards/check_todo.py` keeps the compass and the map in step: no open
+criterion without an owner, and no owner that answers to nothing.
+
+### Reference
+
 | Document | Contents |
 |---|---|
 | [docs/problem_statement.md](docs/problem_statement.md) | The error family and why existing tools miss it |

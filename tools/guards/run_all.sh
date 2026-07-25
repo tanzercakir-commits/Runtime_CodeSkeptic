@@ -23,6 +23,9 @@
 #                    dates for one day in a single session, and a
 #                    `<!-- checked: -->` marker is worthless if the date in it
 #                    is whatever the author believed at the time
+#   check_todo       four documents carry this project - the spirit, the
+#                    compass, the map and the past - and the way it gets lost
+#                    is two of them quietly disagreeing
 #
 # `selftest` runs FIRST and is not one of them. All five pass on a repository
 # that has already been fixed - and so would five guards whose patterns never
@@ -54,6 +57,7 @@ run "finding registry"      python3 "$HERE/check_registry.py"
 run "schemas vs code"       python3 "$HERE/validate_schemas.py"
 run "normative non-goals"   python3 "$HERE/check_non_goals.py"
 run "dates against git"     python3 "$HERE/check_dates.py"
+run "compass vs map"        python3 "$HERE/check_todo.py"
 
 echo
 if [ "$failed" -eq 0 ]; then

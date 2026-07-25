@@ -90,10 +90,24 @@ KNOWN = {
     "docs/non_goals.md": "every entry is a commitment NOT to build something; "
                          "the absence language is the point",
     "docs/PLAN.md": "the plan's whole job is to record what is not done",
+    "docs/TODO.md": "a todo list is a list of things that are not done; "
+                    "tools/guards/check_todo.py checks it instead, against "
+                    "the plan",
     "docs/PROGRESS.md": "an append-only log of what was found wrong; the "
                         "absence language is the record, not a claim about now",
     "tools/guards/check_docs.py": "this file quotes the claims it checks",
 }
+
+# Exempt from CHECK 2 ONLY - the dating of absence claims - and still subject to
+# checks 1 and 3. `docs/scenarios/` is the project's spirit, and its own README
+# says out loud that it is allowed to describe a project that has not been
+# built. Dating that would be theatre: there is nothing to re-check.
+#
+# The narrower exemption matters. The first attempt put the directory in KNOWN,
+# which would also have stopped checking the paths it cites - and the
+# assessment cites real contracts, real profiles and real commands, every one of
+# which can rot.
+NO_ABSENCE_DATING = ("docs/scenarios/",)
 
 
 def main() -> int:
@@ -149,7 +163,7 @@ def main() -> int:
                         f"it exists")
 
             # Check 2: an implementation-state claim must be dated.
-            if not has_absence:
+            if not has_absence or rel.startswith(NO_ABSENCE_DATING):
                 continue
             window = "\n".join(lines[max(0, i - 1):i + 1])
             if not CHECKED.search(window):

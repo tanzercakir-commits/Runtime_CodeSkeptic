@@ -49,7 +49,7 @@ Phase 10 productization           OPEN
 - `[done]` `docs/non_goals.md` — committed, normative
 - `[partial]` `corpus/runtime_failures/` — 11 entries, of which 1 is
   `reported_incident` and 2 are `source_citation`; 8 are
-  `pattern_reconstruction` and count toward nothing
+  `pattern_reconstruction` and count toward nothing (T-003)
 - `[done]` finding-ID registry — `docs/findings/registry.md`, 25 ids
 
 ### Exit criteria
@@ -57,8 +57,8 @@ Phase 10 productization           OPEN
 - `[open]` **at least 30 classified real incidents** — 1 counts
   (`RSC-0011`, shadPS4 issue #4157). The corpus README's own accounting says
   0/30; that is now stale by one, and the entry it turns on rests on a
-  citation this environment cannot re-fetch.
-- `[open]` **at least 10 in the virtual-memory category** — 1 counts
+  citation this environment cannot re-fetch. (T-003)
+- `[open]` **at least 10 in the virtual-memory category** — 1 counts (T-003)
 - `[done]` each category has a concrete evidence model —
   `docs/failure_taxonomy.md`, cross-checked by `tools/guards/check_registry.py`
 - `[done]` terminology stable enough to publish — `docs/evidence_model.md`
@@ -86,7 +86,7 @@ broke on Mac" is a real incident with a real artifact behind it.
   `tools/guards/validate_schemas.py`
 - `[open]` Windows x64 profile fixtures — the probe is
   `src/probe/vm_probe_unimplemented.cpp`; it emits a schema-valid profile in
-  which every fact is unknown, deliberately, rather than guessing
+  which every fact is unknown, deliberately, rather than guessing (T-004)
 - `[done]` Linux x86-64 fixtures — measured on every run by
   `tools/guards/run_all.sh` and `.github/workflows/ci.yml`
 - `[done]` macOS Apple Silicon fixtures —
@@ -111,7 +111,7 @@ broke on Mac" is a real incident with a real artifact behind it.
 - `[done]` deterministic canonicalization — `tests/conformance/test_probe.cpp`
 - `[partial]` **at least three platform families** — Linux, macOS-native and
   macOS-under-Rosetta are three *process environments* on two *families*.
-  Windows is the missing third family and the ROADMAP names it explicitly.
+  Windows is the missing third family and the ROADMAP names it explicitly. (T-004)
 
 ---
 
@@ -146,7 +146,7 @@ broke on Mac" is a real incident with a real artifact behind it.
 - `[open]` **expected false-positive rate is low on curated examples** —
   NEVER MEASURED. This is also ROADMAP Gate B. Nothing in the repository
   establishes it, and the campaign's expectations were written by the same
-  author as the rules.
+  author as the rules. (T-002)
 - `[done]` runs in CI without launching the application — `.github/workflows/ci.yml`
 
 ### The MVP's seven demonstrations (ROADMAP §14)
@@ -158,9 +158,9 @@ broke on Mac" is a real incident with a real artifact behind it.
 - `[done]` 4. W^X / executable-memory restriction — `RS-VM-0009`/`0011`
 - `[partial]` 5. reserve/commit mismatch — `RS-VM-0012` exists but no
   execution has ever confirmed it; the claim is about behaviour under memory
-  pressure, which the harness cannot provoke safely
+  pressure, which the harness cannot provoke safely (T-012)
 - `[open]` 6. **valid host operation rejected by caller assumption** — no
-  contract in the repository demonstrates this direction
+  contract in the repository demonstrates this direction (T-006)
 - `[done]` 7. invalid fallback reported as success — `RS-VM-0014`
 
 ---
@@ -168,7 +168,7 @@ broke on Mac" is a real incident with a real artifact behind it.
 ## Phase 4 — Runtime wrapper library
 
 `[open]` Not started. No libruntimeskeptic, no src/monitor, no tools/rs-replay.
-ROADMAP §21 lists all three; none exists.
+ROADMAP §21 lists all three; none exists. (T-009)
 
 This is the phase that would produce `observed_invariant` evidence, which
 today nothing in the project can generate.
@@ -178,7 +178,7 @@ today nothing in the project can generate.
 ## Phase 5 — CodeSkeptic static integration
 
 `[blocked]` **By the owner's explicit instruction: CodeSkeptic is not to be
-modified.** Recorded here so the blocker is visible rather than inferred.
+modified.** Recorded here so the blocker is visible rather than inferred. (T-011)
 
 ### A boundary that was crossed and walked back
 
@@ -211,7 +211,7 @@ have to rediscover them.
 
 `[open]` All. Phase 6 (counterfactual), 7 (temporal), 8 (further domains,
 gated on Gate D: ten real incidents per domain), 9 (learned invariants),
-10 (productization).
+10 (productization). (untracked)
 
 ROADMAP §19 Risk 1 is *excessive scope*, mitigated by "remain
 virtual-memory-only through the first useful releases". Opening any of these
@@ -230,8 +230,8 @@ that risk materialising.
 - `[open]` **Gate B** (after Phase 3) — it diagnoses real failures and its
   evidence beats ordinary logs, but the **false-positive rate has never been
   measured**, so Gate B is NOT passed. See `docs/PROGRESS.md` for why this is
-  the highest-value open item.
-- `[blocked]` **Gate C** — Phase 5 is blocked.
+  the highest-value open item. (T-002)
+- `[blocked]` **Gate C** — Phase 5 is blocked. (T-011)
 - `[n/a]` **Gate D** — no new domain is proposed.
 
 ---
@@ -241,16 +241,16 @@ that risk materialising.
 - `[done]` ground-truth harness — `tests/groundtruth/`, 14 cases, and its own
   selftest, because the comparison table was untested
 - `[partial]` rule coverage by execution — 13 of the 20 reachable rules;
-  `tools/campaign/groundtruth_coverage.py`
+  `tools/campaign/groundtruth_coverage.py` (T-005)
 - `[open]` §17 **evidence bundle** — `analysis_bundle/` with manifest, hashes
-  and replay status is specified in the ROADMAP and does not exist
+  and replay status is specified in the ROADMAP and does not exist (T-007)
 - `[blocked]` §16 **differential test: hand-written vs statically extracted
   contract** — needs a second, independent producer of contracts, and by the
   Phase 5 decision that producer lives in CodeSkeptic. Blocked on the same
-  instruction that blocks Phase 5, not on effort.
+  instruction that blocks Phase 5, not on effort. (T-011)
 - `[partial]` documentation accuracy — `tools/guards/check_docs.py` exists
   because several documents were found asserting things about the code that
-  had stopped being true. Now checks both directions: an absence claim must
+  had stopped being true. Now checks both directions: an absence claim must (untracked)
   match the filesystem, and a named path must exist. Still `[partial]` because
   only paths and a fixed list of phrases are mechanical; the rest of the prose
   is unchecked and always will be.
