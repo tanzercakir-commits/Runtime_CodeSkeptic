@@ -49,6 +49,13 @@
 
 #include "runtimeskeptic/core/sha256.hpp"
 
+// MAP_NORESERVE is advisory where it exists and absent from some macOS SDKs.
+// Defining it to zero keeps the call identical in meaning: the flag only ever
+// asks the kernel not to pre-commit swap, which macOS does not do anyway.
+#ifndef MAP_NORESERVE
+#define MAP_NORESERVE 0
+#endif
+
 namespace rs::probe {
 namespace {
 
@@ -205,41 +212,69 @@ FixedSupport detect_fixed_allocation(std::size_t page_size,
     return support;
 }
 
-bool can_allocate_exactly_at(std::uint64_t address, std::size_t length) {
+// Why a placement attempt failed. The distinction is load-bearing, and its
+// absence was the first defect the first real macOS measurement exposed.
+//
+// KERN_NO_SPACE means "this range is already yours" - a fact about ONE
+// process's layout, contaminated by wherever the loader put the binary.
+// KERN_INVALID_ADDRESS and friends mean "the kernel refuses this part of the
+// address space" - a fact about the host. Treating them alike made
+// min_map_address report where the probe's own image ended, dressed up as
+// platform policy and carrying measured_capability evidence.
+enum class Placement { Placed, OccupiedByUs, Refused };
+
+Placement try_place(std::uint64_t address, std::size_t length) {
     kern_return_t result = KERN_SUCCESS;
-    if (!mach_allocate_fixed(address, length, result)) return false;
-    mach_release(address, length);
-    return true;
+    if (mach_allocate_fixed(address, length, result)) {
+        mach_release(address, length);
+        return Placement::Placed;
+    }
+    return result == KERN_NO_SPACE ? Placement::OccupiedByUs : Placement::Refused;
+}
+
+// Steps past pages the probe's own image occupies, so a search converges on a
+// kernel boundary rather than on the edge of our own mappings.
+Placement try_place_nearby(std::uint64_t address, std::size_t length,
+                           std::size_t page_size) {
+    for (unsigned i = 0; i < 16; ++i) {
+        const std::uint64_t candidate =
+            address + static_cast<std::uint64_t>(i) * page_size;
+        if (candidate < address) break;  // wrapped
+        const Placement p = try_place(candidate, length);
+        if (p != Placement::OccupiedByUs) return p;
+    }
+    return Placement::OccupiedByUs;
 }
 
 // -------------------------------------------------------------------------
 // Bounds.
 //
-// macOS puts __PAGEZERO at the bottom of a 64-bit process - typically the
-// whole first 4 GiB - so the minimum mappable address is far higher than
-// Linux's mmap_min_addr. It is measured rather than assumed, because the size
-// of __PAGEZERO is a link-time choice and differs between a native arm64
-// binary and a translated x86-64 one.
+// macOS puts __PAGEZERO at the bottom of a 64-bit process, so the lowest
+// mappable address is far above Linux's mmap_min_addr, and its size is a
+// link-time choice that differs between a native arm64 binary and a
+// translated x86-64 one. Measured, never assumed.
 // -------------------------------------------------------------------------
 std::uint64_t find_min_map_address(std::size_t page_size) {
-    // Walk up powers of two until something is placeable, then bisect down.
     std::uint64_t first_ok = 0;
     for (unsigned bit = 12; bit < 48; ++bit) {
         const std::uint64_t candidate = std::uint64_t{1} << bit;
-        if (can_allocate_exactly_at(candidate, page_size)) {
+        if (try_place_nearby(candidate, page_size, page_size) ==
+            Placement::Placed) {
             first_ok = candidate;
             break;
         }
     }
-    if (first_ok == 0) return 0;
+    if (first_ok <= page_size) return first_ok;
 
-    std::uint64_t low = first_ok / 2;  // known to fail, or zero
-    std::uint64_t high = first_ok;     // known to work
+    std::uint64_t low = first_ok / 2;
+    std::uint64_t high = first_ok;
     while (high - low > page_size) {
         const std::uint64_t mid =
             low + ((high - low) / 2 / page_size) * page_size;
         if (mid == low) break;
-        if (can_allocate_exactly_at(mid, page_size)) {
+        // Only a REFUSAL moves the floor up. "Occupied by us" says nothing
+        // about what the kernel would permit another process.
+        if (try_place_nearby(mid, page_size, page_size) == Placement::Placed) {
             high = mid;
         } else {
             low = mid;
@@ -248,24 +283,54 @@ std::uint64_t find_min_map_address(std::size_t page_size) {
     return high;
 }
 
-std::uint64_t find_max_user_address(std::size_t page_size) {
-    std::uint64_t low = 0;
+// The address space is a SET, not an interval.
+//
+// The first version walked powers of two and stopped at the first failure,
+// then bisected. On Linux that is harmless: user space really is one
+// contiguous run. On macOS it is wrong. There are holes, and the search
+// halted at the bottom of the first one - reporting the commpage boundary at
+// 0xFC0000000 as "the end of the user address space" while 0x7000000000 was
+// demonstrably usable. Everything above that false ceiling then went
+// untested, including the entire band this project exists to reason about.
+struct SpaceSurvey {
+    std::uint64_t highest_placed = 0;
+    std::vector<std::uint64_t> refused;  // structural refusals, ascending
+};
+
+SpaceSurvey survey_address_space(std::size_t page_size) {
+    SpaceSurvey survey;
     for (unsigned bit = 20; bit < 63; ++bit) {
         const std::uint64_t candidate = std::uint64_t{1} << bit;
-        if (can_allocate_exactly_at(candidate, page_size)) {
-            low = candidate;
-        } else if (low != 0) {
-            break;
+        switch (try_place_nearby(candidate, page_size, page_size)) {
+            case Placement::Placed:
+                survey.highest_placed = candidate;
+                break;
+            case Placement::Refused:
+                survey.refused.push_back(candidate);
+                break;
+            case Placement::OccupiedByUs:
+                break;  // says nothing about the host
         }
     }
-    if (low == 0) return 0;
+    return survey;
+}
 
-    std::uint64_t high = low * 2;
+// Refines the top of the address space from the highest probe point that
+// worked. Returns 0 rather than a guess when the result is inconsistent.
+std::uint64_t refine_max_user_address(std::uint64_t highest_placed,
+                                      std::size_t page_size) {
+    if (highest_placed == 0) return 0;
+    if (highest_placed > (UINT64_MAX / 2)) return highest_placed + page_size;
+    std::uint64_t low = highest_placed;
+    std::uint64_t high = highest_placed * 2;
+    if (try_place_nearby(high, page_size, page_size) == Placement::Placed) {
+        return 0;  // contradicts the survey; refuse to guess
+    }
     while (high - low > page_size) {
         const std::uint64_t mid =
             low + ((high - low) / 2 / page_size) * page_size;
         if (mid == low) break;
-        if (can_allocate_exactly_at(mid, page_size)) {
+        if (try_place_nearby(mid, page_size, page_size) == Placement::Placed) {
             low = mid;
         } else {
             high = mid;
@@ -273,7 +338,6 @@ std::uint64_t find_max_user_address(std::size_t page_size) {
     }
     return low + page_size;
 }
-
 // -------------------------------------------------------------------------
 // Hint relocation.
 // -------------------------------------------------------------------------
@@ -456,8 +520,7 @@ struct ScanOutcome {
 };
 
 ScanOutcome scan_address_space(std::size_t page_size, std::uint64_t probe_length,
-                               std::uint64_t min_address,
-                               std::uint64_t max_address) {
+                               std::uint64_t min_address) {
     ScanOutcome outcome;
 
     std::vector<std::uint64_t> candidates;
@@ -489,8 +552,11 @@ ScanOutcome scan_address_space(std::size_t page_size, std::uint64_t probe_length
 
     for (std::uint64_t base : candidates) {
         if (base % page_size != 0) continue;
+        // Deliberately NOT skipped against max_address. That ceiling is
+        // itself a measurement and was wrong once already; letting it prune
+        // the candidate list is how the first run silently failed to test the
+        // band the whole project is about.
         if (min_address != 0 && base < min_address) continue;
-        if (max_address != 0 && base >= max_address) continue;
         const auto range = AddressRange::from_base_size(base, probe_length);
         if (!range) continue;
 
@@ -680,6 +746,7 @@ Result probe_virtual_memory(const Options& options) {
     // -- bounds ------------------------------------------------------------
     std::uint64_t min_address = 0;
     std::uint64_t max_address = 0;
+    (void)max_address;  // retained for readability of the survey block below
     if (exact_probing_allowed) {
         min_address = find_min_map_address(page_size);
         if (min_address != 0) {
@@ -689,12 +756,35 @@ Result probe_virtual_memory(const Options& options) {
                     ": binary search for the lowest placeable page (this is "
                     "where __PAGEZERO ends)");
         }
-        max_address = find_max_user_address(page_size);
+        const SpaceSurvey survey = survey_address_space(page_size);
+        max_address = refine_max_user_address(survey.highest_placed, page_size);
         if (max_address != 0) {
             profile.vm.max_user_address = Fact<Address>::known(
                 Address(max_address), EvidenceClass::MeasuredCapability,
                 std::string(kSourceProbe) +
-                    ": binary search with mach_vm_allocate(VM_FLAGS_FIXED)");
+                    ": highest placeable probe point was " +
+                    std::to_string(survey.highest_placed) +
+                    ", refined by bisection above it");
+        } else if (survey.highest_placed != 0) {
+            warnings.emplace_back(
+                "the top of the address space could not be pinned down "
+                "consistently; max_user_address was left unknown rather than "
+                "guessed");
+        }
+        // Structural refusals BELOW the highest placeable address are holes,
+        // not the ceiling. Recording them is the whole point on this platform.
+        for (std::uint64_t refused : survey.refused) {
+            if (refused >= survey.highest_placed) continue;
+            const auto hole = AddressRange::from_base_size(
+                refused, static_cast<std::uint64_t>(page_size));
+            if (!hole) continue;
+            ClassifiedRange cr;
+            cr.range = *hole;
+            cr.evidence = EvidenceClass::MeasuredCapability;
+            cr.note = "the kernel refused an exact placement here while higher "
+                      "addresses remained placeable, so this is a hole in the "
+                      "address space rather than its end";
+            profile.vm.unavailable_ranges.push_back(cr);
         }
     }
 
@@ -814,10 +904,12 @@ Result probe_virtual_memory(const Options& options) {
             options.max_test_mapping_bytes < page_size
                 ? static_cast<std::uint64_t>(page_size)
                 : options.max_test_mapping_bytes;
-        ScanOutcome scan = scan_address_space(page_size, probe_length,
-                                              min_address, max_address);
+        ScanOutcome scan =
+            scan_address_space(page_size, probe_length, min_address);
         profile.vm.available_ranges = std::move(scan.available);
-        profile.vm.unavailable_ranges = std::move(scan.unavailable);
+        for (auto& r : scan.unavailable) {
+            profile.vm.unavailable_ranges.push_back(std::move(r));
+        }
         for (auto& note : scan.occupied_notes) {
             warnings.push_back(std::move(note));
         }

@@ -163,16 +163,22 @@ bool can_map_exactly_at(std::uint64_t address, std::size_t length) {
 
 std::uint64_t find_max_user_address(std::size_t page_size) {
     // Lower bound: an address we know works. Upper bound: one we know fails.
+    // Do NOT stop at the first failure. Linux user space happens to be one
+    // contiguous run today, so stopping early is harmless here - but the same
+    // logic on macOS reported the bottom of the first hole as the top of the
+    // address space, and everything above the false ceiling went untested.
+    // The address space is a set, not an interval; probe to the top and keep
+    // the highest address that actually worked.
     std::uint64_t low = 0;
     for (unsigned bit = 20; bit < 63; ++bit) {
         const std::uint64_t candidate = std::uint64_t{1} << bit;
-        if (can_map_exactly_at(candidate, page_size)) {
-            low = candidate;
-        } else {
-            break;
-        }
+        if (can_map_exactly_at(candidate, page_size)) low = candidate;
     }
     if (low == 0) return 0;
+    // The bisection below is only meaningful if the next power of two really
+    // is unavailable; otherwise the search would run off the top.
+    if (low > (UINT64_MAX / 2)) return low + page_size;
+    if (can_map_exactly_at(low * 2, page_size)) return 0;
 
     std::uint64_t high = low * 2;
     // Binary search for the first page that cannot be mapped.
