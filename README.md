@@ -231,9 +231,14 @@ docs/                     problem statement, taxonomy, evidence model, findings 
 
 ## Honest limitations of v0.1
 
-- Only Linux is probed. macOS and Windows build and run, but their probe is a
-  stub that reports every fact as `unknown` - deliberately, rather than
-  guessing plausible defaults.
+- Linux and macOS are probed; Windows builds and runs but its probe is a stub
+  that reports every fact as `unknown` - deliberately, rather than guessing
+  plausible defaults.
+- **The macOS probe has never run on hardware I control.** It is written and
+  wired into CI (`.github/workflows/macos-probe.yml`, native arm64 and
+  translated x86-64 lanes), and the artifacts that workflow uploads will be
+  the first measured macOS facts this project has. Until that run is green,
+  treat the macOS path as unproven.
 - The macOS/Rosetta fixture in `profiles/fixtures/` was **not measured**. Its
   facts are `heuristic_risk` and every finding derived from it is capped at
   `PREDICTIVE`.

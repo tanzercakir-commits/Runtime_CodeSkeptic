@@ -9,7 +9,7 @@
 // which facts it needed.
 #include "runtimeskeptic/probe/vm_probe.hpp"
 
-#if !defined(RS_PLATFORM_LINUX)
+#if !defined(RS_PLATFORM_LINUX) && !defined(RS_PLATFORM_MACOS)
 
 #include <string>
 
@@ -69,4 +69,4 @@ Result probe_virtual_memory(const Options&) {
 
 }  // namespace rs::probe
 
-#endif  // !RS_PLATFORM_LINUX
+#endif  // !RS_PLATFORM_LINUX && !RS_PLATFORM_MACOS

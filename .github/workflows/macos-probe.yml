@@ -1,0 +1,209 @@
+name: macOS measurement
+
+# The point of this workflow is EVIDENCE, not a green tick.
+#
+# Every headline claim in this project is about macOS - the Rosetta 2 GPU
+# carveout, 16 KiB pages, write-xor-execute, the JIT entitlement - and until
+# this workflow existed, none of it had been measured. Three hand-authored
+# fixtures carried the load, all capped at PREDICTIVE or OBSERVED_INVARIANT
+# because nobody had run a probe.
+#
+# This runs the probe on a real Apple Silicon runner, natively and (where
+# Rosetta 2 is present) as a translated x86-64 process, and uploads both
+# profiles. Those artifacts are the first measured macOS facts the project
+# has ever had.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  native-arm64:
+    name: native arm64
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build
+        run: |
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=RelWithDebInfo
+          cmake --build build --parallel
+
+      - name: Test
+        run: ctest --test-dir build --output-on-failure
+
+      - name: Confirm this is really Apple Silicon
+        run: |
+          uname -m
+          sysctl -n hw.optional.arm64 || echo "hw.optional.arm64 absent"
+          sysctl -n kern.osproductversion
+
+      - name: Measure
+        run: |
+          build/bin/rs-env-probe vm --name "macos-arm64-native-ci" \
+            --output macos-arm64-native.json
+          build/bin/rs-profile verify macos-arm64-native.json
+
+      # The facts this project has been guessing at for its entire life.
+      - name: Report what was measured
+        run: |
+          python3 - <<'PY'
+          import json
+          d = json.load(open("macos-arm64-native.json"))
+          vm = d["virtual_memory"]
+          p = d["platform"]
+          print(f"os            : {p['os_version']}")
+          print(f"host arch     : {p['host_arch']}   process arch: {p['process_arch']}")
+          print(f"translation   : {p['translation_mode']}")
+          for k in ("page_size", "allocation_granularity", "min_map_address",
+                    "max_user_address", "exact_mapping",
+                    "fixed_noreplace_available", "file_map_beyond_eof"):
+              f = vm[k]
+              print(f"{k:26} {str(f['value']):22} {f['evidence']}")
+          for k, f in vm["protection"].items():
+              print(f"{k:26} {str(f['value']):22} {f['evidence']}")
+          print(f"available ranges  : {len(vm['available_ranges'])}")
+          print(f"unavailable ranges: {len(vm['unavailable_ranges'])}")
+          for r in vm["unavailable_ranges"]:
+              print(f"  UNAVAILABLE {r['start']} .. {r['end']}  {r['note']}")
+          PY
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos-arm64-native-profile
+          path: macos-arm64-native.json
+
+  rosetta-x86_64:
+    name: x86-64 under Rosetta 2
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+
+      # Rosetta 2 may or may not be installed on a hosted runner. If it is
+      # absent the job reports that plainly and stops; a missing translator is
+      # a fact about the runner, not a build failure, and pretending otherwise
+      # would be exactly the kind of laundering this project exists to catch.
+      - name: Is Rosetta 2 available?
+        id: rosetta
+        run: |
+          if arch -x86_64 /usr/bin/true 2>/dev/null; then
+            echo "available=true" >> "$GITHUB_OUTPUT"
+            echo "Rosetta 2 is present."
+          else
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::Rosetta 2 is not available on this runner; the translated measurement was skipped. The macOS/Rosetta claims in this repository remain unmeasured."
+          fi
+
+      - name: Build as x86-64
+        if: steps.rosetta.outputs.available == 'true'
+        run: |
+          cmake -S . -B build-x64 -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+                -DCMAKE_OSX_ARCHITECTURES=x86_64
+          cmake --build build-x64 --parallel
+
+      - name: Confirm the binary really is x86-64
+        if: steps.rosetta.outputs.available == 'true'
+        run: |
+          file build-x64/bin/rs-env-probe
+          file build-x64/bin/rs-env-probe | grep -q x86_64
+
+      - name: Test under translation
+        if: steps.rosetta.outputs.available == 'true'
+        run: ctest --test-dir build-x64 --output-on-failure
+
+      # This is the measurement the whole project has been waiting for.
+      - name: Measure the translated address space
+        if: steps.rosetta.outputs.available == 'true'
+        run: |
+          build-x64/bin/rs-env-probe vm --name "macos-arm64-rosetta-x86_64-ci" \
+            --output macos-rosetta-x86_64.json
+          build-x64/bin/rs-profile verify macos-rosetta-x86_64.json
+
+      - name: Did the probe agree that it was translated?
+        if: steps.rosetta.outputs.available == 'true'
+        run: |
+          python3 - <<'PY'
+          import json, sys
+          d = json.load(open("macos-rosetta-x86_64.json"))
+          p = d["platform"]
+          print(f"process arch : {p['process_arch']}")
+          print(f"host arch    : {p['host_arch']}")
+          print(f"translation  : {p['translation_mode']}")
+          if p["translation_mode"] != "rosetta2":
+              print("::error::the probe did not detect Rosetta 2 in a translated process")
+              sys.exit(1)
+          PY
+
+      # The three fixtures claim a reserved band at 0x1000000000-0x7000000000
+      # and a commpage below it. Now we find out. Either outcome is a result:
+      # confirmation upgrades those facts from heuristic_risk to
+      # measured_capability, and refutation means the fixtures are wrong and
+      # must be corrected.
+      - name: What did it find in the reported reserved bands?
+        if: steps.rosetta.outputs.available == 'true'
+        run: |
+          python3 - <<'PY'
+          import json
+          d = json.load(open("macos-rosetta-x86_64.json"))
+          vm = d["virtual_memory"]
+          print(f"page size   : {vm['page_size']['value']}")
+          print(f"min mappable: {vm['min_map_address']['value']}")
+          print(f"max user    : {vm['max_user_address']['value']}")
+          print()
+
+          def covered(ranges, addr):
+              return [r for r in ranges
+                      if int(r["start"], 16) <= addr < int(r["end"], 16)]
+
+          watch = {
+              "commpage start      0xfc0000000": 0xfc0000000,
+              "GPU carveout start  0x1000000000": 0x1000000000,
+              "GTA V target        0x1307200000": 0x1307200000,
+              "carveout mid        0x4000000000": 0x4000000000,
+              "reported end        0x6fc0000000": 0x6fc0000000,
+              "shadPS4 USER_MIN    0x7000000000": 0x7000000000,
+          }
+          for label, addr in watch.items():
+              un = covered(vm["unavailable_ranges"], addr)
+              av = covered(vm["available_ranges"], addr)
+              if un:
+                  print(f"  REFUSED   {label}   ({un[0]['note'][:60]})")
+              elif av:
+                  print(f"  AVAILABLE {label}")
+              else:
+                  print(f"  untested  {label}")
+
+          print()
+          print("unavailable ranges measured:")
+          for r in vm["unavailable_ranges"]:
+              print(f"  {r['start']} .. {r['end']}   {r['note']}")
+          PY
+
+      # Does the measured profile reproduce the reported GTA V crash?
+      - name: Re-run the GTA V case against the MEASURED profile
+        if: steps.rosetta.outputs.available == 'true'
+        continue-on-error: true
+        run: |
+          build-x64/bin/rs-check contracts/gtav-rage-direct-memory-mapping.json \
+            --profile macos-rosetta-x86_64.json || true
+          echo
+          echo "Against the reported-measurement fixture, for comparison:"
+          build-x64/bin/rs-check contracts/gtav-rage-direct-memory-mapping.json \
+            --profile profiles/fixtures/macos-arm64-rosetta-x86_64.reported.fixture.json \
+            --quiet || true
+
+      - name: Compare the measurement against the hand-authored fixture
+        if: steps.rosetta.outputs.available == 'true'
+        continue-on-error: true
+        run: |
+          echo "Differences between what we MEASURED and what the fixture CLAIMED:"
+          build-x64/bin/rs-profile diff macos-rosetta-x86_64.json \
+            profiles/fixtures/macos-arm64-rosetta-x86_64.reported.fixture.json || true
+
+      - uses: actions/upload-artifact@v4
+        if: steps.rosetta.outputs.available == 'true'
+        with:
+          name: macos-rosetta-x86_64-profile
+          path: macos-rosetta-x86_64.json
