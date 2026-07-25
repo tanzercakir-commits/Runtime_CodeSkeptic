@@ -273,6 +273,53 @@ std::string Requirement::requirement_id() const {
     return rs::hash::sha256_uri(*canonical);
 }
 
+namespace {
+
+// Every key the reader understands, so anything else can be reported rather
+// than dropped. Kept adjacent to from_json on purpose: a field added below
+// without a name added here shows up as unrecognized in the tool's own tests,
+// which is a louder reminder than a comment.
+constexpr const char* kKnownTopLevel[] = {
+    "schema", "name", "component", "operation", "request", "assumptions",
+    "required_postconditions", "permitted_fallbacks", "failure_sink",
+    "assumption_evidence", "source_locations", "extraction_limitations",
+    "producer", "rule",
+};
+constexpr const char* kKnownRequest[] = {
+    "address", "size", "exact_address_required", "protection", "file_backed",
+    "file_length", "file_offset", "accesses_beyond_eof", "eof_access_extent",
+    "required_alignment", "required_page_size", "required_page_size_relation",
+    "write_then_execute", "simultaneous_write_execute", "reserve_then_commit",
+    "commit_is_checked_call", "validates_returned_address", "address_min",
+    "address_max", "max_displacement_bytes", "displacement_reference",
+};
+constexpr const char* kKnownAssumptions[] = {
+    "guest_host_identity_required", "translation_layer_available",
+    "retries_on_failure", "max_retries", "pointer_storage_width_bits",
+};
+
+template <std::size_t N>
+void collect_unrecognized(const json::Value& node,
+                          const char* const (&known)[N],
+                          const std::string& prefix,
+                          std::vector<std::string>& out) {
+    if (!node.is_object()) return;
+    for (const auto& entry : node.as_object()) {
+        bool recognized = false;
+        for (std::size_t i = 0; i < N; ++i) {
+            if (entry.first == known[i]) { recognized = true; break; }
+        }
+        // Anything namespaced with x_ is an extension by convention and is
+        // deliberately not reported: x_campaign and x_groundtruth carry this
+        // project's own provenance notes.
+        if (!recognized && entry.first.rfind("x_", 0) != 0) {
+            out.push_back(prefix + entry.first);
+        }
+    }
+}
+
+}  // namespace
+
 std::optional<Requirement> Requirement::from_json(const json::Value& v,
                                                    std::string& error) {
     if (!v.is_object()) {
@@ -523,6 +570,16 @@ std::optional<Requirement> Requirement::from_json(const json::Value& v,
                 r.extraction_limitations.push_back(item.as_string());
             }
         }
+    }
+
+    collect_unrecognized(v, kKnownTopLevel, "", r.unrecognized_fields);
+    if (req != nullptr) {
+        collect_unrecognized(*req, kKnownRequest, "request.",
+                             r.unrecognized_fields);
+    }
+    if (const json::Value* assume = v.find("assumptions"); assume != nullptr) {
+        collect_unrecognized(*assume, kKnownAssumptions, "assumptions.",
+                             r.unrecognized_fields);
     }
 
     return r;

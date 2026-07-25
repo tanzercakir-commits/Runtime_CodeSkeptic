@@ -1593,6 +1593,18 @@ AnalysisResult Analysis::run() {
                                                limitation);
     }
 
+    // A field the reader did not understand is a part of the document that had
+    // no effect on this verdict, and the reader must say so. Misspell
+    // `accesses_beyond_eof` and the requirement quietly reads false, the rule
+    // that would have caught it never runs, and the report is a clean bill of
+    // health for a claim nobody evaluated.
+    for (const auto& field : req_.unrecognized_fields) {
+        result_.analyzer_limitations.push_back(
+            "unrecognized requirement field '" + field +
+            "' was ignored; if it was meant to constrain this request, nothing "
+            "here evaluated it");
+    }
+
     if (req_.operation != OperationKind::VirtualMemoryMap &&
         req_.operation != OperationKind::VirtualMemoryReserve &&
         req_.operation != OperationKind::VirtualMemoryCommit &&

@@ -306,4 +306,56 @@ RS_TEST(an_omitted_fact_and_an_explicit_unknown_are_the_same_profile) {
     RS_CHECK_EQ(pa->profile_id(), pb->profile_id());
 }
 
+// A misspelled field used to change a contract's meaning in silence. Write
+// `acceses_beyond_eof` and the requirement quietly reads false, the rule that
+// would have caught it never runs, and the report is a clean bill of health for
+// a claim nobody evaluated - the exact shape of thing this project exists to
+// object to.
+RS_TEST(unrecognized_requirement_fields_are_reported_not_dropped) {
+    auto parsed = json::parse(R"({
+        "schema": "runtime-skeptic.application-requirements.v1",
+        "operation": "virtual_memory_map",
+        "assumption_evidence": "specified_guarantee",
+        "request": {
+            "size": 4096,
+            "acceses_beyond_eof": true,
+            "x_provenance": "extensions are exempt by convention"
+        },
+        "assumptions": { "retries_on_faliure": true }
+    })");
+    RS_CHECK(parsed.ok());
+    std::string error;
+    auto r = Requirement::from_json(*parsed.value, error);
+    RS_CHECK_MESSAGE(r.has_value(), error);
+    if (!r) return;
+
+    bool saw_request_typo = false;
+    bool saw_assumption_typo = false;
+    bool saw_extension = false;
+    for (const auto& f : r->unrecognized_fields) {
+        if (f == "request.acceses_beyond_eof") saw_request_typo = true;
+        if (f == "assumptions.retries_on_faliure") saw_assumption_typo = true;
+        if (f.find("x_provenance") != std::string::npos) saw_extension = true;
+    }
+    RS_CHECK(saw_request_typo);
+    RS_CHECK(saw_assumption_typo);
+    // x_ is the extension namespace; this project's own x_campaign and
+    // x_groundtruth blocks live there and must not be reported as mistakes.
+    RS_CHECK(!saw_extension);
+}
+
+RS_TEST(a_correct_requirement_reports_no_unrecognized_fields) {
+    const Requirement original = exact_mapping_requirement();
+    std::string error;
+    auto restored = Requirement::from_json(original.to_json(), error);
+    RS_CHECK_MESSAGE(restored.has_value(), error);
+    if (!restored) return;
+    // A round trip of the tool's own output must be clean, or the known-key
+    // list has drifted away from the writer.
+    RS_CHECK_MESSAGE(restored->unrecognized_fields.empty(),
+                     restored->unrecognized_fields.empty()
+                         ? ""
+                         : restored->unrecognized_fields.front());
+}
+
 RS_TEST_MAIN("profile")

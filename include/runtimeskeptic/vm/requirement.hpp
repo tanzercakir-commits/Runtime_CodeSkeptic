@@ -261,6 +261,22 @@ public:
     // reading as a clean bill.
     std::vector<std::string> extraction_limitations;
 
+    // Keys the reader did not recognise, collected rather than discarded.
+    //
+    // A typo used to change a contract's meaning in silence. `address_is_hint`
+    // was invented while writing a ground-truth contract, accepted without a
+    // word, and ignored - and the failure mode is worse than a wasted field:
+    // misspell `accesses_beyond_eof` and the requirement quietly says false,
+    // the rule that would have caught it never runs, and the report is a clean
+    // bill of health for a claim nobody evaluated.
+    //
+    // That is the exact shape of the thing this project exists to object to, so
+    // it is not dropped and not fatal either: unknown keys travel into
+    // analyzer_limitations, where a reader sees that part of their document was
+    // not understood. Rejecting outright would make every future schema
+    // addition a breaking change for older tools.
+    std::vector<std::string> unrecognized_fields;
+
     bool permits(FallbackKind kind) const;
 
     json::Value to_json() const;
