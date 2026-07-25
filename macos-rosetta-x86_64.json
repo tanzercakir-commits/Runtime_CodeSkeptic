@@ -1,0 +1,531 @@
+{
+  "notes": [
+    "Ranges the probe found occupied by its own process image are NOT recorded as host limitations; see probe_run.warnings.",
+    "MAP_FIXED is never used by this probe. Exact placement is probed through mach_vm_allocate(VM_FLAGS_FIXED), which refuses a collision instead of evicting the existing mapping."
+  ],
+  "origin": "measured",
+  "platform": {
+    "host_arch": "aarch64",
+    "kernel_version": "23.6.0",
+    "os": "macos",
+    "os_version": "macOS 14.8.7",
+    "pointer_width_bits": 64,
+    "process_arch": "x86_64",
+    "translation_mode": "rosetta2"
+  },
+  "probe_run": {
+    "duration_ms": 0,
+    "probe_binary_hash": "",
+    "probe_version": "rs-env-probe/vm/0.1.0",
+    "run_id": "e30a51cb552a23bb",
+    "timestamp_utc": "2026-07-25T00:25:58Z",
+    "tool_version": "runtimeskeptic/0.1.0",
+    "warnings": [
+      "range [0xfc0000000, 0xfc0400000) is mapped by the probe process itself (confirmed with mach_vm_region); NOT recorded as a host limitation",
+      "range [0xff0000000, 0xff0400000) is mapped by the probe process itself (confirmed with mach_vm_region); NOT recorded as a host limitation",
+      "range [0xfffc00000, 0x1000000000) is mapped by the probe process itself (confirmed with mach_vm_region); NOT recorded as a host limitation",
+      "range [0x1000000000, 0x1000400000) is mapped by the probe process itself (confirmed with mach_vm_region); NOT recorded as a host limitation",
+      "range [0x1307200000, 0x1307600000) is mapped by the probe process itself (confirmed with mach_vm_region); NOT recorded as a host limitation",
+      "range [0x1fffc00000, 0x2000000000) is mapped by the probe process itself (confirmed with mach_vm_region); NOT recorded as a host limitation",
+      "range [0x2000000000, 0x2000400000) is mapped by the probe process itself (confirmed with mach_vm_region); NOT recorded as a host limitation",
+      "range [0x3fffc00000, 0x4000000000) is mapped by the probe process itself (confirmed with mach_vm_region); NOT recorded as a host limitation",
+      "range [0x4000000000, 0x4000400000) is mapped by the probe process itself (confirmed with mach_vm_region); NOT recorded as a host limitation",
+      "range [0x6f00000000, 0x6f00400000) is mapped by the probe process itself (confirmed with mach_vm_region); NOT recorded as a host limitation",
+      "range [0x6fc0000000, 0x6fc0400000) is mapped by the probe process itself (confirmed with mach_vm_region); NOT recorded as a host limitation"
+    ]
+  },
+  "profile_id": "sha256:5934b48f80f44062ceca2df3bd4f289ee3fe99d56af1e7dd2ea024b9c53d5dd8",
+  "profile_name": "macos-arm64-rosetta-x86_64-ci",
+  "schema": "runtime-skeptic.environment-profile.v1",
+  "virtual_memory": {
+    "allocation_granularity": {
+      "evidence": "measured_capability",
+      "source": "rs-env-probe vm (macos): mach_vm_allocate places at page granularity",
+      "value": 4096
+    },
+    "anonymous_mapping_supported": {
+      "evidence": "measured_capability",
+      "source": "rs-env-probe vm (macos): mmap(NULL, page_size, RW, MAP_PRIVATE|MAP_ANON)",
+      "value": true
+    },
+    "available_ranges": [
+      {
+        "end": "0x200000000",
+        "evidence": "measured_capability",
+        "note": "mach_vm_allocate(VM_FLAGS_FIXED) succeeded at this exact address in the probe process",
+        "start": "0x1ffc00000"
+      },
+      {
+        "end": "0x200400000",
+        "evidence": "measured_capability",
+        "note": "mach_vm_allocate(VM_FLAGS_FIXED) succeeded at this exact address in the probe process",
+        "start": "0x200000000"
+      },
+      {
+        "end": "0x400000000",
+        "evidence": "measured_capability",
+        "note": "mach_vm_allocate(VM_FLAGS_FIXED) succeeded at this exact address in the probe process",
+        "start": "0x3ffc00000"
+      },
+      {
+        "end": "0x400400000",
+        "evidence": "measured_capability",
+        "note": "mach_vm_allocate(VM_FLAGS_FIXED) succeeded at this exact address in the probe process",
+        "start": "0x400000000"
+      },
+      {
+        "end": "0x800000000",
+        "evidence": "measured_capability",
+        "note": "mach_vm_allocate(VM_FLAGS_FIXED) succeeded at this exact address in the probe process",
+        "start": "0x7ffc00000"
+      },
+      {
+        "end": "0x800400000",
+        "evidence": "measured_capability",
+        "note": "mach_vm_allocate(VM_FLAGS_FIXED) succeeded at this exact address in the probe process",
+        "start": "0x800000000"
+      },
+      {
+        "end": "0x7000400000",
+        "evidence": "measured_capability",
+        "note": "mach_vm_allocate(VM_FLAGS_FIXED) succeeded at this exact address in the probe process",
+        "start": "0x7000000000"
+      },
+      {
+        "end": "0x8000000000",
+        "evidence": "measured_capability",
+        "note": "mach_vm_allocate(VM_FLAGS_FIXED) succeeded at this exact address in the probe process",
+        "start": "0x7fffc00000"
+      },
+      {
+        "end": "0x8000400000",
+        "evidence": "measured_capability",
+        "note": "mach_vm_allocate(VM_FLAGS_FIXED) succeeded at this exact address in the probe process",
+        "start": "0x8000000000"
+      },
+      {
+        "end": "0x10000000000",
+        "evidence": "measured_capability",
+        "note": "mach_vm_allocate(VM_FLAGS_FIXED) succeeded at this exact address in the probe process",
+        "start": "0xffffc00000"
+      },
+      {
+        "end": "0x10000400000",
+        "evidence": "measured_capability",
+        "note": "mach_vm_allocate(VM_FLAGS_FIXED) succeeded at this exact address in the probe process",
+        "start": "0x10000000000"
+      },
+      {
+        "end": "0x20000000000",
+        "evidence": "measured_capability",
+        "note": "mach_vm_allocate(VM_FLAGS_FIXED) succeeded at this exact address in the probe process",
+        "start": "0x1ffffc00000"
+      },
+      {
+        "end": "0x20000400000",
+        "evidence": "measured_capability",
+        "note": "mach_vm_allocate(VM_FLAGS_FIXED) succeeded at this exact address in the probe process",
+        "start": "0x20000000000"
+      },
+      {
+        "end": "0x40000000000",
+        "evidence": "measured_capability",
+        "note": "mach_vm_allocate(VM_FLAGS_FIXED) succeeded at this exact address in the probe process",
+        "start": "0x3ffffc00000"
+      },
+      {
+        "end": "0x40000400000",
+        "evidence": "measured_capability",
+        "note": "mach_vm_allocate(VM_FLAGS_FIXED) succeeded at this exact address in the probe process",
+        "start": "0x40000000000"
+      },
+      {
+        "end": "0x80000000000",
+        "evidence": "measured_capability",
+        "note": "mach_vm_allocate(VM_FLAGS_FIXED) succeeded at this exact address in the probe process",
+        "start": "0x7ffffc00000"
+      },
+      {
+        "end": "0x80000400000",
+        "evidence": "measured_capability",
+        "note": "mach_vm_allocate(VM_FLAGS_FIXED) succeeded at this exact address in the probe process",
+        "start": "0x80000000000"
+      },
+      {
+        "end": "0x100000000000",
+        "evidence": "measured_capability",
+        "note": "mach_vm_allocate(VM_FLAGS_FIXED) succeeded at this exact address in the probe process",
+        "start": "0xfffffc00000"
+      },
+      {
+        "end": "0x100000400000",
+        "evidence": "measured_capability",
+        "note": "mach_vm_allocate(VM_FLAGS_FIXED) succeeded at this exact address in the probe process",
+        "start": "0x100000000000"
+      },
+      {
+        "end": "0x200000000000",
+        "evidence": "measured_capability",
+        "note": "mach_vm_allocate(VM_FLAGS_FIXED) succeeded at this exact address in the probe process",
+        "start": "0x1fffffc00000"
+      },
+      {
+        "end": "0x200000400000",
+        "evidence": "measured_capability",
+        "note": "mach_vm_allocate(VM_FLAGS_FIXED) succeeded at this exact address in the probe process",
+        "start": "0x200000000000"
+      },
+      {
+        "end": "0x400000000000",
+        "evidence": "measured_capability",
+        "note": "mach_vm_allocate(VM_FLAGS_FIXED) succeeded at this exact address in the probe process",
+        "start": "0x3fffffc00000"
+      },
+      {
+        "end": "0x400000400000",
+        "evidence": "measured_capability",
+        "note": "mach_vm_allocate(VM_FLAGS_FIXED) succeeded at this exact address in the probe process",
+        "start": "0x400000000000"
+      }
+    ],
+    "exact_mapping": {
+      "evidence": "measured_capability",
+      "source": "rs-env-probe vm (macos): exact placement succeeds for free, in-bounds, page-aligned ranges",
+      "value": "CONDITIONALLY_SUPPORTED"
+    },
+    "exact_mapping_failure_codes": [
+      "KERN_NO_SPACE",
+      "KERN_INVALID_ADDRESS",
+      "ENOMEM"
+    ],
+    "file_map_beyond_eof": {
+      "evidence": "measured_capability",
+      "source": "rs-env-probe vm (macos): an isolated child read past end of file without faulting",
+      "value": "zero_fill"
+    },
+    "fixed_noreplace_available": {
+      "evidence": "measured_capability",
+      "source": "rs-env-probe vm (macos): mach_vm_allocate(VM_FLAGS_FIXED) refused a collision with KERN_NO_SPACE rather than evicting the neighbour",
+      "value": true
+    },
+    "hinted_mapping_may_relocate": {
+      "evidence": "measured_capability",
+      "source": "rs-env-probe vm (macos): a hinted mapping at an occupied address was relocated",
+      "value": true
+    },
+    "max_user_address": {
+      "evidence": "measured_capability",
+      "source": "rs-env-probe vm (macos): highest placeable probe point was 70368744177664, refined by bisection above it",
+      "value": "0x600000000000"
+    },
+    "min_map_address": {
+      "evidence": "measured_capability",
+      "source": "rs-env-probe vm (macos): binary search for the lowest placeable page (this is where __PAGEZERO ends)",
+      "value": "0x109032000"
+    },
+    "page_size": {
+      "evidence": "measured_capability",
+      "source": "rs-env-probe vm (macos): sysconf(_SC_PAGESIZE)",
+      "value": 4096
+    },
+    "protection": {
+      "anonymous_executable_mapping": {
+        "evidence": "measured_capability",
+        "source": "rs-env-probe vm (macos): mmap(PROT_READ|PROT_EXEC)",
+        "value": true
+      },
+      "jit_entitlement_required": {
+        "evidence": "measured_capability",
+        "source": "rs-env-probe vm (macos): plain RWX succeeded without MAP_JIT or any entitlement",
+        "value": false
+      },
+      "write_execute_simultaneous": {
+        "evidence": "measured_capability",
+        "source": "rs-env-probe vm (macos): mmap(PROT_READ|PROT_WRITE|PROT_EXEC) without MAP_JIT",
+        "value": true
+      },
+      "write_then_execute_transition": {
+        "evidence": "measured_capability",
+        "source": "rs-env-probe vm (macos): mprotect(RW -> RX)",
+        "value": true
+      }
+    },
+    "reserve_commit_model": {
+      "evidence": "measured_capability",
+      "source": "rs-env-probe vm (macos): a 1 GiB PROT_NONE reservation succeeded without backing it",
+      "value": "posix_lazy"
+    },
+    "unavailable_ranges": [
+      {
+        "end": "0x101000",
+        "evidence": "measured_capability",
+        "note": "the kernel refused an exact placement here while higher addresses remained placeable, so this is a hole in the address space rather than its end",
+        "start": "0x100000"
+      },
+      {
+        "end": "0x201000",
+        "evidence": "measured_capability",
+        "note": "the kernel refused an exact placement here while higher addresses remained placeable, so this is a hole in the address space rather than its end",
+        "start": "0x200000"
+      },
+      {
+        "end": "0x401000",
+        "evidence": "measured_capability",
+        "note": "the kernel refused an exact placement here while higher addresses remained placeable, so this is a hole in the address space rather than its end",
+        "start": "0x400000"
+      },
+      {
+        "end": "0x801000",
+        "evidence": "measured_capability",
+        "note": "the kernel refused an exact placement here while higher addresses remained placeable, so this is a hole in the address space rather than its end",
+        "start": "0x800000"
+      },
+      {
+        "end": "0x1001000",
+        "evidence": "measured_capability",
+        "note": "the kernel refused an exact placement here while higher addresses remained placeable, so this is a hole in the address space rather than its end",
+        "start": "0x1000000"
+      },
+      {
+        "end": "0x2001000",
+        "evidence": "measured_capability",
+        "note": "the kernel refused an exact placement here while higher addresses remained placeable, so this is a hole in the address space rather than its end",
+        "start": "0x2000000"
+      },
+      {
+        "end": "0x4001000",
+        "evidence": "measured_capability",
+        "note": "the kernel refused an exact placement here while higher addresses remained placeable, so this is a hole in the address space rather than its end",
+        "start": "0x4000000"
+      },
+      {
+        "end": "0x8001000",
+        "evidence": "measured_capability",
+        "note": "the kernel refused an exact placement here while higher addresses remained placeable, so this is a hole in the address space rather than its end",
+        "start": "0x8000000"
+      },
+      {
+        "end": "0x10001000",
+        "evidence": "measured_capability",
+        "note": "the kernel refused an exact placement here while higher addresses remained placeable, so this is a hole in the address space rather than its end",
+        "start": "0x10000000"
+      },
+      {
+        "end": "0x20001000",
+        "evidence": "measured_capability",
+        "note": "the kernel refused an exact placement here while higher addresses remained placeable, so this is a hole in the address space rather than its end",
+        "start": "0x20000000"
+      },
+      {
+        "end": "0x40001000",
+        "evidence": "measured_capability",
+        "note": "the kernel refused an exact placement here while higher addresses remained placeable, so this is a hole in the address space rather than its end",
+        "start": "0x40000000"
+      },
+      {
+        "end": "0x80001000",
+        "evidence": "measured_capability",
+        "note": "the kernel refused an exact placement here while higher addresses remained placeable, so this is a hole in the address space rather than its end",
+        "start": "0x80000000"
+      },
+      {
+        "end": "0x100001000",
+        "evidence": "measured_capability",
+        "note": "the kernel refused an exact placement here while higher addresses remained placeable, so this is a hole in the address space rather than its end",
+        "start": "0x100000000"
+      },
+      {
+        "end": "0x800000000000",
+        "evidence": "measured_capability",
+        "note": "exact allocation refused with KERN_INVALID_ADDRESS",
+        "start": "0x7fffffc00000"
+      },
+      {
+        "end": "0x800000400000",
+        "evidence": "measured_capability",
+        "note": "exact allocation refused with KERN_INVALID_ADDRESS",
+        "start": "0x800000000000"
+      },
+      {
+        "end": "0x1000000000000",
+        "evidence": "measured_capability",
+        "note": "exact allocation refused with KERN_INVALID_ADDRESS",
+        "start": "0xffffffc00000"
+      },
+      {
+        "end": "0x1000000400000",
+        "evidence": "measured_capability",
+        "note": "exact allocation refused with KERN_INVALID_ADDRESS",
+        "start": "0x1000000000000"
+      },
+      {
+        "end": "0x2000000000000",
+        "evidence": "measured_capability",
+        "note": "exact allocation refused with KERN_INVALID_ADDRESS",
+        "start": "0x1ffffffc00000"
+      },
+      {
+        "end": "0x2000000400000",
+        "evidence": "measured_capability",
+        "note": "exact allocation refused with KERN_INVALID_ADDRESS",
+        "start": "0x2000000000000"
+      },
+      {
+        "end": "0x4000000000000",
+        "evidence": "measured_capability",
+        "note": "exact allocation refused with KERN_INVALID_ADDRESS",
+        "start": "0x3ffffffc00000"
+      },
+      {
+        "end": "0x4000000400000",
+        "evidence": "measured_capability",
+        "note": "exact allocation refused with KERN_INVALID_ADDRESS",
+        "start": "0x4000000000000"
+      },
+      {
+        "end": "0x8000000000000",
+        "evidence": "measured_capability",
+        "note": "exact allocation refused with KERN_INVALID_ADDRESS",
+        "start": "0x7ffffffc00000"
+      },
+      {
+        "end": "0x8000000400000",
+        "evidence": "measured_capability",
+        "note": "exact allocation refused with KERN_INVALID_ADDRESS",
+        "start": "0x8000000000000"
+      },
+      {
+        "end": "0x10000000000000",
+        "evidence": "measured_capability",
+        "note": "exact allocation refused with KERN_INVALID_ADDRESS",
+        "start": "0xfffffffc00000"
+      },
+      {
+        "end": "0x10000000400000",
+        "evidence": "measured_capability",
+        "note": "exact allocation refused with KERN_INVALID_ADDRESS",
+        "start": "0x10000000000000"
+      },
+      {
+        "end": "0x20000000000000",
+        "evidence": "measured_capability",
+        "note": "exact allocation refused with KERN_INVALID_ADDRESS",
+        "start": "0x1fffffffc00000"
+      },
+      {
+        "end": "0x20000000400000",
+        "evidence": "measured_capability",
+        "note": "exact allocation refused with KERN_INVALID_ADDRESS",
+        "start": "0x20000000000000"
+      },
+      {
+        "end": "0x40000000000000",
+        "evidence": "measured_capability",
+        "note": "exact allocation refused with KERN_INVALID_ADDRESS",
+        "start": "0x3fffffffc00000"
+      },
+      {
+        "end": "0x40000000400000",
+        "evidence": "measured_capability",
+        "note": "exact allocation refused with KERN_INVALID_ADDRESS",
+        "start": "0x40000000000000"
+      },
+      {
+        "end": "0x80000000000000",
+        "evidence": "measured_capability",
+        "note": "exact allocation refused with KERN_INVALID_ADDRESS",
+        "start": "0x7fffffffc00000"
+      },
+      {
+        "end": "0x80000000400000",
+        "evidence": "measured_capability",
+        "note": "exact allocation refused with KERN_INVALID_ADDRESS",
+        "start": "0x80000000000000"
+      },
+      {
+        "end": "0x100000000000000",
+        "evidence": "measured_capability",
+        "note": "exact allocation refused with KERN_INVALID_ADDRESS",
+        "start": "0xffffffffc00000"
+      },
+      {
+        "end": "0x100000000400000",
+        "evidence": "measured_capability",
+        "note": "exact allocation refused with KERN_INVALID_ADDRESS",
+        "start": "0x100000000000000"
+      },
+      {
+        "end": "0x200000000000000",
+        "evidence": "measured_capability",
+        "note": "exact allocation refused with KERN_INVALID_ADDRESS",
+        "start": "0x1ffffffffc00000"
+      },
+      {
+        "end": "0x200000000400000",
+        "evidence": "measured_capability",
+        "note": "exact allocation refused with KERN_INVALID_ADDRESS",
+        "start": "0x200000000000000"
+      },
+      {
+        "end": "0x400000000000000",
+        "evidence": "measured_capability",
+        "note": "exact allocation refused with KERN_INVALID_ADDRESS",
+        "start": "0x3ffffffffc00000"
+      },
+      {
+        "end": "0x400000000400000",
+        "evidence": "measured_capability",
+        "note": "exact allocation refused with KERN_INVALID_ADDRESS",
+        "start": "0x400000000000000"
+      },
+      {
+        "end": "0x800000000000000",
+        "evidence": "measured_capability",
+        "note": "exact allocation refused with KERN_INVALID_ADDRESS",
+        "start": "0x7ffffffffc00000"
+      },
+      {
+        "end": "0x800000000400000",
+        "evidence": "measured_capability",
+        "note": "exact allocation refused with KERN_INVALID_ADDRESS",
+        "start": "0x800000000000000"
+      },
+      {
+        "end": "0x1000000000000000",
+        "evidence": "measured_capability",
+        "note": "exact allocation refused with KERN_INVALID_ADDRESS",
+        "start": "0xfffffffffc00000"
+      },
+      {
+        "end": "0x1000000000400000",
+        "evidence": "measured_capability",
+        "note": "exact allocation refused with KERN_INVALID_ADDRESS",
+        "start": "0x1000000000000000"
+      },
+      {
+        "end": "0x2000000000000000",
+        "evidence": "measured_capability",
+        "note": "exact allocation refused with KERN_INVALID_ADDRESS",
+        "start": "0x1fffffffffc00000"
+      },
+      {
+        "end": "0x2000000000400000",
+        "evidence": "measured_capability",
+        "note": "exact allocation refused with KERN_INVALID_ADDRESS",
+        "start": "0x2000000000000000"
+      },
+      {
+        "end": "0x4000000000000000",
+        "evidence": "measured_capability",
+        "note": "exact allocation refused with KERN_INVALID_ADDRESS",
+        "start": "0x3fffffffffc00000"
+      },
+      {
+        "end": "0x4000000000400000",
+        "evidence": "measured_capability",
+        "note": "exact allocation refused with KERN_INVALID_ADDRESS",
+        "start": "0x4000000000000000"
+      }
+    ]
+  }
+}
