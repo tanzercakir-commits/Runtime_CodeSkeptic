@@ -149,19 +149,14 @@ Binaries land in `build/bin/`.
 | `rs-profile verify` | Validate a profile and report how many facts it actually knows |
 | `rs-profile diff` | Compare two profiles' facts - did the platform change? |
 | `rs-check` | Evaluate a requirement (or a bundle) against a profile |
-| `rs-extract` | Recover candidate requirements from C/C++ source (bounded, see below) |
 | `rs-mcp` | The same capabilities over the Model Context Protocol |
 
-Requirement documents are written by hand, or recovered from source by
-`rs-extract` - a **bounded** text scanner, not a static analyzer, whose output
-is a set of candidates for review. `rs-check` also accepts a *bundle* of many
-at once, which is what a real static extractor would emit; see
-[docs/integrations.md](docs/integrations.md).
-
-> `rs-extract` sits in tension with [docs/non_goals.md](docs/non_goals.md)
-> section 18, which reserves contract extraction for CodeSkeptic. That
-> conflict is unresolved and is tracked in [docs/PLAN.md](docs/PLAN.md); the
-> guard `tools/guards/check_non_goals.py` fails until it is decided.
+Requirement documents are written by hand. `rs-check` also accepts a *bundle*
+of many at once, which is the shape a static extractor emits; see
+[docs/integrations.md](docs/integrations.md). No extractor is bundled and none
+is required - extraction belongs to CodeSkeptic
+([docs/non_goals.md](docs/non_goals.md) section 18), and
+`tools/guards/check_non_goals.py` fails the build if one reappears here.
 
 ### Exit codes
 

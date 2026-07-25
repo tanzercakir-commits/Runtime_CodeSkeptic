@@ -32,8 +32,12 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 NON_GOALS = ROOT / "docs" / "non_goals.md"
-EXTRACT_TOOL = ROOT / "tools" / "rs-extract"
-EXTRACT_LIB = ROOT / "src" / "extract"
+# Any extractor, not just the one that was removed. A rename would slip past a
+# single hard-coded path, and the commitment is about the CAPABILITY, not about
+# a name. This does not stop deliberate evasion - no guard does - it stops the
+# capability drifting back in under a plausible name while nobody is looking.
+EXTRACT_GLOBS = ("tools/*extract*", "src/*extract*", "include/**/*extract*",
+                 "tools/*scanner*", "src/*scanner*")
 
 
 def main() -> int:
@@ -45,16 +49,19 @@ def main() -> int:
         return 1
 
     exception = re.search(r"NON-GOAL-18-EXCEPTION:\s*(\d{4}-\d{2}-\d{2})", text)
-    extractor_present = EXTRACT_TOOL.exists() or EXTRACT_LIB.exists()
+    found = sorted({str(p.relative_to(ROOT))
+                    for g in EXTRACT_GLOBS for p in ROOT.glob(g)})
 
-    if extractor_present and not exception:
+    if found and not exception:
         problems.append(
             "docs/non_goals.md section 18 reserves contract extraction and "
-            "fatal-sink identification for CodeSkeptic, and tools/rs-extract "
-            "does both. Resolve it: remove the tool, rename it so it claims "
-            "nothing, or add `NON-GOAL-18-EXCEPTION: YYYY-MM-DD` to "
-            "docs/non_goals.md with the reasoning and an expiry. "
-            "See docs/PLAN.md, Phase 5.")
+            "fatal-sink identification for CodeSkeptic. These paths look like "
+            "an extractor growing back here: " + ", ".join(found) +
+            ". Resolve it: remove them, or add "
+            "`NON-GOAL-18-EXCEPTION: YYYY-MM-DD` to docs/non_goals.md with the "
+            "reasoning and an expiry. One was removed on 2026-07-25; see "
+            "docs/PROGRESS.md for what it learned, so a future extractor in "
+            "the right repository does not have to rediscover it.")
 
     # Section 18 must still say what it says; silently deleting the commitment
     # is not a resolution.

@@ -16,6 +16,58 @@ re-litigated; a mistake recorded here does not need to be re-made.
 
 ---
 
+## 2026-07-25 — rs-extract removed; the boundary holds
+
+**Changed.** `tools/rs-extract`, `src/extract`, `include/runtimeskeptic/extract`,
+`tests/unit/test_extract.cpp`, `tests/extract/`, their build wiring and both CI
+steps — deleted. `tools/guards/check_non_goals.py` stays and now passes.
+
+**Decision and why.** The owner chose removal over an exception: RuntimeSkeptic
+is to remain a pure runtime project, and a merge with CodeSkeptic may be
+considered later. Extraction then arrives from the side that owns it, rather
+than as a duplicate that had grown here while nobody was checking section 18.
+
+**Kept, because the code is gone and the knowledge should not be.** If an
+extractor is ever built in the right repository, these were the findings:
+
+*The five recognisers that worked.* `mmap`/`mach_vm_allocate`/`VirtualAlloc`
+carrying `MAP_FIXED` with a literal address; a mapping call requesting
+`PROT_WRITE|PROT_EXEC` together; `mprotect` adding `PROT_EXEC` without
+`PROT_WRITE`; a `#define` of a page-size constant; a bounded loop containing a
+mapping call. Against the shadPS4 issue #4157 pattern these recovered the
+address `0x1307200000`, the size `0x20000`, `exact_address_required`, and the
+`fatal_assert` sink — matching the hand-written contract field for field, and
+reaching the same verdict against the measured Rosetta profile.
+
+*Three bugs that only realistic input exposed, all worth pre-empting:*
+
+1. **Reading one line at a time misses every `MAP_FIXED` site.** Real calls
+   wrap, and the flag sits on the continuation line. Join until the parentheses
+   balance.
+2. **The loop bound is not the first literal.** `for (int i = 0; i < 30; i++)`
+   opens with `0`, so every retry loop reads as unbounded. Take the largest
+   literal in the header.
+3. **Whole-word matching rejects macro suffixes.** `_` is an identifier
+   character, so `LJ_PAGESIZE` does not match `PAGESIZE`. The page-size
+   recogniser rejected the exact constant it was written for.
+
+*Two invariants worth keeping in any future version.* Every candidate must
+carry `statically_inferred` — a text match that could reach a stronger evidence
+class would let `grep` produce a proof — and every candidate must state what
+the producer could not determine at that specific site, not a generic
+disclaimer.
+
+**Confirmed on request.** CodeSkeptic was never modified. Both local clones
+show zero working-tree changes, zero unpushed commits and no push in the
+reflog; neither has a GitHub remote, and the token grants push to
+`Runtime_CodeSkeptic` only.
+
+**Next.** Unchanged: the §18 conflict is closed, so the open items are the
+false-positive rate (ROADMAP Gate B, never measured) and the Phase 0 corpus
+(1 of 30).
+
+---
+
 ## 2026-07-25 — the process itself
 
 **Changed.** `docs/PLAN.md` (the spine), this file, and `tools/guards/` — five

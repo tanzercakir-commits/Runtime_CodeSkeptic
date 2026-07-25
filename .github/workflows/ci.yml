@@ -81,18 +81,6 @@ jobs:
           build/bin/rs-env-probe vm --name gt-host --output /tmp/gt-host.json
           bash tests/groundtruth/run.sh /tmp/gt-host.json
 
-      # Source -> requirement -> verdict, end to end. Until rs-extract existed
-      # every contract in this repository was written by hand, which the
-      # external evaluation named as the project's largest gap.
-      - name: Source to verdict, end to end
-        if: runner.os != 'Windows'
-        run: |
-          build/bin/rs-extract tests/extract/fixture.c \
-            --component ci --out /tmp/extracted.json --explain
-          build/bin/rs-check /tmp/extracted.json --profile /tmp/gt-host.json \
-            --format json > /tmp/extracted-verdict.json || true
-          python3 tests/extract/check_extracted.py /tmp/extracted.json
-
       # The probe is only implemented for Linux. On other platforms this step
       # proves the honest fallback: a schema-valid profile in which every fact
       # is unknown, and a non-zero warning list saying so.
@@ -155,18 +143,6 @@ jobs:
         run: |
           build/bin/rs-env-probe vm --name gt-host --output /tmp/gt-host.json
           bash tests/groundtruth/run.sh /tmp/gt-host.json
-
-      # Source -> requirement -> verdict, end to end. Until rs-extract existed
-      # every contract in this repository was written by hand, which the
-      # external evaluation named as the project's largest gap.
-      - name: Source to verdict, end to end
-        if: runner.os != 'Windows'
-        run: |
-          build/bin/rs-extract tests/extract/fixture.c \
-            --component ci --out /tmp/extracted.json --explain
-          build/bin/rs-check /tmp/extracted.json --profile /tmp/gt-host.json \
-            --format json > /tmp/extracted-verdict.json || true
-          python3 tests/extract/check_extracted.py /tmp/extracted.json
 
   compatibility-gate:
     name: compatibility gate (linux)

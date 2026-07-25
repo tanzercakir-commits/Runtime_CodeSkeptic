@@ -176,24 +176,30 @@ today nothing in the project can generate.
 `[blocked]` **By the owner's explicit instruction: CodeSkeptic is not to be
 modified.** Recorded here so the blocker is visible rather than inferred.
 
-### An open conflict, stated rather than resolved
+### A boundary that was crossed and walked back
 
-`tools/rs-extract` was built to close the "no path from source to a
-requirement" gap. **`docs/non_goals.md` §18 is normative and forbids exactly
-this**: "contract extraction, error-path analysis, fatal-sink identification
-... stay in CodeSkeptic."
+An extractor (tools/rs-extract) was built here to close the "no path from source to a
+requirement" gap, and it worked - it recovered the shadPS4 issue #4157 pattern
+from source text and reached the same `RS-VM-0001 / UNSUPPORTED` verdict as the
+hand-written contract.
 
-rs-extract performs contract extraction and fatal-sink identification. Whether
-it is a permitted stopgap or a boundary violation is the owner's decision, not
-the implementer's. Three options, none taken:
+It also broke `docs/non_goals.md` section 18, which is normative and reserves
+contract extraction and fatal-sink identification for CodeSkeptic. **It was
+removed** on 2026-07-25, in full: the tool, the library, the header, the tests,
+the fixture, the build wiring and the CI step. `git log` is the only place it
+survives.
 
-1. remove it,
-2. keep it and amend §18 with a stated exception and an expiry,
-3. keep it renamed as a test-fixture generator with no claim to being an
-   extractor.
+The decision was the owner's and the reasoning was theirs: RuntimeSkeptic is to
+stay a pure runtime project. A merge with CodeSkeptic may be considered later,
+and if it happens, extraction arrives from the side that owns it rather than as
+a duplicate that had quietly grown here.
 
-`tools/guards/check_non_goals.py` fails while this is unresolved, so it cannot
-be forgotten.
+`tools/guards/check_non_goals.py` stays, now passing, and fails again the
+moment an extractor reappears under this repository.
+
+What was learned is kept in `docs/PROGRESS.md` - the recogniser designs and the
+three bugs that only realistic input exposed - so a future extractor does not
+have to rediscover them.
 
 ---
 
