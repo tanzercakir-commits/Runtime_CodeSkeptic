@@ -32,12 +32,31 @@ name: Windows measurement
 
 # Windows runners bill at 2x. That is a fifth of macOS but not free, and the
 # host cannot change between two commits - the same reasoning that moved the
-# macOS workflow off per-push after a quota exhaustion on 2026-07-25. Weekly,
-# plus a button.
+# macOS workflow off per-push after a quota exhaustion on 2026-07-25.
+#
+# So: weekly, a button, AND a path filter.
+#
+# The path filter is not a way around the button. It is a better trigger than
+# either, for a reason the macOS workflow's comment gets slightly wrong: the
+# HOST does not change between two commits, but the PROBE does, and a probe
+# change is exactly when a fresh measurement is worth 2x. Listing the two files
+# that can alter what gets measured makes the workflow fire when the answer
+# could have changed and stay silent when it could not.
+#
+# It also unblocks the first run. This project's development sandbox reaches
+# GitHub over the git protocol only - the REST API answers
+# "GitHub access to this repository is not enabled for this session" - so
+# `workflow_dispatch` is a button nobody in the loop can press. A push to these
+# paths is the one trigger both the sandbox and a human can reach.
 on:
   schedule:
     - cron: '41 4 * * 1'
   workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/windows-probe.yml'
+      - 'src/probe/vm_probe_windows.cpp'
+      - 'include/runtimeskeptic/probe/vm_probe.hpp'
 
 permissions:
   contents: write
