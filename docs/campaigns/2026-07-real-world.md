@@ -191,6 +191,54 @@ even checked.
 
 ---
 
+## Addendum 2: the schema gaps closed
+
+Four fields were added after the campaign, each because more than one project
+needed it and had nowhere to put it.
+
+| Field | Closes | Effect |
+|---|---|---|
+| `address_min` / `address_max` | "below 2^31", "below 2^32", "above 2^32" - LuaJIT, Box64 box32, Box64 dynarec | `RS-VM-0023`, `RS-VM-0025` |
+| `max_displacement_bytes` + `displacement_reference` | "within +/-2 GiB of another region" - every JIT with a rel32 branch | `RS-VM-0024` |
+| `commit_is_checked_call` | POSIX map-over-PROT_NONE vs Windows two-phase | silences the `RS-VM-0012` false positive |
+| `validates_returned_address` | test-and-reject vs silent truncation | already covered above |
+
+The displacement field deserves a note. v0.1 still **cannot evaluate** it - a
+host profile has no idea where the reference region will land - so
+`RS-VM-0024` reports it as an acknowledged gap and moves the verdict to
+`UNKNOWN`. That is the point. Before, LuaJIT's machine-code window came back
+`SUPPORTED` with nothing said, because stripped of the displacement the
+request is "64 KiB anon RW, later RX". The verdict was not wrong; it was
+empty. An unanswered question and an unnoticed one now look different.
+
+`RS-VM-0025` exists because closing a gap cost an insight. Removing the
+(incorrect) pointer-truncation story from LuaJIT also removed the only
+warning that the program depends on winning an address-space lottery. The
+bound is satisfiable on this host - and it covers **one part in 65535** of the
+space. That is ROADMAP section 11's PREDICTIVE class: not a defect today, not
+a guarantee either.
+
+### Campaign after the schema work
+
+```text
+total: 26   supported: 11   unsupported: 5   conditional: 9   unknown: 1
+```
+
+Four rows still disagree, and all four are the tool arguing for a subtlety the
+prediction missed: an unevaluated displacement (`luajit-mcode-jumprange`), an
+unguaranteed 32 MiB alignment (`mimalloc-segment-alignment`), a tight address
+bound (`box64-guest-map32bit`), and a defensible identity reading
+(`box64-4k-page-dirty-code-detection`).
+
+Two expectations were revised, each recording its original value and why:
+`redis-jemalloc-page-size-lg16` (the contract's page-size relation was
+corrected from equality to at-most against `pages.c:760`) and
+`box64-box32-guest-alloc-below-4gb` (the truncation story it rested on cannot
+occur; Box64 tests and returns `ENOMEM`). No expectation was changed merely
+because the output disagreed with it.
+
+---
+
 ## What the schema cannot express
 
 The most valuable output of the campaign. Six of twenty-six contracts have a
@@ -199,7 +247,7 @@ load-bearing constraint that survives only as free text in
 
 | Constraint | Who needs it | Consequence today |
 |---|---|---|
-| **"within ±N bytes of another region"** | LuaJIT mcode (`±2 GB` of the exit handler), V8 code range (`kRadiusInMB` around the embedded blob) — and every JIT with a rel32 branch: SpiderMonkey, .NET | Stripped of it, LuaJIT's request is "64 KiB anon RW, later RX" — trivially `SUPPORTED`. The verdict is not wrong, it is **empty** |
+| **"within ±N bytes of another region"** - now *expressible*, still not *evaluable* | LuaJIT mcode (`±2 GB` of the exit handler), V8 code range (`kRadiusInMB` around the embedded blob) — and every JIT with a rel32 branch: SpiderMonkey, .NET | Stripped of it, LuaJIT's request is "64 KiB anon RW, later RX" — trivially `SUPPORTED`. The verdict is not wrong, it is **empty** |
 | **"must be below 2^31 / 2^32"** | LuaJIT `LJ_ALLOC_MBITS`, Box64 box32, Box64 `MAP_32BIT` emulation — three sites in two unrelated projects | `pointer_storage_width_bits` is wrong twice over: it means 2^32 when the bound is 2^31, and it models truncation when both programs test-and-reject |
 | **"must be at or above 2^32"** | Box64 box32 dynarec, V8 TrustedRange | Expressible only as a non-binding hint, so a correctness failure and a harmless relocation look the same |
 | **"the reservation must be contiguous"** | QEMU `reserved_va`, mimalloc's 4×1 GiB huge-page claim | Only a size is carried |

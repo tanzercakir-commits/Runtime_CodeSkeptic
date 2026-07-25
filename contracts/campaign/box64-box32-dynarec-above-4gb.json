@@ -13,7 +13,8 @@
       "execute": true
     },
     "write_then_execute": true,
-    "simultaneous_write_execute": true
+    "simultaneous_write_execute": true,
+    "address_min": "0x100000000"
   },
   "assumptions": {
     "guest_host_identity_required": false,
@@ -70,6 +71,7 @@
     "source": "src/custommem.c:1372 and src/custommem.c:1393",
     "quote": "    static uintptr_t cur = 0x100000000LL;\n---\n    void* ret = InternalMmap(box64_isAddressSpace32?NULL:(void*)0x100000000ULL, size, PROT_READ | PROT_WRITE | PROT_EXEC, map_flags, fd, offset);",
     "expected_verdict": "SUPPORTED",
-    "rationale": "A hinted RWX mapping at 4 GiB is unremarkable on x86-64 Linux, and the code accepts relocation, so nothing here can fail."
+    "rationale": "A hinted RWX mapping at 4 GiB is unremarkable on x86-64 Linux, and the code accepts relocation, so nothing here can fail.",
+    "note_after_schema_fix": "The complement of the box32 bound, now expressible."
   }
 }

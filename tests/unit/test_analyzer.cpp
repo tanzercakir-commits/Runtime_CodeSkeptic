@@ -547,6 +547,70 @@ RS_TEST(a_declared_no_op_failure_sink_caps_severity) {
     }
 }
 
+RS_TEST(an_address_bound_the_host_cannot_reach_is_refused) {
+    // LuaJIT below 2^31, Box64's box32 below 2^32, Box64's dynarec above 2^32.
+    // Before the field existed, authors reached for identity requirements and
+    // the analyzer reported a contradiction it had manufactured itself.
+    EnvironmentProfile p = permissive_host();
+    p.vm.min_map_address = Fact<Address>::known(
+        Address(0x100000000ull), EvidenceClass::MeasuredCapability, "fixture");
+
+    Requirement r = plain_anonymous_mapping();
+    r.request.address_max = 0x80000000ull;  // must be below 2 GiB
+
+    const auto result = analyze(r, p);
+    RS_CHECK(has_finding(result, ids::kAddressBoundUnsatisfiable));
+    RS_CHECK(result.overall == SupportLevel::Unsupported);
+}
+
+RS_TEST(an_address_bound_the_host_can_reach_is_not_refused) {
+    Requirement r = plain_anonymous_mapping();
+    r.request.address_min = 0x1000000000ull;
+    r.request.address_max = 0x1010000000ull;  // the fixture's available range
+    const auto result = analyze(r, permissive_host());
+    RS_CHECK(!has_finding(result, ids::kAddressBoundUnsatisfiable));
+}
+
+RS_TEST(an_address_outside_its_own_bound_is_an_internal_contradiction) {
+    Requirement r = exact_mapping_requirement(0x1000000000ull);
+    r.request.address_max = 0x80000000ull;
+    const auto result = analyze(r, permissive_host());
+    const Finding* f = get_finding(result, ids::kAddressBoundUnsatisfiable);
+    RS_CHECK(f != nullptr);
+    if (f != nullptr) RS_CHECK(f->structural_impossibility);
+}
+
+RS_TEST(a_displacement_constraint_is_acknowledged_not_ignored) {
+    // The campaign's verdict on LuaJIT's machine-code window was not wrong, it
+    // was EMPTY: stripped of the +/-2 GiB requirement the request is trivially
+    // supportable, and nothing said the hard part had been dropped.
+    Requirement r = plain_anonymous_mapping();
+    r.request.max_displacement_bytes = std::uint64_t{2} << 30;
+    r.request.displacement_reference = "the VM exit handler";
+
+    const auto result = analyze(r, permissive_host());
+    RS_CHECK(has_finding(result, ids::kDisplacementConstraintNotEvaluable));
+    RS_CHECK_MESSAGE(result.overall == SupportLevel::Unknown,
+                     "an unevaluated constraint left the verdict at SUPPORTED");
+}
+
+RS_TEST(a_posix_two_step_reservation_is_not_a_windows_commit_model) {
+    // QEMU reserves with PROT_NONE and maps over it, checking THAT call. The
+    // rule downgraded four campaign contracts on a distinction it could not
+    // see.
+    Requirement r = plain_anonymous_mapping();
+    r.request.reserve_then_commit = true;
+    r.request.commit_is_checked_call = true;
+
+    const auto result = analyze(r, permissive_host());
+    RS_CHECK(!has_finding(result, ids::kReserveCommitSemanticMismatch));
+
+    Requirement windows_style = r;
+    windows_style.request.commit_is_checked_call = false;
+    RS_CHECK(has_finding(analyze(windows_style, permissive_host()),
+                         ids::kReserveCommitSemanticMismatch));
+}
+
 // ---------------------------------------------------------------------------
 // Determinism and structure of the result.
 // ---------------------------------------------------------------------------

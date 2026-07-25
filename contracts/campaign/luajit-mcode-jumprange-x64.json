@@ -12,7 +12,9 @@
       "execute": false
     },
     "write_then_execute": true,
-    "simultaneous_write_execute": false
+    "simultaneous_write_execute": false,
+    "max_displacement_bytes": 2147418112,
+    "displacement_reference": "lj_vm_exit_handler"
   },
   "assumptions": {
     "guest_host_identity_required": false,
@@ -97,6 +99,7 @@
     "source": "src/lj_mcode.c:266 and src/lj_mcode.c:276-280",
     "quote": "#define MCODE_RANGE64\t((1u << LJ_TARGET_JUMPRANGE) - 0x10000u)\n---\n  /* Every address in the 64KB-aligned range should be able to reach\n  ** any other, so MCODE_RANGE64 is only half the (signed) branch range.\n  */\n  J->mcmin = (addr - (MCODE_RANGE64 >> 1) + 0xffffu) & ~(uintptr_t)0xffffu;\n  J->mcmax = J->mcmin + MCODE_RANGE64;",
     "expected_verdict": "SUPPORTED",
-    "rationale": "Stripped of the relative-distance constraint the schema cannot carry, this is a 64 KiB anonymous RW mapping later mprotect'ed to RX - which the probe confirms works. I expect SUPPORTED, and I expect that to be an incomplete answer rather than a wrong one."
+    "rationale": "Stripped of the relative-distance constraint the schema cannot carry, this is a 64 KiB anonymous RW mapping later mprotect'ed to RX - which the probe confirms works. I expect SUPPORTED, and I expect that to be an incomplete answer rather than a wrong one.",
+    "note_after_schema_fix": "The jump-range constraint is now carried explicitly; the verdict is UNKNOWN rather than an empty SUPPORTED."
   }
 }

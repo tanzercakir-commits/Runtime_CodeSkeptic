@@ -111,6 +111,42 @@ struct MappingRequest {
     // Additional alignment the program relies on, beyond page alignment.
     std::optional<std::uint64_t> required_alignment;
 
+    // The returned address must fall within these bounds.
+    //
+    // Added because the campaign found three unrelated projects expressing
+    // exactly this and having nowhere to put it: LuaJIT needs its heap below
+    // 2^31 (LJ_ALLOC_MBITS), Box64's box32 mode needs guest allocations below
+    // 2^32, and Box64's dynarec buffer needs to be ABOVE 2^32 - two opposite
+    // bounds in the same process. Without the field, authors reached for
+    // `guest_host_identity_required`, which means something far stronger, and
+    // the analyzer then reported a self-contradiction it had manufactured
+    // itself.
+    std::optional<std::uint64_t> address_min;
+    std::optional<std::uint64_t> address_max;  // exclusive
+
+    // The mapping must land within `max_displacement` bytes of some other
+    // region, named informally by `reference`.
+    //
+    // This is the constraint every JIT that emits a relative branch lives
+    // under: LuaJIT's machine-code area must sit inside a +/-2 GiB window
+    // centred on its exit handler, V8's code range likewise around the
+    // embedded blob, and the same holds for SpiderMonkey and .NET. v0.1
+    // cannot evaluate it - the reference address is not knowable from a host
+    // profile - but carrying it lets the analyzer say so explicitly instead
+    // of returning a confident SUPPORTED that simply ignored the hard part.
+    std::optional<std::uint64_t> max_displacement_bytes;
+    std::string displacement_reference;
+
+    // For reserve/commit: is the later commit a CHECKED call site?
+    //
+    // Windows MEM_RESERVE/MEM_COMMIT and the POSIX
+    // mmap(PROT_NONE)-then-mmap(MAP_FIXED)-over-it idiom look alike in a
+    // boolean but differ in the only way that matters. In the POSIX form the
+    // commit IS a call whose result the program tests, so the warning that
+    // "failures move from a checked call site to an unchecked memory access"
+    // is false for it.
+    bool commit_is_checked_call = false;
+
     // The program hard-codes a page size (common in emulators that mirror a
     // guest MMU). A host with a different page size breaks it.
     std::optional<std::uint64_t> required_page_size;

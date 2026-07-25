@@ -152,6 +152,26 @@ const std::vector<FindingDefinition>& registry_storage() {
          "File-backed mapping extends beyond end of file", Severity::High,
          "Accessing the portion of a file mapping past end-of-file has "
          "host-specific behavior that the program does not handle."},
+        {ids::kAddressBoundUnsatisfiable,
+         "The host cannot place the mapping inside the program's address bound",
+         Severity::Critical,
+         "The program needs the returned address inside a bounded window - "
+         "below 2^31, above 2^32, and so on - and this host's usable address "
+         "space does not intersect it."},
+        {ids::kDisplacementConstraintNotEvaluable,
+         "A relative-displacement constraint was carried but not evaluated",
+         Severity::Info,
+         "The mapping must land within a bounded distance of another region. "
+         "A host profile does not know where that region will be, so v0.1 "
+         "cannot decide this. Reported rather than ignored: the alternative "
+         "was a confident verdict that silently dropped the hard part."},
+        {ids::kAddressBoundIsTight,
+         "The program can use only a small part of this host's address space",
+         Severity::Low,
+         "The address bound is satisfiable today but covers a small fraction "
+         "of what the host offers. Success then depends on the allocator "
+         "handing out a low address, which degrades as the process fragments "
+         "and can change with a different ASLR configuration."},
         {ids::kAnonymousMappingUnavailable,
          "Anonymous memory mapping is unavailable on this host", Severity::Critical,
          "The host cannot create an ordinary anonymous mapping at all. Nothing "

@@ -141,6 +141,8 @@ private:
     void rule_internal_fallback_contradiction();
     void rule_baseline_mapping_capability();
     void rule_size_feasibility();
+    void rule_address_bounds();
+    void rule_displacement_constraint();
     void rule_reservation_alignment();
     void rule_page_size();
     void rule_address_alignment();
@@ -324,6 +326,214 @@ void Analysis::rule_size_feasibility() {
         {"Retry, or wait for memory pressure to ease",
          "The limit is the width of the address space, not the amount of free "
          "memory in it."});
+    emit(std::move(f));
+}
+
+// ---------------------------------------------------------------------------
+// RS-VM-0023: the program needs its address inside a bounded window.
+//
+// Three unrelated projects in the campaign expressed exactly this and had
+// nowhere to put it - LuaJIT below 2^31, Box64's box32 mode below 2^32,
+// Box64's dynarec buffer ABOVE 2^32 in the same process. Authors reached for
+// guest_host_identity_required instead, which means something far stronger,
+// and the analyzer then reported a self-contradiction it had manufactured.
+// ---------------------------------------------------------------------------
+void Analysis::rule_address_bounds() {
+    const auto& req = req_.request;
+    if (!req.address_min && !req.address_max) return;
+
+    const std::uint64_t lower = req.address_min.value_or(0);
+    const std::uint64_t upper = req.address_max.value_or(UINT64_MAX);
+
+    // First: is the bound self-consistent with an address the program also
+    // pinned down? That needs no host at all.
+    if (req.address && (*req.address < lower || *req.address >= upper)) {
+        Finding f = start(ids::kAddressBoundUnsatisfiable, Confidence::Proven,
+                          SupportLevel::Unsupported);
+        f.structural_impossibility = true;
+        f.required = "an address in [" + json::to_hex(lower) + ", " +
+                     json::to_hex(upper) + ")";
+        f.host_capability = "not consulted: the request names an address "
+                            "outside its own declared bound";
+        f.conclusion = "The requirement contradicts itself; this holds on every "
+                       "host.";
+        add_application_claim(f, "program requests " + json::to_hex(*req.address) +
+                                     " while requiring [" + json::to_hex(lower) +
+                                     ", " + json::to_hex(upper) + ")");
+        f.evidence.add(Layer::Analyzer, EvidenceClass::SpecifiedGuarantee,
+                       "the requested address lies outside the declared bound",
+                       "analyzer: bound arithmetic");
+        emit(std::move(f));
+        return;
+    }
+
+    // Now the host. A bound is unsatisfiable when the usable address space
+    // does not intersect it at all.
+    if (req.address_min && profile_.vm.max_user_address.is_known()) {
+        const std::uint64_t top = profile_.vm.max_user_address.value().value;
+        if (top <= lower) {
+            Finding f = start(ids::kAddressBoundUnsatisfiable, Confidence::Proven,
+                              SupportLevel::Unsupported);
+            f.structural_impossibility = true;
+            f.required = "an address at or above " + json::to_hex(lower);
+            f.host_capability = "the usable address space ends at " +
+                                json::to_hex(top);
+            f.conclusion = "No address on this host satisfies the lower bound.";
+            add_application_claim(f, "program requires an address at or above " +
+                                         json::to_hex(lower));
+            f.evidence.add(Layer::OperatingSystem,
+                           profile_.vm.max_user_address.evidence(),
+                           "usable address space ends at " + json::to_hex(top),
+                           profile_.profile_name);
+            f.remediations.push_back(
+                {RemediationClass::SelectDifferentHostConfiguration, ""});
+            emit(std::move(f));
+            return;
+        }
+    }
+    if (req.address_max && profile_.vm.min_map_address.is_known()) {
+        const std::uint64_t floor = profile_.vm.min_map_address.value().value;
+        if (floor >= upper) {
+            Finding f = start(ids::kAddressBoundUnsatisfiable, Confidence::Proven,
+                              SupportLevel::Unsupported);
+            f.structural_impossibility = true;
+            f.required = "an address below " + json::to_hex(upper);
+            f.host_capability = "the lowest mappable address is " +
+                                json::to_hex(floor);
+            f.conclusion =
+                "Every address this host will grant is above the program's "
+                "ceiling. This is the shape that breaks a 32-bit-addressed "
+                "runtime on a host with a high load base.";
+            add_application_claim(f, "program requires an address below " +
+                                         json::to_hex(upper));
+            f.evidence.add(Layer::OperatingSystem,
+                           profile_.vm.min_map_address.evidence(),
+                           "lowest mappable address is " + json::to_hex(floor),
+                           profile_.profile_name);
+            emit(std::move(f));
+            return;
+        }
+    }
+
+    // The bound is reachable in principle. Do we have positive evidence that
+    // anything inside it is actually available?
+    const AddressRange window{lower, upper};
+    bool observed_inside = false;
+    for (const auto& r : profile_.vm.available_ranges) {
+        if (r.range.intersects(window)) { observed_inside = true; break; }
+    }
+
+    if (observed_inside) {
+        // Satisfiable - but how comfortably? A program confined to a small
+        // corner of the address space is not wrong today and not safe either:
+        // it depends on the allocator handing out a low address, which decays
+        // as the process fragments. ROADMAP section 11 calls this class
+        // PREDICTIVE, and losing it was the cost of removing the (incorrect)
+        // truncation story that used to cover the same cases.
+        if (!req.address_max || !profile_.vm.max_user_address.is_known()) return;
+        const std::uint64_t top = profile_.vm.max_user_address.value().value;
+        if (top == 0 || upper > top / 4) return;  // uses a comfortable share
+
+        Finding f = start(ids::kAddressBoundIsTight, Confidence::Predictive,
+                          SupportLevel::ConditionallySupported);
+        f.required = "every mapping below " + json::to_hex(upper);
+        f.host_capability = "the host offers usable space up to " +
+                            json::to_hex(top);
+        f.modeled_fallback =
+            "allocation succeeds while low addresses remain free and starts "
+            "failing once they do not";
+        // Expressed as a ratio, not a percentage: the window is routinely
+        // four or five orders of magnitude smaller than the space, and integer
+        // percentages of that read as a flat "0%".
+        f.conclusion =
+            "The program can address roughly one part in " +
+            dec(upper == 0 ? 0 : top / upper) +
+            " of this host's space. That is a dependency on address-space "
+            "layout, not a guarantee: it degrades as the process fragments and "
+            "can differ under another ASLR configuration.";
+        add_application_claim(f, "program requires every mapping below " +
+                                     json::to_hex(upper));
+        f.evidence.add(Layer::OperatingSystem,
+                       profile_.vm.max_user_address.evidence(),
+                       "usable space reaches " + json::to_hex(top),
+                       profile_.profile_name);
+        f.evidence.add(Layer::Analyzer, EvidenceClass::HeuristicRisk,
+                       "the reachable window is a small fraction of the space",
+                       "analyzer: fragmentation heuristic");
+        f.remediations.push_back({RemediationClass::ReserveAddressSpaceEarlier,
+                                  "claim the low region at startup, before the "
+                                  "allocator and loader fragment it"});
+        f.remediations.push_back({RemediationClass::WidenPointerStorage,
+                                  "or lift the bound entirely"});
+        emit(std::move(f));
+        return;
+    }
+    if (!options_.report_unknowns) {
+        result_.overall = combine(result_.overall, SupportLevel::Unknown);
+        return;
+    }
+    Finding f = start(ids::kRequiredFactUnknown, Confidence::Hypothesis,
+                      SupportLevel::Unknown);
+    f.required = "an address in [" + json::to_hex(lower) + ", " +
+                 json::to_hex(upper) + ")";
+    f.host_capability =
+        "no probe observation falls inside that window, so whether the host "
+        "can place a mapping there was never established";
+    f.conclusion =
+        "The bound is not refuted, but nothing supports it either. Extend the "
+        "probe to sample inside the window.";
+    add_application_claim(f, "program requires an address inside [" +
+                                 json::to_hex(lower) + ", " +
+                                 json::to_hex(upper) + ")");
+    f.evidence.add(Layer::OperatingSystem, EvidenceClass::Unknown,
+                   "no observation inside the required window",
+                   profile_.profile_name);
+    emit(std::move(f));
+}
+
+// ---------------------------------------------------------------------------
+// RS-VM-0024: "within N bytes of something else".
+//
+// Every JIT that emits a relative branch lives under this constraint. v0.1
+// cannot evaluate it, because a host profile has no idea where the reference
+// region will land. The campaign's verdict on LuaJIT's machine-code window
+// was not wrong, it was EMPTY: stripped of the displacement the request is
+// "64 KiB anon RW, later RX", which is trivially supportable. Saying so out
+// loud is the difference between an unanswered question and an unnoticed one.
+// ---------------------------------------------------------------------------
+void Analysis::rule_displacement_constraint() {
+    if (!req_.request.max_displacement_bytes) return;
+
+    Finding f = start(ids::kDisplacementConstraintNotEvaluable,
+                      Confidence::Hypothesis, SupportLevel::Unknown);
+    f.required = "the mapping must land within " +
+                 dec(*req_.request.max_displacement_bytes) + " bytes of " +
+                 (req_.request.displacement_reference.empty()
+                      ? "another region"
+                      : req_.request.displacement_reference);
+    f.host_capability =
+        "a host profile records what the address space looks like, not where "
+        "any particular region of a future process will be placed";
+    f.modeled_fallback =
+        "if the two land too far apart the program cannot encode its branches "
+        "and either falls back to a slower sequence or fails outright";
+    f.conclusion =
+        "This constraint is carried but NOT evaluated in v0.1. The rest of "
+        "this verdict says nothing about it. Deciding it needs either a "
+        "runtime observation of both regions or an allocation-order model.";
+    add_application_claim(f, "program requires the mapping within " +
+                                 dec(*req_.request.max_displacement_bytes) +
+                                 " bytes of " +
+                                 (req_.request.displacement_reference.empty()
+                                      ? "another region"
+                                      : req_.request.displacement_reference));
+    f.evidence.add(Layer::Analyzer, EvidenceClass::Unknown,
+                   "no rule in v0.1 evaluates relative displacement",
+                   "analyzer: acknowledged gap");
+    f.remediations.push_back(
+        {RemediationClass::ReserveAddressSpaceEarlier,
+         "reserve both regions together at startup so the displacement is "
+         "chosen rather than hoped for"});
     emit(std::move(f));
 }
 
@@ -1018,6 +1228,11 @@ void Analysis::rule_jit_entitlement() {
 // ---------------------------------------------------------------------------
 void Analysis::rule_reserve_commit() {
     if (!req_.request.reserve_then_commit) return;
+    // The POSIX idiom - reserve with PROT_NONE, then map over it with
+    // MAP_FIXED and CHECK THAT CALL - is not the Windows two-phase model, and
+    // the warning below is false for it. QEMU is the second kind; this rule
+    // downgraded four campaign contracts on a distinction it could not see.
+    if (req_.request.commit_is_checked_call) return;
     if (!profile_.vm.reserve_commit_model.is_known()) return;
     if (profile_.vm.reserve_commit_model.value() !=
         ReserveCommitModel::PosixLazy) {
@@ -1324,6 +1539,8 @@ AnalysisResult Analysis::run() {
     rule_internal_fallback_contradiction();
     rule_baseline_mapping_capability();
     rule_size_feasibility();
+    rule_address_bounds();
+    rule_displacement_constraint();
     rule_reservation_alignment();
     rule_page_size();
     rule_address_alignment();

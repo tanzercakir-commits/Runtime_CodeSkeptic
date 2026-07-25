@@ -148,6 +148,16 @@ json::Value MappingRequest::to_json() const {
     v["required_page_size"] =
         required_page_size ? json::Value(static_cast<unsigned long long>(*required_page_size))
                            : json::Value();
+    v["address_min"] =
+        address_min ? json::Value(json::to_hex(*address_min)) : json::Value();
+    v["address_max"] =
+        address_max ? json::Value(json::to_hex(*address_max)) : json::Value();
+    v["max_displacement_bytes"] =
+        max_displacement_bytes
+            ? json::Value(static_cast<unsigned long long>(*max_displacement_bytes))
+            : json::Value();
+    v["displacement_reference"] = displacement_reference;
+    v["commit_is_checked_call"] = commit_is_checked_call;
     v["required_page_size_relation"] =
         std::string(rs::vm::to_string(required_page_size_relation));
     v["validates_returned_address"] = validates_returned_address;
@@ -314,6 +324,40 @@ std::optional<Requirement> Requirement::from_json(const json::Value& v,
     }
 
     r.request.required_alignment = read_optional_uint(req->find("required_alignment"));
+
+    auto read_optional_address = [&](const char* key,
+                                     std::optional<std::uint64_t>& out) -> bool {
+        const json::Value* node = req->find(key);
+        if (node == nullptr || node->is_null()) return true;
+        if (node->is_string()) {
+            auto parsed = json::from_hex(node->as_string());
+            if (!parsed) {
+                error = std::string("request.") + key +
+                        " must be a hex string like \"0x80000000\"";
+                return false;
+            }
+            out = *parsed;
+            return true;
+        }
+        if (node->type() == json::Type::UInt || node->type() == json::Type::Int) {
+            out = node->as_uint();
+            return true;
+        }
+        error = std::string("request.") + key + " must be a hex string";
+        return false;
+    };
+    if (!read_optional_address("address_min", r.request.address_min)) {
+        return std::nullopt;
+    }
+    if (!read_optional_address("address_max", r.request.address_max)) {
+        return std::nullopt;
+    }
+    r.request.max_displacement_bytes =
+        read_optional_uint(req->find("max_displacement_bytes"));
+    if (const json::Value* ref = req->find("displacement_reference");
+        ref != nullptr && ref->is_string()) {
+        r.request.displacement_reference = ref->as_string();
+    }
     r.request.required_page_size = read_optional_uint(req->find("required_page_size"));
     if (const json::Value* rel = req->find("required_page_size_relation");
         rel != nullptr && !rel->is_null()) {
@@ -346,6 +390,8 @@ std::optional<Requirement> Requirement::from_json(const json::Value& v,
                    error) ||
         !read_flag(req, "validates_returned_address",
                    r.request.validates_returned_address, error) ||
+        !read_flag(req, "commit_is_checked_call",
+                   r.request.commit_is_checked_call, error) ||
         !read_flag(req, "reserve_then_commit", r.request.reserve_then_commit,
                    error)) {
         return std::nullopt;

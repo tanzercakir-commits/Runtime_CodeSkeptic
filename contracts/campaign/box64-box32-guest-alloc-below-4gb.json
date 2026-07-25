@@ -10,12 +10,13 @@
       "read": true,
       "write": true,
       "execute": false
-    }
+    },
+    "address_max": "0x100000000",
+    "validates_returned_address": true
   },
   "assumptions": {
     "guest_host_identity_required": true,
     "translation_layer_available": false,
-    "pointer_storage_width_bits": 32,
     "retries_on_failure": false
   },
   "required_postconditions": [
@@ -75,7 +76,10 @@
     "commit": "a2ae050",
     "source": "src/custommem.c:843-848 and src/custommem.c:3020-3034",
     "quote": "    if (is32bits && p > (void*)0xffffffffLL) {\n        p_blocks[i].maxfree = allocsize - mapsize;\n        p_blocks[i].is32bits = 0;\n        errno = ENOMEM;\n        return NULL;\n    }",
-    "expected_verdict": "UNSUPPORTED",
-    "rationale": "An unhinted mmap on x86-64 Linux returns an address near 0x7f.., far above 2^32; without Box64's pre-reservation trick a 32-bit guest pointer slot cannot hold what the host returns."
+    "expected_verdict": "CONDITIONAL",
+    "rationale": "An unhinted mmap on x86-64 Linux returns an address near 0x7f.., far above 2^32; without Box64's pre-reservation trick a 32-bit guest pointer slot cannot hold what the host returns.",
+    "note_after_schema_fix": "Box64 tests the returned address and returns ENOMEM; it does not truncate.",
+    "expected_verdict_original": "UNSUPPORTED",
+    "expectation_revised_because": "The original UNSUPPORTED prediction rested on a truncation story that cannot occur: Box64 tests the returned address and returns ENOMEM (custommem.c:843-848). With the bound expressed as address_max, the honest reading is a satisfiable-but-tight dependency."
   }
 }

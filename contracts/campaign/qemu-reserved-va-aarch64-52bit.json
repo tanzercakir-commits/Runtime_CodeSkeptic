@@ -12,7 +12,8 @@
       "write": false,
       "execute": false
     },
-    "reserve_then_commit": true
+    "reserve_then_commit": true,
+    "commit_is_checked_call": true
   },
   "assumptions": {
     "guest_host_identity_required": false,
@@ -68,6 +69,7 @@
     "source": "linux-user/main.c:115 + target/arm/cpu-param.h:12",
     "quote": "#   define MAX_RESERVED_VA(CPU)  ((1ul << TARGET_VIRT_ADDR_SPACE_BITS) - 1)\n---\n#ifdef TARGET_AARCH64\n# define TARGET_VIRT_ADDR_SPACE_BITS  52",
     "expected_verdict": "UNSUPPORTED",
-    "rationale": "x86-64 Linux gives a user process at most 47 bits of address space (probe measured max_user_address 0x7ffffffff000); a 2^52-byte contiguous reservation is 32x larger than the entire address space and can never succeed."
+    "rationale": "x86-64 Linux gives a user process at most 47 bits of address space (probe measured max_user_address 0x7ffffffff000); a 2^52-byte contiguous reservation is 32x larger than the entire address space and can never succeed.",
+    "note_after_schema_fix": "QEMU maps over its PROT_NONE reservation and checks THAT call; it is not the Windows two-phase model."
   }
 }

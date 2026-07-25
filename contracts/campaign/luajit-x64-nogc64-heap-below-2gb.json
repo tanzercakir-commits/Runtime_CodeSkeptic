@@ -10,12 +10,13 @@
       "read": true,
       "write": true,
       "execute": false
-    }
+    },
+    "address_max": "0x80000000",
+    "validates_returned_address": true
   },
   "assumptions": {
     "guest_host_identity_required": false,
     "translation_layer_available": false,
-    "pointer_storage_width_bits": 32,
     "retries_on_failure": true,
     "max_retries": 30
   },
@@ -96,6 +97,7 @@
     "source": "src/lj_alloc.c:104-105 and src/lj_alloc.c:239-247",
     "quote": "/* Due to limitations in the x64 non-GC64 VM. */\n#define LJ_ALLOC_MBITS\t\t31\t/* 2 GB on x64 with !LJ_GC64. */\n---\n    void *p = mmap((void *)hint_addr, size, MMAP_PROT, MMAP_FLAGS_PROBE, -1, 0);\n    uintptr_t addr = (uintptr_t)p;\n    if ((addr >> LJ_ALLOC_MBITS) == 0 && addr >= LJ_ALLOC_MMAP_PROBE_LOWER &&\n\t((addr + size) >> LJ_ALLOC_MBITS) == 0) {",
     "expected_verdict": "CONDITIONAL",
-    "rationale": "x86-64 Linux does provide MAP_32BIT and honours low hints, so this configuration ships and works; but an unconstrained mmap returns ~0x7f.. and the program depends entirely on its probe loop landing low, which is a conditional property of the host, not a guarantee."
+    "rationale": "x86-64 Linux does provide MAP_32BIT and honours low hints, so this configuration ships and works; but an unconstrained mmap returns ~0x7f.. and the program depends entirely on its probe loop landing low, which is a conditional property of the host, not a guarantee.",
+    "note_after_schema_fix": "LJ_ALLOC_MBITS is an address bound the program TESTS and rejects, not a pointer-width truncation."
   }
 }

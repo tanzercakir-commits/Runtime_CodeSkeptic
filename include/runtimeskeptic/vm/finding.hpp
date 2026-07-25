@@ -139,6 +139,9 @@ inline constexpr const char* kAnonymousMappingUnavailable = "RS-VM-0019";
 inline constexpr const char* kAddressHintNotHonourable = "RS-VM-0020";
 inline constexpr const char* kSizeExceedsAddressSpace = "RS-VM-0021";
 inline constexpr const char* kReservationAlignmentUnguaranteed = "RS-VM-0022";
+inline constexpr const char* kAddressBoundUnsatisfiable = "RS-VM-0023";
+inline constexpr const char* kDisplacementConstraintNotEvaluable = "RS-VM-0024";
+inline constexpr const char* kAddressBoundIsTight = "RS-VM-0025";
 }  // namespace ids
 
 }  // namespace rs::vm

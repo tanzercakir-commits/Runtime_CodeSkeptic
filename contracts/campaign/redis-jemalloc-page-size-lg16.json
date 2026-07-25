@@ -61,8 +61,10 @@
     "commit": "b53f65d",
     "source": "deps/jemalloc/src/pages.c:760",
     "quote": "\tif (os_page > PAGE) {",
-    "expected_verdict": "UNSUPPORTED",
+    "expected_verdict": "SUPPORTED",
     "rationale": "rule_page_size compares 65536 against the probed 4096 for equality and fires RS-VM-0006 Proven/Unsupported. I expect that to be wrong: jemalloc's own guard is an inequality that this host passes, so a --with-lg-page=16 build runs correctly on a 4KiB kernel.",
-    "note_after_fix": "Rewritten to at_most once the relation field existed. jemalloc pages.c checks  - it demands the host page be AT MOST the compiled size and runs correctly on a smaller one. The equality-only reading produced a critical false positive."
+    "note_after_fix": "Rewritten to at_most once the relation field existed. jemalloc pages.c checks  - it demands the host page be AT MOST the compiled size and runs correctly on a smaller one. The equality-only reading produced a critical false positive.",
+    "expected_verdict_original": "UNSUPPORTED",
+    "expectation_revised_because": "The original UNSUPPORTED prediction was written when the contract used page-size EQUALITY. jemalloc pages.c checks `if (os_page > PAGE)` - an AT MOST bound - so the contract was corrected against the source and the prediction updated with it. The old value is recorded here rather than quietly overwritten."
   }
 }

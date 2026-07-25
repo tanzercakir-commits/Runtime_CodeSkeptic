@@ -170,19 +170,38 @@ RS_TEST(available_and_unavailable_ranges_do_not_overlap) {
     }
 }
 
-RS_TEST(disabling_the_scan_removes_range_facts_but_keeps_the_rest) {
+RS_TEST(disabling_the_scan_drops_the_sweep_but_keeps_measured_bounds) {
+    // Caught by the first macOS CI run of the corrected probe, and the test
+    // was the thing that was wrong.
+    //
+    // --no-scan skips the broad candidate sweep. It does NOT discard facts the
+    // BOUNDS search establishes on its way to max_user_address. On a platform
+    // whose address space has holes - macOS does, Linux does not - those holes
+    // are found there, and they are real measurements. Throwing them away so
+    // that an option name reads tidily would be discarding evidence, which is
+    // the one thing this project must never do.
     probe::Options options;
     options.scan_address_space = false;
     options.run_faulting_tests = false;
     const probe::Result result = probe::probe_virtual_memory(options);
 
-    RS_CHECK(result.profile.vm.available_ranges.empty());
-    RS_CHECK(result.profile.vm.unavailable_ranges.empty());
+    // available_ranges comes only from the sweep, so it must be empty.
+    RS_CHECK_MESSAGE(result.profile.vm.available_ranges.empty(),
+                     "available ranges survived --no-scan; they can only come "
+                     "from the sweep");
+
+    // unavailable_ranges may still carry bounds-derived holes. Whatever is
+    // there must still be properly classified.
+    for (const auto& r : result.profile.vm.unavailable_ranges) {
+        RS_CHECK_MESSAGE(r.evidence != EvidenceClass::Unknown,
+                         "a bounds-derived hole carries unknown evidence");
+        RS_CHECK(!r.range.empty());
+    }
+
     if (result.implemented) {
         RS_CHECK_MESSAGE(result.profile.vm.page_size.is_known(),
-                         "page size should not depend on the address scan");
+                         "page size should not depend on the address sweep");
     }
-    // And the profile must say what it skipped.
     RS_CHECK(!result.profile.run.warnings.empty());
 }
 

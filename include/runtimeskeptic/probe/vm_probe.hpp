@@ -27,8 +27,12 @@
 namespace rs::probe {
 
 struct Options {
-    // Probe candidate addresses across the address space to build
+    // Sweep candidate addresses across the address space to build
     // available/unavailable range facts.
+    //
+    // Turning this off does NOT suppress every range fact: establishing
+    // max_user_address requires surveying the space, and on a platform with
+    // holes that survey finds them. Those are measurements and are kept.
     bool scan_address_space = true;
     // Run the tests that can fault (currently: file mapping past end of file).
     // These fork a child; the parent is never at risk.

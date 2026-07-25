@@ -10,10 +10,11 @@
       "read": true,
       "write": true,
       "execute": false
-    }
+    },
+    "address_max": "0x80000000"
   },
   "assumptions": {
-    "guest_host_identity_required": true,
+    "guest_host_identity_required": false,
     "translation_layer_available": false,
     "retries_on_failure": true,
     "max_retries": 1
@@ -74,6 +75,7 @@
     "source": "src/custommem.c:3282-3286",
     "quote": "    new_flags&=~MAP_32BIT;   // remove MAP_32BIT\n    if((flags&MAP_32BIT) && !(flags&MAP_FIXED)) {\n        // MAP_32BIT only exist on x86_64!\n        addr = find31bitBlockNearHint(old_addr, length, 0);",
     "expected_verdict": "SUPPORTED",
-    "rationale": "Nothing in the expressible part of this request can fail on x86-64 Linux - it is a 4 KiB anonymous RW mapping with no address. I expect the tool to miss the below-2GiB constraint entirely, which is the point of including it."
+    "rationale": "Nothing in the expressible part of this request can fail on x86-64 Linux - it is a 4 KiB anonymous RW mapping with no address. I expect the tool to miss the below-2GiB constraint entirely, which is the point of including it.",
+    "note_after_schema_fix": "address_max replaced the identity flag, which was only ever a stand-in for a range bound and made the analyzer report a contradiction it had manufactured."
   }
 }
