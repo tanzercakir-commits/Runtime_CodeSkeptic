@@ -63,6 +63,7 @@ namespace {
 using rs::Address;
 using vm::AddressRange;
 using vm::ClassifiedRange;
+using vm::collapse_contained_ranges;
 
 constexpr const char* kSourceProbe = "rs-env-probe vm (macos)";
 
@@ -609,6 +610,7 @@ struct ScanOutcome {
     std::vector<std::string> occupied_notes;
 };
 
+
 ScanOutcome scan_address_space(std::size_t page_size, std::uint64_t probe_length,
                                std::uint64_t min_address) {
     ScanOutcome outcome;
@@ -664,8 +666,13 @@ ScanOutcome scan_address_space(std::size_t page_size, std::uint64_t probe_length
         }
 
         const RegionInfo region = describe_region(base);
-        if (result == KERN_NO_SPACE && region.covers && !region.reserved &&
-            region.protection != VM_PROT_NONE) {
+        // An entry that grants no access is not "ours" in any useful sense: no
+        // program can map there, whoever nominally holds it.
+        const bool entry_denies_everything =
+            region.covers &&
+            (region.reserved || region.protection == VM_PROT_NONE);
+        if (result == KERN_NO_SPACE && region.covers &&
+            !entry_denies_everything) {
             // A real mapping of ours: a property of one process layout, not of
             // the host, so it must not become a limitation other programs are
             // judged against.
@@ -683,19 +690,36 @@ ScanOutcome scan_address_space(std::size_t page_size, std::uint64_t probe_length
         cr.evidence = EvidenceClass::MeasuredCapability;
         cr.note = "mach_vm_allocate(VM_FLAGS_FIXED) refused with " +
                   kern_error_name(result) + "; " + describe_region_text(region);
+
+        // Record how far the refusal actually reaches.
+        //
+        // The probe asked about a 4 MiB window; vm_region answered with the
+        // bounds of the whole map entry, and on this platform that entry is
+        // 384 GiB wide. Filing the window and discarding the entry turns the
+        // kernel's own statement into a sampling artefact - and it is not a
+        // harmless one. Every address in the carveout that this probe did not
+        // happen to list came back UNKNOWN instead of UNSUPPORTED, on the one
+        // question this project exists to answer.
+        //
+        // The widening is not extrapolation from the sample. vm_region reports
+        // the entry's extent directly, and an entry with no access rights
+        // refuses placement everywhere inside itself by construction. What the
+        // note must not do is blur which part was probed and which part the
+        // kernel described, so it says both.
+        if (entry_denies_everything) {
+            const std::uint64_t region_end = region.start + region.size;
+            if (region.size > 0 && region_end > region.start) {
+                cr.range.start = std::min(cr.range.start, region.start);
+                cr.range.end = std::max(cr.range.end, region_end);
+                cr.note += "; placement was probed at " + json::to_hex(base) +
+                           " and the refusal is recorded across the entry's "
+                           "full extent as vm_region reported it, not across "
+                           "the probe window alone";
+            }
+        }
         outcome.unavailable.push_back(cr);
     }
-    // Many probe points fall inside one refused region; keep one entry each.
-    std::sort(outcome.unavailable.begin(), outcome.unavailable.end(),
-              [](const ClassifiedRange& a, const ClassifiedRange& b) {
-                  return a.range < b.range;
-              });
-    outcome.unavailable.erase(
-        std::unique(outcome.unavailable.begin(), outcome.unavailable.end(),
-                    [](const ClassifiedRange& a, const ClassifiedRange& b) {
-                        return a.range == b.range;
-                    }),
-        outcome.unavailable.end());
+    collapse_contained_ranges(outcome.unavailable);
     return outcome;
 }
 
@@ -1017,6 +1041,10 @@ Result probe_virtual_memory(const Options& options) {
             warnings.push_back(std::move(note));
         }
     }
+    // The survey ladder and the scan both file refusals, and the ladder's
+    // single-page holes sit inside entries the scan measured at full width.
+    // Collapse across both sources, not just within the scan.
+    collapse_contained_ranges(profile.vm.unavailable_ranges);
 
     // -- run metadata ------------------------------------------------------
     profile.run.timestamp_utc = utc_timestamp();

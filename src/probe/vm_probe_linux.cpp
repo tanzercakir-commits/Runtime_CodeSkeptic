@@ -33,6 +33,7 @@ namespace {
 using rs::Address;
 using vm::AddressRange;
 using vm::ClassifiedRange;
+using vm::collapse_contained_ranges;
 
 constexpr const char* kSourceProbe = "rs-env-probe vm (linux)";
 
@@ -439,12 +440,23 @@ ScanOutcome scan_address_space(std::size_t page_size, std::uint64_t probe_length
         // EINVAL / ENOMEM / EPERM at a specific address are structural: the
         // kernel refuses this part of the address space regardless of what is
         // already mapped.
+        //
+        // Unlike the macOS probe, this records the probe window and does not
+        // widen it to the extent of a containing entry. That is not an
+        // oversight and not a gap waiting to be filled the same way: the macOS
+        // widening is sound only because mach_vm_region reports the bounds of
+        // an entry that exists and denies access. A structural refusal on
+        // Linux is refused precisely because nothing is mapped there, so
+        // /proc/self/maps has nothing to say about how far it reaches. There
+        // is no measurement to widen to, and inventing one from the sample is
+        // the mistake this comment exists to prevent.
         ClassifiedRange cr;
         cr.range = *range;
         cr.evidence = EvidenceClass::MeasuredCapability;
         cr.note = "exact mapping refused with " + errno_name(attempt.error);
         outcome.unavailable.push_back(cr);
     }
+    collapse_contained_ranges(outcome.unavailable);
     return outcome;
 }
 

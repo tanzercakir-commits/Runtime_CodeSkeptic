@@ -116,4 +116,85 @@ RS_TEST(classified_range_rejects_inverted_bounds) {
     RS_CHECK(!ClassifiedRange::from_json(*parsed.value, error).has_value());
 }
 
+namespace {
+
+ClassifiedRange cr(std::uint64_t start, std::uint64_t end, std::string note) {
+    ClassifiedRange r;
+    r.range = AddressRange{start, end};
+    r.evidence = EvidenceClass::MeasuredCapability;
+    r.note = std::move(note);
+    return r;
+}
+
+}  // namespace
+
+// The macOS probe learns about one refused entry from three directions: the
+// survey ladder samples a page, the scan probes a 4 MiB window, and vm_region
+// then reports that the entry behind both is 384 GiB wide. Keeping all three
+// would state one fact at three different sizes.
+RS_TEST(contained_ranges_collapse_into_the_widest) {
+    std::vector<ClassifiedRange> ranges{
+        cr(0x1000000000, 0x1000001000, "ladder: single-page hole"),
+        cr(0x1307200000, 0x1307600000, "scan: 4 MiB probe window"),
+        cr(0x1000000000, 0x7000000000, "vm_region: the whole entry"),
+    };
+    collapse_contained_ranges(ranges);
+
+    RS_CHECK_EQ(ranges.size(), std::size_t{1});
+    RS_CHECK_EQ(ranges[0].range.start, std::uint64_t{0x1000000000});
+    RS_CHECK_EQ(ranges[0].range.end, std::uint64_t{0x7000000000});
+    // The survivor must be the one that can explain itself.
+    RS_CHECK(ranges[0].note.find("vm_region") != std::string::npos);
+}
+
+// The commpage ends exactly where the GPU carveout begins. They are two
+// entries, reported separately by the kernel, carrying different notes.
+// Merging them would state a fact vm_region never reported.
+RS_TEST(adjacent_ranges_are_not_merged) {
+    std::vector<ClassifiedRange> ranges{
+        cr(0x1000000000, 0x7000000000, "gpu carveout"),
+        cr(0xfc0000000, 0x1000000000, "commpage"),
+    };
+    collapse_contained_ranges(ranges);
+
+    RS_CHECK_EQ(ranges.size(), std::size_t{2});
+    RS_CHECK_EQ(ranges[0].range.start, std::uint64_t{0xfc0000000});
+    RS_CHECK_EQ(ranges[0].range.end, std::uint64_t{0x1000000000});
+    RS_CHECK_EQ(ranges[1].range.start, std::uint64_t{0x1000000000});
+}
+
+// Neither subsumes the other, and each carries its own account of how it was
+// found. Inventing a union would lose one of the two explanations.
+RS_TEST(partially_overlapping_ranges_are_both_kept) {
+    std::vector<ClassifiedRange> ranges{
+        cr(0x2000, 0x6000, "b"),
+        cr(0x1000, 0x4000, "a"),
+    };
+    collapse_contained_ranges(ranges);
+    RS_CHECK_EQ(ranges.size(), std::size_t{2});
+}
+
+RS_TEST(identical_ranges_collapse_to_one) {
+    std::vector<ClassifiedRange> ranges{
+        cr(0x1000, 0x2000, "first"),
+        cr(0x1000, 0x2000, "second"),
+    };
+    collapse_contained_ranges(ranges);
+    RS_CHECK_EQ(ranges.size(), std::size_t{1});
+}
+
+RS_TEST(collapse_sorts_and_tolerates_an_empty_list) {
+    std::vector<ClassifiedRange> empty;
+    collapse_contained_ranges(empty);
+    RS_CHECK(empty.empty());
+
+    std::vector<ClassifiedRange> ranges{
+        cr(0x9000, 0xa000, "high"),
+        cr(0x1000, 0x2000, "low"),
+    };
+    collapse_contained_ranges(ranges);
+    RS_CHECK_EQ(ranges.size(), std::size_t{2});
+    RS_CHECK(ranges[0].range < ranges[1].range);
+}
+
 RS_TEST_MAIN("address_range")

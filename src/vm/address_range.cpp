@@ -1,9 +1,33 @@
 // SPDX-License-Identifier: Apache-2.0
 #include "runtimeskeptic/vm/address_range.hpp"
 
+#include <algorithm>
 #include <limits>
+#include <utility>
 
 namespace rs::vm {
+
+void collapse_contained_ranges(std::vector<ClassifiedRange>& ranges) {
+    std::sort(ranges.begin(), ranges.end(),
+              [](const ClassifiedRange& a, const ClassifiedRange& b) {
+                  if (a.range.start != b.range.start) {
+                      return a.range.start < b.range.start;
+                  }
+                  return a.range.end > b.range.end;  // widest first
+              });
+    std::vector<ClassifiedRange> kept;
+    for (auto& candidate : ranges) {
+        // contains() is false for an empty argument, so an equal-range
+        // duplicate has to be caught separately or it survives forever.
+        const bool covered = std::any_of(
+            kept.begin(), kept.end(), [&](const ClassifiedRange& k) {
+                return k.range == candidate.range ||
+                       k.range.contains(candidate.range);
+            });
+        if (!covered) kept.push_back(std::move(candidate));
+    }
+    ranges = std::move(kept);
+}
 
 std::optional<AddressRange> AddressRange::from_base_size(std::uint64_t base,
                                                          std::uint64_t size) {

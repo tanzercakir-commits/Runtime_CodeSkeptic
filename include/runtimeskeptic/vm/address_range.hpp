@@ -27,6 +27,7 @@
 #include <cstdint>
 #include <optional>
 #include <string>
+#include <vector>
 
 #include "runtimeskeptic/core/evidence.hpp"
 #include "runtimeskeptic/core/json.hpp"
@@ -80,6 +81,26 @@ struct ClassifiedRange {
     static std::optional<ClassifiedRange> from_json(const json::Value& v,
                                                     std::string& error);
 };
+
+// Drops ranges that another range in the same list already covers entirely,
+// and sorts what remains.
+//
+// A probe learns about one range from several directions: a ladder samples a
+// page, a scan probes a window, and the kernel then reports the extent of the
+// map entry behind both. Those are three statements about one fact, and the
+// widest one subsumes the others.
+//
+// Deliberately containment-only, NOT a merge of everything that touches. On
+// macOS the commpage ends at 0x1000000000 and the GPU carveout begins there:
+// adjacent, separately reported by the kernel, separately meaningful, and
+// carrying different notes. Coalescing them would invent a single 400 GiB
+// entry that vm_region never described - manufacturing a fact out of two, in
+// a document whose whole purpose is that every entry is traceable to a
+// measurement.
+//
+// Partially overlapping ranges are both kept, for the same reason: neither
+// subsumes the other, and each carries its own account of how it was found.
+void collapse_contained_ranges(std::vector<ClassifiedRange>& ranges);
 
 // Alignment helpers. `alignment` must be a power of two; the helpers return
 // nullopt otherwise so callers cannot silently compute garbage.
