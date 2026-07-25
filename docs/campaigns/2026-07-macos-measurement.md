@@ -271,11 +271,38 @@ that go quiet.
 | `macos/aarch64+none` | 0 | 26 |
 | `macos/x86_64+rosetta2` | 0 | 26 |
 
-**The 26 `n/a` rows are not agreement.** They are unreviewed output, and the
+**The `n/a` rows are not agreement.** They are unreviewed output, and the
 runner says so in its own summary. Filling them in from the tool's verdicts
-would make the campaign a machine that agrees with itself; each one has to be
-read and decided by hand, which is a piece of work this measurement has
-created and not yet done.
+would make the campaign a machine that agrees with itself; each has to be read
+and decided by hand.
+
+### Nine of them, decided by hand
+
+Derived from each subject's quoted source plus the measured facts, written
+down **before** running `rs-check`:
+
+| contract | native arm64 | Rosetta | reasoning |
+|---|---|---|---|
+| `redis-jemalloc-page-size-lg12` | UNSUPPORTED | SUPPORTED | `PAGE` is 4096 and `pages.c:760` exits when `os_page > PAGE`; native measures 16384 |
+| `redis-jemalloc-page-size-lg16` | SUPPORTED | SUPPORTED | `PAGE` is 65536, `at_most`; both measured sizes satisfy it |
+| `luajit-arm64-hardcoded-16k-pagesize` | ~~SUPPORTED~~ **CONDITIONAL** | - | see below |
+| `box64-dynarec-rwx-block` | UNSUPPORTED | SUPPORTED | RWX, never flipped; native measures `write_execute_simultaneous=false` |
+| `luajit-mcode-rwx-insecure-build` | UNSUPPORTED | SUPPORTED | `MCPROT_GEN`/`MCPROT_RUN` both RWX; 16 retries cannot defeat a policy |
+
+**Eight matched. The one disagreement was the reviewer, not the tool.**
+
+The LuaJIT page-size expectation was reasoned entirely from page size:
+`LJ_PAGESIZE` is 16384, native macOS arm64 measures 16384, so the constraint
+that fails this contract on a 4 KiB arm64 host is satisfied - `SUPPORTED`. The
+tool returned `CONDITIONALLY_SUPPORTED` and `RS-VM-0011`: LuaJIT is a JIT,
+native arm64 measures `jit_entitlement_required = true`, and executable memory
+is gated by process policy. A constraint from a different axis entirely, which
+the hand-written expectation had simply left out.
+
+The expectation was revised, recording its original value and why - the same
+discipline the July campaign used. This is the first time in either campaign
+that the tool caught something the reviewer missed on a real host, which is
+worth more than the eight agreements.
 
 ---
 

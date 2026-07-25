@@ -73,6 +73,11 @@
     "quote": "    if(p==MAP_FAILED)\n        p = InternalMmap(NULL, allocsize, PROT_READ | PROT_WRITE | PROT_EXEC, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);\n    if(p==MAP_FAILED) {\n        dynarec_log(LOG_INFO, \"Cannot create dynamic map of %zu bytes (%s)\\n\", allocsize, strerror(errno));\n        return 0;\n    }",
     "expected_verdict": "SUPPORTED",
     "expected_on_host": "linux/x86_64+unknown",
+    "expected_verdict_by_host": {
+      "macos/aarch64+none": "UNSUPPORTED",
+      "macos/x86_64+rosetta2": "SUPPORTED"
+    },
+    "expected_verdict_by_host_rationale": "The block is mapped PROT_READ|WRITE|EXEC and never flipped. Native arm64 measures write_execute_simultaneous=false and jit_entitlement_required=true, so a plain RWX mapping is refused. Rosetta measures write_execute_simultaneous=true.",
     "rationale": "The probe measured write_execute_simultaneous=true and jit_entitlement_required=false; plain anonymous RWX mmap works on stock x86-64 Linux without SELinux/PaX in enforcing mode."
   }
 }

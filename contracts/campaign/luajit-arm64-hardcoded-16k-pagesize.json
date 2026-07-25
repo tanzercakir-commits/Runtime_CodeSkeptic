@@ -74,6 +74,10 @@
     "quote": "#define LJ_TARGET_GC64\t\t1\n#define LJ_PAGESIZE\t\t16384\n---\n#define CALLBACK_MCODE_SIZE\t(LJ_PAGESIZE * LJ_NUM_CBPAGE)",
     "expected_verdict": "UNSUPPORTED",
     "expected_on_host": "linux/x86_64+unknown",
+    "expected_verdict_by_host": {
+      "macos/aarch64+none": "CONDITIONAL"
+    },
+    "expected_verdict_by_host_rationale": "LJ_PAGESIZE is hard-coded to 16384 for arm64 and native macOS arm64 measures exactly 16384, so the page-size constraint that fails this contract on a 4 KiB arm64 host is satisfied here. REVISED: originally recorded as SUPPORTED on that reasoning alone, which was incomplete. LuaJIT is a JIT, native macOS arm64 measures jit_entitlement_required = true, and executable memory is therefore gated by process policy - CONDITIONAL, per RS-VM-0011. The tool found a constraint the hand-written expectation had left out; the expectation was wrong, not the tool. No expectation is recorded for the Rosetta lane: an arm64 build running under x86-64 translation is not a configuration anyone ships.",
     "rationale": "The probe measured a 4096-byte host page and this document declares required_page_size 16384, so a page-size rule should fire. I expect that verdict to be technically correct but practically misleading: LuaJIT's uses of the constant are conservative round-ups that tolerate a smaller host page."
   }
 }

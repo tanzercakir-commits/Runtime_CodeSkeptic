@@ -62,6 +62,11 @@
     "quote": "\tif (os_page > PAGE) {\n\t\tmalloc_write(\"<jemalloc>: Unsupported system page size\\n\");",
     "expected_verdict": "SUPPORTED",
     "expected_on_host": "linux/x86_64+unknown",
+    "expected_verdict_by_host": {
+      "macos/aarch64+none": "UNSUPPORTED",
+      "macos/x86_64+rosetta2": "SUPPORTED"
+    },
+    "expected_verdict_by_host_rationale": "jemalloc's PAGE is 4096 and pages.c:760 exits when os_page > PAGE. Native macOS arm64 measures 16384, so the check fires. Rosetta measures 4096, which passes.",
     "rationale": "The probe measured page_size 4096 and this build declares 4096, so rule_page_size returns without a finding and nothing else in the request is contentious. This is the control case: the analyzer should be right and quiet."
   }
 }

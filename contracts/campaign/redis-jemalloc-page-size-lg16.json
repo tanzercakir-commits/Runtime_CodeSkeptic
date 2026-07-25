@@ -63,6 +63,11 @@
     "quote": "\tif (os_page > PAGE) {",
     "expected_verdict": "SUPPORTED",
     "expected_on_host": "linux/x86_64+unknown",
+    "expected_verdict_by_host": {
+      "macos/aarch64+none": "SUPPORTED",
+      "macos/x86_64+rosetta2": "SUPPORTED"
+    },
+    "expected_verdict_by_host_rationale": "PAGE is 65536 and the constraint is at_most. 16384 and 4096 both satisfy it; this build is tolerant of every page size measured.",
     "rationale": "rule_page_size compares 65536 against the probed 4096 for equality and fires RS-VM-0006 Proven/Unsupported. I expect that to be wrong: jemalloc's own guard is an inequality that this host passes, so a --with-lg-page=16 build runs correctly on a 4KiB kernel.",
     "note_after_fix": "Rewritten to at_most once the relation field existed. jemalloc pages.c checks  - it demands the host page be AT MOST the compiled size and runs correctly on a smaller one. The equality-only reading produced a critical false positive.",
     "expected_verdict_original": "UNSUPPORTED",
