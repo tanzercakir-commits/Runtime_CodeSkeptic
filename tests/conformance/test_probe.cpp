@@ -8,6 +8,7 @@
 #include "runtimeskeptic/probe/vm_probe.hpp"
 
 #include <algorithm>
+#include <memory>
 #include <string>
 
 #include "runtimeskeptic/core/json.hpp"
@@ -216,6 +217,50 @@ RS_TEST(disabling_the_scan_drops_the_sweep_but_keeps_measured_bounds) {
                          "page size should not depend on the address sweep");
     }
     RS_CHECK(!result.profile.run.warnings.empty());
+}
+
+// ---------------------------------------------------------------------------
+// The probe must cover the region where programs actually map.
+//
+// It did not, for the project's whole life, and nothing said so: the ladder
+// sampled powers of two plus four emulator landmarks - 224 MiB of a 128 TiB
+// space, nowhere near `mmap_base`. Thirteen real programs made 639 MAP_FIXED
+// requests on a Linux host and 637 fell outside every established range, so
+// the address rules answered UNKNOWN 99.7% of the time. Correct, and useless.
+// See docs/campaigns/2026-07-false-positive-rate.md.
+//
+// This asserts the COVERAGE, not the implementation, so a future rewrite of
+// the sweep is free as long as the answer survives.
+// ---------------------------------------------------------------------------
+RS_TEST(the_scan_covers_where_this_process_is_actually_mapped) {
+    const probe::Result result = probe::probe_virtual_memory();
+    if (!result.implemented) return;
+    if (result.profile.vm.available_ranges.empty() &&
+        result.profile.vm.unavailable_ranges.empty()) {
+        return;  // the sweep was disabled; a different test covers that
+    }
+
+    // Two addresses this process is using right now. Nothing about either is
+    // special except that it is real, which is the entire point.
+    const auto code_addr = reinterpret_cast<std::uint64_t>(
+        &has_value_with_unknown_evidence);
+    const auto heap = std::make_unique<char[]>(1 << 20);
+    const auto heap_addr = reinterpret_cast<std::uint64_t>(heap.get());
+
+    for (std::uint64_t addr : {code_addr, heap_addr}) {
+        const std::uint64_t page = addr & ~std::uint64_t{0xfff};
+        const RangeVerdict verdict =
+            result.profile.query_range(AddressRange{page, page + 4096});
+        // Deliberately NOT asserting Supported: an address may legitimately
+        // sit in a structurally refused band on some host. Asserting the
+        // profile has SOMETHING to say, because saying nothing is the failure
+        // this test exists for.
+        RS_CHECK_MESSAGE(verdict.level != SupportLevel::Unknown,
+                         "the profile establishes nothing about an address "
+                         "this process is executing from or allocating in; "
+                         "the scan is looking in the wrong part of the "
+                         "address space");
+    }
 }
 
 RS_TEST(probe_leaves_the_process_address_space_usable) {

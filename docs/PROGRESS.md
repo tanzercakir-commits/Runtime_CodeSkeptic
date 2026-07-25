@@ -16,6 +16,81 @@ re-litigated; a mistake recorded here does not need to be re-made.
 
 ---
 
+## 2026-07-25 — T-013: the probe was looking in the wrong place
+
+**Changed.** `src/probe/vm_probe_linux.cpp` samples two allocation arenas;
+`tests/conformance/test_probe.cpp` gained a coverage case; the campaign was
+re-run into `campaigns/false-positive/2026-07-linux-x86_64-after-T013.json`.
+
+**The result.** Coverage went up and correctness did not move:
+
+| | before | after |
+|---|---|---|
+| observed addresses answered `UNKNOWN` | 637 of 639 — 99.7% | **1 of 640 — 0.2%** |
+| answered `SUPPORTED` | 1 | **537** |
+| **false positives** | 0 | **0** |
+
+638 of 640 real addresses now get an answer, and every answer agrees with what
+the kernel did.
+
+**What was wrong.** The scan climbed powers of two plus four landmarks —
+`0x1000000000`, `0x4000000000`, `0x6fffff0000`, `0x7fff00000000` — every one a
+plausible *emulator* base, because the probe was written for the shadPS4
+question. 224 MiB of a 128 TiB space, and none of it near where a process is
+actually made of.
+
+```
+0x7c0000000000 .. 0x7ff000400000   kernel mmap arena  (shared libs, big malloc)
+0x550000000000 .. 0x58f000400000   ELF_ET_DYN_BASE    (a PIE executable's text)
+```
+
+**The plan for this item named the trap and then the plan walked into it.**
+`docs/TODO.md` T-013 said: derive the region from `/proc/self/maps`. That is
+this process's ASLR slide — precisely the mistake `min_map_address` already made
+once, when six campaign contracts returned a confident `UNSUPPORTED` off the
+probe's own load address. Writing the trap down was not enough to avoid it; the
+first draft did exactly what the entry warned against.
+
+Two rules kept it out in the end:
+
+1. **Bounds from `max_user_address`** — a kernel constant, measured, identical
+   in every process — never from `/proc/self/maps`.
+2. **`EEXIST` counts as success.** It means the address is already held *by us*:
+   proof the kernel hands this space out, proof of nothing about the host.
+   Making it a third outcome is what would make the recorded set depend on
+   where our libc landed. The granted/held split goes to `notes`, outside the
+   facts subtree and outside `profile_id`.
+
+`check_reproducible.sh` — two processes, because the in-process test was once
+green while this was false — reports identical `profile_id`s.
+
+**Two more mistakes, both caught by running rather than reasoning.**
+
+*Aligned the wrong way.* The first version rounded the arena top **down** to a
+TiB. `max_user_address` is `0x7ffffffff000`, which rounds down to
+`0x7f0000000000` — the exact bucket that 629 of the 639 observed addresses sit
+**above**. The arena was placed 4 TiB below everything it was built to cover,
+and it took looking at the emitted profile to see it.
+
+*Claimed past the last sample.* The run was closed at `max_user_address` rather
+than at the last sampled window, which asserted availability 64 GiB beyond
+anything measured — and overlapped the structurally unavailable band at the top
+of the space, so the profile said one range was both available and not.
+
+**The second arena was found by a test.** A new conformance case asks the
+profile about the address it is *executing from*; it failed, because the test
+binary is PIE and lives at `0x55…`. Nothing in the reasoning had suggested
+looking there.
+
+**The one remaining `UNKNOWN` is the best advertisement in the campaign.**
+HotSpot reserving its heap at `0x82a00000` — a deliberately-chosen
+compressed-oops base no arena covers. The profile has nothing to say and says
+so.
+
+**Next.** `T-003`, the corpus: 1 of 30, and the largest hole left.
+
+---
+
 ## 2026-07-25 — T-002: the false-positive rate, and what measuring it found
 
 **Changed.** `tools/campaign/observe_requirements.py`,

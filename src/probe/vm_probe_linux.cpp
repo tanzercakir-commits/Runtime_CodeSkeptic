@@ -366,6 +366,178 @@ struct ScanOutcome {
     std::vector<std::string> occupied_notes;
 };
 
+// -------------------------------------------------------------------------
+// The allocation arena: where the kernel actually puts things.
+//
+// The ladder below climbs powers of two plus four hand-picked landmarks, every
+// one of them a plausible EMULATOR base, because this probe was built for the
+// shadPS4 question. Measuring the false-positive rate showed what that cost:
+// 13 real programs made 639 MAP_FIXED requests on this host and 637 landed in
+// a range the probe had established nothing about, so the analyzer answered
+// UNKNOWN 99.7% of the time. Correct, and useless.
+//
+//   probe established 56 windows x 4 MiB  =  224 MiB of a 128 TiB space
+//   observed addresses:  629 in 0x7f...,  7 in 0x7e...,  3 low
+//   inside a probe window:  2 of 639
+//
+// Everything real lands near `mmap_base`, which the kernel places below the
+// stack and randomizes within `mmap_rnd_bits` (28 on x86-64: a 1 TiB span).
+// This samples that arena.
+//
+// THE TRAP, AND IT HAS BEEN SPRUNG ON THIS PROJECT BEFORE. `min_map_address`
+// was once the probe's own ASLR slide recorded as a host fact, and six
+// campaign contracts returned a confident UNSUPPORTED off it. Anything derived
+// from where THIS process happens to sit must not reach the profile. So:
+//
+//   1. The arena's bounds come from `max_user_address` - a kernel constant,
+//      measured, identical in every process - and NEVER from /proc/self/maps.
+//   2. A sample returning EEXIST counts exactly as a sample that succeeds.
+//      EEXIST means the address is already held BY US: proof that the kernel
+//      hands this part of the space out, and proof of nothing about the host.
+//      Treating it as a distinct outcome would make the recorded set depend on
+//      where our own libc landed - the very dependency rule 1 prevents.
+//
+// Only a structural refusal - ENOMEM, EINVAL, EPERM - says the kernel will not
+// place a mapping here for anybody, and only that is recorded as a limitation.
+constexpr std::uint64_t kTiB = 1ull << 40;
+
+// How far below the top of the user address space the arena reaches.
+// mmap_base randomization spans 1 TiB on x86-64; four leaves room for a larger
+// `mmap_rnd_bits` and the stack gap. Fixed, so the bounds never depend on this
+// process.
+constexpr std::uint64_t kArenaSpan = 4 * kTiB;
+
+// 64 GiB across 4 TiB is 64 probes: enough to catch a structural hole of any
+// consequential size, few enough to stay cheap.
+constexpr std::uint64_t kArenaStride = 64ull << 30;
+
+// Adds the arena's samples to `outcome`. Contiguous non-structural runs are
+// merged into ONE range rather than recorded per sample, so that the number of
+// entries - and therefore `profile_id` - cannot move with the probe's layout.
+void scan_one_arena(const char* what, std::uint64_t bottom, std::uint64_t top,
+                    std::uint64_t page_size, std::uint64_t probe_length,
+                    ScanOutcome& outcome) {
+    if (bottom >= top || top - bottom < probe_length) return;
+
+    std::uint64_t run_start = 0;
+    std::uint64_t last_sample_end = 0;
+    bool in_run = false;
+    std::size_t granted = 0, occupied = 0, refused = 0;
+
+    auto close_run = [&](std::uint64_t end) {
+        if (!in_run) return;
+        ClassifiedRange cr;
+        cr.range = AddressRange{run_start, end};
+        cr.evidence = EvidenceClass::MeasuredCapability;
+        cr.note =
+            std::string("inside the ") + what +
+            ", sampled on a fixed ladder derived from max_user_address; every "
+            "sample was either granted or already held by the probe process "
+            "(EEXIST), and none was structurally refused. Which samples were "
+            "which depends on the probe's own ASLR slide and is deliberately "
+            "not recorded";
+        outcome.available.push_back(cr);
+        in_run = false;
+    };
+
+    for (std::uint64_t base = bottom; base + probe_length <= top;
+         base += kArenaStride) {
+        if (base % page_size != 0) continue;
+        MapAttempt attempt = try_map(
+            reinterpret_cast<void*>(base), static_cast<std::size_t>(probe_length),
+            PROT_NONE,
+            MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED_NOREPLACE | MAP_NORESERVE);
+
+        bool usable = false;
+        if (attempt.ok()) {
+            usable = reinterpret_cast<std::uint64_t>(attempt.address) == base;
+            unmap(attempt, static_cast<std::size_t>(probe_length));
+            if (usable) ++granted;
+        } else if (attempt.error == EEXIST) {
+            usable = true;   // held by us; see rule 2 above
+            ++occupied;
+        } else {
+            ++refused;
+        }
+
+        if (usable) {
+            if (!in_run) {
+                run_start = base;
+                in_run = true;
+            }
+            last_sample_end = base + probe_length;
+            continue;
+        }
+
+        close_run(base);
+        ClassifiedRange cr;
+        cr.range = AddressRange{base, base + probe_length};
+        cr.evidence = EvidenceClass::MeasuredCapability;
+        cr.note = "exact mapping refused with " + errno_name(attempt.error) +
+                  " inside the " + what;
+        outcome.unavailable.push_back(cr);
+    }
+    // Close at the last SAMPLE, never at `top`. Closing at top claimed
+    // availability up to max_user_address on the strength of a sample that
+    // ended 64 GiB earlier - and it overlapped the structurally unavailable
+    // band at the very top of the space, so the profile asserted a range was
+    // both available and not.
+    close_run(last_sample_end);
+
+    // The split between granted and occupied is the probe's own layout, so it
+    // goes to the notes - which are outside the facts subtree and outside
+    // profile_id - rather than into any recorded fact.
+    outcome.occupied_notes.push_back(
+        std::string(what) + " [" + json::to_hex(bottom) + ", " +
+        json::to_hex(top) + ") sampled every " +
+        json::to_hex(kArenaStride) + " bytes: " + std::to_string(granted) +
+        " granted, " + std::to_string(occupied) +
+        " already held by the probe process, " + std::to_string(refused) +
+        " structurally refused. The first two are treated identically on "
+        "purpose; only the third is a host limitation");
+}
+
+// The two regions a Linux process is actually made of, both derived from
+// TASK_SIZE and neither from this process's own layout.
+//
+//   mmap arena       the top of the user space, where the loader puts every
+//                    shared library and where a large malloc lands
+//   ET_DYN base      ELF_ET_DYN_BASE = TASK_SIZE / 3 * 2, where the kernel
+//                    puts a position-independent executable's own text
+//
+// The second was found by a test rather than by reasoning: the coverage test
+// asked the profile about the address it was executing from, and the profile
+// had nothing to say, because the test binary is PIE and lives at 0x55... -
+// four TiB below the mmap arena and nowhere near the emulator landmarks.
+void scan_allocation_arenas(std::uint64_t page_size,
+                            std::uint64_t probe_length,
+                            std::uint64_t max_user_address,
+                            ScanOutcome& outcome) {
+    if (max_user_address <= kArenaSpan) return;
+
+    // Align the top UP to a TiB. Aligning DOWN was the first attempt and it
+    // put the whole arena 4 TiB below where anything maps: on this host
+    // max_user_address is 0x7ffffffff000, which rounds down to
+    // 0x7f0000000000 - the exact bucket that 629 of the 639 observed
+    // addresses sit ABOVE. The arena is the TOP of the space, so the boundary
+    // has to be the ceiling. Probing still stops at max_user_address.
+    const std::uint64_t ceiling =
+        ((max_user_address + kTiB - 1) / kTiB) * kTiB;
+    if (ceiling > kArenaSpan) {
+        scan_one_arena("kernel's mmap allocation arena", ceiling - kArenaSpan,
+                       max_user_address, page_size, probe_length, outcome);
+    }
+
+    const std::uint64_t dyn_base = (ceiling / 3) * 2;
+    const std::uint64_t dyn_bottom = (dyn_base / kTiB) * kTiB;
+    if (dyn_bottom > 0 && dyn_bottom + kArenaSpan < ceiling - kArenaSpan) {
+        scan_one_arena("ET_DYN base region, where a position-independent "
+                       "executable is placed",
+                       dyn_bottom, dyn_bottom + kArenaSpan, page_size,
+                       probe_length, outcome);
+    }
+}
+
 ScanOutcome scan_address_space(std::size_t page_size, std::uint64_t probe_length,
                                std::uint64_t max_user_address) {
     ScanOutcome outcome;
@@ -456,7 +628,11 @@ ScanOutcome scan_address_space(std::size_t page_size, std::uint64_t probe_length
         cr.note = "exact mapping refused with " + errno_name(attempt.error);
         outcome.unavailable.push_back(cr);
     }
+
+    scan_allocation_arenas(page_size, probe_length, max_user_address, outcome);
+
     collapse_contained_ranges(outcome.unavailable);
+    collapse_contained_ranges(outcome.available);
     return outcome;
 }
 

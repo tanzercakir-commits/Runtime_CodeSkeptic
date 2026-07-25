@@ -43,45 +43,6 @@ completes without leaving a trace in the log is work that will be redone.
 
 ## Now
 
-### T-013 — Probe the region where programs actually map `[now]`
-
-**Serves:** S9, S7, and the credibility of `RS-VM-0001` on Linux
-**Plan:** `docs/PLAN.md` Phase 1 — the scan, and Phase 3's false-positive rate
-**Done when:** a re-run of `tools/campaign/run_false_positive.sh` answers
-something other than `UNKNOWN` for the majority of the 639 observed MAP_FIXED
-addresses, and `tools/campaign/check_reproducible.sh` still passes.
-
-**Found by T-002, and it is the most valuable thing that campaign produced.**
-`scan_address_space()` in `src/probe/vm_probe_linux.cpp` establishes 56 windows
-of 4 MiB — 224 MiB of a 128 TiB space — at powers of two plus four hand-picked
-landmarks. Every landmark is a plausible *emulator* base, because the profile
-was built for the shadPS4 question. None is near `mmap_base`.
-
-```
-observed MAP_FIXED addresses by 1 TiB bucket:
-  0x7f0000000000   629      <- where the dynamic loader actually works
-  0x7e0000000000     7
-  0x000000000000     3
-inside a probe window:  2 of 639
-```
-
-So on Linux the address rules — the project's flagship — are not wrong against
-real software, they are **silent**. That is honest behaviour (`RS-VM-0017`) and
-a useless answer.
-
-**First step:** add the `mmap_base` region to the candidate set. It is
-derivable: `/proc/self/maps` shows where this process's own libraries landed,
-and the probe already reads that file. Sampling near it is a few lines.
-
-**Trap to avoid:** the reproducibility gate. `min_map_address` was once the
-probe's own ASLR slide, and removing the scan's `min_address` filter made
-reproducibility *worse* rather than better — the filter was suppressing the
-dependency, not creating it. Anything derived from `/proc/self/maps` is derived
-from this process's layout, so it must be rounded to something stable before it
-reaches the profile, and `check_reproducible.sh` decides whether it worked.
-
----
-
 ### T-003 — Corpus: 30 classified real incidents `[now]`
 
 **Serves:** S5 (allocators), S2 (page size), and the honesty of the taxonomy
@@ -268,6 +229,65 @@ Each needs a reason, so this cannot quietly become a way to empty the list.
 Items land here with the commit that finished them, and they are not deleted:
 a compass with no wake behind it cannot show whether the heading has been
 holding.
+
+### T-013 — Probe the region where programs actually map `[done]`
+
+**Serves:** S9, S7, and the credibility of `RS-VM-0001` on Linux
+**Plan:** `docs/PLAN.md` Phase 1 — the scan, and Phase 3's false-positive rate
+**Done when:** a re-run of `tools/campaign/run_false_positive.sh` answers
+something other than `UNKNOWN` for the majority of the 639 observed MAP_FIXED
+addresses, and `tools/campaign/check_reproducible.sh` still passes.
+
+**Found by T-002, and it is the most valuable thing that campaign produced.**
+`scan_address_space()` in `src/probe/vm_probe_linux.cpp` establishes 56 windows
+of 4 MiB — 224 MiB of a 128 TiB space — at powers of two plus four hand-picked
+landmarks. Every landmark is a plausible *emulator* base, because the profile
+was built for the shadPS4 question. None is near `mmap_base`.
+
+```
+observed MAP_FIXED addresses by 1 TiB bucket:
+  0x7f0000000000   629      <- where the dynamic loader actually works
+  0x7e0000000000     7
+  0x000000000000     3
+inside a probe window:  2 of 639
+```
+
+So on Linux the address rules — the project's flagship — are not wrong against
+real software, they are **silent**. That is honest behaviour (`RS-VM-0017`) and
+a useless answer.
+
+**Met.** `src/probe/vm_probe_linux.cpp` now samples two arenas; the re-run is
+`campaigns/false-positive/2026-07-linux-x86_64-after-T013.json` and
+`docs/campaigns/2026-07-false-positive-rate.md` §4.
+
+| | before | after |
+|---|---|---|
+| addresses answered `UNKNOWN` | 637 of 639 (99.7%) | **1 of 640 (0.2%)** |
+| addresses answered `SUPPORTED` | 1 | **537** |
+| **false positives** | 0 | **0** |
+
+Coverage was not bought with wrong answers.
+
+```
+0x7c0000000000 .. 0x7ff000400000   kernel mmap arena  (shared libs, big malloc)
+0x550000000000 .. 0x58f000400000   ELF_ET_DYN_BASE    (a PIE executable's text)
+```
+
+**The first step in the original entry was wrong**, and it was the trap. It
+said to derive the region from `/proc/self/maps`. That is this process's ASLR
+slide — the exact mistake `min_map_address` already made once. Both arenas are
+derived from `max_user_address` instead, a kernel constant identical in every
+process, and a sample returning `EEXIST` counts the same as one that succeeds:
+`EEXIST` proves the kernel hands this space out, and proves nothing about the
+host. `check_reproducible.sh` agrees across two processes.
+
+**The second arena was found by a test, not by thinking.** A new conformance
+case asks the profile about the address it is *executing from*. It failed: the
+test binary is position-independent and lives at `0x55…`, four TiB below the
+mmap arena. `tests/conformance/test_probe.cpp`,
+`the_scan_covers_where_this_process_is_actually_mapped`.
+
+---
 
 ### T-002 — Measure the false-positive rate `[done]`
 

@@ -1,8 +1,15 @@
 # Campaign — the false-positive rate, measured
 
 **Host:** Linux x86-64, measured by `rs-env-probe` in the same session
-**Data:** `campaigns/false-positive/2026-07-linux-x86_64.json`
+**Data:** `campaigns/false-positive/2026-07-linux-x86_64.json` (T-002, first run)
+and `campaigns/false-positive/2026-07-linux-x86_64-after-T013.json` (after the
+probe fix this campaign motivated)
 **Reproduce:** `tools/campaign/run_false_positive.sh`
+
+> **Read §4 before quoting anything from §1–3.** The first measurement found a
+> defect in the probe, that defect was fixed as `T-013`, and the campaign was
+> re-run. The body below is the *first* run, kept because it is what found the
+> problem; §4 is where the project stands now.
 
 ROADMAP Gate B and the Phase 3 exit criterion both turn on this number, and
 neither had ever been evaluated. Not through laziness — the obvious method is
@@ -163,13 +170,87 @@ unrecognized-fields work was for. The bug was the harness's; the guard was the
 analyzer's. Worth recording, because it is the first time in this project that
 a new tool's first output was wrong and something else said so immediately.
 
+---
+
+# 4. After the probe fix (T-013)
+
+Data: `campaigns/false-positive/2026-07-linux-x86_64-after-T013.json`
+
+The hole in §1 was the whole reason `T-013` existed, and closing it changed
+the answer:
+
+| | first run | after `T-013` |
+|---|---|---|
+| address population, `UNKNOWN` | 637 of 639 — **99.7%** | **1 of 640 — 0.2%** |
+| address population, `SUPPORTED` | 1 | **537** |
+| address population, `CONDITIONALLY_SUPPORTED` | 1 | 102 |
+| **address population, false positives** | 0 | **0** |
+| shape population, evaluated | 1292 | 1293 |
+| **shape population, false positives** | 0 | **0** |
+
+**638 of 640 observed addresses now get a real answer, and every one of those
+answers agrees with what the kernel did.** The coverage was not bought with
+wrong answers — the false-positive count stayed at zero on both populations.
+
+What changed in the probe is in `src/probe/vm_probe_linux.cpp`: two arenas,
+both derived from `max_user_address` and neither from `/proc/self/maps`.
+
+```
+0x7c0000000000 .. 0x7ff000400000   the kernel's mmap arena: every shared
+                                   library, every large malloc
+0x550000000000 .. 0x58f000400000   ELF_ET_DYN_BASE: a PIE executable's text
+```
+
+The second one was found by a test, not by reasoning. A new conformance case
+asks the profile about the address the test is *executing from*; it failed,
+because the test binary is position-independent and lives at `0x55…`, four TiB
+below the mmap arena and nowhere near any emulator landmark.
+
+**The one remaining `UNKNOWN` is worth keeping.** It is HotSpot reserving its
+heap at `0x82a00000` — a low, deliberately-chosen compressed-oops base that no
+arena covers. The profile has nothing to say about it and says so. That is the
+correct answer, and it is a better advertisement for the model than the 537
+that resolved.
+
+## The reproducibility trap, and how it was avoided
+
+`min_map_address` was once the probe's own ASLR slide recorded as a host fact,
+and six campaign contracts returned a confident `UNSUPPORTED` off it. Sampling
+the arena walks straight back into that: which windows are free depends on
+where *this* process's libc landed.
+
+Two rules keep it out of the profile:
+
+1. **Bounds come from `max_user_address`** — a kernel constant, measured,
+   identical in every process — and never from `/proc/self/maps`.
+2. **A sample returning `EEXIST` counts exactly as one that succeeds.**
+   `EEXIST` means the address is already held *by us*: proof that the kernel
+   hands this part of the space out, and proof of nothing about the host.
+   Treating it as a third outcome is what would make the recorded set depend on
+   our own layout.
+
+The split between granted and already-held goes to `notes`, which is outside
+the facts subtree and therefore outside `profile_id`.
+
+`tools/campaign/check_reproducible.sh` — which runs the probe as **two
+processes**, because the in-process test was once green while this was false —
+reports identical `profile_id`s.
+
 ## Verdict on the criterion
 
 `docs/PLAN.md` Phase 3, *expected false-positive rate is low on curated
-examples* — **measured, and low, for the rules this population exercises.**
-Marked `[partial]` rather than `[done]`: the address rules were not exercised,
-and the reason is `T-013`, not a property of the rules.
+examples* — **measured at 0 of 1933 observed requests across both populations,
+with 99.8% of them answered.**
 
-ROADMAP **Gate B** stays `[partial]` for the same reason. The blocker has moved
-from "never measured" to "measured, with a named hole", which is a different
-and much better problem.
+Still `[partial]`, and the remaining gaps are named rather than hidden:
+
+- **One host, one OS.** Linux x86-64. `strace` is Linux-only; the macOS lanes
+  have measured profiles and no traced programs.
+- **No false negatives are measurable by this method.** Not one failing `mmap`
+  in 13 programs × 3 runs. The other half of correctness is untouched.
+- **`RS-VM-0005` still fires on 42% of real mappings** (§2). Correct, and a
+  decision is owed before anyone gates a build on it.
+
+ROADMAP **Gate B** likewise stays `[partial]`. The blocker has moved from
+"never measured" to "measured on one platform, with the noisy rule named",
+which is a different and much better problem.

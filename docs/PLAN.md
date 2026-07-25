@@ -149,11 +149,14 @@ broke on Mac" is a real incident with a real artifact behind it.
   (`docs/campaigns/2026-07-false-positive-rate.md`,
   `campaigns/false-positive/2026-07-linux-x86_64.json`, reproduce with
   `tools/campaign/run_false_positive.sh`). The contracts were transcribed from
-  `strace`, not authored, so the tool is not grading its own homework. **The
-  gap:** the address rules were not exercised — 99.7% of the address population
-  came back `UNKNOWN` because the Linux probe scans 224 MiB of a 128 TiB space
-  and misses `mmap_base` entirely. The rate is low for page size, granularity
-  and protection; it is unmeasured for `RS-VM-0001`/`0002`/`0003`. (T-013)
+  `strace`, not authored, so the tool is not grading its own homework. After
+  the probe fix the address population is answered too: **0 false positives in
+  640 observed addresses, 99.8% of them answered**
+  (`campaigns/false-positive/2026-07-linux-x86_64-after-T013.json`). **The
+  remaining gap:** one host, one OS — `strace` is Linux-only, so the macOS
+  lanes have measured profiles and no traced programs; and no false negative is
+  measurable, because 13 programs over three runs each produced not one failing
+  `mmap`. (T-004)
 - `[done]` runs in CI without launching the application — `.github/workflows/ci.yml`
 
 ### The MVP's seven demonstrations (ROADMAP §14)
@@ -236,11 +239,11 @@ that risk materialising.
   constraints (the 384 GiB carveout).
 - `[partial]` **Gate B** (after Phase 3) — it diagnoses real failures, its
   evidence beats ordinary logs, and the false-positive rate is now **measured
-  at 0 of 1292** on observed real requests
-  (`docs/campaigns/2026-07-false-positive-rate.md`). Not yet passed, because
-  the population that would exercise the address rules answered `UNKNOWN`
-  99.7% of the time. The blocker moved from "never measured" to "measured,
-  with a named hole", which is a different and much better problem. (T-013)
+  at 0 across 1933 observed requests, 99.8% of them answered**
+  (`docs/campaigns/2026-07-false-positive-rate.md`). Not yet passed, on two
+  named grounds rather than one unmeasured one: the measurement covers a single
+  platform family, and `RS-VM-0005` fires on 42% of all real mappings, which is
+  correct and unusable in a gate until a decision is taken. (T-004)
 - `[blocked]` **Gate C** — Phase 5 is blocked. (T-011)
 - `[n/a]` **Gate D** — no new domain is proposed.
 
