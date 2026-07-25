@@ -50,20 +50,36 @@ deliberately rather than by drift.)*
 
 ## Next
 
-### T-004 — Windows probe `[next]`
+### T-004 — Windows probe `[now]`
 
 **Serves:** S3 (Wine — the scenario that makes it unavoidable), S7
 **Plan:** `docs/PLAN.md` Phase 1 — Windows fixtures, and "three platform families"
-**Done when:** `rs-env-probe` returns measured facts on Windows x64 and a
-committed profile exists; `tools/campaign/check_reproducible.sh` passes there
-as two processes, not two calls in one.
+**Done when:** a profile measured on a **real Windows host** is published by
+`.github/workflows/windows-probe.yml` and committed, with the two-process
+reproducibility step green in that run.
 
-The ROADMAP names three platform families. Linux, macOS-native and
-macOS-under-Rosetta are three *process environments* on two *families*, and
-`src/probe/vm_probe_unimplemented.cpp` is honest about the rest: every fact
-unknown, deliberately, rather than guessed. S3 is dead until this exists —
-comparing a measured host against an all-unknown one yields `UNKNOWN`,
-correctly and uselessly.
+**The code is written and it is not done.** `src/probe/vm_probe_windows.cpp`
+cross-compiles clean with `-Wall -Wextra` under mingw-w64, the whole project
+builds for Windows, and the probe runs correctly under **Wine** — where it
+measures a 64 KiB allocation granularity against a 4 KiB page, a working
+reserve/commit model, non-destructive exact placement, and `error` for
+file-mapping past EOF. Every one of those is the right answer for the Win32
+model and **none of them is a Windows measurement.**
+
+Wine reproduces Win32 well enough that all of it succeeds, which is exactly why
+it cannot stand in: the probe detects Wine through `wine_get_version` and
+renames itself `wine-on-posix-x86_64`, and the CI job refuses to publish a
+profile whose name or version says Wine.
+
+**First step:** dispatch `windows-probe.yml`. It is weekly plus a button, at
+2x billing — a fifth of macOS, and the quota resets on 1 August.
+
+**Trap to avoid:** the profile will look plausible whatever it says, because
+this author has never seen a real one. The two facts to check by hand against
+Microsoft's documentation before believing the run are
+`lpMaximumApplicationAddress` (the model wants an *exclusive* bound and Win32
+reports the last usable byte) and whether `dwAllocationGranularity` is really
+64 KiB on that runner rather than assumed.
 
 ---
 

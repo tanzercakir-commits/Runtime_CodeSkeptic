@@ -97,9 +97,13 @@ findings from the set itself:
 - `[done]` environment profile schema — `schemas/environment-profile.v1.json`,
   validated against every committed artifact by
   `tools/guards/validate_schemas.py`
-- `[open]` Windows x64 profile fixtures — the probe is
-  `src/probe/vm_probe_unimplemented.cpp`; it emits a schema-valid profile in
-  which every fact is unknown, deliberately, rather than guessing (T-004)
+- `[open]` Windows x64 profile fixtures — the probe is **written**
+  (`src/probe/vm_probe_windows.cpp`), cross-compiles clean under mingw-w64,
+  and runs correctly under Wine
+  (`profiles/measured/wine-9.0-on-linux-x86_64.measured.json`). **No Windows
+  host has ever run it.** `.github/workflows/windows-probe.yml` is what would
+  close this; until it publishes a measurement the code is a hypothesis about
+  the platform it targets. (T-004)
 - `[done]` Linux x86-64 fixtures — measured on every run by
   `tools/guards/run_all.sh` and `.github/workflows/ci.yml`
 - `[done]` macOS Apple Silicon fixtures —
@@ -123,8 +127,10 @@ findings from the set itself:
   published as `schemas/environment-profile.v1.json`
 - `[done]` deterministic canonicalization — `tests/conformance/test_probe.cpp`
 - `[partial]` **at least three platform families** — Linux, macOS-native and
-  macOS-under-Rosetta are three *process environments* on two *families*.
-  Windows is the missing third family and the ROADMAP names it explicitly. (T-004)
+  macOS-under-Rosetta are three *process environments* on two *families*. The
+  Windows probe exists and has run under Wine, which is **not** a third family:
+  the probe detects Wine via `wine_get_version` and renames itself
+  `wine-on-posix-x86_64` so the two cannot be confused. (T-004)
 
 ---
 

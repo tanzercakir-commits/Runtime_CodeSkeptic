@@ -45,6 +45,7 @@ add_library(RuntimeSkeptic::reports ALIAS rs_reports)
 add_library(rs_probe STATIC
     probe/vm_probe_linux.cpp
     probe/vm_probe_macos.cpp
+    probe/vm_probe_windows.cpp
     probe/vm_probe_unimplemented.cpp)
 
 target_link_libraries(rs_probe PUBLIC rs_vm PRIVATE rs_warnings)

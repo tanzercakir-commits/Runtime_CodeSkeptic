@@ -1,0 +1,190 @@
+name: Windows measurement
+
+# The third platform family, and the reason this workflow is the deliverable
+# rather than the code.
+#
+# `src/probe/vm_probe_windows.cpp` was written on a Linux machine by an author
+# who has never run it on Windows. It cross-compiles clean with `-Wall -Wextra`
+# under mingw-w64 and it runs correctly under Wine - and neither of those is
+# Windows. Wine reproduces the Win32 memory model faithfully enough that every
+# probe in that file succeeds there, which is exactly why a Wine run cannot
+# stand in for this one: the probe detects Wine and renames itself
+# `wine-on-posix-x86_64` precisely so nobody mistakes the two.
+#
+# So `docs/PLAN.md` says Windows fixtures are `[open]` and "three platform
+# families" is `[partial]`, and both stay that way until THIS workflow
+# publishes a measurement from a real host. Code that has never run on the
+# platform it targets is a hypothesis about that platform.
+#
+# What this run establishes that nothing else in the project can:
+#
+#   - `allocation_granularity` != `page_size`. 64 KiB against 4 KiB. On Linux
+#     and macOS these are equal and every alignment rule has been exercised
+#     against a host where the distinction is invisible. RSC-0044 is the
+#     incident this makes decidable.
+#   - `reserve_commit_model = windows_reserve_commit`, MEASURED. That value has
+#     existed in the model since it was written and no probe on any host has
+#     ever established it. `RS-VM-0012` has never been confirmed by execution.
+#   - `fixed_noreplace_available = true` by demonstration - `VirtualAlloc` at a
+#     base refuses an occupied range rather than clobbering it, the inverse of
+#     POSIX `MAP_FIXED` (RSC-0051, RSC-0052).
+#   - `file_map_beyond_eof`, whose `error` value has never been observed.
+
+# Windows runners bill at 2x. That is a fifth of macOS but not free, and the
+# host cannot change between two commits - the same reasoning that moved the
+# macOS workflow off per-push after a quota exhaustion on 2026-07-25. Weekly,
+# plus a button.
+on:
+  schedule:
+    - cron: '41 4 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: windows-probe-${{ github.ref }}
+  # NOT cancel-in-progress: the output is a measurement, and killing a run
+  # partway through measuring a real host to start a newer one throws away
+  # evidence the development sandbox cannot reconstruct.
+  cancel-in-progress: false
+
+jobs:
+  windows-x86_64:
+    name: windows x86_64
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build
+        run: |
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=RelWithDebInfo
+          cmake --build build --config RelWithDebInfo --parallel
+
+      - name: Test
+        run: ctest --test-dir build -C RelWithDebInfo --output-on-failure
+
+      - name: Measure
+        id: measure
+        shell: pwsh
+        run: |
+          $probe = "build/bin/RelWithDebInfo/rs-env-probe.exe"
+          if (-not (Test-Path $probe)) { $probe = "build/bin/rs-env-probe.exe" }
+          & $probe vm --output windows-x86_64.json
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Get-Content windows-x86_64.json | Select-Object -First 5
+
+      # The measurement is worth nothing if a second process disagrees with the
+      # first. The in-process check was green while this was false once already,
+      # so it is two processes here as it is everywhere else.
+      - name: Reproducibility across two processes
+        shell: pwsh
+        run: |
+          $probe = "build/bin/RelWithDebInfo/rs-env-probe.exe"
+          if (-not (Test-Path $probe)) { $probe = "build/bin/rs-env-probe.exe" }
+          & $probe vm --output a.json
+          & $probe vm --output b.json
+          $ida = (Get-Content a.json | ConvertFrom-Json).profile_id
+          $idb = (Get-Content b.json | ConvertFrom-Json).profile_id
+          Write-Host "profile_id A: $ida"
+          Write-Host "profile_id B: $idb"
+          if ($ida -ne $idb) {
+            Write-Error "two probe processes disagree; the profile depends on this process's layout"
+            exit 1
+          }
+
+      - name: What was measured
+        shell: pwsh
+        run: |
+          python - <<'PY'
+          import json
+          d = json.load(open("windows-x86_64.json"))
+          vm = d["virtual_memory"]
+          print("profile_name :", d["profile_name"])
+          print("platform     :", d["platform"])
+          def fact(name):
+              v = vm.get(name)
+              if isinstance(v, dict):
+                  print(f"{name:32} {v.get('value')}  [{v.get('evidence')}]")
+              else:
+                  print(f"{name:32} {v}")
+          for k in ("page_size", "allocation_granularity", "min_map_address",
+                    "max_user_address", "anonymous_mapping_supported",
+                    "reserve_commit_model", "fixed_noreplace_available",
+                    "exact_mapping", "hinted_mapping_may_relocate",
+                    "file_map_beyond_eof"):
+              fact(k)
+          for k, v in vm.get("protection", {}).items():
+              if isinstance(v, dict):
+                  print(f"  protection.{k:24} {v.get('value')}  [{v.get('evidence')}]")
+          # The claim this job exists to settle.
+          gran = (vm.get("allocation_granularity") or {}).get("value")
+          page = (vm.get("page_size") or {}).get("value")
+          print()
+          if gran and page and gran != page:
+              print(f"CONFIRMED: allocation granularity {gran} != page size {page}")
+              print("The first host in this project where these differ.")
+          else:
+              print(f"NOT CONFIRMED: granularity {gran}, page size {page}")
+          for note in d.get("notes", []):
+              print("note:", note)
+          for w in d.get("probe_run", {}).get("warnings", []):
+              print("warning:", w)
+          PY
+
+      # A profile that says it came from Wine did not come from this runner.
+      # Cheap, and it catches a whole class of "we measured the wrong thing".
+      - name: Refuse a profile that is not from real Windows
+        shell: pwsh
+        run: |
+          python - <<'PY'
+          import json, sys
+          d = json.load(open("windows-x86_64.json"))
+          name = d.get("profile_name", "")
+          version = d.get("platform", {}).get("os_version", "")
+          if "wine" in name.lower() or "Wine" in version:
+              sys.exit(f"this profile is from Wine ({version}), not Windows: {name}")
+          if d.get("origin") != "measured":
+              sys.exit(f"origin is {d.get('origin')!r}, not 'measured'")
+          print("confirmed: a measured profile from a real Windows host")
+          PY
+
+      - uses: actions/upload-artifact@v4
+        if: always() && steps.measure.outcome == 'success'
+        with:
+          name: windows-x86_64-profile
+          path: windows-x86_64.json
+
+      # The development sandbox reaches this repository over the git protocol
+      # only - no Actions REST API, no artifact downloads. So the measurement is
+      # published as a namespaced ref, invisible as a branch and triggering
+      # nothing:
+      #
+      #   refs/measurements/<sha>/<job>
+      #
+      # Fetch it with:
+      #   git fetch origin "refs/measurements/<sha>/windows-x86_64:refs/heads/m"
+      #   git show m:windows-x86_64.json
+      - name: Publish the measurement to refs/measurements/*
+        if: always() && steps.measure.outcome == 'success'
+        shell: bash
+        run: |
+          git config user.name "ci-measurements"
+          git config user.email "ci-measurements@localhost"
+          git checkout --detach -q
+          git add -f windows-x86_64.json
+          git commit -qm "windows x86_64 measured @ ${{ github.sha }}"
+          git push --force origin \
+            "HEAD:refs/measurements/${{ github.sha }}/windows-x86_64"
+
+      - name: Publish job status to refs/status/*
+        if: always()
+        shell: bash
+        run: |
+          state="${{ job.status }}"
+          git config user.name "ci-measurements"
+          git config user.email "ci-measurements@localhost"
+          git checkout --detach -q
+          git commit -q --allow-empty -m "windows-x86_64 ${state} @ ${{ github.sha }}"
+          git push --force origin \
+            "HEAD:refs/status/${{ github.sha }}/windows-x86_64/${state}"

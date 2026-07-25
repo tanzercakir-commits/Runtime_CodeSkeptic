@@ -102,9 +102,17 @@ int main(int argc, char** argv) {
 
     probe::Result result = probe::probe_virtual_memory(options);
     result.profile.run.tool_version = kToolVersion;
+    // `--name` wins, then whatever the probe chose for itself, then a default
+    // built from the platform name.
+    //
+    // The middle case was missing and the override was unconditional, which
+    // discarded the one thing the probe knows and this tool cannot: the
+    // Windows probe detects Wine through `wine_get_version` and names itself
+    // `wine-on-posix-x86_64` so the profile cannot be read as a Windows
+    // measurement - and this line renamed it `windows-x86_64` regardless.
     if (!profile_name.empty()) {
         result.profile.profile_name = profile_name;
-    } else {
+    } else if (result.profile.profile_name.empty()) {
         result.profile.profile_name =
             probe::probe_platform_name() + "-" +
             std::string(vm::to_string(result.profile.platform.process_arch));

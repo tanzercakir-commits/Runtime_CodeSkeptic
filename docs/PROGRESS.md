@@ -16,6 +16,67 @@ re-litigated; a mistake recorded here does not need to be re-made.
 
 ---
 
+## 2026-07-25 — T-004: the Windows probe exists and has never run on Windows
+
+**Changed.** `src/probe/vm_probe_windows.cpp`,
+`.github/workflows/windows-probe.yml`,
+`profiles/measured/wine-9.0-on-linux-x86_64.measured.json`, and a one-line fix
+in `tools/rs-env-probe/main.cpp`.
+
+**Status, stated first because it is the point.** The code is written, it
+cross-compiles clean with `-Wall -Wextra` under mingw-w64, the whole project
+builds for Windows including all 13 test binaries, and the probe runs correctly
+under Wine. **`docs/PLAN.md` still says `[open]`.** Code that has never run on
+the platform it targets is a hypothesis about that platform, and the
+measurement is the deliverable.
+
+**What it measured under Wine**, which is the shape a real run should have:
+
+| Fact | Value | Why it matters |
+|---|---|---|
+| `page_size` | 4096 | |
+| `allocation_granularity` | **65536** | first host in this project where these differ |
+| `reserve_commit_model` | `windows_reserve_commit` | **first time this value has ever been measured anywhere** |
+| `fixed_noreplace_available` | true, demonstrated | a second reservation over an occupied range was refused with `ERROR_INVALID_ADDRESS` |
+| `hinted_mapping_may_relocate` | false | a base address is a requirement here, not a hint - the inverse of POSIX |
+| `file_map_beyond_eof` | `error` | the third `BeyondEofBehavior` value, never observed before |
+
+`RS-VM-0012` has existed since the model was written and had never fired
+against a host that actually has the reserve/commit model. Under Wine it now
+can - and Wine is not Windows.
+
+**The trap this walked into and out of.** Wine reproduces Win32 faithfully
+enough that *every probe succeeded*, and the resulting profile was labelled
+`windows-x86_64` with `origin: measured`. Committed as-is it would have been
+counted as the third platform family. The probe now detects Wine through
+`wine_get_version` in ntdll - Wine's own documented marker, absent on real
+Windows - renames itself `wine-on-posix-x86_64`, sets `translation_mode` and
+writes a note beginning "THIS IS NOT WINDOWS". The CI job additionally refuses
+to publish any profile whose name or version says Wine.
+
+**And a defect that fix exposed.** `tools/rs-env-probe/main.cpp` overwrote
+`profile_name` unconditionally when no `--name` was given, so the probe's own
+name was discarded and the Wine profile came back labelled `windows-x86_64`
+anyway. The caller knew less than the callee and overruled it. Fixed: `--name`
+wins, then whatever the probe chose, then the default.
+
+**Held to the discipline before it could fail.** `VirtualQuery` walks the
+address space and reports exactly which regions are free - far better than the
+Linux probe's sampling, and entirely a property of *this* process's ASLR
+layout. Recording it as `available_ranges` would have made `profile_id` a
+function of our load address: `min_map_address` made that mistake once and the
+arena scan nearly made it again in T-013. The walk's output goes to `notes`,
+outside the facts subtree and outside the hash. Two Wine processes produce an
+identical `profile_id`.
+
+**Next.** Dispatch `windows-probe.yml`. Two things to check by hand against
+Microsoft's documentation before believing the result, because this author has
+never seen a real Windows profile: that `lpMaximumApplicationAddress + 1` is
+the right exclusive bound, and that `dwAllocationGranularity` on that runner is
+measured rather than assumed.
+
+---
+
 ## 2026-07-25 — T-003: the corpus, 1 of 30 to 44 of 30
 
 **Changed.** 43 new entries in `corpus/runtime_failures/`, each citing a public

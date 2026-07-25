@@ -1,0 +1,106 @@
+{
+  "notes": [
+    "THIS IS NOT WINDOWS. ntdll exports wine_get_version, so these facts were measured through Wine 9.0 on a POSIX kernel. Wine reproduces the Win32 memory model faithfully enough that every probe below succeeds, which is precisely why the profile must say where it came from: it does not count as the third platform family, and a contract judged against it has been judged against an emulation of the platform it names.",
+    "VirtualQuery walk: 17 free, 2 reserved, 58 committed region(s); largest free run 123139914997760 bytes. Recorded as a note and NOT as available_ranges: which regions are free is a property of this process's ASLR layout, and a profile that hashed it would differ between two runs on one machine."
+  ],
+  "origin": "measured",
+  "platform": {
+    "host_arch": "x86_64",
+    "kernel_version": "10.0.19043 (Wine 9.0)",
+    "os": "windows",
+    "os_version": "10.0.19043 (Wine 9.0)",
+    "pointer_width_bits": 64,
+    "process_arch": "x86_64",
+    "translation_mode": "other"
+  },
+  "probe_run": {
+    "duration_ms": 7,
+    "probe_binary_hash": "",
+    "probe_version": "rs-env-probe/vm/0.1.0",
+    "run_id": "",
+    "timestamp_utc": "2026-07-25T22:28:30Z",
+    "tool_version": "runtimeskeptic/0.1.0",
+    "warnings": []
+  },
+  "profile_id": "sha256:57a4538be89996516d7b9d4b57a8a995acb8c187331802163a661c8ca7c1612a",
+  "profile_name": "wine-on-posix-x86_64",
+  "schema": "runtime-skeptic.environment-profile.v1",
+  "virtual_memory": {
+    "allocation_granularity": {
+      "evidence": "measured_capability",
+      "source": "rs-env-probe vm (windows): GetSystemInfo().dwAllocationGranularity",
+      "value": 65536
+    },
+    "anonymous_mapping_supported": {
+      "evidence": "measured_capability",
+      "source": "rs-env-probe vm (windows): VirtualAlloc(MEM_RESERVE|MEM_COMMIT)",
+      "value": true
+    },
+    "available_ranges": [],
+    "exact_mapping": {
+      "evidence": "measured_capability",
+      "source": "rs-env-probe vm (windows): VirtualAlloc at an explicit base succeeded on a free range and failed on an occupied one",
+      "value": "CONDITIONALLY_SUPPORTED"
+    },
+    "exact_mapping_failure_codes": [
+      "ERROR_INVALID_ADDRESS"
+    ],
+    "file_map_beyond_eof": {
+      "evidence": "measured_capability",
+      "source": "rs-env-probe vm (windows): CreateFileMapping sized past end of file was refused with ERROR_NOT_ENOUGH_MEMORY",
+      "value": "error"
+    },
+    "fixed_noreplace_available": {
+      "evidence": "measured_capability",
+      "source": "rs-env-probe vm (windows): a second VirtualAlloc over an occupied range was refused, so exact placement here cannot clobber an existing reservation",
+      "value": true
+    },
+    "hinted_mapping_may_relocate": {
+      "evidence": "measured_capability",
+      "source": "rs-env-probe vm (windows): a base address is a requirement on this platform, not a hint; a request at an occupied range was refused rather than relocated",
+      "value": false
+    },
+    "max_user_address": {
+      "evidence": "measured_capability",
+      "source": "rs-env-probe vm (windows): GetSystemInfo().lpMaximumApplicationAddress + 1 (exclusive)",
+      "value": "0x7fffffff0000"
+    },
+    "min_map_address": {
+      "evidence": "measured_capability",
+      "source": "rs-env-probe vm (windows): GetSystemInfo().lpMinimumApplicationAddress",
+      "value": "0x10000"
+    },
+    "page_size": {
+      "evidence": "measured_capability",
+      "source": "rs-env-probe vm (windows): GetSystemInfo().dwPageSize",
+      "value": 4096
+    },
+    "protection": {
+      "anonymous_executable_mapping": {
+        "evidence": "measured_capability",
+        "source": "rs-env-probe vm (windows): VirtualAlloc(PAGE_EXECUTE_READ)",
+        "value": true
+      },
+      "jit_entitlement_required": {
+        "evidence": "unknown",
+        "value": null
+      },
+      "write_execute_simultaneous": {
+        "evidence": "measured_capability",
+        "source": "rs-env-probe vm (windows): VirtualAlloc(PAGE_EXECUTE_READWRITE)",
+        "value": true
+      },
+      "write_then_execute_transition": {
+        "evidence": "measured_capability",
+        "source": "rs-env-probe vm (windows): VirtualProtect(PAGE_READWRITE -> PAGE_EXECUTE_READ)",
+        "value": true
+      }
+    },
+    "reserve_commit_model": {
+      "evidence": "measured_capability",
+      "source": "rs-env-probe vm (windows): MEM_RESERVE then MEM_COMMIT then write, both observed",
+      "value": "windows_reserve_commit"
+    },
+    "unavailable_ranges": []
+  }
+}
