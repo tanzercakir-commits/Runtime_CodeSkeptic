@@ -62,6 +62,15 @@ jobs:
             --output macos-arm64-native.json
           build/bin/rs-profile verify macos-arm64-native.json
 
+      # The only test that checks whether the tool is RIGHT rather than merely
+      # coherent: run the request for real and compare.
+      - name: Ground truth vs prediction
+        if: steps.measure.outcome == 'success'
+        run: |
+          bash tests/groundtruth/run.sh macos-arm64-native.json 2>&1 \
+            | tee /tmp/groundtruth.txt
+          exit "${PIPESTATUS[0]}"
+
       # The facts this project has been guessing at for its entire life.
       - name: Report what was measured
         run: |
@@ -125,11 +134,14 @@ jobs:
           tail -c 30000 /tmp/diag/ctest_failed.txt > /tmp/diag/ctest_tail.txt || true
           cp /tmp/reproducible.txt /tmp/diag/reproducible.txt 2>/dev/null \
             || echo "(the reproducibility step did not run)" > /tmp/diag/reproducible.txt
+          cp /tmp/groundtruth.txt /tmp/diag/groundtruth.txt 2>/dev/null \
+            || echo "(the ground-truth step did not run)" > /tmp/diag/groundtruth.txt
           git config user.name "ci-logs"
           git config user.email "ci-logs@localhost"
           git checkout --detach -q
-          cp /tmp/diag/steps.json /tmp/diag/ctest_tail.txt /tmp/diag/reproducible.txt .
-          git add -f steps.json ctest_tail.txt reproducible.txt
+          cp /tmp/diag/steps.json /tmp/diag/ctest_tail.txt \
+             /tmp/diag/reproducible.txt /tmp/diag/groundtruth.txt .
+          git add -f steps.json ctest_tail.txt reproducible.txt groundtruth.txt
           git commit -qm "macos diagnostics @ ${{ github.sha }}"
           git push --force origin \
             "HEAD:refs/ci-logs/${{ github.sha }}/native-arm64"
@@ -193,6 +205,19 @@ jobs:
           build-x64/bin/rs-env-probe vm --name "macos-arm64-rosetta-x86_64-ci" \
             --output macos-rosetta-x86_64.json
           build-x64/bin/rs-profile verify macos-rosetta-x86_64.json
+
+      # Built with the x86-64 toolchain so the case programs are translated
+      # too - a ground-truth run whose cases are native while the profile is
+      # translated would compare two different machines.
+      - name: Ground truth vs prediction (x86-64)
+        if: steps.rosetta.outputs.available == 'true'
+        run: |
+          RS_CHECK=build-x64/bin/rs-check \
+          GT_BIN=build-x64/groundtruth \
+          CC="cc -arch x86_64" \
+            bash tests/groundtruth/run.sh macos-rosetta-x86_64.json 2>&1 \
+              | tee /tmp/groundtruth.txt
+          exit "${PIPESTATUS[0]}"
 
       - name: Did the probe agree that it was translated?
         if: steps.rosetta.outputs.available == 'true'
@@ -314,11 +339,14 @@ jobs:
           tail -c 30000 /tmp/diag/ctest_failed.txt > /tmp/diag/ctest_tail.txt || true
           cp /tmp/reproducible.txt /tmp/diag/reproducible.txt 2>/dev/null \
             || echo "(the reproducibility step did not run)" > /tmp/diag/reproducible.txt
+          cp /tmp/groundtruth.txt /tmp/diag/groundtruth.txt 2>/dev/null \
+            || echo "(the ground-truth step did not run)" > /tmp/diag/groundtruth.txt
           git config user.name "ci-logs"
           git config user.email "ci-logs@localhost"
           git checkout --detach -q
-          cp /tmp/diag/steps.json /tmp/diag/ctest_tail.txt /tmp/diag/reproducible.txt .
-          git add -f steps.json ctest_tail.txt reproducible.txt
+          cp /tmp/diag/steps.json /tmp/diag/ctest_tail.txt \
+             /tmp/diag/reproducible.txt /tmp/diag/groundtruth.txt .
+          git add -f steps.json ctest_tail.txt reproducible.txt groundtruth.txt
           git commit -qm "macos diagnostics @ ${{ github.sha }}"
           git push --force origin \
             "HEAD:refs/ci-logs/${{ github.sha }}/rosetta-x86_64"

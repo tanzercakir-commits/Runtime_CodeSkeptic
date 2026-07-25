@@ -1444,16 +1444,39 @@ void Analysis::rule_file_mapping_beyond_eof() {
 
     const BeyondEofBehavior behavior = profile_.vm.file_map_beyond_eof.value();
 
-    // Zero-fill of the trailing partial page is universal and harmless; only
-    // whole pages entirely past EOF are the problem. Without page size we
-    // cannot tell the two apart, so we stay conservative and report.
-    if (behavior == BeyondEofBehavior::ZeroFill &&
-        !req_.request.accesses_beyond_eof) {
-        return;
-    }
     if (!req_.request.accesses_beyond_eof) {
         // Mapped but never touched: no fault can occur.
         return;
+    }
+
+    // Zero-fill of the trailing partial page is universal and harmless; only
+    // whole pages entirely past EOF are the problem.
+    //
+    // This used to say "without page size we cannot tell the two apart, so we
+    // stay conservative and report" - and reporting was not conservative, it
+    // was wrong. POSIX requires every conforming system to zero-fill the
+    // partial page at the end of a mapped object, so a program reading only
+    // between the end of the file and the end of its final page cannot fault
+    // anywhere. Calling that UNSUPPORTED on a sigbus host is a false positive
+    // on a portable program, and it fired on every host until
+    // tests/groundtruth/ ran the actual read and looked.
+    if (req_.request.eof_access_extent ==
+        MappingRequest::EofAccessExtent::WithinFinalPartialPage) {
+        // The claim is only meaningful if a partial page exists at all. A
+        // page-aligned file has none, so a contract asserting this about one is
+        // describing something that cannot happen, and gets the risky path
+        // rather than a free pass.
+        const std::uint64_t page = profile_.vm.page_size.value_or(0);
+        const bool partial_page_exists = page > 0 && (file_length % page) != 0;
+        if (partial_page_exists) {
+            satisfied("reads only within the final partial page of the mapped "
+                      "file",
+                      "POSIX requires the partial page at the end of a mapped "
+                      "object to be zero-filled, on this and every conforming "
+                      "host",
+                      EvidenceClass::SpecifiedGuarantee);
+            return;
+        }
     }
 
     Finding f = start(ids::kFileMappingBeyondEof, Confidence::Proven,

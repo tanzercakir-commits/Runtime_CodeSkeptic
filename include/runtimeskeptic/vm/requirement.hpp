@@ -175,6 +175,29 @@ struct MappingRequest {
     // that merely extends past EOF is harmless until it is accessed.
     bool accesses_beyond_eof = false;
 
+    // HOW FAR past the end. These are two different questions and conflating
+    // them produced a false positive on every host.
+    //
+    // POSIX requires a conforming system to zero-fill the partial page at the
+    // end of a mapped object. A program that reads only between the end of the
+    // file and the end of its final page is therefore portable and CANNOT
+    // fault - on Linux, on macOS, anywhere. Only a reference to a page lying
+    // ENTIRELY past the end is implementation-defined, and that is what
+    // `file_map_beyond_eof` measures: Linux and native macOS arm64 raise
+    // SIGBUS, the same Apple machine under Rosetta 2 returns zeroes.
+    //
+    // Until this field existed both were spelled `accesses_beyond_eof: true`,
+    // so the safe one was judged against a fact about the dangerous one and
+    // came back UNSUPPORTED on a sigbus host. Found by
+    // tests/groundtruth/, whose first version made the same mistake in its own
+    // case program - it read inside the partial page while claiming to measure
+    // the other thing, contradicted the analyzer, and was wrong.
+    enum class EofAccessExtent {
+        WholePagePastEnd = 0,       // implementation-defined; the risky one
+        WithinFinalPartialPage = 1, // POSIX-guaranteed zero-fill; always safe
+    };
+    EofAccessExtent eof_access_extent = EofAccessExtent::WholePagePastEnd;
+
     // The program reserves address space first and commits later, and relies
     // on the reservation being a distinct, observable state.
     bool reserve_then_commit = false;

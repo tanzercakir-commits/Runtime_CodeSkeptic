@@ -1,0 +1,41 @@
+{
+  "schema": "runtime-skeptic.application-requirements.v1",
+  "name": "Reading a mapped file past its end",
+  "component": "ground-truth pairing for the sigbus-versus-zero-fill split between the two lanes",
+  "operation": "virtual_memory_map",
+  "request": {
+    "size": 4096,
+    "exact_address_required": false,
+    "protection": {
+      "read": true,
+      "write": false,
+      "execute": false
+    },
+    "file_backed": true,
+    "file_length": 1,
+    "accesses_beyond_eof": true
+  },
+  "assumptions": {
+    "guest_host_identity_required": false,
+    "translation_layer_available": false,
+    "retries_on_failure": false
+  },
+  "required_postconditions": [
+    "a read past the end of the file returns zero-filled bytes instead of raising a signal"
+  ],
+  "permitted_fallbacks": [],
+  "failure_sink": {
+    "kind": "process_exit",
+    "location": {
+      "file": "tests/groundtruth/cases/file_map_beyond_eof.c",
+      "line": 1,
+      "symbol": "attempt"
+    },
+    "description": "the case reports `faulted` when the host raises SIGBUS; an unhandled SIGBUS terminates the process, which is why the sink is process_exit rather than a checked return - nothing in the calling code gets a chance to look"
+  },
+  "assumption_evidence": "specified_guarantee",
+  "extraction_limitations": [
+    "Single-claim contract written to pair with a ground-truth case. It asserts exactly one thing so that a whole-contract verdict can be compared against a single observation without ambiguity."
+  ],
+  "x_groundtruth": "POSIX leaves this implementation-defined and one Apple Silicon machine disagrees with itself across its two lanes."
+}

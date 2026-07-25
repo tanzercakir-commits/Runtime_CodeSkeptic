@@ -1,0 +1,40 @@
+{
+  "schema": "runtime-skeptic.application-requirements.v1",
+  "name": "Exact MAP_FIXED mapping at 0x1307200000, the address from shadPS4 issue #4157",
+  "component": "ground-truth pairing for the GTA V direct-memory mapping",
+  "operation": "virtual_memory_map",
+  "request": {
+    "address": "0x1307200000",
+    "size": 131072,
+    "exact_address_required": true,
+    "protection": {
+      "read": true,
+      "write": true,
+      "execute": false
+    },
+    "file_backed": false
+  },
+  "assumptions": {
+    "guest_host_identity_required": false,
+    "translation_layer_available": false,
+    "retries_on_failure": false
+  },
+  "required_postconditions": [
+    "the mapping is placed at exactly 0x1307200000 and accepts reads and writes"
+  ],
+  "permitted_fallbacks": [],
+  "failure_sink": {
+    "kind": "fatal_assert",
+    "location": {
+      "file": "tests/groundtruth/cases/exact_mapping.c",
+      "line": 1,
+      "symbol": "attempt"
+    },
+    "description": "the case reports `relocated` or `refused` and the runner fails the pairing"
+  },
+  "assumption_evidence": "specified_guarantee",
+  "extraction_limitations": [
+    "Single-claim contract written to pair with a ground-truth case. It asserts exactly one thing so that a whole-contract verdict can be compared against a single observation without ambiguity."
+  ],
+  "x_groundtruth": "cases/exact_mapping.c performs this exact mmap+MAP_FIXED in a forked child."
+}

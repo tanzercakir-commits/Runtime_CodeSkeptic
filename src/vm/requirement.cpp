@@ -85,6 +85,32 @@ bool read_flag(const json::Value* parent, const char* key, bool& out,
     return true;
 }
 
+// How far past end-of-file the program actually reads. Absent means
+// `whole_page_past_end`, the risky one, so an older contract that predates the
+// field keeps the verdict it had rather than being quietly upgraded to safe.
+bool read_eof_access_extent(const json::Value* parent,
+                            MappingRequest::EofAccessExtent& out,
+                            std::string& error) {
+    if (parent == nullptr) return true;
+    const json::Value* node = parent->find("eof_access_extent");
+    if (node == nullptr || node->is_null()) return true;
+    if (!node->is_string()) {
+        error = "eof_access_extent must be a string";
+        return false;
+    }
+    const std::string& s = node->as_string();
+    if (s == "whole_page_past_end") {
+        out = MappingRequest::EofAccessExtent::WholePagePastEnd;
+        return true;
+    }
+    if (s == "within_final_partial_page") {
+        out = MappingRequest::EofAccessExtent::WithinFinalPartialPage;
+        return true;
+    }
+    error = "unrecognized eof_access_extent: " + s;
+    return false;
+}
+
 }  // namespace
 
 std::string_view to_string(OperationKind v) { return name_of(kOperation, v); }
@@ -170,6 +196,10 @@ json::Value MappingRequest::to_json() const {
                            : json::Value();
     v["file_offset"] = static_cast<unsigned long long>(file_offset);
     v["accesses_beyond_eof"] = accesses_beyond_eof;
+    v["eof_access_extent"] =
+        std::string(eof_access_extent == EofAccessExtent::WithinFinalPartialPage
+                        ? "within_final_partial_page"
+                        : "whole_page_past_end");
     v["reserve_then_commit"] = reserve_then_commit;
     return v;
 }
@@ -388,6 +418,7 @@ std::optional<Requirement> Requirement::from_json(const json::Value& v,
         !read_flag(req, "file_backed", r.request.file_backed, error) ||
         !read_flag(req, "accesses_beyond_eof", r.request.accesses_beyond_eof,
                    error) ||
+        !read_eof_access_extent(req, r.request.eof_access_extent, error) ||
         !read_flag(req, "validates_returned_address",
                    r.request.validates_returned_address, error) ||
         !read_flag(req, "commit_is_checked_call",

@@ -1,0 +1,39 @@
+{
+  "schema": "runtime-skeptic.application-requirements.v1",
+  "name": "2 MiB anonymous mapping that is writable and executable at the same time",
+  "component": "ground-truth pairing for Box64's dynarec block and LuaJIT's insecure-mcode build",
+  "operation": "virtual_memory_map",
+  "request": {
+    "size": 2097152,
+    "exact_address_required": false,
+    "protection": {
+      "read": true,
+      "write": true,
+      "execute": true
+    },
+    "file_backed": false
+  },
+  "assumptions": {
+    "guest_host_identity_required": false,
+    "translation_layer_available": false,
+    "retries_on_failure": false
+  },
+  "required_postconditions": [
+    "the mapping is writable and executable simultaneously, with no protection change between generating code and running it"
+  ],
+  "permitted_fallbacks": [],
+  "failure_sink": {
+    "kind": "error_return",
+    "location": {
+      "file": "tests/groundtruth/cases/rwx_anonymous.c",
+      "line": 1,
+      "symbol": "attempt"
+    },
+    "description": "the case reports `refused` if the mapping is denied, or `faulted` if it is granted and then kills the process on first instruction fetch"
+  },
+  "assumption_evidence": "specified_guarantee",
+  "extraction_limitations": [
+    "Single-claim contract written to pair with a ground-truth case. It asserts exactly one thing so that a whole-contract verdict can be compared against a single observation without ambiguity."
+  ],
+  "x_groundtruth": "cases/rwx_anonymous.c writes a function through the mapping and calls it. A successful mmap is not the observable: macOS grants RWX and faults on execution when the JIT entitlement is absent."
+}

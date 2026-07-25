@@ -1,0 +1,42 @@
+{
+  "schema": "runtime-skeptic.application-requirements.v1",
+  "name": "Reading only within the final partial page of a mapped file - POSIX guarantees zero-fill",
+  "component": "ground-truth pairing: the false positive the harness found",
+  "operation": "virtual_memory_map",
+  "request": {
+    "size": 4096,
+    "exact_address_required": false,
+    "protection": {
+      "read": true,
+      "write": false,
+      "execute": false
+    },
+    "file_backed": true,
+    "file_length": 1,
+    "accesses_beyond_eof": true,
+    "eof_access_extent": "within_final_partial_page"
+  },
+  "assumptions": {
+    "guest_host_identity_required": false,
+    "translation_layer_available": false,
+    "retries_on_failure": false
+  },
+  "required_postconditions": [
+    "bytes between the end of the file and the end of its final page read as zero, which POSIX requires of every conforming system"
+  ],
+  "permitted_fallbacks": [],
+  "failure_sink": {
+    "kind": "process_exit",
+    "location": {
+      "file": "tests/groundtruth/cases/file_map_beyond_eof.c",
+      "line": 1,
+      "symbol": "attempt"
+    },
+    "description": "there is no reachable sink on a conforming host; the case reports `faulted` only if one appears, which would be a platform bug"
+  },
+  "assumption_evidence": "specified_guarantee",
+  "extraction_limitations": [
+    "Single-claim contract written to pair with a ground-truth case. It asserts exactly one thing so that a whole-contract verdict can be compared against a single observation without ambiguity."
+  ],
+  "x_groundtruth": "cases/file_map_partial_page.c performs this read. The analyzer called it UNSUPPORTED on every sigbus host until eof_access_extent existed."
+}

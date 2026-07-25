@@ -1,0 +1,67 @@
+{
+  "schema": "runtime-skeptic.groundtruth-manifest.v1",
+  "note": "Each entry pairs one single-claim contract with the program that performs that claim on the real host. The program's argv is fixed here so the request the analyzer reads and the request the kernel receives cannot drift apart.",
+  "cases": [
+    {
+      "case": "exact-mapping-in-carveout",
+      "contract": "contracts/exact-mapping-in-carveout.json",
+      "program": "exact_mapping",
+      "args": [
+        "1307200000",
+        "131072"
+      ],
+      "why": "The address from shadPS4 issue #4157. On the measured macOS profiles it falls inside a 384 GiB no-access entry, so the analyzer says UNSUPPORTED and the mmap must not succeed there. On a Linux host nothing is reserved at that address and both should agree it works."
+    },
+    {
+      "case": "exact-mapping-at-a-free-address",
+      "contract": "contracts/exact-mapping-at-a-free-address.json",
+      "program": "exact_mapping",
+      "args": [
+        "7000000000",
+        "131072"
+      ],
+      "why": "The control. shadPS4 uses 0x7000000000 as USER_MIN on Apple x86-64 precisely because it is placeable, and the probe measured it placeable in both lanes. A tool that reports UNSUPPORTED here is crying wolf, and no amount of correct UNSUPPORTED verdicts elsewhere makes up for that."
+    },
+    {
+      "case": "rwx-anonymous-2mib",
+      "contract": "contracts/rwx-anonymous-2mib.json",
+      "program": "rwx_anonymous",
+      "args": [
+        "2097152"
+      ],
+      "why": "Box64's dynarec block and LuaJIT's LUAJIT_SECURITY_MCODE=0 machine-code area. The case writes a function through the mapping and calls it, because macOS grants RWX pages and then faults on the first instruction fetch without the JIT entitlement - a successful mmap is not the observable."
+    },
+    {
+      "case": "page-size-at-most-4kib",
+      "contract": "contracts/page-size-at-most-4kib.json",
+      "program": "page_size_at_most",
+      "args": [
+        "4096"
+      ],
+      "why": "jemalloc's default build. Should be satisfied on a 4 KiB host and refused on native macOS arm64, where sysconf reports 16384 and pages.c:760 aborts."
+    },
+    {
+      "case": "page-size-at-most-64kib",
+      "contract": "contracts/page-size-at-most-64kib.json",
+      "program": "page_size_at_most",
+      "args": [
+        "65536"
+      ],
+      "why": "jemalloc built with --with-lg-page=16. Satisfied on every page size measured so far; this is the case that caught defect 4, where the analyzer tested equality and declared a working configuration critically broken."
+    },
+    {
+      "case": "file-map-beyond-eof",
+      "contract": "contracts/file-map-beyond-eof.json",
+      "program": "file_map_beyond_eof",
+      "args": [],
+      "why": "The sharpest difference between the two macOS lanes: native arm64 raises SIGBUS, the same machine under Rosetta 2 returns zero-fill. Identical source, one machine, opposite outcomes."
+    },
+    {
+      "case": "file-map-partial-page",
+      "contract": "contracts/file-map-partial-page.json",
+      "program": "file_map_partial_page",
+      "args": [],
+      "why": "The false positive this harness found on its first run. POSIX requires the partial page at the end of a mapped object to be zero-filled, so this read cannot fault anywhere - but the analyzer called it UNSUPPORTED on any host measuring `sigbus`, because a contract could not distinguish it from a read a whole page past the end. If that regresses, a prediction of UNSUPPORTED will meet an observation of `satisfied` here."
+    }
+  ]
+}

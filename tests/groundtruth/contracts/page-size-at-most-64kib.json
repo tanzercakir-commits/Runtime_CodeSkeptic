@@ -1,0 +1,40 @@
+{
+  "schema": "runtime-skeptic.application-requirements.v1",
+  "name": "A build assuming PAGE == 65536 running on this host's page size",
+  "component": "ground-truth pairing for jemalloc's pages.c:760 check",
+  "operation": "virtual_memory_map",
+  "request": {
+    "size": 65536,
+    "exact_address_required": false,
+    "required_page_size": 65536,
+    "required_page_size_relation": "at_most",
+    "protection": {
+      "read": true,
+      "write": true,
+      "execute": false
+    }
+  },
+  "assumptions": {
+    "guest_host_identity_required": false,
+    "translation_layer_available": false,
+    "retries_on_failure": false
+  },
+  "required_postconditions": [
+    "sysconf(_SC_PAGESIZE) <= 65536, so the shipping guard is not taken"
+  ],
+  "permitted_fallbacks": [],
+  "failure_sink": {
+    "kind": "process_exit",
+    "location": {
+      "file": "tests/groundtruth/cases/page_size_at_most.c",
+      "line": 1,
+      "symbol": "main"
+    },
+    "description": "the case reports `refused` when os_page > PAGE, which is where the real code aborts"
+  },
+  "assumption_evidence": "specified_guarantee",
+  "extraction_limitations": [
+    "Single-claim contract written to pair with a ground-truth case. It asserts exactly one thing so that a whole-contract verdict can be compared against a single observation without ambiguity."
+  ],
+  "x_groundtruth": "cases/page_size_at_most.c implements `if (os_page > PAGE) abort()` longhand. The relation is at_most; testing equality here was defect 4 of the July campaign."
+}

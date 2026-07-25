@@ -42,6 +42,11 @@ jobs:
       - name: Probe is reproducible across processes
         run: bash tools/campaign/check_reproducible.sh
 
+      - name: Ground truth vs prediction
+        run: |
+          build/bin/rs-env-probe vm --name ci-linux --output /tmp/ci-linux.json
+          bash tests/groundtruth/run.sh /tmp/ci-linux.json
+
       # The probe is only implemented for Linux. On other platforms this step
       # proves the honest fallback: a schema-valid profile in which every fact
       # is unknown, and a non-zero warning list saying so.
