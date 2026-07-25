@@ -62,6 +62,43 @@
       "program": "file_map_partial_page",
       "args": [],
       "why": "The false positive this harness found on its first run. POSIX requires the partial page at the end of a mapped object to be zero-filled, so this read cannot fault anywhere - but the analyzer called it UNSUPPORTED on any host measuring `sigbus`, because a contract could not distinguish it from a read a whole page past the end. If that regresses, a prediction of UNSUPPORTED will meet an observation of `satisfied` here."
+    },
+    {
+      "case": "write-then-execute-2mib",
+      "contract": "contracts/write-then-execute-2mib.json",
+      "program": "write_then_execute",
+      "args": [
+        "2097152"
+      ],
+      "why": "The pair with rwx-anonymous-2mib is the project's thesis in two programs: on native macOS arm64 the same JIT succeeds written one way and fails written the other, and RS-VM-0009 can only be trusted to tell them apart if both halves have run for real."
+    },
+    {
+      "case": "hinted-mapping-requires-identity",
+      "contract": "contracts/hinted-mapping-requires-identity.json",
+      "program": "hinted_relocation",
+      "args": [
+        "131072"
+      ],
+      "why": "mmap's addr is advisory and reports success wherever it lands, so a program requiring guest/host identity loses silently. The only case that produces `relocated` against a real kernel rather than the selftest stub.\n\nDELIBERATELY NOT ASSERTED, and it is the one pairing where the case is narrower than its contract. The contract says the hint MAY relocate, which is CONDITIONALLY_SUPPORTED and correct: hinting at a free address usually works, and whether it is free depends on a process layout no profile can know. The case forces the unlucky branch by occupying the address first. So it cannot confirm or refute the verdict - what it does is prove the unlucky branch is real on this kernel, and show what the program sees when it happens: success, at the wrong address, with nothing to check.",
+      "asserted": false
+    },
+    {
+      "case": "oversized-reservation-4pib",
+      "contract": "contracts/oversized-reservation-4pib.json",
+      "program": "oversized_reservation",
+      "args": [
+        "4503599627370496"
+      ],
+      "why": "Campaign defect 1, which the tool answered SUPPORTED with no findings. Address-less-but-enormous is how emulators and allocators make their largest requests."
+    },
+    {
+      "case": "reserve-then-commit-1gib",
+      "contract": "contracts/reserve-then-commit-1gib.json",
+      "program": "reserve_then_commit",
+      "args": [
+        "1073741824"
+      ],
+      "why": "Windows makes reservation and commitment distinct observable states; POSIX does not. RS-VM-0012 reads reserve_commit_model, measured posix_lazy on every host probed so far."
     }
   ]
 }

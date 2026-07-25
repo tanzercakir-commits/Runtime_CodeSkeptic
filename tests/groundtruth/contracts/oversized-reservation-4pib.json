@@ -1,0 +1,38 @@
+{
+  "schema": "runtime-skeptic.application-requirements.v1",
+  "name": "A 4 PiB address-space reservation",
+  "component": "ground-truth pairing for QEMU's MAX_RESERVED_VA = (1<<52)-1",
+  "operation": "virtual_memory_map",
+  "request": {
+    "size": 4503599627370496,
+    "exact_address_required": false,
+    "protection": {
+      "read": false,
+      "write": false,
+      "execute": false
+    }
+  },
+  "assumptions": {
+    "guest_host_identity_required": false,
+    "translation_layer_available": false,
+    "retries_on_failure": false
+  },
+  "required_postconditions": [
+    "the host reserves the whole requested range"
+  ],
+  "permitted_fallbacks": [],
+  "failure_sink": {
+    "kind": "error_return",
+    "location": {
+      "file": "tests/groundtruth/cases/oversized_reservation.c",
+      "line": 1,
+      "symbol": "attempt"
+    },
+    "description": "the case reports the refusal and the runner fails the pairing"
+  },
+  "assumption_evidence": "specified_guarantee",
+  "extraction_limitations": [
+    "Single-claim contract written to pair with a ground-truth case. It asserts exactly one thing so that a whole-contract verdict can be compared against a single observation without ambiguity."
+  ],
+  "x_groundtruth": "Campaign defect 1: the analyzer answered SUPPORTED with no findings, because no rule compared request.size against anything at all."
+}

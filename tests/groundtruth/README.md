@@ -57,6 +57,13 @@ A case prints one JSON object to stdout:
 that demands an exact address is not helped by a successful mapping somewhere
 else, and the whole reason `MAP_FIXED` is dangerous is that it succeeds.
 
+Those two are also the outcomes a well-behaved host rarely produces, which
+makes them the ones most likely to be mishandled by the runner and never
+noticed. `faulted` arrives for real from `file_map_beyond_eof` on a sigbus
+host; `relocated` arrives from `hinted_relocation`. Both are additionally
+exercised end-to-end by `selftest.sh`, because a comparison table that is
+silently wrong makes every green run here meaningless.
+
 Anything that can fault runs in a forked child, so a case that takes SIGBUS
 reports it instead of taking the harness down with it.
 

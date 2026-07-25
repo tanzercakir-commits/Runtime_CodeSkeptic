@@ -1,0 +1,38 @@
+{
+  "schema": "runtime-skeptic.application-requirements.v1",
+  "name": "A hinted mapping whose caller requires the returned address to equal the hint",
+  "component": "ground-truth pairing for QEMU user mode and shadPS4's direct-memory path",
+  "operation": "virtual_memory_map",
+  "request": {
+    "size": 131072,
+    "exact_address_required": false,
+    "protection": {
+      "read": true,
+      "write": true,
+      "execute": false
+    }
+  },
+  "assumptions": {
+    "guest_host_identity_required": true,
+    "translation_layer_available": false,
+    "retries_on_failure": false
+  },
+  "required_postconditions": [
+    "the address mmap returns equals the address that was hinted"
+  ],
+  "permitted_fallbacks": [],
+  "failure_sink": {
+    "kind": "error_return",
+    "location": {
+      "file": "tests/groundtruth/cases/hinted_relocation.c",
+      "line": 1,
+      "symbol": "attempt"
+    },
+    "description": "the case reports `relocated`: mmap returned SUCCESS at a different address, and a caller requiring identity has no error to check"
+  },
+  "assumption_evidence": "specified_guarantee",
+  "extraction_limitations": [
+    "Single-claim contract written to pair with a ground-truth case. It asserts exactly one thing so that a whole-contract verdict can be compared against a single observation without ambiguity."
+  ],
+  "x_groundtruth": "mmap's addr is advisory. The case occupies an address and then hints at it without MAP_FIXED, which is the only case here that produces `relocated` against a real kernel."
+}

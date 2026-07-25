@@ -1,0 +1,40 @@
+{
+  "schema": "runtime-skeptic.application-requirements.v1",
+  "name": "2 MiB mapping written as RW, then flipped to RX before execution",
+  "component": "ground-truth pairing: the safe way to build a JIT on a W^X host",
+  "operation": "virtual_memory_map",
+  "request": {
+    "size": 2097152,
+    "exact_address_required": false,
+    "protection": {
+      "read": true,
+      "write": false,
+      "execute": true
+    },
+    "write_then_execute": true,
+    "simultaneous_write_execute": false
+  },
+  "assumptions": {
+    "guest_host_identity_required": false,
+    "translation_layer_available": false,
+    "retries_on_failure": false
+  },
+  "required_postconditions": [
+    "code written through a writable mapping is executable after the protection is changed, with W and X never live at the same moment"
+  ],
+  "permitted_fallbacks": [],
+  "failure_sink": {
+    "kind": "error_return",
+    "location": {
+      "file": "tests/groundtruth/cases/write_then_execute.c",
+      "line": 1,
+      "symbol": "attempt"
+    },
+    "description": "the case reports the refusal and the runner fails the pairing"
+  },
+  "assumption_evidence": "specified_guarantee",
+  "extraction_limitations": [
+    "Single-claim contract written to pair with a ground-truth case. It asserts exactly one thing so that a whole-contract verdict can be compared against a single observation without ambiguity."
+  ],
+  "x_groundtruth": "The deliberate opposite of rwx-anonymous-2mib. On native macOS arm64 the measured facts give these two OPPOSITE answers: write_execute_simultaneous=false, write_then_execute_transition=true."
+}
