@@ -648,20 +648,31 @@ ScanOutcome scan_address_space(std::size_t page_size, std::uint64_t probe_length
         // itself a measurement and was wrong once already; letting it prune
         // the candidate list is how the first run silently failed to test the
         // band the whole project is about.
-        // NOT filtered against min_address, deliberately.
         //
-        // Skipping candidates below the probe's own image makes the candidate
-        // SET depend on where the loader put us, and under Rosetta that moves
-        // at every exec. Two runs on one machine agreed only by luck: the ~48
-        // MiB the image slid between them happened to contain no power-of-two
-        // sample point, so the two candidate lists came out identical. A wider
-        // slide would have changed the range facts and, with them, the
-        // profile_id that is supposed to name the host.
+        // The min_address filter stays, and the argument for removing it was
+        // wrong in a way only a measurement could show.
         //
-        // The classifier below already distinguishes "a real mapping of ours"
-        // from "the kernel refuses this" - that is what it is for, and it is
-        // the fix that landed for defect 2. Filtering ahead of it added a
-        // dependency on our own layout to do a job it already does.
+        // The argument: skipping candidates below our own image makes the
+        // candidate SET depend on where the loader put us, which under Rosetta
+        // moves at every exec. That much is true. It was removed on that
+        // reasoning, and the cross-process reproducibility gate failed on BOTH
+        // lanes on the next run - including native arm64, which had been
+        // byte-identical across two earlier runs.
+        //
+        // Why: filtering was not the only thing that depended on our layout,
+        // it was the thing SUPPRESSING the dependency. Probe a low candidate
+        // and the answer is "free" or "occupied" according to where this
+        // process's heap and libraries happen to sit, and a free one is
+        // recorded in available_ranges - a fact about our morning, hashed into
+        // an id that is supposed to name the host. The filter cut those
+        // candidates before they could be recorded.
+        //
+        // The residual risk the removal was aimed at is real and stays: if the
+        // image ever slides across a power-of-two sample point, the candidate
+        // set changes. It is now a risk the gate can SEE - which is a better
+        // position than trading a narrow hazard for a broad one on an argument
+        // that sounded right.
+        if (min_address != 0 && base < min_address) continue;
         const auto range = AddressRange::from_base_size(base, probe_length);
         if (!range) continue;
 

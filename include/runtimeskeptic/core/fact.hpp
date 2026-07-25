@@ -118,7 +118,16 @@ private:
 template <typename T, typename Reader>
 Fact<T> fact_from_json(const json::Value* node, Reader read_value,
                        std::string& error) {
-    if (node == nullptr || node->is_null()) return Fact<T>::unknown("absent");
+    // Same rule as the unknown-with-no-note case below: a missing key is the
+    // document declining to say, and the reader does not get to narrate that
+    // back as "absent". Two documents stating identical facts - one omitting
+    // the key, one writing {"evidence":"unknown","value":null} - mean the same
+    // thing and must hash to the same profile_id.
+    //
+    // The "malformed" notes further down are a different matter: those paths
+    // also set `error`, and every caller treats that as a hard schema failure,
+    // so the note never survives into a valid profile.
+    if (node == nullptr || node->is_null()) return Fact<T>::unknown();
     if (!node->is_object()) {
         error = "fact must be an object with 'value' and 'evidence'";
         return Fact<T>::unknown("malformed");

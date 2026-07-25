@@ -271,4 +271,39 @@ RS_TEST(a_stated_reason_for_unknown_is_preserved) {
     RS_CHECK_EQ(restored->profile_id(), p.profile_id());
 }
 
+// Two documents that state the same facts must name the same host, whether an
+// unknown fact is written out as null or simply left out.
+RS_TEST(an_omitted_fact_and_an_explicit_unknown_are_the_same_profile) {
+    const char* omitted = R"({
+        "schema": "runtime-skeptic.environment-profile.v1",
+        "origin": "measured",
+        "platform": {"os": "linux", "process_arch": "x86_64"},
+        "virtual_memory": {
+            "page_size": {"value": 4096, "evidence": "measured_capability"}
+        }
+    })";
+    const char* explicit_unknown = R"({
+        "schema": "runtime-skeptic.environment-profile.v1",
+        "origin": "measured",
+        "platform": {"os": "linux", "process_arch": "x86_64"},
+        "virtual_memory": {
+            "page_size": {"value": 4096, "evidence": "measured_capability"},
+            "min_map_address": {"value": null, "evidence": "unknown"}
+        }
+    })";
+    auto a = json::parse(omitted);
+    auto b = json::parse(explicit_unknown);
+    RS_CHECK(a.ok());
+    RS_CHECK(b.ok());
+    if (!a.ok() || !b.ok()) return;
+
+    std::string error;
+    auto pa = EnvironmentProfile::from_json(*a.value, error);
+    auto pb = EnvironmentProfile::from_json(*b.value, error);
+    RS_CHECK(pa.has_value());
+    RS_CHECK(pb.has_value());
+    if (!pa || !pb) return;
+    RS_CHECK_EQ(pa->profile_id(), pb->profile_id());
+}
+
 RS_TEST_MAIN("profile")

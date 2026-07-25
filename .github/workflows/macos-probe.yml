@@ -45,7 +45,9 @@ jobs:
       # ctest's reproducibility test calls the probe twice in ONE process, so
       # it cannot see anything ASLR decides at exec time. This runs two.
       - name: Probe is reproducible across processes
-        run: bash tools/campaign/check_reproducible.sh
+        run: |
+          bash tools/campaign/check_reproducible.sh 2>&1 | tee /tmp/reproducible.txt
+          exit "${PIPESTATUS[0]}"
 
       - name: Confirm this is really Apple Silicon
         run: |
@@ -121,11 +123,13 @@ jobs:
           ctest --test-dir build --rerun-failed --output-on-failure \
             > /tmp/diag/ctest_failed.txt 2>&1 || true
           tail -c 30000 /tmp/diag/ctest_failed.txt > /tmp/diag/ctest_tail.txt || true
+          cp /tmp/reproducible.txt /tmp/diag/reproducible.txt 2>/dev/null \
+            || echo "(the reproducibility step did not run)" > /tmp/diag/reproducible.txt
           git config user.name "ci-logs"
           git config user.email "ci-logs@localhost"
           git checkout --detach -q
-          cp /tmp/diag/steps.json /tmp/diag/ctest_tail.txt .
-          git add -f steps.json ctest_tail.txt
+          cp /tmp/diag/steps.json /tmp/diag/ctest_tail.txt /tmp/diag/reproducible.txt .
+          git add -f steps.json ctest_tail.txt reproducible.txt
           git commit -qm "macos diagnostics @ ${{ github.sha }}"
           git push --force origin \
             "HEAD:refs/ci-logs/${{ github.sha }}/native-arm64"
@@ -178,7 +182,8 @@ jobs:
         run: |
           PROBE=build-x64/bin/rs-env-probe \
           PROFILE_TOOL=build-x64/bin/rs-profile \
-            bash tools/campaign/check_reproducible.sh
+            bash tools/campaign/check_reproducible.sh 2>&1 | tee /tmp/reproducible.txt
+          exit "${PIPESTATUS[0]}"
 
       # This is the measurement the whole project has been waiting for.
       - name: Measure the translated address space
@@ -307,11 +312,13 @@ jobs:
           ctest --test-dir build-x64 --rerun-failed --output-on-failure \
             > /tmp/diag/ctest_failed.txt 2>&1 || true
           tail -c 30000 /tmp/diag/ctest_failed.txt > /tmp/diag/ctest_tail.txt || true
+          cp /tmp/reproducible.txt /tmp/diag/reproducible.txt 2>/dev/null \
+            || echo "(the reproducibility step did not run)" > /tmp/diag/reproducible.txt
           git config user.name "ci-logs"
           git config user.email "ci-logs@localhost"
           git checkout --detach -q
-          cp /tmp/diag/steps.json /tmp/diag/ctest_tail.txt .
-          git add -f steps.json ctest_tail.txt
+          cp /tmp/diag/steps.json /tmp/diag/ctest_tail.txt /tmp/diag/reproducible.txt .
+          git add -f steps.json ctest_tail.txt reproducible.txt
           git commit -qm "macos diagnostics @ ${{ github.sha }}"
           git push --force origin \
             "HEAD:refs/ci-logs/${{ github.sha }}/rosetta-x86_64"
