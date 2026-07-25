@@ -224,12 +224,28 @@ FixedSupport detect_fixed_allocation(std::size_t page_size,
 // platform policy and carrying measured_capability evidence.
 enum class Placement { Placed, OccupiedByUs, Refused };
 
-// Does THIS task have a mapping covering `address`?
+// What does the task map actually say about this address?
 //
-// mach_vm_region returns the first region at or above the address it is
-// given, so a region that starts at or below the target and extends past it
-// is ours; anything else means our task has nothing there.
-bool task_has_mapping_at(std::uint64_t address) {
+// Iteration four on the same boundary, and the previous three were all wrong
+// in instructive ways. "Is there a region covering it?" turned out to be true
+// for the commpage and the GPU carveout: macOS places those in EVERY task's
+// map, so the presence of a region says nothing about who may use it.
+//
+// vm_region_basic_info carries the field that does: `reserved` means the
+// entry is a placeholder the system has taken, not a real mapping. That is
+// precisely the distinction between "another part of my program is here" and
+// "the platform will never give me this".
+struct RegionInfo {
+    bool found = false;
+    bool covers = false;
+    bool reserved = false;
+    vm_prot_t protection = 0;
+    std::uint64_t start = 0;
+    std::uint64_t size = 0;
+};
+
+RegionInfo describe_region(std::uint64_t address) {
+    RegionInfo out;
     mach_vm_address_t region = static_cast<mach_vm_address_t>(address);
     mach_vm_size_t size = 0;
     vm_region_basic_info_data_64_t info{};
@@ -238,10 +254,32 @@ bool task_has_mapping_at(std::uint64_t address) {
     const kern_return_t kr = ::mach_vm_region(
         ::mach_task_self(), &region, &size, VM_REGION_BASIC_INFO_64,
         reinterpret_cast<vm_region_info_t>(&info), &count, &object);
-    if (kr != KERN_SUCCESS) return false;
-    return static_cast<std::uint64_t>(region) <= address &&
-           address < static_cast<std::uint64_t>(region) +
-                         static_cast<std::uint64_t>(size);
+    if (kr != KERN_SUCCESS) return out;
+    out.found = true;
+    out.start = static_cast<std::uint64_t>(region);
+    out.size = static_cast<std::uint64_t>(size);
+    out.covers = out.start <= address && address < out.start + out.size;
+    out.reserved = info.reserved != 0;
+    out.protection = info.protection;
+    return out;
+}
+
+// Human-readable, and carried into the profile so the NEXT measurement
+// explains itself instead of needing another round of guessing.
+std::string describe_region_text(const RegionInfo& r) {
+    if (!r.found) return "mach_vm_region found no region at or above this address";
+    std::string s = "region [" + json::to_hex(r.start) + ", " +
+                    json::to_hex(r.start + r.size) + ")";
+    s += r.covers ? " covers it" : " starts above it, so nothing covers it";
+    if (r.covers) {
+        s += r.reserved ? ", and is a system RESERVATION (vm_region reserved=1)"
+                        : ", and is a real mapping (reserved=0)";
+        s += ", protection ";
+        s.push_back((r.protection & VM_PROT_READ) ? 'r' : '-');
+        s.push_back((r.protection & VM_PROT_WRITE) ? 'w' : '-');
+        s.push_back((r.protection & VM_PROT_EXECUTE) ? 'x' : '-');
+    }
+    return s;
 }
 
 Placement try_place(std::uint64_t address, std::size_t length) {
@@ -265,8 +303,11 @@ Placement try_place(std::uint64_t address, std::size_t length) {
     // So ask. If our own task has no mapping covering the address and the
     // allocation was still refused, the reservation belongs to the platform
     // and IS a host limitation.
-    return task_has_mapping_at(address) ? Placement::OccupiedByUs
-                                        : Placement::Refused;
+    const RegionInfo region = describe_region(address);
+    // A system reservation, or nothing of ours at all, is a host limitation.
+    // Only a real mapping that covers the address is genuinely "ours".
+    if (!region.covers || region.reserved) return Placement::Refused;
+    return Placement::OccupiedByUs;
 }
 
 // Steps past pages the probe's own image occupies, so a search converges on a
@@ -610,14 +651,15 @@ ScanOutcome scan_address_space(std::size_t page_size, std::uint64_t probe_length
             continue;
         }
 
-        if (result == KERN_NO_SPACE && task_has_mapping_at(base)) {
-            // Genuinely ours: a property of one process layout, not of the
-            // host, so it must not become a limitation other programs are
+        const RegionInfo region = describe_region(base);
+        if (result == KERN_NO_SPACE && region.covers && !region.reserved) {
+            // A real mapping of ours: a property of one process layout, not of
+            // the host, so it must not become a limitation other programs are
             // judged against.
             outcome.occupied_notes.push_back(
-                "range " + range->to_string() +
-                " is mapped by the probe process itself (confirmed with "
-                "mach_vm_region); NOT recorded as a host limitation");
+                "range " + range->to_string() + " is a real mapping in the "
+                "probe process (" + describe_region_text(region) +
+                "); NOT recorded as a host limitation");
             continue;
         }
 
@@ -626,13 +668,8 @@ ScanOutcome scan_address_space(std::size_t page_size, std::uint64_t probe_length
         ClassifiedRange cr;
         cr.range = *range;
         cr.evidence = EvidenceClass::MeasuredCapability;
-        cr.note =
-            result == KERN_NO_SPACE
-                ? std::string("the range is reserved: mach_vm_allocate refused "
-                              "with KERN_NO_SPACE while mach_vm_region shows "
-                              "this task has no mapping there, so the "
-                              "reservation belongs to the platform")
-                : "exact allocation refused with " + kern_error_name(result);
+        cr.note = "mach_vm_allocate(VM_FLAGS_FIXED) refused with " +
+                  kern_error_name(result) + "; " + describe_region_text(region);
         outcome.unavailable.push_back(cr);
     }
     return outcome;

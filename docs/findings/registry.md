@@ -215,3 +215,44 @@ No IDs are deprecated today. `FindingDefinition` in `include/runtimeskeptic/vm/f
 The registry is versioned with the tool, not independently. `AnalysisResult` carries `schema: runtime-skeptic.compatibility-result.v1`; a change to the *shape* of a finding is a schema version bump, while adding or deprecating an ID is not.
 
 Consumers should treat an unrecognized ID as a finding they do not have local knowledge of — reporting it with its severity and confidence — rather than as an error. The `severity`, `confidence` and `support_impact` fields are self-describing precisely so a consumer can act on a finding it has never seen.
+
+## Added after the July 2026 real-world campaign
+
+These seven ids did not exist when the registry was first written. Each was
+added because running real projects through the analyzer showed something it
+could not say - and in five of the seven cases, something it was saying
+*wrongly*.
+
+| ID | Title | Severity | Why it exists |
+|---|---|---|---|
+| `RS-VM-0019` | Anonymous memory mapping is unavailable on this host | critical | A profile that established nothing produced `SUPPORTED`, exit 0. Absence of objections was being reported as support, so "can this host map memory at all" became an explicit fact that must be positively established. |
+| `RS-VM-0020` | Address hint points into a range the host cannot provide | low | A hint aimed at an unavailable range does not fail the request - the mapping lands elsewhere - but the hint is silently useless and downstream code sometimes assumes otherwise. |
+| `RS-VM-0021` | Requested size does not fit in the usable address space | critical | QEMU's aarch64 mode reserves 4 PiB. Every placement rule began `if (!request.address) return;` and nothing compared the size to anything, so 4 PiB and 4 KiB were indistinguishable. |
+| `RS-VM-0022` | Reservation alignment exceeds what the mapping API guarantees | high | `required_alignment` was only read when an address was *also* given, so "4 GiB aligned to 4 GiB, anywhere" - V8's cage, mimalloc's segments - fell straight through. Deleting the field changed nothing, which is the definition of dead code. |
+| `RS-VM-0023` | The host cannot place the mapping inside the program's address bound | critical | LuaJIT below 2^31, Box64 box32 below 2^32, Box64 dynarec above 2^32. With nowhere to express a bound, authors reached for identity requirements and the analyzer reported a contradiction it had manufactured. |
+| `RS-VM-0024` | A relative-displacement constraint was carried but not evaluated | info | Every JIT with a rel32 branch needs "within ±N bytes of another region". v0.1 cannot decide it. Saying so turns an unnoticed question into an unanswered one. |
+| `RS-VM-0025` | The program can use only a small part of this host's address space | low | Removing the (incorrect) truncation story from LuaJIT also removed the only warning that it depends on winning an address-space lottery. `PREDICTIVE` per ROADMAP section 11. |
+
+### Two ids whose meaning changed
+
+`RS-VM-0017` was "Availability of the requested range was never established"
+and rendered a different title depending on which rule emitted it, so the id
+no longer determined the title. It is now "A platform fact this request
+depends on was never established" - one id for the whole "we never looked"
+class, so CI can filter it with a single rule.
+
+`RS-VM-0015` was unreachable for statically inferred requirements. It asked
+"did anything prove impossibility?" by testing `confidence == Proven`, but
+confidence is clamped by evidence and a statically inferred requirement can
+never reach `PROVEN` - which is the entire class of input a static extractor
+produces. Findings now carry `structural_impossibility` separately, because
+"no execution can succeed" is a property of the reasoning and `PROVEN` is a
+property of the evidence.
+
+### Findings that report a satisfied constraint
+
+None. Satisfied constraints are not findings; they are recorded separately in
+`AnalysisResult::satisfied` and rendered under "Checked and satisfied". The
+campaign found that a contract written specifically to catch the
+4 KiB-versus-16 KiB problem produced *no output at all* on a 4 KiB host, which
+made "checked and fine" indistinguishable from "never examined".
