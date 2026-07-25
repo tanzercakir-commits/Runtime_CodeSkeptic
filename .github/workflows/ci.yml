@@ -5,8 +5,23 @@ on:
     branches: [main]
   pull_request:
   workflow_dispatch:
+  # The expensive lanes still get exercised, just not on every commit.
+  schedule:
+    - cron: '17 4 * * 1'
 
 jobs:
+  # Linux only, and every push. GitHub bills these at 1x.
+  #
+  # macOS and Windows moved to `expensive-platforms` below, because this matrix
+  # was the single largest thing in the repository and nobody had added up what
+  # it cost. Every push to main started THREE macOS jobs - one here plus the two
+  # in macos-probe.yml - and macOS bills at 10x, Windows at 2x. Roughly 75
+  # billable minutes per push. Twenty pushes in one night exhausted a 2,000
+  # minute monthly quota, and the first symptom was every run in the repository
+  # failing at startup in under fifteen seconds with no billable time recorded.
+  #
+  # The macOS entry here was pure duplication on top of that: macos-probe.yml
+  # already builds and tests on macOS twice, natively and under Rosetta.
   build-and-test:
     name: ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
@@ -16,8 +31,6 @@ jobs:
         include:
           - { name: "linux / gcc",     os: ubuntu-latest,  cc: gcc,   cxx: g++ }
           - { name: "linux / clang",   os: ubuntu-latest,  cc: clang, cxx: clang++ }
-          - { name: "macos / apple-clang", os: macos-latest, cc: clang, cxx: clang++ }
-          - { name: "windows / msvc",  os: windows-latest, cc: "",    cxx: "" }
 
     steps:
       - uses: actions/checkout@v4
@@ -39,19 +52,24 @@ jobs:
       - name: Test
         run: ctest --test-dir build --build-config RelWithDebInfo --output-on-failure
 
+      # POSIX-only: the case programs use mmap/mprotect/fork, and the probe is
+      # not implemented for Windows.
       - name: Probe is reproducible across processes
+        if: runner.os != 'Windows'
         run: bash tools/campaign/check_reproducible.sh
 
       # Before trusting the comparison, test the comparator. This exercises the
       # rows a real host never produces - `relocated`, a SUPPORTED prediction
       # meeting a refusal, a case that dies without printing.
       - name: Ground-truth harness selftest
+        if: runner.os != 'Windows'
         run: bash tests/groundtruth/selftest.sh
 
       - name: Ground truth vs prediction
+        if: runner.os != 'Windows'
         run: |
-          build/bin/rs-env-probe vm --name ci-linux --output /tmp/ci-linux.json
-          bash tests/groundtruth/run.sh /tmp/ci-linux.json
+          build/bin/rs-env-probe vm --name gt-host --output /tmp/gt-host.json
+          bash tests/groundtruth/run.sh /tmp/gt-host.json
 
       # The probe is only implemented for Linux. On other platforms this step
       # proves the honest fallback: a schema-valid profile in which every fact
@@ -69,6 +87,52 @@ jobs:
         with:
           name: profile-${{ matrix.os }}-${{ matrix.cc || 'msvc' }}
           path: host-profile.json
+
+  # macOS at 10x and Windows at 2x, so NOT on every commit. Weekly, or on
+  # demand, or when a pull request is what you are about to merge.
+  #
+  # This is a real reduction in coverage per push and the honest trade is worth
+  # stating: a portability break on Windows can now land on main and go unseen
+  # for up to a week. That is acceptable while nothing in the project is
+  # Windows-specific - the probe is `vm_probe_unimplemented.cpp` there - and it
+  # stops being acceptable the moment a Windows probe exists. Revisit then.
+  expensive-platforms:
+    name: ${{ matrix.name }}
+    if: github.event_name != 'push'
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: "macos / apple-clang", os: macos-latest,   cc: clang, cxx: clang++ }
+          - { name: "windows / msvc",      os: windows-latest, cc: "",    cxx: "" }
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure
+        shell: bash
+        run: |
+          if [ -n "${{ matrix.cc }}" ]; then
+            export CC=${{ matrix.cc }} CXX=${{ matrix.cxx }}
+          fi
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=RelWithDebInfo -DRS_WARNINGS_AS_ERRORS=ON
+
+      - name: Build
+        run: cmake --build build --config RelWithDebInfo --parallel
+
+      - name: Test
+        run: ctest --test-dir build --build-config RelWithDebInfo --output-on-failure
+
+      # POSIX-only: the case programs use mmap/mprotect/fork.
+      - name: Ground-truth harness selftest
+        if: runner.os != 'Windows'
+        run: bash tests/groundtruth/selftest.sh
+
+      - name: Ground truth vs prediction
+        if: runner.os != 'Windows'
+        run: |
+          build/bin/rs-env-probe vm --name gt-host --output /tmp/gt-host.json
+          bash tests/groundtruth/run.sh /tmp/gt-host.json
 
   compatibility-gate:
     name: compatibility gate (linux)

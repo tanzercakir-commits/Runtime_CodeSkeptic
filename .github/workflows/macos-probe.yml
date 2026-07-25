@@ -13,35 +13,29 @@ name: macOS measurement
 # profiles. Those artifacts are the first measured macOS facts the project
 # has ever had.
 
-# GitHub bills macOS runners at 10x, and this workflow starts two of them.
-# Running it for a commit that edits a Markdown file spends real minutes to
-# re-measure a host that cannot have changed - and on 2026-07-25 a night of
-# ~20 macOS jobs, several of them triggered by docs-only commits, was followed
-# by every run in this repository failing at startup in under 15 seconds.
+# GitHub bills macOS runners at 10x and this workflow starts two of them, so it
+# does NOT run on push.
 #
-# So the trigger is now narrow: only paths that can actually change what gets
-# measured or how it is judged. Everything else waits for the next real change,
-# or for someone to press Run workflow.
+# That is a deliberate reversal. It used to run on every commit to main, and on
+# 2026-07-25 the arithmetic caught up: three macOS jobs per push (one from
+# ci.yml, two here) at 10x, roughly 75 billable minutes a push, twenty pushes in
+# a night, and a 2,000 minute monthly quota gone. Every run in the repository
+# then failed at startup in under fifteen seconds with `Billable Time -`.
+#
+# The reasoning for per-push measurement was never strong: the HOST cannot
+# change between two commits. What changes is the probe and the analyzer, and a
+# weekly run plus a button covers that without spending a tenth of the month's
+# quota on a commit that edited a test comment.
+#
+#   schedule           one measurement a week, unattended
+#   workflow_dispatch   press Run workflow when you want one now
+#
+# If a measurement is needed for a specific commit, dispatch it against that
+# ref. The trade is real and worth stating: a probe change can now sit on main
+# for up to a week before any Apple Silicon host has run it.
 on:
-  push:
-    branches: [main]
-    paths:
-      - 'src/**'
-      - 'include/**'
-      - 'tools/**'
-      - 'tests/**'
-      - 'contracts/**'
-      - 'CMakeLists.txt'
-      - '.github/workflows/macos-probe.yml'
-  pull_request:
-    paths:
-      - 'src/**'
-      - 'include/**'
-      - 'tools/**'
-      - 'tests/**'
-      - 'contracts/**'
-      - 'CMakeLists.txt'
-      - '.github/workflows/macos-probe.yml'
+  schedule:
+    - cron: '23 4 * * 1'
   workflow_dispatch:
 
 # Publishing measurements and job status as git refs needs push rights.
