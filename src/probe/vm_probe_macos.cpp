@@ -39,6 +39,7 @@
 #include <fcntl.h>
 #include <mach/mach.h>
 #include <mach/mach_vm.h>
+#include <mach/vm_region.h>
 #include <mach/vm_statistics.h>
 #include <signal.h>
 #include <sys/mman.h>
@@ -223,13 +224,49 @@ FixedSupport detect_fixed_allocation(std::size_t page_size,
 // platform policy and carrying measured_capability evidence.
 enum class Placement { Placed, OccupiedByUs, Refused };
 
+// Does THIS task have a mapping covering `address`?
+//
+// mach_vm_region returns the first region at or above the address it is
+// given, so a region that starts at or below the target and extends past it
+// is ours; anything else means our task has nothing there.
+bool task_has_mapping_at(std::uint64_t address) {
+    mach_vm_address_t region = static_cast<mach_vm_address_t>(address);
+    mach_vm_size_t size = 0;
+    vm_region_basic_info_data_64_t info{};
+    mach_msg_type_number_t count = VM_REGION_BASIC_INFO_COUNT_64;
+    mach_port_t object = MACH_PORT_NULL;
+    const kern_return_t kr = ::mach_vm_region(
+        ::mach_task_self(), &region, &size, VM_REGION_BASIC_INFO_64,
+        reinterpret_cast<vm_region_info_t>(&info), &count, &object);
+    if (kr != KERN_SUCCESS) return false;
+    return static_cast<std::uint64_t>(region) <= address &&
+           address < static_cast<std::uint64_t>(region) +
+                         static_cast<std::uint64_t>(size);
+}
+
 Placement try_place(std::uint64_t address, std::size_t length) {
     kern_return_t result = KERN_SUCCESS;
     if (mach_allocate_fixed(address, length, result)) {
         mach_release(address, length);
         return Placement::Placed;
     }
-    return result == KERN_NO_SPACE ? Placement::OccupiedByUs : Placement::Refused;
+    if (result != KERN_NO_SPACE) return Placement::Refused;
+
+    // KERN_NO_SPACE means "this range is not free". It does NOT say WHO holds
+    // it, and reading it as "the probe's own image" was wrong in the most
+    // consequential place possible.
+    //
+    // The first macOS run refused every address from 0xFC0000000 to
+    // 0x6FC0000000 with KERN_NO_SPACE - exactly the band shadPS4 documents as
+    // the commpage plus the GPU carveout - and the probe filed all of it under
+    // "occupied by us, not a host limitation" and recorded nothing. A fresh
+    // process does not own 400 GiB at 64 GiB. The kernel does.
+    //
+    // So ask. If our own task has no mapping covering the address and the
+    // allocation was still refused, the reservation belongs to the platform
+    // and IS a host limitation.
+    return task_has_mapping_at(address) ? Placement::OccupiedByUs
+                                        : Placement::Refused;
 }
 
 // Steps past pages the probe's own image occupies, so a search converges on a
@@ -573,15 +610,14 @@ ScanOutcome scan_address_space(std::size_t page_size, std::uint64_t probe_length
             continue;
         }
 
-        if (result == KERN_NO_SPACE) {
-            // Occupied in THIS process. That is a property of one process
-            // layout, not of the host, so it must not become a host
-            // limitation other programs are judged against.
+        if (result == KERN_NO_SPACE && task_has_mapping_at(base)) {
+            // Genuinely ours: a property of one process layout, not of the
+            // host, so it must not become a limitation other programs are
+            // judged against.
             outcome.occupied_notes.push_back(
                 "range " + range->to_string() +
-                " was occupied in the probe process (KERN_NO_SPACE); this is a "
-                "property of the probe's own layout and was NOT recorded as a "
-                "host limitation");
+                " is mapped by the probe process itself (confirmed with "
+                "mach_vm_region); NOT recorded as a host limitation");
             continue;
         }
 
@@ -590,7 +626,13 @@ ScanOutcome scan_address_space(std::size_t page_size, std::uint64_t probe_length
         ClassifiedRange cr;
         cr.range = *range;
         cr.evidence = EvidenceClass::MeasuredCapability;
-        cr.note = "exact allocation refused with " + kern_error_name(result);
+        cr.note =
+            result == KERN_NO_SPACE
+                ? std::string("the range is reserved: mach_vm_allocate refused "
+                              "with KERN_NO_SPACE while mach_vm_region shows "
+                              "this task has no mapping there, so the "
+                              "reservation belongs to the platform")
+                : "exact allocation refused with " + kern_error_name(result);
         outcome.unavailable.push_back(cr);
     }
     return outcome;

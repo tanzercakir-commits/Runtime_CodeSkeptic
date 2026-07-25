@@ -211,6 +211,17 @@ std::string render_text(const vm::AnalysisResult& result,
         out << "\n";
     }
 
+    if (options.verbose && !result.satisfied.empty()) {
+        out << "  " << p.dim << "Checked and satisfied" << p.reset << "\n";
+        for (const auto& c : result.satisfied) {
+            out << "    " << p.green << "ok" << p.reset << "  " << c.constraint
+                << "\n";
+            out << "        " << p.dim << c.host_fact << "  ["
+                << rs::to_string(c.evidence) << "]" << p.reset << "\n";
+        }
+        out << "\n";
+    }
+
     if (!result.analyzer_limitations.empty()) {
         out << p.yellow << "  Analyzer limitations" << p.reset << "\n";
         for (const auto& l : result.analyzer_limitations) {
@@ -326,6 +337,17 @@ std::string render_markdown(const vm::AnalysisResult& result,
             }
             out << "\n";
         }
+    }
+
+    if (!result.satisfied.empty()) {
+        out << "## Checked and satisfied\n\n";
+        out << "A quiet report is ambiguous unless it says what it looked at.\n\n";
+        out << "| Constraint | Host fact | Evidence |\n|---|---|---|\n";
+        for (const auto& c : result.satisfied) {
+            out << "| " << c.constraint << " | " << c.host_fact << " | `"
+                << rs::to_string(c.evidence) << "` |\n";
+        }
+        out << "\n";
     }
 
     if (!result.analyzer_limitations.empty()) {

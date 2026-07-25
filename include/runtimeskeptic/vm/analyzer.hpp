@@ -40,6 +40,22 @@ struct AnalysisOptions {
     bool report_unknowns = true;
 };
 
+// A constraint that WAS examined and WAS satisfied.
+//
+// Silence is ambiguous, and the campaign caught it: Box64's contract exists to
+// capture the 4 KiB-versus-16 KiB problem, the host was 4 KiB, the rule stayed
+// quiet, and the contract's entire point produced no output at all. "Checked
+// and fine" and "never looked at" were indistinguishable - on a tool whose
+// central promise is that it never lets absence of a warning read as proof of
+// safety.
+struct SatisfiedCheck {
+    std::string constraint;   // what the program required
+    std::string host_fact;    // what the host provides
+    EvidenceClass evidence = EvidenceClass::Unknown;  // how that fact is known
+
+    json::Value to_json() const;
+};
+
 struct AnalysisResult {
     std::string schema = kResultSchema;
     SupportLevel overall = SupportLevel::Unknown;
@@ -50,6 +66,10 @@ struct AnalysisResult {
     std::string profile_name;
     std::string requirement_name;
     ProfileOrigin profile_origin = ProfileOrigin::Unknown;
+
+    // Constraints examined and satisfied. Not findings - the opposite of
+    // findings - but they are what makes a quiet report readable.
+    std::vector<SatisfiedCheck> satisfied;
 
     // Set when the analyzer refused to reason further, e.g. an operation kind
     // the VM domain does not model.

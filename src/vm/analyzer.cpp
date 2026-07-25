@@ -82,6 +82,15 @@ private:
         return f;
     }
 
+    // Records that a constraint was examined and holds. The evidence class
+    // travels with it: "satisfied, on a measured fact" and "satisfied, on a
+    // guess" are different statements.
+    void satisfied(std::string constraint, std::string host_fact,
+                   EvidenceClass evidence) {
+        result_.satisfied.push_back(
+            SatisfiedCheck{std::move(constraint), std::move(host_fact), evidence});
+    }
+
     void emit(Finding f) {
         f.severity = adjust_severity(f.severity, req_.failure_sink.kind);
         // The single place where overclaiming is prevented.
@@ -170,6 +179,12 @@ private:
 // ---------------------------------------------------------------------------
 void Analysis::rule_internal_fallback_contradiction() {
     if (!req_.permits(FallbackKind::Relocate)) return;
+    // A program that CHECKS the address it got back and rejects a bad one is
+    // not accepting relocation as success - it is trying again. jemalloc
+    // unmaps a relocated result and retries with over-allocate-and-trim
+    // (pages.c:155). Reading that as a self-contradiction condemned the normal
+    // shape of allocator code.
+    if (req_.request.validates_returned_address) return;
 
     const bool requires_identity =
         req_.request.exact_address_required ||
@@ -293,7 +308,12 @@ void Analysis::rule_size_feasibility() {
             : 0;
     if (top <= bottom) return;
     const std::uint64_t usable = top - bottom;
-    if (req_.request.size <= usable) return;
+    if (req_.request.size <= usable) {
+        satisfied("a reservation of " + dec(req_.request.size) + " bytes",
+                  "the usable address space is " + dec(usable) + " bytes",
+                  profile_.vm.max_user_address.evidence());
+        return;
+    }
 
     Finding f = start(ids::kSizeExceedsAddressSpace, Confidence::Proven,
                       SupportLevel::Unsupported);
@@ -634,13 +654,18 @@ void Analysis::rule_page_size() {
     const char* relation_text = relation == SizeRelation::AtMost   ? "<= "
                                 : relation == SizeRelation::AtLeast ? ">= "
                                                                     : "== ";
-    bool satisfied = false;
+    bool satisfied_relation = false;
     switch (relation) {
-        case SizeRelation::Equal:   satisfied = actual == required; break;
-        case SizeRelation::AtMost:  satisfied = actual <= required; break;
-        case SizeRelation::AtLeast: satisfied = actual >= required; break;
+        case SizeRelation::Equal:   satisfied_relation = actual == required; break;
+        case SizeRelation::AtMost:  satisfied_relation = actual <= required; break;
+        case SizeRelation::AtLeast: satisfied_relation = actual >= required; break;
     }
-    if (satisfied) return;
+    if (satisfied_relation) {
+        satisfied("host page size " + std::string(relation_text) + dec(required),
+                  "host page size is " + dec(actual),
+                  profile_.vm.page_size.evidence());
+        return;
+    }
 
     Finding f = start(ids::kPageSizeMismatch, Confidence::Proven,
                       SupportLevel::Unsupported);
@@ -834,7 +859,11 @@ void Analysis::rule_range_availability() {
 
     const RangeVerdict verdict = profile_.query_range(*range);
 
-    if (verdict.level == SupportLevel::Supported) return;
+    if (verdict.level == SupportLevel::Supported) {
+        satisfied("exact placement at " + range->to_string(), verdict.reason,
+                  verdict.evidence);
+        return;
+    }
 
     if (verdict.level == SupportLevel::Unknown) {
         if (!options_.report_unknowns) {
@@ -1122,7 +1151,12 @@ void Analysis::rule_write_execute() {
     }
 
     if (!profile_.vm.protection.write_execute_simultaneous.is_known()) return;
-    if (profile_.vm.protection.write_execute_simultaneous.value()) return;
+    if (profile_.vm.protection.write_execute_simultaneous.value()) {
+        satisfied("a mapping that is writable and executable at once",
+                  "this host permits simultaneous write and execute",
+                  profile_.vm.protection.write_execute_simultaneous.evidence());
+        return;
+    }
 
     const bool flip_available =
         profile_.vm.protection.write_then_execute_transition.is_known() &&
@@ -1174,7 +1208,12 @@ void Analysis::rule_executable_mapping() {
     if (!req_.request.protection.execute && !req_.request.write_then_execute) return;
     if (req_.request.file_backed) return;
     if (!profile_.vm.protection.anonymous_executable_mapping.is_known()) return;
-    if (profile_.vm.protection.anonymous_executable_mapping.value()) return;
+    if (profile_.vm.protection.anonymous_executable_mapping.value()) {
+        satisfied("executable anonymous memory",
+                  "this host permits anonymous executable mappings",
+                  profile_.vm.protection.anonymous_executable_mapping.evidence());
+        return;
+    }
 
     Finding f = start(ids::kExecutableMappingUnsupported, Confidence::Proven,
                       SupportLevel::Unsupported);
@@ -1201,7 +1240,12 @@ void Analysis::rule_executable_mapping() {
 void Analysis::rule_jit_entitlement() {
     if (!req_.request.protection.execute && !req_.request.write_then_execute) return;
     if (!profile_.vm.protection.jit_entitlement_required.is_known()) return;
-    if (!profile_.vm.protection.jit_entitlement_required.value()) return;
+    if (!profile_.vm.protection.jit_entitlement_required.value()) {
+        satisfied("executable memory for generated code",
+                  "this host does not gate executable memory on an entitlement",
+                  profile_.vm.protection.jit_entitlement_required.evidence());
+        return;
+    }
 
     Finding f = start(ids::kJitEntitlementRequired, Confidence::Proven,
                       SupportLevel::ConditionallySupported);
@@ -1576,6 +1620,14 @@ AnalysisResult Analysis::run() {
 
 }  // namespace
 
+json::Value SatisfiedCheck::to_json() const {
+    json::Value v = json::Value::object();
+    v["constraint"] = constraint;
+    v["host_fact"] = host_fact;
+    v["evidence"] = std::string(rs::to_string(evidence));
+    return v;
+}
+
 json::Value AnalysisResult::to_json() const {
     json::Value v = json::Value::object();
     v["schema"] = schema;
@@ -1589,6 +1641,10 @@ json::Value AnalysisResult::to_json() const {
     json::Value arr = json::Value::array();
     for (const auto& f : findings) arr.push_back(f.to_json());
     v["findings"] = arr;
+
+    json::Value checks = json::Value::array();
+    for (const auto& c : satisfied) checks.push_back(c.to_json());
+    v["satisfied_checks"] = checks;
 
     json::Value limits = json::Value::array();
     for (const auto& l : analyzer_limitations) limits.push_back(json::Value(l));
