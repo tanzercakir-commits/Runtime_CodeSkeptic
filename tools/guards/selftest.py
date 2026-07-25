@@ -45,18 +45,45 @@ Reserved for CodeSkeptic: contract extraction, fatal-sink identification.
 
 
 class Case:
-    def __init__(self, guard, name, files, expect_fail, expect_text=""):
+    def __init__(self, guard, name, files, expect_fail, expect_text="",
+                 commits=None):
         self.guard = guard
         self.name = name
         self.files = files
         self.expect_fail = expect_fail
         self.expect_text = expect_text
+        # [(iso-date, {rel: content}), ...] - committed in order, each with
+        # that author date. check_dates.py reads git, so testing it needs a
+        # real repository with real (and deliberately wrong) history.
+        self.commits = commits or []
+
+    def _git(self, root, *args, when=None):
+        env = {"PATH": "/usr/bin:/bin", "HOME": str(root),
+               "GIT_CONFIG_GLOBAL": "/dev/null", "GIT_CONFIG_SYSTEM": "/dev/null"}
+        if when:
+            env["GIT_AUTHOR_DATE"] = when
+            env["GIT_COMMITTER_DATE"] = when
+        subprocess.run(["git", *args], cwd=root, env=env,
+                       capture_output=True, text=True)
 
     def run(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             (root / "tools" / "guards").mkdir(parents=True)
             shutil.copy(HERE / self.guard, root / "tools" / "guards" / self.guard)
+
+            if self.commits:
+                self._git(root, "init", "-q", "-b", "main")
+                self._git(root, "config", "user.email", "selftest@example.invalid")
+                self._git(root, "config", "user.name", "selftest")
+                for when, files in self.commits:
+                    for rel, content in files.items():
+                        target = root / rel
+                        target.parent.mkdir(parents=True, exist_ok=True)
+                        target.write_text(content)
+                    self._git(root, "add", "-A")
+                    self._git(root, "commit", "-q", "-m", "selftest", when=when)
+
             for rel, content in self.files.items():
                 target = root / rel
                 target.parent.mkdir(parents=True, exist_ok=True)
@@ -175,6 +202,55 @@ CASES = [
          {"docs/PLAN.md": "# Plan and status\n\n- `[done]` the probe works — "
                           "`tests/unit/test_nothing.cpp`\n"},
          expect_fail=True),
+
+    Case("check_plan.py", "evidence on the next line still counts",
+         {"docs/PLAN.md": "# Plan and status\n\n`[done]` the probe works,\n"
+                          "measured on two lanes: `docs/PLAN.md`\n"},
+         expect_fail=False),
+
+    Case("check_plan.py", "the scenario assessment is checked too",
+         {"docs/PLAN.md": "# Plan and status\n\n- `[open]` nothing yet\n",
+          "docs/scenarios/assessment.md":
+              "# Scenarios\n\n## S1\n\n`[done]` it works, honest\n"},
+         expect_fail=True, expect_text="scenarios/assessment.md"),
+
+    # ---- check_dates: git decides, not the author ----------------------
+    Case("check_dates.py", "a progress entry dated before it was written fails",
+         {},
+         commits=[("2026-07-25T12:00:00+00:00",
+                   {"docs/PROGRESS.md": "# Progress log\n\n"
+                                        "## 2026-01-02 — backdated\n\nbody\n"})],
+         expect_fail=True, expect_text="git says the line was written"),
+
+    Case("check_dates.py", "the same entry dated when it was written passes",
+         {},
+         commits=[("2026-07-25T12:00:00+00:00",
+                   {"docs/PROGRESS.md": "# Progress log\n\n"
+                                        "## 2026-07-25 — honest\n\nbody\n"})],
+         expect_fail=False),
+
+    Case("check_dates.py", "a date after the newest commit fails",
+         {},
+         commits=[("2026-07-25T12:00:00+00:00",
+                   {"docs/PROGRESS.md": "# Progress log\n\n"
+                                        "## 2026-07-25 — honest\n\nbody\n",
+                    "docs/x.md": "Verified. <!-- checked: 2027-03-01 -->\n"})],
+         expect_fail=True, expect_text="after the newest commit"),
+
+    Case("check_dates.py", "a stale checked marker is reported, not failed",
+         {},
+         commits=[("2026-07-25T12:00:00+00:00",
+                   {"docs/PROGRESS.md": "# Progress log\n\n"
+                                        "## 2026-07-25 — honest\n\nbody\n",
+                    "docs/x.md": "Still true. <!-- checked: 2024-01-01 -->\n"})],
+         expect_fail=False, expect_text="stale:"),
+
+    Case("check_dates.py", "one day either side of the commit is tolerated",
+         {},
+         commits=[("2026-07-25T00:30:00+00:00",
+                   {"docs/PROGRESS.md": "# Progress log\n\n"
+                                        "## 2026-07-24 — written before midnight\n\nbody\n"})],
+         expect_fail=False),
 ]
 
 

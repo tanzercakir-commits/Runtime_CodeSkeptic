@@ -16,6 +16,56 @@ re-litigated; a mistake recorded here does not need to be re-made.
 
 ---
 
+## 2026-07-25 — the scenarios, and a ceiling nobody had noticed
+
+**Changed.** `docs/scenarios/` — the owner's ten use cases, kept byte-for-byte,
+plus an assessment of each against a real run. `tools/guards/check_dates.py` is
+new; `check_plan.py` now checks the scenario statuses on the same vocabulary as
+PLAN.md, and its entry-continuation rule was wrong for paragraphs.
+
+**Learned, and it changes what this project can promise.** The scenarios end
+with a pipeline — source → CodeSkeptic → RuntimeSkeptic → an AI report saying
+"Confidence: 94%" — and Scenario 1 asks for `Confidence: PROVEN`. Both are
+reasonable and **they cannot both happen**, for a reason already enforced in
+`include/runtimeskeptic/core/evidence.hpp`.
+
+Two contracts, same address, same measured host:
+
+| Contract | Application evidence | Verdict |
+|---|---|---|
+| `tests/groundtruth/contracts/exact-mapping-in-carveout.json` | `specified_guarantee` | `UNSUPPORTED` `PROVEN` |
+| `contracts/gtav-rage-direct-memory-mapping.json` | `statically_inferred` | `UNSUPPORTED` `COUNTEREXAMPLE` |
+
+Anything extracted from source text is `statically_inferred`, which
+`confidence_ceiling()` caps at `COUNTEREXAMPLE`. So **an automatically extracted
+requirement can never produce a PROVEN verdict** — by design, because a text
+match must not be able to manufacture a proof. The verdict, the rule and the
+remediation are identical; only the honesty of the label differs. Any report
+template written in advance for that pipeline should say `COUNTEREXAMPLE`, and
+a percentage would be a third quantity this project has deliberately never
+defined.
+
+**Also learned: only one of the ten scenarios works end to end.** Five do part
+of what they describe, three are not started, one is blocked by instruction.
+The cheapest missing capability is S9's second half — re-evaluating a set of
+contracts against two profiles and reporting which verdicts *changed*. It needs
+no new probe, no new rule and no new evidence, only a loop.
+
+**The owner asked whether the plan and progress files need dating**, and
+offered to supply the date. They do, and the date should come from neither of
+us. This session alone produced three dates for one day: the environment header
+said 2026-07-24, a later reminder said 2026-07-25, the container clock said
+2026-07-25T20:34Z. `check_dates.py` therefore blames every `## YYYY-MM-DD`
+heading here against the commit that wrote it, refuses any date later than the
+newest commit, and names `<!-- checked: -->` markers older than 90 days. Git
+records when work happened; the author only remembers.
+
+**Next.** Ranked in `docs/scenarios/assessment.md`: contract-set re-evaluation
+across two profiles, then the false-positive rate (Gate B), then the Windows
+probe.
+
+---
+
 ## 2026-07-25 — what the removal left behind, and a test for the guards
 
 **Changed.** Three documents still described `rs-extract` after the code was

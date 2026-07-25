@@ -70,6 +70,10 @@ Phase 10 productization           OPEN
 taxonomy is derived from imagination, not from incidents, and until 30 real
 ones exist nobody can say whether the ten categories are the right ten.
 
+`docs/scenarios/assessment.md` S5 and S2 name the cheapest way in: mimalloc,
+jemalloc and V8 publish their shipped configurations, and "a customer said it
+broke on Mac" is a real incident with a real artifact behind it.
+
 ---
 
 ## Phase 1 — Virtual memory environment probe
@@ -250,6 +254,13 @@ that risk materialising.
   match the filesystem, and a named path must exist. Still `[partial]` because
   only paths and a fixed list of phrases are mechanical; the rest of the prose
   is unchecked and always will be.
-- `[done]` the guards are tested — `tools/guards/selftest.py`, 18 cases, each
+- `[done]` the guards are tested — `tools/guards/selftest.py`, 25 cases, each
   requiring a check to fail against a deliberately wrong throwaway repository
   before it is trusted on this one; first in `tools/guards/run_all.sh`
+- `[done]` dates are taken from git, not from the author —
+  `tools/guards/check_dates.py`. The author is a language model that saw three
+  different dates for one day in a single session, and a `<!-- checked: -->`
+  marker proves nothing if the date in it is whatever the author believed.
+- `[done]` the owner's use cases are written down and assessed against real
+  runs — `docs/scenarios/`, ten scenarios, statuses checked by
+  `tools/guards/check_plan.py` on the same vocabulary as this file

@@ -1,0 +1,369 @@
+RuntimeCodeskeptic senaryo 
+
+Bence burada en kritik soru bu.
+Çünkü projeye ilk bakınca insan şunu düşünüyor:
+“Güzel de… bunu kim kullanacak?”
+Ben kodu ve roadmap’i inceledikten sonra fikrim biraz değişti. Aslında bu program son kullanıcı için değil, yazılım geliştiren ekipler için.
+Hatta daha da spesifik söyleyeyim:
+RuntimeSkeptic, “bu program neden bu platformda çalışmıyor?” sorusunu program çalıştırılmadan önce cevaplamaya çalışan bir araç.
+Birkaç gerçek senaryo üzerinden anlatayım.
+ 
+⸻
+ 
+Senaryo 1 — shadPS4 (Bence en güçlü kullanım alanı)
+Gerçek olay.
+PS4 oyunu açılıyor.
+5 saniye sonra çöküyor.
+Crash:
+mmap(0x1000000000, ...)
+failed
+Bugün geliştirici ne yapıyor?
+printf ekle
+
+lldb
+
+gdb
+
+strace
+
+dmesg
+
+vmmap
+
+tekrar dene
+
+printf daha ekle
+2 gün geçiyor.
+Sonra anlıyor ki
+“Bu oyun tam olarak 0x1000000000 adresini istiyor.”
+ 
+⸻
+ 
+RuntimeSkeptic’te ise:
+Game requirement
+↓
+
+Host profile
+
+↓
+
+Analyze
+Sonuç:
+UNSUPPORTED
+
+Reason:
+
+Game requires guest-host identity.
+
+Host relocates mappings.
+
+Translation layer absent.
+
+Confidence:
+
+PROVEN
+Yani crash oluşmadan önce sebebi söylüyor.
+ 
+⸻
+ 
+Senaryo 2 — Apple Silicon portu
+Diyelim ki biri eski bir emulator yazdı.
+Intel’de çalışıyor.
+M1’de crash.
+Adam haftalardır uğraşıyor.
+RuntimeSkeptic:
+Host page size
+
+↓
+
+16 KB
+
+Program assumption
+
+↓
+
+4 KB fixed page size
+Sonuç:
+Page size mismatch
+
+Potential failures:
+
+allocator
+
+JIT
+
+guard page
+
+signal layout
+Bunu kod çalışmadan söylüyor.
+ 
+⸻
+ 
+Senaryo 3 — Wine
+Wine geliştiricisi.
+Bir Windows oyunu açılıyor.
+İlk saniyede patlıyor.
+RuntimeSkeptic:
+Program wants
+
+↓
+
+Reserve
+
+↓
+
+Commit
+
+↓
+
+Windows semantics
+Host:
+Linux mmap
+Sonuç:
+Reserve/Commit semantic mismatch.
+ 
+⸻
+ 
+Senaryo 4 — LuaJIT
+LuaJIT şunu istiyor.
+JIT code
+
+↓
+
+±2 GB
+Host:
+Code region
+
+↓
+
+çok uzakta
+Bugün:
+Adam crash alıyor.
+RuntimeSkeptic:
+Relative jump constraint cannot be satisfied.
+ 
+⸻
+ 
+Senaryo 5 — mimalloc
+Allocator geliştiriyorsun.
+Yeni release.
+Müşteri diyor:
+Mac'te bozuldu.
+RuntimeSkeptic:
+Large page alignment assumption violated.
+ 
+⸻
+ 
+Senaryo 6 — CI Pipeline
+Bence ticari olarak en değerli kullanım.
+GitHub Actions:
+Build
+
+↓
+
+Tests
+
+↓
+
+RuntimeSkeptic
+
+↓
+
+Deploy
+RuntimeSkeptic:
+This binary cannot run correctly on:
+
+macOS 15
+
+Rosetta
+
+because
+
+...
+PR reddediliyor.
+Henüz müşteri görmeden.
+ 
+⸻
+ 
+Senaryo 7 — Oyun stüdyosu
+AAA oyun.
+5 platform.
+Windows
+
+Linux
+
+Steam Deck
+
+macOS
+
+Wine
+Release öncesi.
+RuntimeSkeptic:
+Platform compatibility report
+
+↓
+
+Windows
+
+SUPPORTED
+
+Linux
+
+SUPPORTED
+
+macOS
+
+UNSUPPORTED
+
+Reason:
+
+Executable anonymous mapping.
+ 
+⸻
+ 
+Senaryo 8 — Güvenlik ekibi
+Şirket.
+500 uygulama.
+Yeni güvenlik politikası geldi.
+Artık
+RWX
+
+yasak.
+RuntimeSkeptic:
+Applications affected:
+
+31
+
+Reason:
+
+Need simultaneous RWX.
+ 
+⸻
+ 
+Senaryo 9 — Yeni işletim sistemi
+Linux 7.2 çıktı.
+Kernel değişti.
+Şirket soruyor:
+Bizim emulator etkilenir mi?
+Yeni profile çıkarılıyor.
+Old profile
+
+↓
+
+New profile
+
+↓
+
+Diff
+RuntimeSkeptic:
+Exact mapping behavior changed.
+
+Potential impact:
+
+shadPS4
+
+Box64
+
+QEMU
+ 
+⸻
+ 
+Senaryo 10 — Kod inceleme (Bence geleceği burada)
+Bence bu proje burada asıl değerini bulacak.
+CodeSkeptic:
+Source code
+↓
+çıkarıyor
+Requirement Bundle
+↓
+RuntimeSkeptic
+↓
+çıkarıyor
+This assumption cannot hold on macOS.
+↓
+PR yorumu.
+Adam daha kod merge etmeden öğreniyor.
+ 
+⸻
+ 
+Benim aklımdaki en büyük kullanım
+Şimdi biraz daha ileri gideceğim.
+Bence proje burada bitmemeli.
+Şunu hayal et.
+ 
+⸻
+ 
+Adam GitHub’a PR açtı.
+AI çalışıyor.
+CodeSkeptic
+
+↓
+
+Requirement Extraction
+↓
+RuntimeSkeptic
+↓
+Platform Analysis
+↓
+
+AI rapor yazıyor.
+Your code assumes:
+	•	4 KB pages
+	•	fixed virtual address
+	•	RWX memory
+	•	identity mapping
+These assumptions fail on:
+Apple Silicon
+Linux Hardened
+Windows ARM
+Confidence:
+94%
+Adam daha compile bile etmeden bunu görüyor.
+
+---
+
+# Bence en büyük problem
+
+Şu an proje şunu söylüyor:
+Requirement
+	•	● 
+Host
+↓
+Analyze
+Ama requirement'ı insan yazıyor.
+
+İnsan bunu yazdığı sürece kullanıcı kitlesi dar kalır.
+
+---
+
+# Benim hayalim (ve bence senin roadmap'ine de çok yakın)
+
+Şu akış:
+C/C++ Source
+↓
+CodeSkeptic
+↓
+Requirement Bundle
+↓
+RuntimeSkeptic
+↓
+Compatibility Report
+↓
+Codex / Claude
+↓
+Otomatik düzeltme önerisi
+İşte bu noktada ortaya çıkan şey artık tek bir araç olmaz.
+
+Bu, klasik statik analiz araçlarının ötesine geçen bir **"runtime varsayım doğrulama platformu"** olur.
+
+## Benim gözümde ürünün gerçek değeri
+
+Kodunu inceledikten sonra şu sonuca vardım:
+
+RuntimeSkeptic'in sattığı şey aslında "VM analizi" değil.
+
+Sattığı şey şu:
+
+> **"Kodunuzun platform hakkında sessizce yaptığı varsayımları, kullanıcıya ulaşmadan önce görünür hale getirmek."**
+
+Bence bu cümle projenin teknik değerini en doğru şekilde özetliyor.

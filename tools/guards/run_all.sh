@@ -19,6 +19,10 @@
 #                    life, so no third party could check an artifact
 #   check_plan       a [done] with no evidence is just a claim
 #   check_non_goals  a normative commitment was broken inside one session
+#   check_dates      the author is a language model that saw three different
+#                    dates for one day in a single session, and a
+#                    `<!-- checked: -->` marker is worthless if the date in it
+#                    is whatever the author believed at the time
 #
 # `selftest` runs FIRST and is not one of them. All five pass on a repository
 # that has already been fixed - and so would five guards whose patterns never
@@ -49,6 +53,7 @@ run "documentation drift"   python3 "$HERE/check_docs.py"
 run "finding registry"      python3 "$HERE/check_registry.py"
 run "schemas vs code"       python3 "$HERE/validate_schemas.py"
 run "normative non-goals"   python3 "$HERE/check_non_goals.py"
+run "dates against git"     python3 "$HERE/check_dates.py"
 
 echo
 if [ "$failed" -eq 0 ]; then
