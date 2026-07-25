@@ -304,9 +304,21 @@ Placement try_place(std::uint64_t address, std::size_t length) {
     // allocation was still refused, the reservation belongs to the platform
     // and IS a host limitation.
     const RegionInfo region = describe_region(address);
-    // A system reservation, or nothing of ours at all, is a host limitation.
-    // Only a real mapping that covers the address is genuinely "ours".
-    if (!region.covers || region.reserved) return Placement::Refused;
+    if (!region.covers) return Placement::Refused;
+    // The `reserved` flag was the fourth wrong guess. macOS does NOT express
+    // the commpage and the GPU carveout as reserved placeholders; it expresses
+    // them as ordinary map entries that grant NO ACCESS AT ALL:
+    //
+    //   region [0xfc0000000,  0x1000000000)  reserved=0  protection ---
+    //   region [0x1000000000, 0x7000000000)  reserved=0  protection ---
+    //
+    // Which is the whole point, and it is the right signal. A program asking
+    // for that address does not care who nominally owns the entry; it cares
+    // that nothing can be mapped there. An entry with no rights is address
+    // space the host will not give up.
+    if (region.reserved || region.protection == VM_PROT_NONE) {
+        return Placement::Refused;
+    }
     return Placement::OccupiedByUs;
 }
 
@@ -652,7 +664,8 @@ ScanOutcome scan_address_space(std::size_t page_size, std::uint64_t probe_length
         }
 
         const RegionInfo region = describe_region(base);
-        if (result == KERN_NO_SPACE && region.covers && !region.reserved) {
+        if (result == KERN_NO_SPACE && region.covers && !region.reserved &&
+            region.protection != VM_PROT_NONE) {
             // A real mapping of ours: a property of one process layout, not of
             // the host, so it must not become a limitation other programs are
             // judged against.
@@ -672,6 +685,17 @@ ScanOutcome scan_address_space(std::size_t page_size, std::uint64_t probe_length
                   kern_error_name(result) + "; " + describe_region_text(region);
         outcome.unavailable.push_back(cr);
     }
+    // Many probe points fall inside one refused region; keep one entry each.
+    std::sort(outcome.unavailable.begin(), outcome.unavailable.end(),
+              [](const ClassifiedRange& a, const ClassifiedRange& b) {
+                  return a.range < b.range;
+              });
+    outcome.unavailable.erase(
+        std::unique(outcome.unavailable.begin(), outcome.unavailable.end(),
+                    [](const ClassifiedRange& a, const ClassifiedRange& b) {
+                        return a.range == b.range;
+                    }),
+        outcome.unavailable.end());
     return outcome;
 }
 
