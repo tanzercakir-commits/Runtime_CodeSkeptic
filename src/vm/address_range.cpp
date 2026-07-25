@@ -54,6 +54,7 @@ json::Value ClassifiedRange::to_json() const {
     v["start"] = json::to_hex(range.start);
     v["end"] = json::to_hex(range.end);
     v["evidence"] = std::string(rs::to_string(evidence));
+    if (!source.empty()) v["source"] = source;
     if (!note.empty()) v["note"] = note;
     return v;
 }
@@ -111,6 +112,9 @@ std::optional<ClassifiedRange> ClassifiedRange::from_json(const json::Value& v,
         return std::nullopt;
     }
 
+    if (const json::Value* source = v.find("source"); source != nullptr) {
+        out.source = source->as_string();
+    }
     if (const json::Value* note = v.find("note"); note != nullptr) {
         out.note = note->as_string();
     }

@@ -1,0 +1,37 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://runtimeskeptic.dev/schemas/application-requirements-bundle.v1.json",
+  "title": "runtime-skeptic.application-requirements-bundle.v1",
+  "description": "Many requirements from one source tree. The run's verdict is the worst of them.",
+  "type": "object",
+  "required": [
+    "schema",
+    "requirements"
+  ],
+  "properties": {
+    "schema": {
+      "const": "runtime-skeptic.application-requirements-bundle.v1"
+    },
+    "producer": {
+      "type": "object",
+      "properties": {
+        "tool": {
+          "type": "string"
+        },
+        "version": {
+          "type": "string"
+        },
+        "rule": {
+          "type": "string"
+        }
+      }
+    },
+    "requirements": {
+      "type": "array",
+      "items": {
+        "$ref": "application-requirements.v1.json"
+      }
+    }
+  },
+  "additionalProperties": true
+}

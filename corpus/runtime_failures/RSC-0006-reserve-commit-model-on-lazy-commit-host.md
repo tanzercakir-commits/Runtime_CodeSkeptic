@@ -78,6 +78,7 @@ An additional wrinkle worth recording: on lazy-commit hosts the behavior under e
 - the shim's `commit()` returns success, always, and truthfully: the operation it performs did succeed;
 - there is no API on such a host that answers "will touching this page succeed?", because the answer depends on system-wide state at the moment of the touch;
 - the reservation succeeded for the full size, so every early sanity check confirms the program's model;
+<!-- checked: 2026-07-25 -->
 - the error-handling path the program wrote is not dead code — it is unreachable, which no compiler warning and no coverage report distinguishes from "not exercised in this test run".
 
 ## Manifestation

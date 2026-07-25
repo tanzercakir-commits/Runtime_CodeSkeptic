@@ -1,8 +1,8 @@
 # Finding ID Registry — Virtual Memory Domain
 
-The 18 registered `RS-VM-*` finding IDs, their default severities, taxonomy categories and typical confidence, plus the policy that makes an ID permanent once published.
+The 25 registered `RS-VM-*` finding IDs, their default severities, taxonomy categories and typical confidence, plus the policy that makes an ID permanent once published.
 
-**Status:** ROADMAP Phase 0 deliverable ("initial finding-ID registry"), consumed by the Phase 3 analyzer. **Implemented, partially reachable.** All 18 IDs are declared in `include/runtimeskeptic/vm/finding.hpp` (`namespace rs::vm::ids`) and defined with titles, severities and summaries in `src/vm/finding.cpp` (`registry_storage()`). 17 of the 18 are emitted by rules in `src/vm/analyzer.cpp`; `RS-VM-0018` is registered but unreachable — see section 4.
+**Status:** ROADMAP Phase 0 deliverable ("initial finding-ID registry"), consumed by the Phase 3 analyzer. **Implemented and fully reachable.** All 25 IDs are declared in `include/runtimeskeptic/vm/finding.hpp` (`namespace rs::vm::ids`), defined in `src/vm/finding.cpp` (`registry_storage()`), and every one is emitted by a rule in `src/vm/analyzer.cpp`. `tools/guards/check_registry.py` fails CI if those three ever disagree — they did, for months, while this line said 18.
 
 ---
 
@@ -115,7 +115,8 @@ Each rule states a desired confidence and `Analysis::emit()` clamps it to the ce
 
 Stated here rather than left for a reader to trip over.
 
-**`RS-VM-0018` is unreachable.** The ID is registered, the profile carries `file_map_beyond_eof` as a `Fact<BeyondEofBehavior>`, and `MappingRequest` carries `file_backed`. No rule reads them together. The missing rule needs the file's length, which the requirement schema does not currently express, so implementing it requires a schema field as well as a rule. The simple static case (mapping length exceeds a declared file length) fits Phase 3; the general case — the file can be truncated between map and access — is a lifecycle property and fits Phase 7.
+<!-- checked: 2026-07-25 -->
+**`RS-VM-0018` was unreachable and is not any more.** <!-- checked: 2026-07-25 --> The ID was registered while no rule read `file_map_beyond_eof` and `file_backed` together. `rule_file_mapping_beyond_eof()` now does, and the schema gained the `file_length` field the rule needed plus `eof_access_extent`, which distinguishes a read inside the final partial page (POSIX guarantees zero-fill; always safe) from a read a whole page past the end (implementation-defined). The second distinction was found by a ground-truth case contradicting the analyzer, and the analyzer was right the first time and wrong the second.
 
 **`RS-VM-0017` is used for two different unknowns, with an overridden title.** `rule_range_availability()` emits it with its registered title. `rule_page_size()` also emits it for an unknown page size and then overwrites `Finding::title` with `"Host page size was never established"`. The emitted title therefore does not match the registry entry for that ID, which breaks the assumption that an ID determines a title. Two possible resolutions, neither applied: allocate a distinct ID per unknown-fact kind, or make `RS-VM-0017` a generic "required fact not established" finding whose registered title is neutral and whose specific fact is named in the `host_capability` field. The second is preferred, because per-fact IDs would proliferate with every new profile field.
 

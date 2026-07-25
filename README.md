@@ -149,12 +149,19 @@ Binaries land in `build/bin/`.
 | `rs-profile verify` | Validate a profile and report how many facts it actually knows |
 | `rs-profile diff` | Compare two profiles' facts - did the platform change? |
 | `rs-check` | Evaluate a requirement (or a bundle) against a profile |
+| `rs-extract` | Recover candidate requirements from C/C++ source (bounded, see below) |
 | `rs-mcp` | The same capabilities over the Model Context Protocol |
 
-Requirement documents are written by hand. `rs-check` also accepts a
-*bundle* of many at once, which is what a static extractor would emit; see
-[docs/integrations.md](docs/integrations.md). No extractor is required, and
-none is bundled - the vertical slice above is the whole tool.
+Requirement documents are written by hand, or recovered from source by
+`rs-extract` - a **bounded** text scanner, not a static analyzer, whose output
+is a set of candidates for review. `rs-check` also accepts a *bundle* of many
+at once, which is what a real static extractor would emit; see
+[docs/integrations.md](docs/integrations.md).
+
+> `rs-extract` sits in tension with [docs/non_goals.md](docs/non_goals.md)
+> section 18, which reserves contract extraction for CodeSkeptic. That
+> conflict is unresolved and is tracked in [docs/PLAN.md](docs/PLAN.md); the
+> guard `tools/guards/check_non_goals.py` fails until it is decided.
 
 ### Exit codes
 
@@ -231,17 +238,18 @@ docs/                     problem statement, taxonomy, evidence model, findings 
 
 ## Honest limitations of v0.1
 
+<!-- checked: 2026-07-25 -->
 - Linux and macOS are probed; Windows builds and runs but its probe is a stub
   that reports every fact as `unknown` - deliberately, rather than guessing
   plausible defaults.
-- **The macOS probe has never run on hardware I control.** It is written and
-  wired into CI (`.github/workflows/macos-probe.yml`, native arm64 and
-  translated x86-64 lanes), and the artifacts that workflow uploads will be
-  the first measured macOS facts this project has. Until that run is green,
-  treat the macOS path as unproven.
-- The macOS/Rosetta fixture in `profiles/fixtures/` was **not measured**. Its
-  facts are `heuristic_risk` and every finding derived from it is capped at
-  `PREDICTIVE`.
+- **macOS is now measured**, natively and as a translated x86-64 process, on a
+  GitHub-hosted Apple Silicon runner. See `profiles/measured/` and
+  `docs/campaigns/2026-07-macos-measurement.md`. One virtualised machine is not
+  a platform, and nothing here has been reproduced on physical hardware.
+- The macOS/Rosetta *fixture* in `profiles/fixtures/` was **not measured** and
+  is superseded by those profiles. Measurement contradicted one of its claims:
+  it asserted W^X enforcement on the Rosetta lane, and a translated x86-64
+  process is granted RWX outright.
 - The incident corpus is a set of reconstructed *patterns*, not verified
   citations. Each entry says so. Phase 0's exit criteria are not met yet.
 - Requirements are written by hand. Automatic extraction from source is

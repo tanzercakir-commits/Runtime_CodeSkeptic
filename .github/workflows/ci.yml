@@ -52,6 +52,16 @@ jobs:
       - name: Test
         run: ctest --test-dir build --build-config RelWithDebInfo --output-on-failure
 
+      # Project rules that can be checked mechanically. These matter as much as
+      # the behavioural tests: a repository that has started lying about itself
+      # passes every test right up until someone trusts a document.
+      # tools/guards/run_all.sh records what each guard caught.
+      - name: Project guards
+        run: |
+          python3 -m pip install --quiet --break-system-packages jsonschema \
+            || python3 -m pip install --quiet jsonschema || true
+          bash tools/guards/run_all.sh
+
       # POSIX-only: the case programs use mmap/mprotect/fork, and the probe is
       # not implemented for Windows.
       - name: Probe is reproducible across processes

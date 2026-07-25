@@ -28,7 +28,8 @@ How we know a single fact. Ordered strongest to weakest; the numeric order is lo
 | # | Name (wire form) | Meaning | Produced by |
 | --- | --- | --- | --- |
 | 0 | `specified_guarantee` | a documented, binding platform contract | curated API/OS specifications; analyzer arithmetic that follows from a definition |
-| 1 | `measured_capability` | `rs-env-probe` observed it on this host | Phase 1 probe (**not implemented**) |
+<!-- checked: 2026-07-25 -->
+| 1 | `measured_capability` | `rs-env-probe` observed it on this host | Phase 1 probe (Linux and macOS implemented; Windows is a stub) |
 | 2 | `observed_invariant` | held across a recorded trace set | Phase 4 runtime wrapper; Phase 9 invariant miner |
 | 3 | `statically_inferred` | derived from source analysis | Phase 5 CodeSkeptic integration |
 | 4 | `bounded_counterexample` | found within an explicit exploration bound | Phase 6 counterfactual explorer; today, the analyzer's outcome enumeration |

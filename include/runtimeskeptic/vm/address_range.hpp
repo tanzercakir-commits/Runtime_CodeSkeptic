@@ -77,6 +77,18 @@ struct ClassifiedRange {
     EvidenceClass evidence = EvidenceClass::Unknown;
     std::string note;
 
+    // WHERE the range came from: a probe id, a document, a commit. The
+    // evidence class says how strongly it is known; this says who says so, and
+    // docs/evidence_model.md rule 4 requires it of every evidence step.
+    //
+    // It was missing, and a hand-authored fixture citing
+    // `shadps4-emu/shadPS4@d392abe src/core/address_space.cpp:39-40` had that
+    // citation silently dropped on read - the reader parsed start, end,
+    // evidence and note, and discarded everything else without a word. The
+    // schema guard found it by validating a real artifact against a real
+    // schema for the first time.
+    std::string source;
+
     json::Value to_json() const;
     static std::optional<ClassifiedRange> from_json(const json::Value& v,
                                                     std::string& error);

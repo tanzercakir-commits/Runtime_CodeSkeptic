@@ -62,6 +62,7 @@ The failure mode this category names is not "the constant is wrong". It is that 
 | `application` | shadPS4 assumes the usable user area ends at `USER_MAX`, fixed at compile time |
 | `compatibility_layer` | no translation layer; the ceiling directly bounds every guest address |
 | `operating_system` | the actual top of usable space, and the actual placement of the executable, vary by kernel, distribution, ASLR entropy, PIE settings and `ulimit` |
+<!-- checked: 2026-07-25 -->
 | `kernel` | on a host where the executable lands *below* `USER_MAX`, the reservation overlaps it; on a host with a *larger* usable space, guest memory that should exist is unreachable |
 | `application` | the first case reaches `throw std::bad_alloc{}` (`address_space.cpp:680`); the second is silent under-provisioning with no sink at all |
 

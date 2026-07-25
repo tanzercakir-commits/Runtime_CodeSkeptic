@@ -1,0 +1,456 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://runtimeskeptic.dev/schemas/environment-profile.v1.json",
+  "title": "runtime-skeptic.environment-profile.v1",
+  "description": "What a host was MEASURED to do, not what it is documented to do. Written by rs-env-probe; consumed by rs-check. A fact absent from this document is unknown, and unknown is never support.",
+  "type": "object",
+  "required": [
+    "schema",
+    "origin",
+    "platform"
+  ],
+  "properties": {
+    "schema": {
+      "const": "runtime-skeptic.environment-profile.v1"
+    },
+    "profile_name": {
+      "type": "string",
+      "description": "A human label. Deliberately EXCLUDED from profile_id: renaming a profile must not change its identity."
+    },
+    "profile_id": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "description": "SHA-256 over the canonical facts subtree only. Run metadata is excluded so two runs on one host agree."
+    },
+    "origin": {
+      "enum": [
+        "measured",
+        "hand_authored_fixture",
+        "synthetic",
+        "unknown"
+      ],
+      "description": "`synthetic` and `hand_authored_fixture` are not evidence about any real host and the report says so."
+    },
+    "platform": {
+      "type": "object",
+      "properties": {
+        "os": {
+          "type": "string"
+        },
+        "os_version": {
+          "type": "string"
+        },
+        "kernel_version": {
+          "type": "string"
+        },
+        "host_arch": {
+          "type": "string"
+        },
+        "process_arch": {
+          "type": "string"
+        },
+        "pointer_width_bits": {
+          "type": "integer"
+        },
+        "translation_mode": {
+          "enum": [
+            "none",
+            "rosetta2",
+            "wow64",
+            "qemu_user",
+            "other",
+            "unknown"
+          ]
+        }
+      },
+      "additionalProperties": true
+    },
+    "probe_run": {
+      "type": "object",
+      "description": "Excluded from profile_id."
+    },
+    "notes": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "virtual_memory": {
+      "type": "object",
+      "properties": {
+        "page_size": {
+          "type": "object",
+          "description": "A value that cannot be carried without saying how it is known. `value: null` with `evidence: unknown` is the only way to say 'not established'.",
+          "required": [
+            "value",
+            "evidence"
+          ],
+          "properties": {
+            "value": {},
+            "evidence": {
+              "$ref": "#/$defs/evidenceClass"
+            },
+            "source": {
+              "type": "string"
+            },
+            "note": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        },
+        "allocation_granularity": {
+          "type": "object",
+          "description": "A value that cannot be carried without saying how it is known. `value: null` with `evidence: unknown` is the only way to say 'not established'.",
+          "required": [
+            "value",
+            "evidence"
+          ],
+          "properties": {
+            "value": {},
+            "evidence": {
+              "$ref": "#/$defs/evidenceClass"
+            },
+            "source": {
+              "type": "string"
+            },
+            "note": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        },
+        "min_map_address": {
+          "type": "object",
+          "description": "A value that cannot be carried without saying how it is known. `value: null` with `evidence: unknown` is the only way to say 'not established'.",
+          "required": [
+            "value",
+            "evidence"
+          ],
+          "properties": {
+            "value": {},
+            "evidence": {
+              "$ref": "#/$defs/evidenceClass"
+            },
+            "source": {
+              "type": "string"
+            },
+            "note": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        },
+        "max_user_address": {
+          "type": "object",
+          "description": "A value that cannot be carried without saying how it is known. `value: null` with `evidence: unknown` is the only way to say 'not established'.",
+          "required": [
+            "value",
+            "evidence"
+          ],
+          "properties": {
+            "value": {},
+            "evidence": {
+              "$ref": "#/$defs/evidenceClass"
+            },
+            "source": {
+              "type": "string"
+            },
+            "note": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        },
+        "exact_mapping": {
+          "type": "object",
+          "description": "A value that cannot be carried without saying how it is known. `value: null` with `evidence: unknown` is the only way to say 'not established'.",
+          "required": [
+            "value",
+            "evidence"
+          ],
+          "properties": {
+            "value": {},
+            "evidence": {
+              "$ref": "#/$defs/evidenceClass"
+            },
+            "source": {
+              "type": "string"
+            },
+            "note": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        },
+        "fixed_noreplace_available": {
+          "type": "object",
+          "description": "A value that cannot be carried without saying how it is known. `value: null` with `evidence: unknown` is the only way to say 'not established'.",
+          "required": [
+            "value",
+            "evidence"
+          ],
+          "properties": {
+            "value": {},
+            "evidence": {
+              "$ref": "#/$defs/evidenceClass"
+            },
+            "source": {
+              "type": "string"
+            },
+            "note": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        },
+        "anonymous_mapping_supported": {
+          "type": "object",
+          "description": "A value that cannot be carried without saying how it is known. `value: null` with `evidence: unknown` is the only way to say 'not established'.",
+          "required": [
+            "value",
+            "evidence"
+          ],
+          "properties": {
+            "value": {},
+            "evidence": {
+              "$ref": "#/$defs/evidenceClass"
+            },
+            "source": {
+              "type": "string"
+            },
+            "note": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        },
+        "hinted_mapping_may_relocate": {
+          "type": "object",
+          "description": "A value that cannot be carried without saying how it is known. `value: null` with `evidence: unknown` is the only way to say 'not established'.",
+          "required": [
+            "value",
+            "evidence"
+          ],
+          "properties": {
+            "value": {},
+            "evidence": {
+              "$ref": "#/$defs/evidenceClass"
+            },
+            "source": {
+              "type": "string"
+            },
+            "note": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        },
+        "file_map_beyond_eof": {
+          "type": "object",
+          "description": "A value that cannot be carried without saying how it is known. `value: null` with `evidence: unknown` is the only way to say 'not established'.",
+          "required": [
+            "value",
+            "evidence"
+          ],
+          "properties": {
+            "value": {},
+            "evidence": {
+              "$ref": "#/$defs/evidenceClass"
+            },
+            "source": {
+              "type": "string"
+            },
+            "note": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        },
+        "reserve_commit_model": {
+          "type": "object",
+          "description": "A value that cannot be carried without saying how it is known. `value: null` with `evidence: unknown` is the only way to say 'not established'.",
+          "required": [
+            "value",
+            "evidence"
+          ],
+          "properties": {
+            "value": {},
+            "evidence": {
+              "$ref": "#/$defs/evidenceClass"
+            },
+            "source": {
+              "type": "string"
+            },
+            "note": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        },
+        "protection": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "description": "A value that cannot be carried without saying how it is known. `value: null` with `evidence: unknown` is the only way to say 'not established'.",
+            "required": [
+              "value",
+              "evidence"
+            ],
+            "properties": {
+              "value": {},
+              "evidence": {
+                "$ref": "#/$defs/evidenceClass"
+              },
+              "source": {
+                "type": "string"
+              },
+              "note": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "available_ranges": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "start",
+              "end",
+              "evidence"
+            ],
+            "properties": {
+              "start": {
+                "type": "string",
+                "pattern": "^0x[0-9a-f]+$"
+              },
+              "end": {
+                "type": "string",
+                "pattern": "^0x[0-9a-f]+$"
+              },
+              "evidence": {
+                "$ref": "#/$defs/evidenceClass"
+              },
+              "note": {
+                "type": "string"
+              },
+              "source": {
+                "type": "string",
+                "description": "Where the range came from: a probe id, a document, a commit. Distinct from `evidence`, which says how strongly it is known."
+              }
+            },
+            "additionalProperties": false,
+            "description": "Half-open [start, end). `evidence: unknown` is forbidden here by the reader: absence of observation is not evidence of impossibility."
+          }
+        },
+        "unavailable_ranges": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "start",
+              "end",
+              "evidence"
+            ],
+            "properties": {
+              "start": {
+                "type": "string",
+                "pattern": "^0x[0-9a-f]+$"
+              },
+              "end": {
+                "type": "string",
+                "pattern": "^0x[0-9a-f]+$"
+              },
+              "evidence": {
+                "$ref": "#/$defs/evidenceClass"
+              },
+              "note": {
+                "type": "string"
+              },
+              "source": {
+                "type": "string",
+                "description": "Where the range came from: a probe id, a document, a commit. Distinct from `evidence`, which says how strongly it is known."
+              }
+            },
+            "additionalProperties": false,
+            "description": "Half-open [start, end). `evidence: unknown` is forbidden here by the reader: absence of observation is not evidence of impossibility."
+          }
+        },
+        "exact_mapping_failure_codes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "additionalProperties": true
+    }
+  },
+  "additionalProperties": true,
+  "$defs": {
+    "evidenceClass": {
+      "enum": [
+        "specified_guarantee",
+        "measured_capability",
+        "statically_inferred",
+        "bounded_counterexample",
+        "observed_invariant",
+        "heuristic_risk",
+        "unknown"
+      ]
+    },
+    "fact": {
+      "type": "object",
+      "description": "A value that cannot be carried without saying how it is known. `value: null` with `evidence: unknown` is the only way to say 'not established'.",
+      "required": [
+        "value",
+        "evidence"
+      ],
+      "properties": {
+        "value": {},
+        "evidence": {
+          "$ref": "#/$defs/evidenceClass"
+        },
+        "source": {
+          "type": "string"
+        },
+        "note": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "range": {
+      "type": "object",
+      "required": [
+        "start",
+        "end",
+        "evidence"
+      ],
+      "properties": {
+        "start": {
+          "type": "string",
+          "pattern": "^0x[0-9a-f]+$"
+        },
+        "end": {
+          "type": "string",
+          "pattern": "^0x[0-9a-f]+$"
+        },
+        "evidence": {
+          "$ref": "#/$defs/evidenceClass"
+        },
+        "note": {
+          "type": "string"
+        },
+        "source": {
+          "type": "string",
+          "description": "Where the range came from: a probe id, a document, a commit. Distinct from `evidence`, which says how strongly it is known."
+        }
+      },
+      "additionalProperties": false,
+      "description": "Half-open [start, end). `evidence: unknown` is forbidden here by the reader: absence of observation is not evidence of impossibility."
+    }
+  }
+}

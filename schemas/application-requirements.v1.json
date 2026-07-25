@@ -1,0 +1,266 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://runtimeskeptic.dev/schemas/application-requirements.v1.json",
+  "title": "runtime-skeptic.application-requirements.v1",
+  "description": "What a program requires of its execution environment. Written by hand, by rs-extract, or by a static analyzer. Fields under `x_` are extensions and are ignored by the reader; ANY OTHER unrecognized field is reported as a limitation of the analysis rather than dropped in silence.",
+  "type": "object",
+  "required": [
+    "schema",
+    "operation",
+    "assumption_evidence",
+    "request"
+  ],
+  "properties": {
+    "schema": {
+      "const": "runtime-skeptic.application-requirements.v1"
+    },
+    "name": {
+      "type": "string"
+    },
+    "component": {
+      "type": "string"
+    },
+    "operation": {
+      "enum": [
+        "virtual_memory_map",
+        "virtual_memory_protect",
+        "virtual_memory_reserve",
+        "virtual_memory_commit",
+        "unknown"
+      ]
+    },
+    "assumption_evidence": {
+      "$ref": "#/$defs/evidenceClass",
+      "description": "How the requirement itself is known. `statically_inferred` ceilings any derived finding at COUNTEREXAMPLE; only specified_guarantee or measured_capability permit PROVEN."
+    },
+    "request": {
+      "type": "object",
+      "required": [
+        "size"
+      ],
+      "properties": {
+        "address": {
+          "type": [
+            "string",
+            "integer",
+            "null"
+          ]
+        },
+        "size": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "exact_address_required": {
+          "type": "boolean"
+        },
+        "required_alignment": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "required_page_size": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "required_page_size_relation": {
+          "enum": [
+            "equal",
+            "at_most",
+            "at_least"
+          ]
+        },
+        "address_min": {
+          "type": [
+            "string",
+            "integer",
+            "null"
+          ]
+        },
+        "address_max": {
+          "type": [
+            "string",
+            "integer",
+            "null"
+          ]
+        },
+        "protection": {
+          "type": "object",
+          "properties": {
+            "read": {
+              "type": "boolean"
+            },
+            "write": {
+              "type": "boolean"
+            },
+            "execute": {
+              "type": "boolean"
+            }
+          }
+        },
+        "write_then_execute": {
+          "type": "boolean"
+        },
+        "simultaneous_write_execute": {
+          "type": "boolean"
+        },
+        "file_backed": {
+          "type": "boolean"
+        },
+        "file_length": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "file_offset": {
+          "type": "integer"
+        },
+        "accesses_beyond_eof": {
+          "type": "boolean"
+        },
+        "eof_access_extent": {
+          "enum": [
+            "whole_page_past_end",
+            "within_final_partial_page"
+          ],
+          "description": "POSIX guarantees zero-fill in the final partial page, so only whole_page_past_end is implementation-defined. Absent means the risky one."
+        },
+        "reserve_then_commit": {
+          "type": "boolean"
+        },
+        "commit_is_checked_call": {
+          "type": "boolean"
+        },
+        "validates_returned_address": {
+          "type": "boolean"
+        },
+        "max_displacement_bytes": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "displacement_reference": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": true
+    },
+    "assumptions": {
+      "type": "object",
+      "properties": {
+        "guest_host_identity_required": {
+          "type": "boolean"
+        },
+        "translation_layer_available": {
+          "type": "boolean"
+        },
+        "retries_on_failure": {
+          "type": "boolean"
+        },
+        "max_retries": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "pointer_storage_width_bits": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": true
+    },
+    "required_postconditions": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "permitted_fallbacks": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "failure_sink": {
+      "type": "object",
+      "required": [
+        "kind"
+      ],
+      "properties": {
+        "kind": {
+          "enum": [
+            "fatal_assert",
+            "process_exit",
+            "error_return",
+            "retry_loop",
+            "unchecked",
+            "none",
+            "unknown"
+          ]
+        },
+        "location": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/sourceLocation"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "null when the producer could not determine one; the writer emits the key either way."
+        },
+        "description": {
+          "type": "string"
+        }
+      }
+    },
+    "source_locations": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/sourceLocation"
+      }
+    },
+    "extraction_limitations": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "What the producer could NOT establish. Travels into the report, because a limit on extraction is a limit on the verdict."
+    }
+  },
+  "additionalProperties": true,
+  "$defs": {
+    "evidenceClass": {
+      "enum": [
+        "specified_guarantee",
+        "measured_capability",
+        "statically_inferred",
+        "bounded_counterexample",
+        "observed_invariant",
+        "heuristic_risk",
+        "unknown"
+      ]
+    },
+    "sourceLocation": {
+      "type": "object",
+      "properties": {
+        "file": {
+          "type": "string"
+        },
+        "line": {
+          "type": "integer"
+        },
+        "symbol": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}

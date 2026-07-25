@@ -296,6 +296,7 @@ because the output disagreed with it.
 
 The most valuable output of the campaign. Six of twenty-six contracts have a
 load-bearing constraint that survives only as free text in
+<!-- checked: 2026-07-25 -->
 `required_postconditions`, where no rule reads it.
 
 | Constraint | Who needs it | Consequence today |

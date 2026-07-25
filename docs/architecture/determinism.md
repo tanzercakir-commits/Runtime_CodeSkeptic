@@ -2,7 +2,7 @@
 
 The byte-exact rules that make an environment profile, a requirement document and an analysis result reproducible across machines, toolchains and releases.
 
-**Status:** ROADMAP Phase 1 exit criterion ("profile output passes deterministic canonicalization tests") and Phase 2 deliverable ("canonical serializer"). **Implemented** in `src/core/json.cpp`, `src/core/sha256.cpp`, `src/vm/profile.cpp` and `src/vm/address_range.cpp`. The conformance tests that would enforce it are **not implemented**: `tests/unit/` and `tests/conformance/` are empty, and the root `CMakeLists.txt` refers to `add_subdirectory(tests)` for a directory that has no `CMakeLists.txt`.
+**Status:** ROADMAP Phase 1 exit criterion ("profile output passes deterministic canonicalization tests") and Phase 2 deliverable ("canonical serializer"). **Implemented** in `src/core/json.cpp`, `src/core/sha256.cpp`, `src/vm/profile.cpp` and `src/vm/address_range.cpp`. The conformance tests that enforce it are **implemented**: `tests/unit/` and `tests/conformance/` carry 13 suites wired through `tests/CMakeLists.txt`, and `ctest` runs them on every push.
 
 ---
 
@@ -315,7 +315,7 @@ Byte-exact output is necessary but not sufficient. Two further ordering decision
 
 **Finding order.** `Analysis::run()` sorts findings with a `std::stable_sort` on `(severity, confidence, id)`. All three keys are needed: severity and confidence alone do not disambiguate, and the id does. The sort is stable so that two findings identical in all three keys retain rule-evaluation order, which is itself fixed — the fifteen rules are called in a literal sequence in `run()`, not dispatched from a container.
 
-**Array order.** JSON arrays preserve insertion order and are never sorted by the serializer, so any array in a schema must have a defined construction order. `unavailable_ranges` and `available_ranges` are serialized in the order the profile carries them; a probe must therefore emit them in a deterministic order (`AddressRange::operator<` orders by `start`, then `end`, and is the natural choice) or two runs on the same host will produce different bytes despite identical facts. This is a probe requirement, and the probe does not exist yet.
+**Array order.** JSON arrays preserve insertion order and are never sorted by the serializer, so any array in a schema must have a defined construction order. `unavailable_ranges` and `available_ranges` are serialized in the order the profile carries them; a probe must therefore emit them in a deterministic order (`AddressRange::operator<` orders by `start`, then `end`, and is the natural choice) or two runs on the same host will produce different bytes despite identical facts. This is a probe requirement, and both probes satisfy it: ranges are sorted at serialization time. That was a real defect once - the probe discovered ranges in experiment order, so writing a profile and reading it back produced a different `profile_id`.
 
 **No wall-clock or environment inputs in the analysis path.** Nothing in `src/core/` or `src/vm/` reads the clock, the environment, a locale, or a random source. Number formatting uses `snprintf` with `%lld` / `%llu` / `%04x`, none of which is locale-sensitive for integers. Timestamps exist only in `ProbeRun`, which is outside the hash.
 
@@ -323,7 +323,10 @@ Byte-exact output is necessary but not sufficient. Two further ordering decision
 
 ## 7. What a conformance test suite must check
 
-None of these exist yet. They are the Phase 1 and Phase 2 exit criteria expressed as tests, listed so the gap is explicit.
+Most of these now exist. <!-- checked: 2026-07-25 --> The table below marks each one; `tools/guards/check_docs.py` fails if this paragraph starts claiming otherwise while the suites are present.
+
+<!-- checked: 2026-07-25 -->
+Still missing: the cross-platform identity check, which needs the same fixture canonicalized on three platforms and two compilers. Linux and macOS are covered; Windows is not, because its probe is a stub.
 
 | Property | Test |
 | --- | --- |

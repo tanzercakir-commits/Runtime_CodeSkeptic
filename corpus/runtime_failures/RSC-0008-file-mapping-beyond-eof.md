@@ -115,6 +115,7 @@ The defect is a mismatch between two lengths that live in different subsystems: 
 
 ## What RuntimeSkeptic would need
 
+<!-- checked: 2026-07-25 -->
 **From the requirement document:** `file_backed: true`, `size`, and **a field that does not exist yet** — the file length the program relies on, or a declaration that the program does not check it. Without that field the analyzer has nothing to compare `size` against. Adding it is a schema change (`runtime-skeptic.application-requirements.v1`), which is why this finding is not merely an unwritten rule.
 
 **From the environment profile:** `virtual_memory.file_map_beyond_eof`.
@@ -156,5 +157,6 @@ The closest existing class is `select_different_host_configuration`, which is un
 - Should the requirement schema carry the file length, or a flag meaning "the mapped length is not validated against the file"? The second is easier to extract statically and is what CodeSkeptic would most plausibly produce.
 - Should the three `BeyondEofBehavior` values produce different severities? `zero_fill` is arguably worse than `sigbus`, because it is silent, yet it is the one that never crashes.
 - Where does the truncation variant belong — a Phase 3 rule with a caveat, or a Phase 7 lifecycle contract? The static case is decidable now; the dynamic case is not decidable at all without observing the other process.
+<!-- checked: 2026-07-25 -->
 - What should the analyzer do when `file_map_beyond_eof` is `unknown`? Following the model, an `RS-VM-0017`-style unknown finding and an `UNKNOWN` verdict; today, nothing is emitted at all, because no rule exists.
 - **Unverified:** the storage-engine structure, the header field and the failure ordering are illustrative. This entry is a reconstruction, not a report.
