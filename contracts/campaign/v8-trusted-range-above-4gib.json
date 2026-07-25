@@ -7,7 +7,11 @@
     "size": 1073741824,
     "exact_address_required": false,
     "required_alignment": 4294967296,
-    "protection": { "read": false, "write": false, "execute": false },
+    "protection": {
+      "read": false,
+      "write": false,
+      "execute": false
+    },
     "reserve_then_commit": true
   },
   "assumptions": {
@@ -74,6 +78,7 @@
     "source": "src/heap/trusted-range.cc:36",
     "quote": "  // To achieve this, we simply require 4GB alignment of the allocation and\n  // assume that we can never map the zeroth page.\n  const size_t base_alignment = size_t{4} * GB;",
     "expected_verdict": "CONDITIONAL",
+    "expected_on_host": "linux/x86_64+unknown",
     "rationale": "Same shape as the pointer-compression cage: required_alignment is unreachable without an address, so I expect the only finding to be RS-VM-0012 reserve/commit against posix_lazy, giving CONDITIONAL. Neither the alignment nor the 'must be above 2^32' bound will be evaluated."
   }
 }

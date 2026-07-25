@@ -8,7 +8,11 @@
     "size": 33554432,
     "exact_address_required": false,
     "required_alignment": 33554432,
-    "protection": { "read": true, "write": true, "execute": false }
+    "protection": {
+      "read": true,
+      "write": true,
+      "execute": false
+    }
   },
   "assumptions": {
     "guest_host_identity_required": false,
@@ -21,7 +25,9 @@
     "the [2TiB, 30TiB) window is habitually free, so a hint aimed into it is usually honoured and the returned address is usually already MI_SEGMENT_ALIGN aligned",
     "if the hint is not honoured the result is only slower, never wrong: unix_mmap_prim_aligned falls through to a plain mmap and the over-allocate-and-trim path fixes the alignment"
   ],
-  "permitted_fallbacks": ["relocate"],
+  "permitted_fallbacks": [
+    "relocate"
+  ],
   "failure_sink": {
     "kind": "retry_loop",
     "location": {
@@ -74,6 +80,7 @@
     "source": "src/os.c:112",
     "quote": "#define MI_HINT_BASE ((uintptr_t)2 << 40)  // 2TiB start",
     "expected_verdict": "SUPPORTED",
+    "expected_on_host": "linux/x86_64+unknown",
     "rationale": "0x20000000000 is 32MiB-aligned so the declared-alignment branch of rule_address_alignment passes, exact placement is not required and relocation is permitted, and the probe observed 0x20000000000-0x20000400000 as available so the hint branch of rule_range_availability should not fire either."
   }
 }

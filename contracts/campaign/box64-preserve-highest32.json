@@ -66,6 +66,7 @@
     "source": "src/custommem.c:3003-3006",
     "quote": "    // reserve area close to 0xffffffff too, to avoid roll over on some opcodes...\n    void* cur = InternalMmap((void*)(0x100000000LL-65536), 65536, 0, MAP_ANONYMOUS | MAP_PRIVATE | MAP_NORESERVE, -1, 0);\n    if(cur!=MAP_FAILED && (cur==(void*)(0x100000000LL-65536))) {\n        rb_set(mapallmem, (uintptr_t)cur, (uintptr_t)cur+65536, MEM_RESERVED);",
     "expected_verdict": "CONDITIONAL",
+    "expected_on_host": "linux/x86_64+unknown",
     "rationale": "The address is free on a normal x86-64 Linux process so the hint is usually honoured, but the request carries no MAP_FIXED and the probe measured hinted_mapping_may_relocate=true, so exact placement is not guaranteed."
   }
 }

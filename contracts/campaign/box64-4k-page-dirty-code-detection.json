@@ -72,6 +72,7 @@
     "source": "src/dynarec/dynarec_native.c:456 and src/custommem.c:2290-2295",
     "quote": "const uint32_t req_prot = (box64_pagesize==4096)?(PROT_EXEC|PROT_READ):PROT_READ;\n---\n                    if(box64_pagesize > 4096) {\n                        uintptr_t host_page = cur & ~(box64_pagesize-1);\n                        if(hostPageHasExternalWrite_locked(host_page, addr, addr+size)) {\n                            dynarec_log(LOG_INFO, \"protectDBJumpTable: mixed code+data host page %p, using always_test instead of mprotect\\n\", (void*)host_page);\n                            prot |= PROT_NEVERCLEAN;",
     "expected_verdict": "SUPPORTED",
+    "expected_on_host": "linux/x86_64+unknown",
     "rationale": "The probe measured page_size 4096 on this x86-64 Linux host, which is exactly the value the fast path requires; this contract is the one that should flip to UNSUPPORTED on a 16K Apple Silicon or 64K ARM host."
   }
 }

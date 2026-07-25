@@ -72,6 +72,7 @@
     "source": "src/lj_mcode.c:215-235",
     "quote": "#if LUAJIT_SECURITY_MCODE == 0\n...\n#define MCPROT_GEN\tMCPROT_RWX\n#define MCPROT_RUN\tMCPROT_RWX\n\nstatic void mcode_protect(jit_State *J, int prot)\n{\n  UNUSED(J); UNUSED(prot);\n}",
     "expected_verdict": "SUPPORTED",
+    "expected_on_host": "linux/x86_64+unknown",
     "rationale": "The probe measured write_execute_simultaneous=true on this host, so RWX anonymous memory is obtainable; a W^X-enforcing host is where this would break."
   }
 }

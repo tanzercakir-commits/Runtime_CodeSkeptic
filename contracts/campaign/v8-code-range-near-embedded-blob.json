@@ -6,7 +6,11 @@
   "request": {
     "size": 134217728,
     "exact_address_required": false,
-    "protection": { "read": true, "write": false, "execute": true },
+    "protection": {
+      "read": true,
+      "write": false,
+      "execute": true
+    },
     "write_then_execute": true,
     "simultaneous_write_execute": false,
     "reserve_then_commit": true
@@ -23,7 +27,9 @@
     "the range is reserved kNoAccessWillJitLater and individual pages are later made executable - reserve and commit are distinct states",
     "requested <= kMaximalCodeRangeSize (128MiB here) and requested >= kMinimumCodeRangeSize (64MiB)"
   ],
-  "permitted_fallbacks": ["relocate"],
+  "permitted_fallbacks": [
+    "relocate"
+  ],
   "failure_sink": {
     "kind": "error_return",
     "location": {
@@ -81,6 +87,7 @@
     "source": "src/heap/code-range.cc:203",
     "quote": "  constexpr size_t kRadiusInMB =\n      kMaxPCRelativeCodeRangeInMB > 1024 ? kMaxPCRelativeCodeRangeInMB : 4096;\n  auto preferred_region = GetPreferredRegion(kRadiusInMB, kPageSize);",
     "expected_verdict": "CONDITIONAL",
+    "expected_on_host": "linux/x86_64+unknown",
     "rationale": "The probe says anonymous executable mappings, the RW->RX transition and W+X are all available and no JIT entitlement is needed, so the protection rules stay quiet; the verdict should come from rule_reserve_commit firing RS-VM-0012 against posix_lazy. The +/-2048MiB proximity constraint - the only thing that can actually degrade this reservation - will not appear."
   }
 }

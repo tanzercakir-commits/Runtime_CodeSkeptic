@@ -76,6 +76,7 @@
     "source": "linux-user/arm/elfload.c:223-234",
     "quote": "    commpage = COMMPAGE & -host_page_size;\n    want = g2h_untagged(commpage);\n    addr = mmap(want, host_page_size, PROT_READ | PROT_WRITE,\n                MAP_ANONYMOUS | MAP_PRIVATE |\n                (commpage < reserved_va ? MAP_FIXED : MAP_FIXED_NOREPLACE),\n                -1, 0);\n\n    if (addr == MAP_FAILED) {\n        perror(\"Allocating guest commpage\");\n        exit(EXIT_FAILURE);\n    }",
     "expected_verdict": "SUPPORTED",
+    "expected_on_host": "linux/x86_64+unknown",
     "rationale": "0xffff0000 is a page-aligned address well inside the x86-64 Linux user address space and above mmap_min_addr; nothing normally occupies 4 GiB - 64 KiB, and MAP_FIXED makes placement unconditional anyway."
   }
 }

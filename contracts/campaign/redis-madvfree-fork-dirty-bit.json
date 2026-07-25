@@ -6,7 +6,11 @@
   "request": {
     "size": 12288,
     "exact_address_required": false,
-    "protection": { "read": true, "write": true, "execute": false }
+    "protection": {
+      "read": true,
+      "write": true,
+      "execute": false
+    }
   },
   "assumptions": {
     "guest_host_identity_required": false,
@@ -67,6 +71,7 @@
     "source": "src/syscheck.c:269",
     "quote": "        /* Child: check if the page is marked as dirty, page_size in kb.\n         * A value of 0 means the kernel is affected by the bug. */\n        ret = smapsGetSharedDirty((unsigned long) q);",
     "expected_verdict": "SUPPORTED",
+    "expected_on_host": "linux/x86_64+unknown",
     "rationale": "A 12KiB anonymous RW mapping with no address is unobjectionable to every rule in the analyzer, so I expect a bare SUPPORTED. The postconditions that carry the entire requirement are free text the engine never reads."
   }
 }

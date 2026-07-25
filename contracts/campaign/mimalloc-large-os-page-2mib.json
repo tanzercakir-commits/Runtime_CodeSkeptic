@@ -7,7 +7,11 @@
     "size": 16777216,
     "exact_address_required": false,
     "required_page_size": 2097152,
-    "protection": { "read": true, "write": true, "execute": false }
+    "protection": {
+      "read": true,
+      "write": true,
+      "execute": false
+    }
   },
   "assumptions": {
     "guest_host_identity_required": false,
@@ -19,7 +23,9 @@
     "the returned region is 2MiB-aligned, since MAP_HUGETLB forces huge-page alignment",
     "a failure here is not an error: p == NULL falls through to the regular mmap at prim.c:390 and mimalloc runs with base pages"
   ],
-  "permitted_fallbacks": ["smaller_size"],
+  "permitted_fallbacks": [
+    "smaller_size"
+  ],
   "failure_sink": {
     "kind": "none",
     "location": {
@@ -62,6 +68,7 @@
     "source": "src/prim/unix/prim.c:349",
     "quote": "      lflags |= MAP_HUGETLB;",
     "expected_verdict": "UNSUPPORTED",
+    "expected_on_host": "linux/x86_64+unknown",
     "rationale": "rule_page_size does an equality test against the profile's page_size fact, which the probe measured as 4096, so 2097152 != 4096 fires RS-VM-0006 as Proven/Unsupported. I expect that verdict to be wrong about the program: mimalloc treats a failed huge-page mmap as a non-event and falls through to base pages at prim.c:390."
   }
 }

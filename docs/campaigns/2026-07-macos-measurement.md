@@ -242,17 +242,42 @@ machine is not a platform.
   to. Same-looking gap, no measurement behind it, left alone on purpose.
 - **Nothing here was reproduced independently.** One runner, one workflow.
 
-### Known-open, found while doing this
+### Found while doing this, and fixed
 
-`run_campaign.sh` compares every verdict against the `expected_verdict` stored
-in the contract, but that field has no host qualifier - it was recorded against
-the Linux reference host. Running the 26-contract campaign against a macOS
-profile therefore marks 12 rows `!` where most are simply a different host
-giving a different, correct answer. On the reference host the count is the
-same four rows the July campaign already documents, so nothing here regressed;
-the runner is just comparing against an expectation that does not say which
-machine it was written for. Expectations need to be keyed by host before the
-campaign means anything on a second platform.
+`run_campaign.sh` compared every verdict against the `expected_verdict` stored
+in the contract, but that field had no host qualifier - all 26 were recorded
+against the x86-64 Linux reference host. Running the campaign against a macOS
+profile therefore marked 12 rows `!` where most were a different host correctly
+giving a different answer. Twelve manufactured disagreements, in the one report
+whose whole job is to show where the analyzer is wrong.
+
+Expectations are now keyed by host:
+
+```json
+"expected_verdict": "UNSUPPORTED",
+"expected_on_host": "linux/x86_64+unknown",
+"expected_verdict_by_host": { "macos/x86_64+rosetta2": "..." }
+```
+
+The key names only what changes the *answer* - OS, the architecture the
+process actually runs as, and any translation layer. Translation mode is
+always appended, including `unknown`, which is why the reference key reads
+`linux/x86_64+unknown`: the Linux probe does not detect translation in v0.1,
+so every one of those 26 expectations was recorded without knowing whether a
+translator was underneath. A prettier key was available; this one does not let
+that go quiet.
+
+| host | disagreements | no expectation |
+|---|---|---|
+| `linux/x86_64+unknown` | 4 (the same four the July campaign documents) | 0 |
+| `macos/aarch64+none` | 0 | 26 |
+| `macos/x86_64+rosetta2` | 0 | 26 |
+
+**The 26 `n/a` rows are not agreement.** They are unreviewed output, and the
+runner says so in its own summary. Filling them in from the tool's verdicts
+would make the campaign a machine that agrees with itself; each one has to be
+read and decided by hand, which is a piece of work this measurement has
+created and not yet done.
 
 ## Reproducing
 

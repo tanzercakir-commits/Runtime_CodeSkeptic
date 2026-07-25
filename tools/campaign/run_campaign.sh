@@ -33,9 +33,17 @@ verdict_of() {
     esac
 }
 
+# An expectation is only meaningful about a kind of host. Comparing a verdict
+# against one recorded on a different platform manufactures disagreements out
+# of a host difference, which is the opposite of what a campaign is for.
+HOST_KEY=$(python3 "$(dirname "$0")/host_key.py" "$PROFILE") || exit 65
+
 total=0
+unqualified=0
 declare -A counts=( [SUPPORTED]=0 [UNSUPPORTED]=0 [CONDITIONAL]=0 [UNKNOWN]=0 )
 
+echo "host: $HOST_KEY"
+echo
 printf '%-44s %-13s %-13s %s\n' CONTRACT VERDICT EXPECTED FINDINGS
 printf '%.0s-' {1..110}; echo
 
@@ -44,14 +52,29 @@ for contract in "$CONTRACT_DIR"/*.json; do
     name=$(basename "$contract" .json)
 
     # An expectation lives in the contract itself so it cannot drift away from
-    # the case it describes. Absent means "we have no prior belief".
-    expected=$(python3 -c "
-import json,sys
+    # the case it describes, and it is keyed by the host it was recorded on.
+    #
+    #   expected_verdict_by_host[<key>]   preferred, explicit
+    #   expected_verdict                  applies only on expected_on_host
+    #
+    # Anything else prints "n/a" - not a pass, not a failure. We have no prior
+    # belief about this contract on this host, and saying so is the honest
+    # answer. Filling those in from the tool's own output would be the tool
+    # grading its own homework.
+    expected=$(HOST_KEY="$HOST_KEY" python3 -c "
+import json,os,sys
+key=os.environ['HOST_KEY']
 try:
-    d=json.load(open('$contract'))
-    print(d.get('x_campaign',{}).get('expected_verdict','-'))
+    c=json.load(open('$contract')).get('x_campaign',{})
+    by_host=c.get('expected_verdict_by_host') or {}
+    if key in by_host:
+        print(by_host[key])
+    elif c.get('expected_verdict') and c.get('expected_on_host')==key:
+        print(c['expected_verdict'])
+    else:
+        print('n/a')
 except Exception:
-    print('-')
+    print('n/a')
 ")
 
     json_out=$("$RS_CHECK" "$contract" --profile "$PROFILE" --format json 2>/dev/null)
@@ -74,7 +97,9 @@ except Exception:
 ")
 
     mark=' '
-    if [ "$expected" != "-" ] && [ "$expected" != "$verdict" ]; then
+    if [ "$expected" = "n/a" ]; then
+        unqualified=$((unqualified + 1))
+    elif [ "$expected" != "$verdict" ]; then
         mark='!'
     fi
     printf '%s%-43s %-13s %-13s %s\n' "$mark" "$name" "$verdict" "$expected" "$findings"
@@ -82,4 +107,9 @@ done
 
 echo
 echo "total: $total   supported: ${counts[SUPPORTED]}   unsupported: ${counts[UNSUPPORTED]}   conditional: ${counts[CONDITIONAL]}   unknown: ${counts[UNKNOWN]}"
-echo "rows marked ! disagree with the expectation recorded in the contract."
+echo "rows marked ! disagree with an expectation recorded for $HOST_KEY."
+if [ "$unqualified" -gt 0 ]; then
+    echo "$unqualified of $total contracts have no expectation recorded for this host (EXPECTED n/a)."
+    echo "Those rows are unreviewed output, not agreement. Record an expectation by"
+    echo "hand, after reading the report - never by copying the verdict back in."
+fi

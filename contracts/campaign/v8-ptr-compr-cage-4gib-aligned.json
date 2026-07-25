@@ -7,7 +7,11 @@
     "size": 4294967296,
     "exact_address_required": false,
     "required_alignment": 4294967296,
-    "protection": { "read": false, "write": false, "execute": false },
+    "protection": {
+      "read": false,
+      "write": false,
+      "execute": false
+    },
     "reserve_then_commit": true
   },
   "assumptions": {
@@ -74,6 +78,7 @@
     "source": "include/v8-internal.h:167",
     "quote": "constexpr size_t kPtrComprCageReservationSize = size_t{1} << 32;\nconstexpr size_t kPtrComprCageBaseAlignment = size_t{1} << 32;",
     "expected_verdict": "CONDITIONAL",
+    "expected_on_host": "linux/x86_64+unknown",
     "rationale": "I expect the 4GiB-alignment requirement to be dropped on the floor (rule_address_alignment needs an address) and the verdict to come from rule_reserve_commit instead: the profile records reserve_commit_model=posix_lazy, so RS-VM-0012 should fire ConditionallySupported. The one constraint that can actually abort V8 will not be mentioned."
   }
 }

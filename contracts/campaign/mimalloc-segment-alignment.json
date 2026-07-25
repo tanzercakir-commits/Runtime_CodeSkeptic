@@ -7,7 +7,11 @@
     "size": 33554432,
     "exact_address_required": false,
     "required_alignment": 33554432,
-    "protection": { "read": true, "write": true, "execute": false }
+    "protection": {
+      "read": true,
+      "write": true,
+      "execute": false
+    }
   },
   "assumptions": {
     "guest_host_identity_required": false,
@@ -19,7 +23,9 @@
     "the address may be anything the host likes; only its alignment is constrained",
     "for every block pointer p inside the segment, (p - 1) & ~MI_SEGMENT_MASK must equal the segment header address - this is how mi_free() finds the owning segment in O(1) with no lookup table"
   ],
-  "permitted_fallbacks": ["relocate"],
+  "permitted_fallbacks": [
+    "relocate"
+  ],
   "failure_sink": {
     "kind": "unchecked",
     "location": {
@@ -72,6 +78,7 @@
     "source": "include/mimalloc/types.h:193",
     "quote": "#define MI_SEGMENT_ALIGN                  MI_SEGMENT_SIZE",
     "expected_verdict": "SUPPORTED",
+    "expected_on_host": "linux/x86_64+unknown",
     "rationale": "rule_address_alignment (analyzer.cpp:316) begins with `if (!req_.request.address) return;`, so a required_alignment with no address is never read by any rule. I expect a clean SUPPORTED with no finding - which would be the analyzer reporting support for a constraint it never evaluated."
   }
 }

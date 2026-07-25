@@ -72,6 +72,7 @@
     "source": "linux-user/elfload.c:1072-1078",
     "quote": "    load_addr = target_mmap(load_addr, align_size, PROT_NONE,\n                            MAP_PRIVATE | MAP_ANON | MAP_NORESERVE |\n                            (ehdr->e_type == ET_EXEC ? MAP_FIXED_NOREPLACE : 0),\n                            -1, 0);\n    if (load_addr == -1) {\n        goto exit_mmap;\n    }",
     "expected_verdict": "SUPPORTED",
+    "expected_on_host": "linux/x86_64+unknown",
     "rationale": "The probe measured fixed_noreplace_available=true and exact placement works for free page-aligned ranges; 0x08048000 is not occupied in a normal x86-64 Linux process, whose own image sits at 0x400000 or in the 0x55.. PIE band.",
     "note_after_schema_fix": "QEMU maps over its PROT_NONE reservation and checks THAT call; it is not the Windows two-phase model."
   }

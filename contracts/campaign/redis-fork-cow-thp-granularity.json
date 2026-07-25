@@ -7,7 +7,11 @@
     "size": 1073741824,
     "exact_address_required": false,
     "required_page_size": 4096,
-    "protection": { "read": true, "write": true, "execute": false }
+    "protection": {
+      "read": true,
+      "write": true,
+      "execute": false
+    }
   },
   "assumptions": {
     "guest_host_identity_required": false,
@@ -68,6 +72,7 @@
     "source": "src/syscheck.c:146",
     "quote": "/* Make sure transparent huge pages aren't always enabled. When they are this can cause copy-on-write logic\n * to consume much more memory and reduce performance during forks. */",
     "expected_verdict": "SUPPORTED",
+    "expected_on_host": "linux/x86_64+unknown",
     "rationale": "The probed page_size is 4096 and this document declares 4096, so rule_page_size stays silent and every other rule is inapplicable. SUPPORTED will be a true statement about the wrong fact: the analyzer has no way to look at THP or at fork semantics at all."
   }
 }

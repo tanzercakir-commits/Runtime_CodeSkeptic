@@ -6,7 +6,11 @@
   "request": {
     "size": 2097152,
     "exact_address_required": false,
-    "protection": { "read": true, "write": true, "execute": false }
+    "protection": {
+      "read": true,
+      "write": true,
+      "execute": false
+    }
   },
   "assumptions": {
     "guest_host_identity_required": true,
@@ -19,7 +23,9 @@
     "MAP_FIXED must NOT be used, because it would replace an existing mapping instead of failing - jemalloc says so in the code",
     "the resulting extent abuts the caller's existing extent, which is what makes coalescing in the extent map legal"
   ],
-  "permitted_fallbacks": ["relocate"],
+  "permitted_fallbacks": [
+    "relocate"
+  ],
   "failure_sink": {
     "kind": "error_return",
     "location": {
@@ -63,6 +69,7 @@
     "source": "deps/jemalloc/src/pages.c:155",
     "quote": "\t} else if (addr != NULL && ret != addr) {\n\t\t/*\n\t\t * We succeeded in mapping memory, but not in the right place.\n\t\t */\n\t\tos_pages_unmap(ret, size);\n\t\tret = NULL;",
     "expected_verdict": "UNSUPPORTED",
+    "expected_on_host": "linux/x86_64+unknown",
     "rationale": "permitted_fallbacks contains relocate while guest_host_identity_required is true, so rule_internal_fallback_contradiction (RS-VM-0014) should fire Proven/Unsupported and suppress everything else. I expect that to be wrong: jemalloc's try-exact-then-relax structure is not a contradiction, it is two attempts with different contracts, and the schema has only one fallback list per request to describe both."
   }
 }

@@ -7,7 +7,11 @@
     "size": 4096,
     "exact_address_required": false,
     "required_page_size": 4096,
-    "protection": { "read": true, "write": true, "execute": false }
+    "protection": {
+      "read": true,
+      "write": true,
+      "execute": false
+    }
   },
   "assumptions": {
     "guest_host_identity_required": false,
@@ -57,6 +61,7 @@
     "source": "deps/jemalloc/src/pages.c:760",
     "quote": "\tif (os_page > PAGE) {\n\t\tmalloc_write(\"<jemalloc>: Unsupported system page size\\n\");",
     "expected_verdict": "SUPPORTED",
+    "expected_on_host": "linux/x86_64+unknown",
     "rationale": "The probe measured page_size 4096 and this build declares 4096, so rule_page_size returns without a finding and nothing else in the request is contentious. This is the control case: the analyzer should be right and quiet."
   }
 }

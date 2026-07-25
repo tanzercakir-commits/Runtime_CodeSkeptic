@@ -82,6 +82,7 @@
     "source": "linux-user/main.c:842-846, common-user/probe-guest-base.c:129-132",
     "quote": "} else if (HOST_LONG_BITS == 64 && TARGET_VIRT_ADDR_SPACE_BITS <= 32) {\n        /* MAX_RESERVED_VA + 1 is a large power of 2, so is aligned. */\n        reserved_va = max_reserved_va;\n    }\n---\n    if (reserved_va) {\n        ga->bounds[n].lo = try_identity ? mmap_min_addr : 0;\n        ga->bounds[n].hi = reserved_va;\n        n++;",
     "expected_verdict": "SUPPORTED",
+    "expected_on_host": "linux/x86_64+unknown",
     "rationale": "A 4 GiB PROT_NONE MAP_NORESERVE reservation is routine on x86-64 Linux, whose user address space is ~128 TiB; QEMU also permits relocation via guest_base, so no exact address is needed.",
     "note_after_schema_fix": "QEMU maps over its PROT_NONE reservation and checks THAT call; it is not the Windows two-phase model."
   }

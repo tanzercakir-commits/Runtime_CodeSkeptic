@@ -73,6 +73,7 @@
     "source": "src/lj_arch.h:304 and src/lj_ccallback.c:26",
     "quote": "#define LJ_TARGET_GC64\t\t1\n#define LJ_PAGESIZE\t\t16384\n---\n#define CALLBACK_MCODE_SIZE\t(LJ_PAGESIZE * LJ_NUM_CBPAGE)",
     "expected_verdict": "UNSUPPORTED",
+    "expected_on_host": "linux/x86_64+unknown",
     "rationale": "The probe measured a 4096-byte host page and this document declares required_page_size 16384, so a page-size rule should fire. I expect that verdict to be technically correct but practically misleading: LuaJIT's uses of the constant are conservative round-ups that tolerate a smaller host page."
   }
 }
