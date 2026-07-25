@@ -28,6 +28,17 @@ target_link_libraries(rs_vm PUBLIC rs_core PRIVATE rs_warnings)
 add_library(RuntimeSkeptic::vm ALIAS rs_vm)
 
 # ---------------------------------------------------------------------------
+# rs_extract - a BOUNDED source scanner. Depends on the domain to build
+# requirements; nothing depends on it, so a weak extractor can never weaken
+# the analyzer.
+# ---------------------------------------------------------------------------
+add_library(rs_extract STATIC
+    extract/scanner.cpp)
+
+target_link_libraries(rs_extract PUBLIC rs_vm PRIVATE rs_warnings)
+add_library(RuntimeSkeptic::extract ALIAS rs_extract)
+
+# ---------------------------------------------------------------------------
 # rs_reports - rendering. Depends on the domain, never the other way round.
 # ---------------------------------------------------------------------------
 add_library(rs_reports STATIC

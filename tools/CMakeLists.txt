@@ -9,7 +9,10 @@ target_link_libraries(rs-check PRIVATE rs_reports rs_warnings)
 add_executable(rs-profile rs-profile/main.cpp)
 target_link_libraries(rs-profile PRIVATE rs_reports rs_warnings)
 
+add_executable(rs-extract rs-extract/main.cpp)
+target_link_libraries(rs-extract PRIVATE rs_extract rs_warnings)
+
 add_executable(rs-mcp rs-mcp/main.cpp)
 target_link_libraries(rs-mcp PRIVATE rs_server rs_warnings)
 
-install(TARGETS rs-env-probe rs-check rs-profile rs-mcp RUNTIME DESTINATION bin)
+install(TARGETS rs-env-probe rs-check rs-profile rs-extract rs-mcp RUNTIME DESTINATION bin)
