@@ -146,7 +146,23 @@ Fact<T> fact_from_json(const json::Value* node, Reader read_value,
     const json::Value* value_node = node->find("value");
     if (evidence == EvidenceClass::Unknown || value_node == nullptr ||
         value_node->is_null()) {
-        return Fact<T>::unknown(note.empty() ? "declared unknown" : note);
+        // Pass `note` through EXACTLY as the document had it, including empty.
+        //
+        // This used to substitute "declared unknown" for an absent note, which
+        // meant reading a profile ADDED text that was never written - and
+        // profile_id hashes the note. Write a profile with an unknown fact,
+        // read it back, and the id changed: the same document identified two
+        // different hosts depending on whether it had made a round trip.
+        //
+        // It stayed hidden because every fact in every profile the project had
+        // ever produced was known. The macOS probe leaving min_map_address
+        // unknown - correctly, since it had been reporting its own ASLR slide
+        // - produced the first profile with a hole in it, and the conformance
+        // test caught this within one CI run.
+        //
+        // A reader may not invent provenance. If the document does not say why
+        // a fact is unknown, then it does not say.
+        return Fact<T>::unknown(note);
     }
 
     T value{};

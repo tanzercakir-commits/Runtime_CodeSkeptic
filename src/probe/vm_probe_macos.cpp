@@ -648,7 +648,20 @@ ScanOutcome scan_address_space(std::size_t page_size, std::uint64_t probe_length
         // itself a measurement and was wrong once already; letting it prune
         // the candidate list is how the first run silently failed to test the
         // band the whole project is about.
-        if (min_address != 0 && base < min_address) continue;
+        // NOT filtered against min_address, deliberately.
+        //
+        // Skipping candidates below the probe's own image makes the candidate
+        // SET depend on where the loader put us, and under Rosetta that moves
+        // at every exec. Two runs on one machine agreed only by luck: the ~48
+        // MiB the image slid between them happened to contain no power-of-two
+        // sample point, so the two candidate lists came out identical. A wider
+        // slide would have changed the range facts and, with them, the
+        // profile_id that is supposed to name the host.
+        //
+        // The classifier below already distinguishes "a real mapping of ours"
+        // from "the kernel refuses this" - that is what it is for, and it is
+        // the fix that landed for defect 2. Filtering ahead of it added a
+        // dependency on our own layout to do a job it already does.
         const auto range = AddressRange::from_base_size(base, probe_length);
         if (!range) continue;
 
@@ -668,9 +681,34 @@ ScanOutcome scan_address_space(std::size_t page_size, std::uint64_t probe_length
         const RegionInfo region = describe_region(base);
         // An entry that grants no access is not "ours" in any useful sense: no
         // program can map there, whoever nominally holds it.
+        //
+        // WITH ONE EXCEPTION, and it is this process's own __PAGEZERO. That is
+        // also a VM_PROT_NONE entry, so the rule above would file it as a host
+        // limitation - which is exactly the mistake defect 2 was about, walking
+        // back in through a different door now that the candidate list is no
+        // longer filtered against our load address.
+        //
+        // __PAGEZERO is the only no-access entry that starts at 0; the commpage
+        // begins at 0xfc0000000 and the carveout at 0x1000000000. Its SIZE is a
+        // link-time choice (-pagezero_size) and its top moves with ASLR, so
+        // nothing about it describes the platform. Addresses inside it are not
+        // available and not unavailable - they are unmeasurable from in here,
+        // and the warning says so.
+        const bool is_our_pagezero =
+            region.covers && region.start == 0 &&
+            region.protection == VM_PROT_NONE;
         const bool entry_denies_everything =
-            region.covers &&
+            region.covers && !is_our_pagezero &&
             (region.reserved || region.protection == VM_PROT_NONE);
+        if (is_our_pagezero) {
+            outcome.occupied_notes.push_back(
+                "range " + range->to_string() +
+                " lies inside this process's own __PAGEZERO (" +
+                describe_region_text(region) +
+                "); its size is a link-time choice, so this says nothing about "
+                "the platform and was NOT recorded as a host limitation");
+            continue;
+        }
         if (result == KERN_NO_SPACE && region.covers &&
             !entry_denies_everything) {
             // A real mapping of ours: a property of one process layout, not of

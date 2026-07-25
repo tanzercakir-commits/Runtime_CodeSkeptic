@@ -223,4 +223,52 @@ RS_TEST(unavailable_ranges_are_sorted_for_canonical_output) {
     if (q) RS_CHECK_EQ(p->profile_id(), q->profile_id());
 }
 
+// Regression: reading a profile used to substitute the note "declared unknown"
+// for an unknown fact that had no note, and profile_id hashes the note. Writing
+// a profile and reading it back therefore changed its identity - the same
+// document naming two different hosts depending on whether it had made a round
+// trip.
+//
+// It hid for the project's whole life because every fact in every profile
+// produced so far was known. The first profile with a genuine hole in it was
+// the macOS one, after min_map_address stopped being recorded.
+RS_TEST(an_unknown_fact_survives_a_write_read_round_trip) {
+    EnvironmentProfile p = rs::test::permissive_host();
+    p.vm.min_map_address = Fact<Address>{};  // unknown, and says nothing about why
+    const std::string original = p.profile_id();
+
+    auto text = json::serialize_canonical(p.to_json());
+    RS_CHECK(text.has_value());
+    if (!text) return;
+    auto reparsed = json::parse(*text);
+    RS_CHECK(reparsed.ok());
+    if (!reparsed.ok()) return;
+
+    std::string error;
+    auto restored = EnvironmentProfile::from_json(*reparsed.value, error);
+    RS_CHECK_MESSAGE(restored.has_value(), error);
+    if (!restored) return;
+    RS_CHECK_EQ(restored->profile_id(), original);
+    // And the reader must not have invented a reason the document never gave.
+    RS_CHECK(restored->vm.min_map_address.note().empty());
+}
+
+// The other half: a note the document DOES carry has to survive intact.
+RS_TEST(a_stated_reason_for_unknown_is_preserved) {
+    EnvironmentProfile p = rs::test::permissive_host();
+    p.vm.min_map_address = Fact<Address>::unknown("probe declined to guess");
+
+    auto text = json::serialize_canonical(p.to_json());
+    RS_CHECK(text.has_value());
+    if (!text) return;
+    auto reparsed = json::parse(*text);
+    std::string error;
+    auto restored = EnvironmentProfile::from_json(*reparsed.value, error);
+    RS_CHECK(restored.has_value());
+    if (!restored) return;
+    RS_CHECK_EQ(restored->vm.min_map_address.note(),
+                std::string("probe declined to guess"));
+    RS_CHECK_EQ(restored->profile_id(), p.profile_id());
+}
+
 RS_TEST_MAIN("profile")
