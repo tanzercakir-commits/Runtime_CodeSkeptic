@@ -332,6 +332,53 @@ This is the sharpest instance of the pattern the whole page documents: the
 instrument was confidently reporting a number, the number was about the
 instrument, and only a second measurement could tell the difference.
 
+### What leaving that fact unknown then uncovered
+
+Removing `min_map_address` produced the first profile this project had ever
+made with a genuine hole in it, and `profile_id_survives_a_write_read_round_trip`
+- green since Phase 1 - failed on both lanes within one CI run.
+
+```
+written   {"evidence":"unknown","value":null}
+read      {"evidence":"unknown","value":null,"note":"declared unknown"}
+```
+
+`Fact::from_json` substituted the note `"declared unknown"` when an unknown
+fact carried none, and `profile_id` hashes the note. Writing a profile and
+reading it back changed its identity: **the same document named two different
+hosts depending on whether it had made a round trip.** A missing key had the
+same problem under a different name (`"absent"`), so two documents stating
+identical facts hashed differently depending on whether an unknown fact was
+spelled out or left out.
+
+The rule now is that a reader may not add information. If the document does
+not say why a fact is unknown, then it does not say. Three regression tests
+cover it.
+
+This bug was older and broader than the macOS work that exposed it, and it had
+hidden for the project's whole life for a simple reason: **every fact in every
+profile ever produced had been known.** The test was right and had never been
+given the input that mattered.
+
+### And one thing the gate said no to
+
+The same round of work removed the scan's `min_address` filter, reasoning that
+skipping candidates below our own image makes the candidate *set* depend on
+where the loader put us. That reasoning is correct.
+
+The gate then failed on both lanes, native included - which had been
+byte-identical across two earlier runs. Filtering was not the only thing
+depending on our layout; it was the thing *suppressing* the dependency. Probe
+a low candidate and "free" or "occupied" is decided by where this process's
+heap and libraries happen to sit, and a free one is recorded in
+`available_ranges`. The filter cut those candidates before they could be
+recorded. A narrow hazard had been traded for a broad one, on an argument that
+sounded right.
+
+Restored, with the residual risk documented rather than traded away: if the
+image ever slides across a power-of-two sample point, the candidate set
+changes. That risk is now something the gate can see.
+
 ## Reproducing
 
 ```console
