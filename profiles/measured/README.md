@@ -21,13 +21,15 @@ a fixture's W^X claim on the Rosetta lane.
 
 ## Provenance
 
-> **Empty right now, on purpose.** The two macOS profiles taken at `2d9ea6c`
-> were withdrawn: they carry a `min_map_address` fact that the probe should
-> never have recorded, and under Rosetta that value moved ~48 MiB between two
-> runs of the same CI job because it was really the ASLR slide of the probe's
-> own image. See `docs/campaigns/2026-07-macos-measurement.md`. They will be
-> replaced from a run of the corrected probe rather than edited - a measured
-> profile that someone fixed up by hand is not a measurement.
+| file | host | source |
+|---|---|---|
+| `macos-14-arm64-native.measured.json` | macOS 14.8.7, Apple Silicon, native arm64 | `.github/workflows/macos-probe.yml`, job `native-arm64`, commit `67dfbd8` |
+| `macos-14-arm64-rosetta-x86_64.measured.json` | macOS 14.8.7, Apple Silicon, x86-64 under Rosetta 2 | same workflow, job `rosetta-x86_64`, commit `67dfbd8` |
+
+An earlier pair taken at `2d9ea6c` was withdrawn rather than corrected. They
+carried a `min_map_address` that was really the ASLR slide of the probe's own
+image, and a measured profile someone fixed up by hand is not a measurement.
+These come from a run that passes the cross-process reproducibility gate.
 
 Both runners are GitHub-hosted and virtualised. One machine is not a platform;
 read the limitations section of the campaign document before treating these as
@@ -37,5 +39,5 @@ The originals remain published as git refs, which is the record of when they
 were taken:
 
 ```console
-$ tools/campaign/fetch_measurement.sh 2d9ea6c953178f2c38f907347877240ac8a187cf rosetta-x86_64
+$ tools/campaign/fetch_measurement.sh 67dfbd8 rosetta-x86_64
 ```

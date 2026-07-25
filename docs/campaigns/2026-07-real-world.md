@@ -159,8 +159,16 @@ demonstration, not an inference from two hosts happening to agree.
 | host | consulted the host | did not |
 |---|---|---|
 | `linux/x86_64+unknown` | 24 / 26 (92%) | 2 |
-| `macos/x86_64+rosetta2` | 24 / 26 (92%) | 2 |
-| `macos/aarch64+none` | 25 / 26 (96%) | 1 |
+| `macos/aarch64+none` | 23 / 26 (88%) | 3 |
+| `macos/x86_64+rosetta2` | 19 / 26 (73%) | 7 |
+
+The macOS figures **fell** after `min_map_address` stopped being recorded
+there, from 92% to 73% on the Rosetta lane. That is the honest direction. Six
+contracts ask about low addresses, the platform's floor on macOS was never
+measured - the old value was the probe's own ASLR slide - and with the
+fabricated fact gone they answer `UNKNOWN` on a measured host and an empty one
+alike. The tool became less informative and more correct in the same commit,
+and a metric worth having has to be able to move that way.
 
 Both rows that answer without a host turn out to be entitled to:
 
