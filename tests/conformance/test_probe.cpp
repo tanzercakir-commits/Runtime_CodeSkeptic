@@ -67,10 +67,23 @@ RS_TEST(unimplemented_platforms_report_synthetic_origin) {
     RS_CHECK(!result.profile.run.warnings.empty());
 }
 
-RS_TEST(repeated_runs_produce_the_same_profile_id) {
+RS_TEST(repeated_calls_in_one_process_produce_the_same_profile_id) {
     // Phase 1 exit criterion: "repeated runs on the same stable host produce
-    // equivalent canonical profiles". Run metadata differs between runs by
+    // equivalent canonical profiles". Run metadata differs between calls by
     // construction, so this also proves that profile_id excludes it.
+    //
+    // WHAT THIS DOES NOT COVER, and once did not admit. Both calls happen
+    // inside ONE process, so they share an image base, a __PAGEZERO, and every
+    // other thing ASLR fixes at exec time. Cross-process variance is invisible
+    // here - and on macOS under Rosetta 2 that was the only kind there was:
+    // min_map_address moved ~48 MiB between two runs of the same CI job while
+    // this test stayed green, because "repeated runs" had quietly come to mean
+    // "repeated calls".
+    //
+    // tools/campaign/check_reproducible.sh runs the probe as two separate
+    // processes and is the test that actually covers the criterion. This one
+    // covers determinism within a process, which is a different and weaker
+    // claim; it is kept because it is fast and catches ordering bugs.
     const probe::Result a = probe::probe_virtual_memory();
     const probe::Result b = probe::probe_virtual_memory();
     RS_CHECK_EQ(a.profile.profile_id(), b.profile.profile_id());

@@ -876,12 +876,42 @@ Result probe_virtual_memory(const Options& options) {
     (void)max_address;  // retained for readability of the survey block below
     if (exact_probing_allowed) {
         min_address = find_min_map_address(page_size);
+        // DELIBERATELY NOT RECORDED AS A HOST FACT.
+        //
+        // The search finds the lowest page this process can place, which is
+        // where its own __PAGEZERO and image end. That is a property of how
+        // this binary was linked and where the loader put it - not a platform
+        // policy. Linux has a real one to read (/proc/sys/vm/mmap_min_addr);
+        // macOS does not, and a binary search cannot manufacture it.
+        //
+        // Two CI runs of the same job on the same runner made this concrete:
+        //
+        //   run 1 (2d9ea6c)  min = 0x10a8f2000
+        //   run 2 (fd649c7)  min = 0x10d841000
+        //
+        // ~48 MiB apart, because a translated image is slid by ASLR. Recorded
+        // as measured_capability it was worse than useless: measured_capability
+        // permits a PROVEN conclusion, the analyzer rejects requested addresses
+        // below it, and so a contract asking for a low address was judged
+        // against where this probe's own binary happened to land that morning.
+        // It also made profile_id - which is supposed to identify a HOST -
+        // change between two measurements of the same machine.
+        //
+        // Leaving it unknown makes rs-check answer UNKNOWN for questions that
+        // depend on it. That is the true answer: nothing here measured the
+        // platform's floor. The native lane is stable at 0x300000000 only
+        // because __PAGEZERO has a fixed default size there; link with a
+        // different -pagezero_size and it moves too, so the fact is
+        // process-scoped in both lanes and stable in neither sense that counts.
         if (min_address != 0) {
-            profile.vm.min_map_address = Fact<Address>::known(
-                Address(min_address), EvidenceClass::MeasuredCapability,
-                std::string(kSourceProbe) +
-                    ": binary search for the lowest placeable page (this is "
-                    "where __PAGEZERO ends)");
+            warnings.emplace_back(
+                "the lowest placeable page in this process is " +
+                json::to_hex(min_address) +
+                ", which is where its own __PAGEZERO and image end. macOS has "
+                "no equivalent of vm.mmap_min_addr to read, so min_map_address "
+                "is left UNKNOWN rather than filled in with a property of the "
+                "probe binary; under Rosetta this value moves between runs of "
+                "the same job because the translated image is slid by ASLR");
         }
         const SpaceSurvey survey = survey_address_space(page_size);
         max_address = refine_max_user_address(survey.highest_placed, page_size);

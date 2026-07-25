@@ -42,6 +42,11 @@ jobs:
       - name: Test
         run: ctest --test-dir build --output-on-failure
 
+      # ctest's reproducibility test calls the probe twice in ONE process, so
+      # it cannot see anything ASLR decides at exec time. This runs two.
+      - name: Probe is reproducible across processes
+        run: bash tools/campaign/check_reproducible.sh
+
       - name: Confirm this is really Apple Silicon
         run: |
           uname -m
@@ -168,6 +173,12 @@ jobs:
       - name: Test under translation
         if: steps.rosetta.outputs.available == 'true'
         run: ctest --test-dir build-x64 --output-on-failure
+
+      - name: Probe is reproducible across processes (x86-64)
+        run: |
+          PROBE=build-x64/bin/rs-env-probe \
+          PROFILE_TOOL=build-x64/bin/rs-profile \
+            bash tools/campaign/check_reproducible.sh
 
       # This is the measurement the whole project has been waiting for.
       - name: Measure the translated address space

@@ -231,10 +231,8 @@ machine is not a platform.
   startup, before the allocator has fragmented anything. The probe measures a
   nearly-empty process. Both are legitimate, and they are not the same
   question.
-- **`min_map_address` is process-specific.** It reports where `__PAGEZERO`
-  and the loader's own mappings end, which depends on how the binary was
-  linked. It is not a platform policy the way Linux's `vm.mmap_min_addr` is,
-  and the profile should probably say so more loudly than it does.
+- **`min_map_address` is no longer recorded on macOS.** See below - the
+  suspicion in this list turned out to be a live defect.
 - **The program side of the GTA V contract is still `statically_inferred`,**
   as the section above sets out. The verdict is `COUNTEREXAMPLE`, not proof.
 - **Widening applies to macOS only.** A structural refusal on Linux is refused
@@ -279,10 +277,66 @@ would make the campaign a machine that agrees with itself; each one has to be
 read and decided by hand, which is a piece of work this measurement has
 created and not yet done.
 
+---
+
+## The worst defect on this page: a host fact that was an ASLR roll
+
+The earlier draft of this document listed `min_map_address` as a soft
+limitation - "process-specific... the profile should probably say so more
+loudly than it does". Comparing two CI runs turned the suspicion into a
+measurement.
+
+```
+run 1 (2d9ea6c)   min_map_address = 0x10a8f2000
+run 2 (fd649c7)   min_map_address = 0x10d841000
+```
+
+Same runner image, same job, same machine type, nothing about the host
+different. ~48 MiB apart, because a Rosetta-translated image is slid by ASLR
+and the probe derived this "fact" from a binary search for the lowest page it
+could place - which finds the end of **its own image**.
+
+It was recorded as `measured_capability`, and that class permits `PROVEN`.
+What it cost:
+
+- **Six campaign contracts returned a confident `UNSUPPORTED`** on macOS
+  because the analyzer rejects requested addresses below `min_map_address`.
+  `box64-box32-guest-alloc-below-4gb`, `box64-guest-map32bit-emulation`,
+  `box64-preserve-highest32`, `luajit-x64-nogc64-heap-below-2gb`,
+  `qemu-arm-commpage-fixed`, `qemu-i386-etexec-fixed-noreplace`. All six are
+  now `UNKNOWN`, which is the truth: nothing measured the platform's floor.
+- **`profile_id` differed between two measurements of one machine** - and
+  `profile_id` exists to identify a host.
+
+Linux has a real policy to read (`/proc/sys/vm/mmap_min_addr`). macOS does
+not, and a binary search cannot manufacture one, so the fact is now left
+unknown and the observation is recorded as a `probe_run` warning that explains
+itself. The native lane is stable at `0x300000000` only because `__PAGEZERO`
+has a fixed default size there; link with a different `-pagezero_size` and it
+moves too.
+
+### The test that should have caught it, and why it did not
+
+`repeated_runs_produce_the_same_profile_id` has existed since Phase 1 and was
+green throughout. It calls `probe_virtual_memory()` **twice inside one
+process**, where both calls share an image base and everything else ASLR fixes
+at exec time. Cross-process variance - the only kind that exists here - was
+invisible to it. "Repeated runs" had quietly come to mean "repeated calls".
+
+`tools/campaign/check_reproducible.sh` runs the probe as two separate
+processes, diffs the facts when the ids disagree, and now runs in both CI
+workflows and on both macOS lanes. The in-process test is renamed to say what
+it actually covers.
+
+This is the sharpest instance of the pattern the whole page documents: the
+instrument was confidently reporting a number, the number was about the
+instrument, and only a second measurement could tell the difference.
+
 ## Reproducing
 
 ```console
 $ gh workflow run macos-probe.yml          # or push to main
 $ tools/campaign/fetch_measurement.sh <sha> rosetta-x86_64
 $ tools/campaign/fetch_measurement.sh <sha> native-arm64
+$ tools/campaign/check_reproducible.sh     # two processes, one host
 ```

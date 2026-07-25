@@ -39,6 +39,9 @@ jobs:
       - name: Test
         run: ctest --test-dir build --build-config RelWithDebInfo --output-on-failure
 
+      - name: Probe is reproducible across processes
+        run: bash tools/campaign/check_reproducible.sh
+
       # The probe is only implemented for Linux. On other platforms this step
       # proves the honest fallback: a schema-valid profile in which every fact
       # is unknown, and a non-zero warning list saying so.
