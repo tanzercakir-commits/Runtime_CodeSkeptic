@@ -917,6 +917,44 @@ That is the pattern worth carrying out of this session: on macOS there is no way
 ask whose a map entry is, so every producer that reads a refusal has to be told
 where the boundary is — and the boundary has to be written down **once**.
 
+### Three entries left, and they were races
+
+`8a6d9f7` removed the `__PAGEZERO` holes. The profile shows exactly what still moved:
+
+```
+U [0x100000000, 0x100400000)   "exact placement refused inside the allocation arena"
+U [0x15b400000, 0x15b800000)
+U [0x16bc00000, 0x16c000000)
+U [0xfc0000000,  0x1000000000)   commpage   <- correct, and stable
+U [0x1000000000, 0x7000000000)   carveout   <- correct, and stable
+... 32 KERN_INVALID_ADDRESS entries above 2^47                <- correct, and stable
+```
+
+The three arena entries are refusals where `mach_vm_region` reported **nothing
+covering the window** — the case the previous commit classified as structural. That
+combination is self-contradictory unless the task map changed between the allocate
+and the query, which it does constantly: the probe allocates and releases 7,500
+windows while walking. So they are races, and their addresses drift — 46 vs 56 entries
+across two runs.
+
+So the rule is completed rather than patched: **inside the arena's bounds, no refusal
+is attributable to the host.** Not just the covered ones. `no_access_here_is_ours()`
+already says the host is not answerable for what is in the way there; a refusal with
+no visible cause at all is the same claim with *less* evidence behind it, not more.
+Everything unplaceable inside the arena is counted in the note and recorded as
+nothing.
+
+The commpage, the carveout and the 32 above-the-address-space entries are outside
+those bounds and keep recording, which is the half that has to survive.
+
+**What the four fixes to this one boundary have in common** — the arena floor, the
+covered refusals, the ladder's widened extents, the `__PAGEZERO` holes, and now the
+uncovered refusals: each was reasoned out correctly *in its own frame* and each
+answered "is this the host's?" without being able to. macOS gives no way to ask whose
+a map entry is. Once that is accepted, the boundary has to be written down once and
+every producer has to consult it — which is now the case, in
+`no_access_here_is_ours()`.
+
 **Also next.** Windows still has no arena at all, and `RS-VM-0027` will fire on every
 Windows and macOS profile until those probes measure `max_single_reservation` — which
 is the honest reading of a profile that has not measured it.

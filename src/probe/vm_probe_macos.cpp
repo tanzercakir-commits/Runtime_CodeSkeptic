@@ -773,7 +773,29 @@ void scan_allocation_arenas(std::uint64_t page_size, std::uint64_t probe_length,
         const bool denies_everything =
             region.covers &&
             (region.reserved || region.protection == VM_PROT_NONE);
-        entry.covers = denies_everything;
+        // INSIDE THE ARENA, NO REFUSAL IS ATTRIBUTABLE - not just the ones with a
+        // no-access entry covering them.
+        //
+        // The previous commit resolved the covered case and left three entries that
+        // still moved between runs:
+        //
+        //   U [0x100000000, 0x100400000)   "exact placement refused inside the
+        //   U [0x15b400000, 0x15b800000)    allocation arena"
+        //   U [0x16bc00000, 0x16c000000)
+        //
+        // Those are refusals where `mach_vm_region` reported NOTHING covering the
+        // window - and that combination is self-contradictory unless the task map
+        // changed between the allocate and the query, which it does constantly,
+        // because this probe allocates and releases thousands of windows while
+        // walking. So they are races, and their addresses drift: 46 vs 56 entries
+        // across two runs.
+        //
+        // `no_access_here_is_ours()` already says the host is not answerable for
+        // what is in the way inside these bounds. This extends that to refusals with
+        // no visible cause at all, which is the same claim with less evidence behind
+        // it, not more. Everything unplaceable inside the arena is counted in the
+        // note and recorded as nothing.
+        entry.covers = denies_everything || no_access_here_is_ours(base);
         entry.start = region.start;
         entry.size = region.size;
         entry.text = describe_region_text(region);
