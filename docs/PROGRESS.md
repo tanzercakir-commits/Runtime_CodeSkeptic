@@ -1154,7 +1154,39 @@ and the fix touched `src/probe/vm_probe_unimplemented.cpp`, which is not in it.
 | **−** | the trigger list names the implementation but not **the file that can silently replace the implementation** — which is precisely the bug just fixed, hiding its own confirmation |
 | **+** | `vm_probe_unimplemented.cpp`, `CMakeLists.txt` and `src/CMakeLists.txt` are in the filter now. The last two define `RS_PLATFORM_WINDOWS` and nowhere else does |
 
-**Also next.** Windows still has no arena. But that question was never reachable:
+### THE FIRST REAL WINDOWS MEASUREMENT
+
+`47540c7`. `refs/measurements/47540c7…/windows-x86_64`:
+
+```
+origin                     measured                 <- not synthetic
+os                         10.0.26100
+arch                       x86_64 / process x86_64
+
+page_size                  4096                     measured_capability
+allocation_granularity     65536                    measured_capability
+min_map_address            0x10000                  measured_capability
+max_user_address           0x7fffffff0000           measured_capability
+max_single_reservation     70368744177664           measured_capability
+exact_mapping              CONDITIONALLY_SUPPORTED  measured_capability
+fixed_noreplace_available  true                     measured_capability
+reserve_commit_model       windows_reserve_commit   measured_capability
+file_map_beyond_eof        error                    measured_capability
+```
+
+Every one `measured_capability`, on a real `windows-latest` host. This project has
+been making claims about Windows since it started and has never once had this.
+
+| | |
+|---|---|
+| **+** | **`allocation_granularity: 65536` is now measured, not documented.** T-004 said: *"64 KiB granularity is not documented as a value at all — neither `SYSTEM_INFO` nor `VirtualAlloc` states it. So it stays `measured_capability` and a host reporting something else is a finding."* The host reports 64 KiB. The mechanism behind `RSC-0044` is confirmed on the platform it is about |
+| **+** | `max_user_address` is `0x7fffffff0000`, which is the `lpMaximumApplicationAddress + 1` question T-004 settled by `VirtualQuery` rather than by reservation — applied on real Windows for the first time |
+| **+** | `fixed_noreplace_available: true` and `reserve_commit_model: windows_reserve_commit`: the two facts every Windows claim in the corpus leans on, measured |
+| **+** | 14/14 ctest on the runner, including the new `a_platform_with_an_implementation_actually_uses_it`, which passes now precisely because the probe is real |
+| **−** | `available: 0, unavailable: 0`. **The Windows probe establishes no address ranges at all** — no arena, no landmark ladder. Every address question on Windows still answers UNKNOWN, honestly and uselessly. That is T-013 and T-014's gap, third platform |
+| **−** | the job still failed, in a step **with no id**, so `steps.json` said `build/test/measure success` and nothing more. Third time this exact omission has cost a round trip; `reproducible`, `report` and `refuse_wine` have ids now, and the reproducibility output is written to a file so the channel carries it |
+
+**Also next.** Windows has no arena. That question was never reachable before now:
 the probe that would need one was not in the binary. The Rosetta lane still needs a dispatch —
 `gh workflow run macos-probe.yml --ref main` — and it now publishes its ground-truth
 output, so the second half of the `file_map_beyond_eof` claim will be readable from

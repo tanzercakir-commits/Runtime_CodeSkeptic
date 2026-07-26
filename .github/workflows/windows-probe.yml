@@ -134,6 +134,7 @@ jobs:
       # first. The in-process check was green while this was false once already,
       # so it is two processes here as it is everywhere else.
       - name: Reproducibility across two processes
+        id: reproducible
         shell: pwsh
         run: |
           $probe = "build/bin/RelWithDebInfo/rs-env-probe.exe"
@@ -150,6 +151,7 @@ jobs:
           }
 
       - name: What was measured
+        id: report
         shell: pwsh
         run: |
           python - <<'PY'
@@ -191,6 +193,7 @@ jobs:
       # A profile that says it came from Wine did not come from this runner.
       # Cheap, and it catches a whole class of "we measured the wrong thing".
       - name: Refuse a profile that is not from real Windows
+        id: refuse_wine
         shell: pwsh
         run: |
           python - <<'PY'
@@ -246,12 +249,18 @@ jobs:
           tail -c 30000 /tmp/diag/ctest.txt > /tmp/diag/ctest_tail.txt || true
           # The probe may not have produced a profile; say so in the file rather
           # than leaving it absent, which reads as "nobody looked".
+          # The reproducibility step runs AFTER Measure, so when it is the failure
+          # the profile alone does not say so. ci.yml learned this the same way.
+          cp repro.txt /tmp/diag/reproducible.txt 2>/dev/null \
+            || echo "(the reproducibility step wrote no file)" \
+                 > /tmp/diag/reproducible.txt
           cp windows-x86_64.json /tmp/diag/profile.json 2>/dev/null \
             || echo '{"error":"the Measure step did not produce a profile"}' \
                  > /tmp/diag/profile.json
           bash tools/ci/publish_measurement.sh ci-logs \
             "windows-x86_64" "${{ github.sha }}" \
-            /tmp/diag/steps.json /tmp/diag/ctest_tail.txt /tmp/diag/profile.json
+            /tmp/diag/steps.json /tmp/diag/ctest_tail.txt \
+            /tmp/diag/reproducible.txt /tmp/diag/profile.json
 
       - name: Publish the measurement to refs/measurements/*
         if: always() && steps.measure.outcome == 'success'
