@@ -1127,7 +1127,7 @@ about a stub that measures nothing — and says so honestly, to a reader who loo
 |---|---|
 | **−** | `ci.yml`'s `windows---msvc` job has been **green throughout**. It runs `rs-profile verify host-profile.json`, and a synthetic profile verifies perfectly well. Green meant "the file is well-formed", and was read as "the platform was measured" |
 | **−** | `test_probe` passed 14/14 on Windows because `unimplemented_platforms_report_synthetic_origin` returns early when `implemented` is true — and **nothing returned early when it was false**. The suite had a test for one direction of a two-directional claim |
-| **+** | the step that caught it is `windows-probe.yml`'s *"Refuse a profile that is not from real Windows"*, written for Wine. It turned out to guard something much larger than Wine |
+| **+** | ~~the step that caught it is the Wine refusal, guarding something larger~~ — **wrong, corrected below.** That step has never executed: it runs after `report`, which fails first on every Windows run there has ever been. What found the synthetic profile was the diagnostics channel and a reading of the artifact it published |
 | **+** | `tools/guards/check_probe_platforms.py` evaluates each probe's `#if` against every `RS_PLATFORM_*` setting CMake can produce and requires exactly one active. **No compiler, no platform** — which is the only version of this fix that removes the dependency instead of moving it. Selftest 63 to **66 cases**; it fails on demand |
 | **+** | and `a_platform_with_an_implementation_actually_uses_it` asserts it *on* the platform, because a guard reads source and a test reads the binary that was actually linked |
 

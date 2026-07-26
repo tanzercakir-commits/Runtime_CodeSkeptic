@@ -150,9 +150,18 @@ jobs:
             exit 1
           }
 
+      # `shell: bash`, NOT pwsh, and this had been wrong since the step was
+      # written. The body is `python - <<'PY'` - a bash heredoc - and PowerShell
+      # has no such construct, so this step failed on every Windows run there has
+      # ever been. It failed BEFORE "Refuse a profile that is not from real
+      # Windows", which is therefore `skipped` in every one of those runs and has
+      # never executed either.
+      #
+      # Windows runners ship Git Bash, so `shell: bash` is available and is what
+      # the diagnostics step in this same job already uses.
       - name: What was measured
         id: report
-        shell: pwsh
+        shell: bash
         run: |
           python - <<'PY'
           import json
@@ -192,9 +201,19 @@ jobs:
 
       # A profile that says it came from Wine did not come from this runner.
       # Cheap, and it catches a whole class of "we measured the wrong thing".
+      # Same defect, found by sweeping for it rather than by waiting for the next
+      # run: a bash heredoc under pwsh. This step has never executed at all - it
+      # runs after `report`, which failed first on every Windows run in this
+      # repository's history, so it was always `skipped`.
+      #
+      # Which corrects something recorded two entries above. The synthetic-profile
+      # discovery was credited to this step "written for Wine, guarding something
+      # larger". It guarded nothing; it had never run. What found the synthetic
+      # profile was the diagnostics channel added one commit earlier, and reading
+      # the artifact it published.
       - name: Refuse a profile that is not from real Windows
         id: refuse_wine
-        shell: pwsh
+        shell: bash
         run: |
           python - <<'PY'
           import json, sys
