@@ -1,0 +1,96 @@
+{
+  "notes": [
+    "Do not use this profile as evidence. It exists so that tooling has a schema-valid document to work with on unsupported platforms."
+  ],
+  "origin": "synthetic",
+  "platform": {
+    "host_arch": "unknown",
+    "kernel_version": "",
+    "os": "windows",
+    "os_version": "",
+    "pointer_width_bits": 64,
+    "process_arch": "x86_64",
+    "translation_mode": "unknown"
+  },
+  "probe_run": {
+    "duration_ms": 0,
+    "probe_binary_hash": "",
+    "probe_version": "rs-env-probe/vm/0.1.0",
+    "run_id": "",
+    "timestamp_utc": "",
+    "tool_version": "runtimeskeptic/0.1.0",
+    "warnings": [
+      "no virtual-memory probe is implemented for this platform in v0.1; every capability is reported as unknown. Nothing here was measured."
+    ]
+  },
+  "profile_id": "sha256:8f59444d3b31aeb660cfe83261a7e0fea122a07f48f8a6e6a5ba8de6f415ad50",
+  "profile_name": "windows-x86_64",
+  "schema": "runtime-skeptic.environment-profile.v1",
+  "virtual_memory": {
+    "allocation_granularity": {
+      "evidence": "unknown",
+      "value": null
+    },
+    "anonymous_mapping_supported": {
+      "evidence": "unknown",
+      "value": null
+    },
+    "available_ranges": [],
+    "exact_mapping": {
+      "evidence": "unknown",
+      "value": null
+    },
+    "exact_mapping_failure_codes": [],
+    "file_map_beyond_eof": {
+      "evidence": "unknown",
+      "value": null
+    },
+    "fixed_noreplace_available": {
+      "evidence": "unknown",
+      "value": null
+    },
+    "hinted_mapping_may_relocate": {
+      "evidence": "unknown",
+      "value": null
+    },
+    "max_single_reservation": {
+      "evidence": "unknown",
+      "value": null
+    },
+    "max_user_address": {
+      "evidence": "unknown",
+      "value": null
+    },
+    "min_map_address": {
+      "evidence": "unknown",
+      "value": null
+    },
+    "page_size": {
+      "evidence": "unknown",
+      "value": null
+    },
+    "protection": {
+      "anonymous_executable_mapping": {
+        "evidence": "unknown",
+        "value": null
+      },
+      "jit_entitlement_required": {
+        "evidence": "unknown",
+        "value": null
+      },
+      "write_execute_simultaneous": {
+        "evidence": "unknown",
+        "value": null
+      },
+      "write_then_execute_transition": {
+        "evidence": "unknown",
+        "value": null
+      }
+    },
+    "reserve_commit_model": {
+      "evidence": "unknown",
+      "value": null
+    },
+    "unavailable_ranges": []
+  }
+}
