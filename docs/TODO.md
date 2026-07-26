@@ -43,7 +43,228 @@ completes without leaving a trace in the log is work that will be redone.
 
 ## Now
 
-### T-014 — T-013 was done for Linux only, and macOS says so `[now]`
+### T-015 — Fitting in the address space is not enough to reserve it `[now]`
+
+**Serves:** the credibility of every `SUPPORTED` the analyzer emits
+**Plan:** `docs/PLAN.md` cross-cutting — rule coverage, and Gate B's false-positive
+claim
+**Done when:** `oversized-reservation-4pib` is `held` on **both** a 4-level and a
+5-level Linux host, and the rule that changed says why in
+`docs/findings/registry.md`.
+
+**Found by a 5-level-paging CI runner, and every host before it hid the defect.**
+
+```
+oversized-reservation-4pib    SUPPORTED   refused   CONTRADICTED
+    mmap of 4503599627370496 bytes (4096.0 TiB) was refused: ENOMEM
+```
+
+On a 4-level host 4 PiB does not fit below `max_user_address`, so the analyzer
+answers UNSUPPORTED, the kernel refuses, and the prediction holds — **for the wrong
+reason**. On an LA57 host `max_user_address` is 2^56, 4 PiB fits, the analyzer
+answers SUPPORTED, and the kernel refuses anyway.
+
+So the rule behind that verdict treats *fits within the address space* as
+sufficient for a reservation to succeed. It is not: `ENOMEM` here is overcommit and
+VA accounting, not bounds. This is a **false positive** in the dangerous
+direction — the analyzer told a caller a 4 PiB reservation would work.
+
+**Not to be fixed by adjusting the expectation.** The harness said so itself, and
+the contract describes what the program does.
+
+**Answered, and the condition is a measured fact rather than a sentence.**
+`VirtualMemoryModel::max_single_reservation` is the largest **power-of-two**
+reservation the host actually granted — a power of two because the exact figure
+moves between two runs as the process's own mappings shift, and a fact that moves
+is a fact about the probe. `RS-VM-0026` gives three honest bands:
+
+```
+size > 2 x granted        the next power of two was measured to FAIL and this is
+                          larger still           -> UNSUPPORTED, PROVEN
+granted < size <= 2x      between the largest success and the smallest failure;
+                          nothing measured it    -> CONDITIONAL, HYPOTHESIS
+size <= granted           the host granted at least this much -> nothing to say
+```
+
+`RS-VM-0027` covers the fact being absent, above 4 GiB — the next power of two
+above the largest request this project has ever observed a real program make
+(1.96 GiB across 1292 observations, p99 32 MiB). Below that, silence, or every
+ordinary mapping on every fixture would carry the finding.
+
+**Still open on this item:**
+
+1. **Done.** All three probes measure it. macOS reports 70368744177664 and the
+   first real Windows profile reports the same 64 TiB, both `measured_capability`.
+   The macOS helper was compiled and run **on Linux** under the full CI warning set,
+   and the Windows one cross-compiles clean under mingw-w64, so neither was written
+   blind. `RS-VM-0027` now fires only on a profile that genuinely has not been
+   measured.
+2. **`oversized-reservation-4pib` is `held` on a 4-level host and unverified on a
+   5-level one**, because CI lands on LA57 hardware only sometimes. The
+   `Done when` above asks for both, and the second cannot be arranged on demand.
+   The unit tests pin the logic against a synthetic 56-bit profile in the meantime.
+3. **`exact-mapping-above-user-space` derives its address from a constant**
+   (`0x800000000000`), which is not above user space on an LA57 host. Renaming is
+   not the fix; deriving it from the measured bound is.
+
+**Also note:** `exact-mapping-above-user-space` is the same host difference from
+the other side. `0x800000000000` is not above user space on an LA57 host, and the
+case's own name stops being true there. Renaming it is not the fix; deriving the
+address from the measured bound is.
+
+
+---
+
+---
+
+## Next
+
+---
+
+### T-005 — Execute the rules that have never run `[next]`
+
+**Serves:** the credibility of every other row
+**Plan:** `docs/PLAN.md` cross-cutting, "rule coverage by execution"
+**Done when:** the coverage tool reports executed and synthetic-only counts
+**separately**, and the executed number has risen.
+
+13 of the 20 reachable rules have been executed against a real kernel. The
+remaining 7 (0010, 0016, 0019, 0020, 0022, 0023, 0025) mostly fire when a host
+does *not* support something, which needs synthetic profiles — and a synthetic
+profile is not ground truth. Saying so in the number is the point; a single
+percentage that mixes both is the flattering-direction error this project has
+already made once, when the coverage tool reported 100% by grepping prose.
+
+---
+
+### T-006 — A contract for "valid host operation rejected by caller assumption" `[next]`
+
+**Serves:** the symmetry of the whole argument
+**Plan:** `docs/PLAN.md` Phase 3, MVP demonstration 6
+**Done when:** a contract and a ground-truth case exist where the **host is
+fine** and the program's own assumption is what fails, and the harness confirms
+it.
+
+Six of the seven MVP demonstrations point the same way: the host refuses
+something the program needs. This one points the other way, and its absence is
+why the tool can still be read as "a list of things platforms will not do".
+`RS-VM-0014` (permitted fallback contradicts a required postcondition) is the
+closest existing rule and the natural place to start.
+
+---
+
+### T-007 — The §17 evidence bundle `[next]`
+
+**Serves:** S6, S8 — anything where a verdict has to survive leaving the machine
+**Plan:** `docs/PLAN.md` cross-cutting, §17
+**Done when:** an analysis emits a directory containing the requirement, the
+profile, the findings, a manifest with hashes and a replay status, and re-running
+from the bundle alone reproduces the verdict.
+
+A verdict that cannot be replayed by someone else is an opinion with a machine
+behind it. Everything needed already exists — profiles are hashed, `profile_id`
+covers the facts subtree, the analyzer is deterministic. This is assembly.
+
+---
+
+## Later
+
+### T-008 — Fleet aggregation `[later]`
+
+**Serves:** S8 (500 applications, one policy question)
+**Plan:** no criterion; a scenario capability
+**Done when:** a run over a manifest of applications aggregates by finding id
+and answers "how many are affected, and which".
+
+Straightforward, and worth nothing before T-002. Answering "31 applications
+affected" with an unmeasured false-positive rate is worse than not answering.
+
+### T-009 — Phase 4 runtime wrapper `[later]`
+
+**Serves:** every scenario, indirectly
+**Plan:** `docs/PLAN.md` Phase 4
+**Done when:** something in this repository can produce `observed_invariant`
+evidence, which nothing can today.
+
+This is the only evidence class the project defines and cannot generate. It is
+also the honest answer to T-001's trap and to S4: a runtime observation is what
+decides a displacement constraint.
+
+### T-010 — Downstream-consequence modelling `[later]`
+
+**Serves:** S2's second half (allocator, JIT, guard page, signal layout)
+**Plan:** no criterion; a scenario capability
+**Done when:** a requirement can declare which of its subsystems are
+page-size-dependent, and the report names those rather than guessing.
+
+**Deliberately last, and flagged.** This is the easiest place in the whole
+project to start generating plausible prose, which Phase 0 forbids by name. If
+it is ever built, the consequences must come from a field the program's author
+filled in — not from the analyzer's imagination.
+
+---
+
+## Blocked
+
+### T-011 — CodeSkeptic integration `[blocked]`
+
+**Blocker:** the owner's standing instruction — CodeSkeptic is not to be
+modified, and no merge before many real-life tests exist.
+**Serves:** S10 (PR review)
+**Plan:** `docs/PLAN.md` Phase 5, Gate C, and §16 (differential test)
+**Done when:** a contract produced by CodeSkeptic and a hand-written contract
+for the same source reach the same verdict on the same profile, as a test — and
+the extracted one is labelled `COUNTEREXAMPLE`, never `PROVEN`, per the ceiling
+in `docs/scenarios/README.md`.
+
+Blocked by a decision, not by difficulty, and the decision looks right: the
+alternative was two extractors drifting apart in two repositories. An extractor
+was built here on 2026-07-25, worked, broke `docs/non_goals.md` §18, and was
+removed; what it learned is in `docs/PROGRESS.md`.
+
+The §16 differential test needs a second, independent producer of contracts, and
+by this decision that producer lives in the other repository. Same blocker.
+
+### T-012 — Reserve/commit under memory pressure `[blocked]`
+
+**Blocker:** the ground-truth harness cannot provoke memory pressure safely on a
+shared runner, and a test that can take down its host is not a test.
+**Serves:** S3
+**Plan:** `docs/PLAN.md` Phase 3, MVP demonstration 5
+**Done when:** a ground-truth case reserves address space, has the commit
+refused under real pressure, and the harness records the refusal — inside a
+bound that cannot affect anything else on the machine.
+
+`RS-VM-0012` and `rule_reserve_commit()` exist and are exercised by contracts;
+what has never happened is a real host demonstrating the behaviour. Unblocking
+needs either a dedicated machine or a `cgroup`-bounded child, and the second is
+worth investigating when T-004 brings a Windows runner into scope.
+
+---
+
+## Deliberately not tracked
+
+Each needs a reason, so this cannot quietly become a way to empty the list.
+
+- **ROADMAP Phases 6–10** (counterfactual, temporal, further domains, learned
+  invariants, productization) — ROADMAP §19 Risk 1 is *excessive scope*,
+  mitigated by "remain virtual-memory-only through the first useful releases".
+  Opening any of them before T-002 and T-003 close would be that risk
+  materialising. Gate D gates Phase 8 and no new domain is proposed.
+- **Documentation accuracy** (`docs/PLAN.md`, `[partial]`) — permanently
+  partial by nature. Only paths and a fixed list of phrases are mechanical;
+  prose is not compiled and never will be. `tools/guards/check_docs.py` covers
+  what can be covered, and there is no end state to reach.
+
+---
+
+## Done
+
+Items land here with the commit that finished them, and they are not deleted:
+a compass with no wake behind it cannot show whether the heading has been
+holding.
+
+### T-014 — T-013 was done for Linux only, and macOS says so `[done]`
 
 **Serves:** S3, S9 — and the credibility of `RS-VM-0001` on the platform half
 this project's corpus is about
@@ -219,225 +440,6 @@ next occurrence is read rather than guessed. Do not fix that one until it has
 been read once.
 
 ---
-
-### T-015 — Fitting in the address space is not enough to reserve it `[now]`
-
-**Serves:** the credibility of every `SUPPORTED` the analyzer emits
-**Plan:** `docs/PLAN.md` cross-cutting — rule coverage, and Gate B's false-positive
-claim
-**Done when:** `oversized-reservation-4pib` is `held` on **both** a 4-level and a
-5-level Linux host, and the rule that changed says why in
-`docs/findings/registry.md`.
-
-**Found by a 5-level-paging CI runner, and every host before it hid the defect.**
-
-```
-oversized-reservation-4pib    SUPPORTED   refused   CONTRADICTED
-    mmap of 4503599627370496 bytes (4096.0 TiB) was refused: ENOMEM
-```
-
-On a 4-level host 4 PiB does not fit below `max_user_address`, so the analyzer
-answers UNSUPPORTED, the kernel refuses, and the prediction holds — **for the wrong
-reason**. On an LA57 host `max_user_address` is 2^56, 4 PiB fits, the analyzer
-answers SUPPORTED, and the kernel refuses anyway.
-
-So the rule behind that verdict treats *fits within the address space* as
-sufficient for a reservation to succeed. It is not: `ENOMEM` here is overcommit and
-VA accounting, not bounds. This is a **false positive** in the dangerous
-direction — the analyzer told a caller a 4 PiB reservation would work.
-
-**Not to be fixed by adjusting the expectation.** The harness said so itself, and
-the contract describes what the program does.
-
-**Answered, and the condition is a measured fact rather than a sentence.**
-`VirtualMemoryModel::max_single_reservation` is the largest **power-of-two**
-reservation the host actually granted — a power of two because the exact figure
-moves between two runs as the process's own mappings shift, and a fact that moves
-is a fact about the probe. `RS-VM-0026` gives three honest bands:
-
-```
-size > 2 x granted        the next power of two was measured to FAIL and this is
-                          larger still           -> UNSUPPORTED, PROVEN
-granted < size <= 2x      between the largest success and the smallest failure;
-                          nothing measured it    -> CONDITIONAL, HYPOTHESIS
-size <= granted           the host granted at least this much -> nothing to say
-```
-
-`RS-VM-0027` covers the fact being absent, above 4 GiB — the next power of two
-above the largest request this project has ever observed a real program make
-(1.96 GiB across 1292 observations, p99 32 MiB). Below that, silence, or every
-ordinary mapping on every fixture would carry the finding.
-
-**Still open on this item:**
-
-1. **The Linux probe measures it; macOS and Windows do not.** Until they do,
-   `RS-VM-0027` fires on their profiles for anything above 4 GiB — which is the
-   honest reading of a profile that has not measured it, and also the reason to
-   measure it there.
-2. **`oversized-reservation-4pib` is `held` on a 4-level host and unverified on a
-   5-level one**, because CI lands on LA57 hardware only sometimes. The
-   `Done when` above asks for both, and the second cannot be arranged on demand.
-   The unit tests pin the logic against a synthetic 56-bit profile in the meantime.
-3. **`exact-mapping-above-user-space` derives its address from a constant**
-   (`0x800000000000`), which is not above user space on an LA57 host. Renaming is
-   not the fix; deriving it from the measured bound is.
-
-**Also note:** `exact-mapping-above-user-space` is the same host difference from
-the other side. `0x800000000000` is not above user space on an LA57 host, and the
-case's own name stops being true there. Renaming it is not the fix; deriving the
-address from the measured bound is.
-
-
----
-
----
-
-## Next
-
----
-
-### T-005 — Execute the rules that have never run `[next]`
-
-**Serves:** the credibility of every other row
-**Plan:** `docs/PLAN.md` cross-cutting, "rule coverage by execution"
-**Done when:** the coverage tool reports executed and synthetic-only counts
-**separately**, and the executed number has risen.
-
-13 of the 20 reachable rules have been executed against a real kernel. The
-remaining 7 (0010, 0016, 0019, 0020, 0022, 0023, 0025) mostly fire when a host
-does *not* support something, which needs synthetic profiles — and a synthetic
-profile is not ground truth. Saying so in the number is the point; a single
-percentage that mixes both is the flattering-direction error this project has
-already made once, when the coverage tool reported 100% by grepping prose.
-
----
-
-### T-006 — A contract for "valid host operation rejected by caller assumption" `[next]`
-
-**Serves:** the symmetry of the whole argument
-**Plan:** `docs/PLAN.md` Phase 3, MVP demonstration 6
-**Done when:** a contract and a ground-truth case exist where the **host is
-fine** and the program's own assumption is what fails, and the harness confirms
-it.
-
-Six of the seven MVP demonstrations point the same way: the host refuses
-something the program needs. This one points the other way, and its absence is
-why the tool can still be read as "a list of things platforms will not do".
-`RS-VM-0014` (permitted fallback contradicts a required postcondition) is the
-closest existing rule and the natural place to start.
-
----
-
-### T-007 — The §17 evidence bundle `[next]`
-
-**Serves:** S6, S8 — anything where a verdict has to survive leaving the machine
-**Plan:** `docs/PLAN.md` cross-cutting, §17
-**Done when:** an analysis emits a directory containing the requirement, the
-profile, the findings, a manifest with hashes and a replay status, and re-running
-from the bundle alone reproduces the verdict.
-
-A verdict that cannot be replayed by someone else is an opinion with a machine
-behind it. Everything needed already exists — profiles are hashed, `profile_id`
-covers the facts subtree, the analyzer is deterministic. This is assembly.
-
----
-
-## Later
-
-### T-008 — Fleet aggregation `[later]`
-
-**Serves:** S8 (500 applications, one policy question)
-**Plan:** no criterion; a scenario capability
-**Done when:** a run over a manifest of applications aggregates by finding id
-and answers "how many are affected, and which".
-
-Straightforward, and worth nothing before T-002. Answering "31 applications
-affected" with an unmeasured false-positive rate is worse than not answering.
-
-### T-009 — Phase 4 runtime wrapper `[later]`
-
-**Serves:** every scenario, indirectly
-**Plan:** `docs/PLAN.md` Phase 4
-**Done when:** something in this repository can produce `observed_invariant`
-evidence, which nothing can today.
-
-This is the only evidence class the project defines and cannot generate. It is
-also the honest answer to T-001's trap and to S4: a runtime observation is what
-decides a displacement constraint.
-
-### T-010 — Downstream-consequence modelling `[later]`
-
-**Serves:** S2's second half (allocator, JIT, guard page, signal layout)
-**Plan:** no criterion; a scenario capability
-**Done when:** a requirement can declare which of its subsystems are
-page-size-dependent, and the report names those rather than guessing.
-
-**Deliberately last, and flagged.** This is the easiest place in the whole
-project to start generating plausible prose, which Phase 0 forbids by name. If
-it is ever built, the consequences must come from a field the program's author
-filled in — not from the analyzer's imagination.
-
----
-
-## Blocked
-
-### T-011 — CodeSkeptic integration `[blocked]`
-
-**Blocker:** the owner's standing instruction — CodeSkeptic is not to be
-modified, and no merge before many real-life tests exist.
-**Serves:** S10 (PR review)
-**Plan:** `docs/PLAN.md` Phase 5, Gate C, and §16 (differential test)
-**Done when:** a contract produced by CodeSkeptic and a hand-written contract
-for the same source reach the same verdict on the same profile, as a test — and
-the extracted one is labelled `COUNTEREXAMPLE`, never `PROVEN`, per the ceiling
-in `docs/scenarios/README.md`.
-
-Blocked by a decision, not by difficulty, and the decision looks right: the
-alternative was two extractors drifting apart in two repositories. An extractor
-was built here on 2026-07-25, worked, broke `docs/non_goals.md` §18, and was
-removed; what it learned is in `docs/PROGRESS.md`.
-
-The §16 differential test needs a second, independent producer of contracts, and
-by this decision that producer lives in the other repository. Same blocker.
-
-### T-012 — Reserve/commit under memory pressure `[blocked]`
-
-**Blocker:** the ground-truth harness cannot provoke memory pressure safely on a
-shared runner, and a test that can take down its host is not a test.
-**Serves:** S3
-**Plan:** `docs/PLAN.md` Phase 3, MVP demonstration 5
-**Done when:** a ground-truth case reserves address space, has the commit
-refused under real pressure, and the harness records the refusal — inside a
-bound that cannot affect anything else on the machine.
-
-`RS-VM-0012` and `rule_reserve_commit()` exist and are exercised by contracts;
-what has never happened is a real host demonstrating the behaviour. Unblocking
-needs either a dedicated machine or a `cgroup`-bounded child, and the second is
-worth investigating when T-004 brings a Windows runner into scope.
-
----
-
-## Deliberately not tracked
-
-Each needs a reason, so this cannot quietly become a way to empty the list.
-
-- **ROADMAP Phases 6–10** (counterfactual, temporal, further domains, learned
-  invariants, productization) — ROADMAP §19 Risk 1 is *excessive scope*,
-  mitigated by "remain virtual-memory-only through the first useful releases".
-  Opening any of them before T-002 and T-003 close would be that risk
-  materialising. Gate D gates Phase 8 and no new domain is proposed.
-- **Documentation accuracy** (`docs/PLAN.md`, `[partial]`) — permanently
-  partial by nature. Only paths and a fixed list of phrases are mechanical;
-  prose is not compiled and never will be. `tools/guards/check_docs.py` covers
-  what can be covered, and there is no end state to reach.
-
----
-
-## Done
-
-Items land here with the commit that finished them, and they are not deleted:
-a compass with no wake behind it cannot show whether the heading has been
-holding.
 
 ### T-004 — Windows probe `[done]`
 

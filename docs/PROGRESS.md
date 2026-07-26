@@ -1305,6 +1305,32 @@ that differed between two runs.
 | **+** | `a_held_entry_reaching_past_the_top_does_not_push_the_range_past_it` — and it fails on demand: removing the clamp breaks it |
 | **−** | fifth round on this one boundary, and the shape shifted again. The first four asked *"whose is this?"*. This one is *"how far did we actually walk?"* — a different question with the same symptom, which is why counting stability was not sufficiency |
 
+### Where the three platforms actually stand
+
+`89ddb90`: **eight of eight green**, three workflows, three platform families at
+once. With T-014 and T-004 both closed and moved to `Done`, `Now` holds one item.
+
+What the three probes establish, read from the newest published measurements:
+
+```
+linux     available 57   unavailable  0
+macOS     available 22   unavailable 34
+Windows   available  0   unavailable  0     <- establishes nothing
+```
+
+That last line is the whole of what is left in Phase 1. The Windows probe measures
+every *capability* — page size, granularity, bounds, reserve/commit, beyond-EOF — and
+**no address ranges at all**: no arena, no landmark ladder. So on Windows
+`RS-VM-0001/0002/0003`, the project's flagship rules, answer UNKNOWN for every
+address. Honestly, and uselessly. It is the same defect T-013 fixed for Linux and
+T-014 for macOS, on the platform that could not be reached until the probe was
+actually in the binary.
+
+And the two remaining T-015 items are both about a **constant standing in for a
+measurement** — `oversized-reservation-4pib` unverified on a 5-level host, and
+`exact-mapping-above-user-space` deriving its address from `0x800000000000` rather
+than from the measured bound. Same shape as the four already fixed today.
+
 **Also next.** Windows has no arena. That question was never reachable before now:
 the probe that would need one was not in the binary. The Rosetta lane still needs a dispatch —
 `gh workflow run macos-probe.yml --ref main` — and it now publishes its ground-truth
