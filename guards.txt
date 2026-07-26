@@ -1,0 +1,54 @@
+
+=== guards themselves ===
+
+guard selftest: 48/48 cases
+
+=== plan structure ===
+plan: blocked=4  done=42  n/a=1  open=9  partial=14  (total 70, across 2 document(s))
+
+=== documentation drift ===
+doc guard: scanned 71 document(s)
+
+=== finding registry ===
+registry: 25 ids declared, 25 emitted by rules
+
+=== schemas vs code ===
+validated 58 artifact(s) against 3 schema(s)
+
+=== normative non-goals ===
+non-goals: no conflicts, no stale names
+
+=== dates against git ===
+
+13 date(s) that git does not agree with:
+  - docs/PROGRESS.md:553: entry is dated 2026-07-25, but git says the line was written 2026-07-26 12:19Z (one day apart, and the commit was 11h41m from midnight - too far for a timezone artifact). The log records when work happened; it is not a place to put the date somebody thought it was.
+  - docs/PROGRESS.md:660: entry is dated 2026-07-25, but git says the line was written 2026-07-26 12:19Z (one day apart, and the commit was 11h41m from midnight - too far for a timezone artifact). The log records when work happened; it is not a place to put the date somebody thought it was.
+  - docs/PROGRESS.md:721: entry is dated 2026-07-25, but git says the line was written 2026-07-26 12:19Z (one day apart, and the commit was 11h41m from midnight - too far for a timezone artifact). The log records when work happened; it is not a place to put the date somebody thought it was.
+  - docs/PROGRESS.md:799: entry is dated 2026-07-25, but git says the line was written 2026-07-26 12:19Z (one day apart, and the commit was 11h41m from midnight - too far for a timezone artifact). The log records when work happened; it is not a place to put the date somebody thought it was.
+  - docs/PROGRESS.md:874: entry is dated 2026-07-25, but git says the line was written 2026-07-26 12:19Z (one day apart, and the commit was 11h41m from midnight - too far for a timezone artifact). The log records when work happened; it is not a place to put the date somebody thought it was.
+  - docs/PROGRESS.md:948: entry is dated 2026-07-25, but git says the line was written 2026-07-26 12:19Z (one day apart, and the commit was 11h41m from midnight - too far for a timezone artifact). The log records when work happened; it is not a place to put the date somebody thought it was.
+  - docs/PROGRESS.md:1013: entry is dated 2026-07-25, but git says the line was written 2026-07-26 12:19Z (one day apart, and the commit was 11h41m from midnight - too far for a timezone artifact). The log records when work happened; it is not a place to put the date somebody thought it was.
+  - docs/PROGRESS.md:1061: entry is dated 2026-07-25, but git says the line was written 2026-07-26 12:19Z (one day apart, and the commit was 11h41m from midnight - too far for a timezone artifact). The log records when work happened; it is not a place to put the date somebody thought it was.
+  - docs/PROGRESS.md:1111: entry is dated 2026-07-25, but git says the line was written 2026-07-26 12:19Z (one day apart, and the commit was 11h41m from midnight - too far for a timezone artifact). The log records when work happened; it is not a place to put the date somebody thought it was.
+  - docs/PROGRESS.md:1149: entry is dated 2026-07-25, but git says the line was written 2026-07-26 12:19Z (one day apart, and the commit was 11h41m from midnight - too far for a timezone artifact). The log records when work happened; it is not a place to put the date somebody thought it was.
+  - docs/PROGRESS.md:1218: entry is dated 2026-07-25, but git says the line was written 2026-07-26 12:19Z (one day apart, and the commit was 11h41m from midnight - too far for a timezone artifact). The log records when work happened; it is not a place to put the date somebody thought it was.
+  - docs/PROGRESS.md:1266: entry is dated 2026-07-25, but git says the line was written 2026-07-26 12:19Z (one day apart, and the commit was 11h41m from midnight - too far for a timezone artifact). The log records when work happened; it is not a place to put the date somebody thought it was.
+  - docs/PROGRESS.md:1291: entry is dated 2026-07-25, but git says the line was written 2026-07-26 12:19Z (one day apart, and the commit was 11h41m from midnight - too far for a timezone artifact). The log records when work happened; it is not a place to put the date somebody thought it was.
+dates: checked against git, newest commit 2026-07-26
+
+=== compass vs map ===
+todo: blocked=2  done=4  later=3  next=3  now=1  (13 items, 6 plan tag(s))
+
+=== published numbers ===
+campaigns: 4 population(s) checked against docs/campaigns/
+
+=== corpus rules ===
+corpus: 54 entries, 44 counting toward 30, 35 toward the virtual-memory 10
+
+=== includes vs MSVC ===
+includes: 35 translation unit(s) and header(s) checked against 15 standard headers
+
+1 guard(s) failed: dates against git
+
+These are project rules, not style. Fix the repository or change the
+rule deliberately - do not silence the guard.
