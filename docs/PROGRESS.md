@@ -1053,7 +1053,36 @@ with any of this session's code**.
 | **+** | the Windows probe **cross-compiles clean** with `x86_64-w64-mingw32-g++` and `-Werror -Wconversion -Wsign-conversion` |
 | **−** | Windows measures a genuinely narrower thing: `MEM_RESERVE\|PAGE_NOACCESS` bounds the *reservation*, and on Windows it is the **commit** that charges the pagefile. A request within the bound can still fail at commit time. The source note says so rather than letting the number read as more than it is |
 
-**Also next.** Windows still has no arena at all. The Rosetta lane still needs a dispatch —
+### The Windows probe went red and could not say why
+
+`2542612` touched `src/probe/vm_probe_windows.cpp`, which is one of the three paths
+in `windows-probe.yml`'s push filter — the self-trigger mechanism. So it ran, for
+the first time in this session, and:
+
+```
+refs/status/2542612…/windows-x86_64/failure
+refs/ci-logs/2542612…/                        (nothing)
+refs/measurements/2542612…/windows-x86_64     (nothing)
+```
+
+The status step is `always()` and published; the measurement step is gated on
+`steps.measure.outcome == 'success'` and did not. So it failed at or before
+`Measure` — Build, Test, or the probe itself — and **there is no way to tell which
+from here**, because this workflow has no diagnostics step at all.
+
+`ci.yml` grew one because a Windows build failure was invisible from inside. The
+workflow whose entire purpose is a measurement nobody has ever obtained did not get
+the same treatment, and the omission only shows up when it fails.
+
+| | |
+|---|---|
+| **+** | it has one now: `steps.json` with real ids on Build/Test/Measure, the ctest tail, and the profile if the probe produced one — published through `tools/ci/publish_measurement.sh`, so the ref is small |
+| **+** | when the probe did *not* produce a profile the file says so, rather than being absent. An absent artifact reads as "nobody looked" |
+| **+** | pushing this touches the workflow's own path, so it self-triggers and the next run answers the question |
+| **−** | only two `windows-x86_64` status refs exist in this repository's whole history, and both are `failure`. The measurement leg of the end-to-end cycle has never once completed |
+
+**Also next.** Windows still has no arena at all — and now there is a channel that
+will say what is stopping the probe before that question is even reachable. The Rosetta lane still needs a dispatch —
 `gh workflow run macos-probe.yml --ref main` — and it now publishes its ground-truth
 output, so the second half of the `file_map_beyond_eof` claim will be readable from
 the sandbox when it runs.
