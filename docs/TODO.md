@@ -215,7 +215,11 @@ answered.
 **Three things this item is NOT finished by, all recorded rather than quietly
 dropped:**
 
-1. **It ran, and it FAILED.** `check_reproducible.sh` on the macOS runner:
+1. **CLOSED at `5ac82e5`.** `check_reproducible.sh` passes on the macOS runner and
+   all six CI jobs are green; two processes agree on `profile_id` there for the first
+   time. It took five rounds, and the account below is kept because each round was a
+   different producer answering the same unanswerable question. The history first:
+   `check_reproducible.sh` on the macOS runner FAILED with
 
    ```
    available_ranges:    35 vs 32 entries

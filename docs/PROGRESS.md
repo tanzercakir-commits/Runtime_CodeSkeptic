@@ -982,9 +982,43 @@ depending on where we were.
 | **+** | five applications of one rule, and this is the first that *adds* a fact rather than suppressing one. The rule was never "record less"; it is "the recorded set must not depend on the probe's own layout" |
 | **−** | it took five rounds to see that, because each round asked "should this be a limitation?" and the actual question was "does this entry's existence move?" |
 
-**Also next.** Windows still has no arena at all, and `RS-VM-0027` will fire on every
-Windows and macOS profile until those probes measure `max_single_reservation` — which
-is the honest reading of a profile that has not measured it.
+### `5ac82e5`: all six green, and the macOS probe is reproducible
+
+```
+compatibility-gate  ✓    determinism  ✓    linux---clang  ✓
+linux---gcc         ✓    macos        ✓    windows---msvc ✓
+```
+
+`check_reproducible.sh` passes on the macOS runner. **T-014's last named remainder is
+closed**, and the measurement is readable rather than inferred:
+
+```
+profile_id  sha256:dd401a12e51a87cccb02c2fa4a1…    22 available, 34 unavailable
+page_size   16384        max_user_address  0x7ffffe000000
+arena [0x100000000, 0xfc0000000): 7384 placed, 115 held by the probe,
+      0 structurally refused, 33 refused-but-covered
+ground truth: 14 cases, 11 held, 0 contradicted, 3 not asserted
+```
+
+`0 structurally refused` and `33 refused-but-covered` is the whole story of the last
+five commits in one line: everything the arena could not place is counted and
+attributed to nobody, and the count is there for a reader to disbelieve.
+
+**What is measured and what is now conceded**, because the honest reading matters more
+than the green:
+
+| | |
+|---|---|
+| **+** | two processes agree on `profile_id` on macOS, for the first time. The arena's coverage, its bounds and its resolution all survive that |
+| **+** | 0 contradicted ground-truth pairings on macOS, from 14 cases |
+| **−** | `max_single_reservation` is **unknown** on macOS — the Linux probe measures it and the macOS one does not yet. So every macOS analysis of a request above 4 GiB now answers UNKNOWN via `RS-VM-0027`. That is the correct reading of a profile that has not measured it, and it is also a visible piece of missing work rather than a silent yes |
+| **−** | 33 windows inside the arena are unplaceable and unattributed. If a platform band is among them, this profile says the space is available. The count is the only thing that would ever say otherwise |
+
+**Also next.** Windows has no arena at all, and neither Windows nor macOS measures
+`max_single_reservation`. The Rosetta lane still needs a dispatch —
+`gh workflow run macos-probe.yml --ref main` — and it now publishes its ground-truth
+output, so the second half of the `file_map_beyond_eof` claim will be readable from
+the sandbox when it runs.
 
 ---
 
