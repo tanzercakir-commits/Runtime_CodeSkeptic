@@ -1,0 +1,737 @@
+{
+  "notes": [
+    "Ranges the probe found occupied by its own process image are NOT recorded as host limitations; see probe_run.warnings.",
+    "MAP_FIXED is never used by this probe. Exact placement is probed through mach_vm_allocate(VM_FLAGS_FIXED), which refuses a collision instead of evicting the existing mapping."
+  ],
+  "origin": "measured",
+  "platform": {
+    "host_arch": "aarch64",
+    "kernel_version": "25.4.0",
+    "os": "macos",
+    "os_version": "macOS 26.4",
+    "pointer_width_bits": 64,
+    "process_arch": "aarch64",
+    "translation_mode": "none"
+  },
+  "probe_run": {
+    "duration_ms": 0,
+    "probe_binary_hash": "",
+    "probe_version": "rs-env-probe/vm/0.1.0",
+    "run_id": "5575a462bce7e236",
+    "timestamp_utc": "2026-07-26T13:55:09Z",
+    "tool_version": "runtimeskeptic/0.1.0",
+    "warnings": [
+      "the lowest placeable page in this process is 0x300000000, which is where its own __PAGEZERO and image end. macOS has no equivalent of vm.mmap_min_addr to read, so min_map_address is left UNKNOWN rather than filled in with a property of the probe binary; under Rosetta this value moves between runs of the same job because the translated image is slid by ASLR",
+      "allocation arena [0x100000000, 0x1000000000) walked in contiguous windows of 0x400000 bytes: 7383 placed, 111 already held by the probe process, 35 structurally refused, and 7831 not probed because they lie inside an entry the platform had already described as granting no access. The first two are treated identically on purpose; only the third and fourth are host limitations"
+    ]
+  },
+  "profile_id": "sha256:6dfc0de337dbcba7a899cd3ac9ceef67a8c9c762a49efbadacf4ee31f875962f",
+  "profile_name": "gt-host",
+  "schema": "runtime-skeptic.environment-profile.v1",
+  "virtual_memory": {
+    "allocation_granularity": {
+      "evidence": "measured_capability",
+      "source": "rs-env-probe vm (macos): mach_vm_allocate places at page granularity",
+      "value": 16384
+    },
+    "anonymous_mapping_supported": {
+      "evidence": "measured_capability",
+      "source": "rs-env-probe vm (macos): mmap(NULL, page_size, RW, MAP_PRIVATE|MAP_ANON)",
+      "value": true
+    },
+    "available_ranges": [
+      {
+        "end": "0x101000000",
+        "evidence": "measured_capability",
+        "note": "inside the allocation arena between the Mach-O __TEXT base and the Rosetta GPU carveout, where a program's own code and heap are placed, walked in contiguous windows of 0x400000 bytes. Every window in this range was placed at its exact address or was already held by the probe process, and none was structurally refused. The windows touch, so nothing between them is asserted without having been placed. Which windows were which depends on the probe's own layout and is deliberately not recorded",
+        "start": "0x100c00000"
+      },
+      {
+        "end": "0x13dc00000",
+        "evidence": "measured_capability",
+        "note": "inside the allocation arena between the Mach-O __TEXT base and the Rosetta GPU carveout, where a program's own code and heap are placed, walked in contiguous windows of 0x400000 bytes. Every window in this range was placed at its exact address or was already held by the probe process, and none was structurally refused. The windows touch, so nothing between them is asserted without having been placed. Which windows were which depends on the probe's own layout and is deliberately not recorded",
+        "start": "0x101400000"
+      },
+      {
+        "end": "0x16b000000",
+        "evidence": "measured_capability",
+        "note": "inside the allocation arena between the Mach-O __TEXT base and the Rosetta GPU carveout, where a program's own code and heap are placed, walked in contiguous windows of 0x400000 bytes. Every window in this range was placed at its exact address or was already held by the probe process, and none was structurally refused. The windows touch, so nothing between them is asserted without having been placed. Which windows were which depends on the probe's own layout and is deliberately not recorded",
+        "start": "0x13e000000"
+      },
+      {
+        "end": "0x180000000",
+        "evidence": "measured_capability",
+        "note": "inside the allocation arena between the Mach-O __TEXT base and the Rosetta GPU carveout, where a program's own code and heap are placed, walked in contiguous windows of 0x400000 bytes. Every window in this range was placed at its exact address or was already held by the probe process, and none was structurally refused. The windows touch, so nothing between them is asserted without having been placed. Which windows were which depends on the probe's own layout and is deliberately not recorded",
+        "start": "0x16ec00000"
+      },
+      {
+        "end": "0x1f6000000",
+        "evidence": "measured_capability",
+        "note": "inside the allocation arena between the Mach-O __TEXT base and the Rosetta GPU carveout, where a program's own code and heap are placed, walked in contiguous windows of 0x400000 bytes. Every window in this range was placed at its exact address or was already held by the probe process, and none was structurally refused. The windows touch, so nothing between them is asserted without having been placed. Which windows were which depends on the probe's own layout and is deliberately not recorded",
+        "start": "0x1f4000000"
+      },
+      {
+        "end": "0x203c00000",
+        "evidence": "measured_capability",
+        "note": "inside the allocation arena between the Mach-O __TEXT base and the Rosetta GPU carveout, where a program's own code and heap are placed, walked in contiguous windows of 0x400000 bytes. Every window in this range was placed at its exact address or was already held by the probe process, and none was structurally refused. The windows touch, so nothing between them is asserted without having been placed. Which windows were which depends on the probe's own layout and is deliberately not recorded",
+        "start": "0x1fa800000"
+      },
+      {
+        "end": "0x2a0800000",
+        "evidence": "measured_capability",
+        "note": "inside the allocation arena between the Mach-O __TEXT base and the Rosetta GPU carveout, where a program's own code and heap are placed, walked in contiguous windows of 0x400000 bytes. Every window in this range was placed at its exact address or was already held by the probe process, and none was structurally refused. The windows touch, so nothing between them is asserted without having been placed. Which windows were which depends on the probe's own layout and is deliberately not recorded",
+        "start": "0x29dc00000"
+      },
+      {
+        "end": "0x2adc00000",
+        "evidence": "measured_capability",
+        "note": "inside the allocation arena between the Mach-O __TEXT base and the Rosetta GPU carveout, where a program's own code and heap are placed, walked in contiguous windows of 0x400000 bytes. Every window in this range was placed at its exact address or was already held by the probe process, and none was structurally refused. The windows touch, so nothing between them is asserted without having been placed. Which windows were which depends on the probe's own layout and is deliberately not recorded",
+        "start": "0x2a6c00000"
+      },
+      {
+        "end": "0x2df000000",
+        "evidence": "measured_capability",
+        "note": "inside the allocation arena between the Mach-O __TEXT base and the Rosetta GPU carveout, where a program's own code and heap are placed, walked in contiguous windows of 0x400000 bytes. Every window in this range was placed at its exact address or was already held by the probe process, and none was structurally refused. The windows touch, so nothing between them is asserted without having been placed. Which windows were which depends on the probe's own layout and is deliberately not recorded",
+        "start": "0x2dec00000"
+      },
+      {
+        "end": "0x2e2000000",
+        "evidence": "measured_capability",
+        "note": "inside the allocation arena between the Mach-O __TEXT base and the Rosetta GPU carveout, where a program's own code and heap are placed, walked in contiguous windows of 0x400000 bytes. Every window in this range was placed at its exact address or was already held by the probe process, and none was structurally refused. The windows touch, so nothing between them is asserted without having been placed. Which windows were which depends on the probe's own layout and is deliberately not recorded",
+        "start": "0x2e1400000"
+      },
+      {
+        "end": "0x538000000",
+        "evidence": "measured_capability",
+        "note": "inside the allocation arena between the Mach-O __TEXT base and the Rosetta GPU carveout, where a program's own code and heap are placed, walked in contiguous windows of 0x400000 bytes. Every window in this range was placed at its exact address or was already held by the probe process, and none was structurally refused. The windows touch, so nothing between them is asserted without having been placed. Which windows were which depends on the probe's own layout and is deliberately not recorded",
+        "start": "0x300000000"
+      },
+      {
+        "end": "0x400000000",
+        "evidence": "measured_capability",
+        "note": "mach_vm_allocate(VM_FLAGS_FIXED) succeeded at this exact address in the probe process",
+        "start": "0x3ffc00000"
+      },
+      {
+        "end": "0x400400000",
+        "evidence": "measured_capability",
+        "note": "mach_vm_allocate(VM_FLAGS_FIXED) succeeded at this exact address in the probe process",
+        "start": "0x400000000"
+      },
+      {
+        "end": "0x839400000",
+        "evidence": "measured_capability",
+        "note": "inside the allocation arena between the Mach-O __TEXT base and the Rosetta GPU carveout, where a program's own code and heap are placed, walked in contiguous windows of 0x400000 bytes. Every window in this range was placed at its exact address or was already held by the probe process, and none was structurally refused. The windows touch, so nothing between them is asserted without having been placed. Which windows were which depends on the probe's own layout and is deliberately not recorded",
+        "start": "0x838c00000"
+      },
+      {
+        "end": "0xfc0000000",
+        "evidence": "measured_capability",
+        "note": "inside the allocation arena between the Mach-O __TEXT base and the Rosetta GPU carveout, where a program's own code and heap are placed, walked in contiguous windows of 0x400000 bytes. Every window in this range was placed at its exact address or was already held by the probe process, and none was structurally refused. The windows touch, so nothing between them is asserted without having been placed. Which windows were which depends on the probe's own layout and is deliberately not recorded",
+        "start": "0xb38000000"
+      },
+      {
+        "end": "0x7000400000",
+        "evidence": "measured_capability",
+        "note": "mach_vm_allocate(VM_FLAGS_FIXED) succeeded at this exact address in the probe process",
+        "start": "0x7000000000"
+      },
+      {
+        "end": "0x8000000000",
+        "evidence": "measured_capability",
+        "note": "mach_vm_allocate(VM_FLAGS_FIXED) succeeded at this exact address in the probe process",
+        "start": "0x7fffc00000"
+      },
+      {
+        "end": "0x8000400000",
+        "evidence": "measured_capability",
+        "note": "mach_vm_allocate(VM_FLAGS_FIXED) succeeded at this exact address in the probe process",
+        "start": "0x8000000000"
+      },
+      {
+        "end": "0x10000000000",
+        "evidence": "measured_capability",
+        "note": "mach_vm_allocate(VM_FLAGS_FIXED) succeeded at this exact address in the probe process",
+        "start": "0xffffc00000"
+      },
+      {
+        "end": "0x10000400000",
+        "evidence": "measured_capability",
+        "note": "mach_vm_allocate(VM_FLAGS_FIXED) succeeded at this exact address in the probe process",
+        "start": "0x10000000000"
+      },
+      {
+        "end": "0x20000000000",
+        "evidence": "measured_capability",
+        "note": "mach_vm_allocate(VM_FLAGS_FIXED) succeeded at this exact address in the probe process",
+        "start": "0x1ffffc00000"
+      },
+      {
+        "end": "0x20000400000",
+        "evidence": "measured_capability",
+        "note": "mach_vm_allocate(VM_FLAGS_FIXED) succeeded at this exact address in the probe process",
+        "start": "0x20000000000"
+      },
+      {
+        "end": "0x40000000000",
+        "evidence": "measured_capability",
+        "note": "mach_vm_allocate(VM_FLAGS_FIXED) succeeded at this exact address in the probe process",
+        "start": "0x3ffffc00000"
+      },
+      {
+        "end": "0x40000400000",
+        "evidence": "measured_capability",
+        "note": "mach_vm_allocate(VM_FLAGS_FIXED) succeeded at this exact address in the probe process",
+        "start": "0x40000000000"
+      },
+      {
+        "end": "0x80000000000",
+        "evidence": "measured_capability",
+        "note": "mach_vm_allocate(VM_FLAGS_FIXED) succeeded at this exact address in the probe process",
+        "start": "0x7ffffc00000"
+      },
+      {
+        "end": "0x80000400000",
+        "evidence": "measured_capability",
+        "note": "mach_vm_allocate(VM_FLAGS_FIXED) succeeded at this exact address in the probe process",
+        "start": "0x80000000000"
+      },
+      {
+        "end": "0x100000000000",
+        "evidence": "measured_capability",
+        "note": "mach_vm_allocate(VM_FLAGS_FIXED) succeeded at this exact address in the probe process",
+        "start": "0xfffffc00000"
+      },
+      {
+        "end": "0x100000400000",
+        "evidence": "measured_capability",
+        "note": "mach_vm_allocate(VM_FLAGS_FIXED) succeeded at this exact address in the probe process",
+        "start": "0x100000000000"
+      },
+      {
+        "end": "0x200000000000",
+        "evidence": "measured_capability",
+        "note": "mach_vm_allocate(VM_FLAGS_FIXED) succeeded at this exact address in the probe process",
+        "start": "0x1fffffc00000"
+      },
+      {
+        "end": "0x200000400000",
+        "evidence": "measured_capability",
+        "note": "mach_vm_allocate(VM_FLAGS_FIXED) succeeded at this exact address in the probe process",
+        "start": "0x200000000000"
+      },
+      {
+        "end": "0x400000000000",
+        "evidence": "measured_capability",
+        "note": "mach_vm_allocate(VM_FLAGS_FIXED) succeeded at this exact address in the probe process",
+        "start": "0x3fffffc00000"
+      },
+      {
+        "end": "0x400000400000",
+        "evidence": "measured_capability",
+        "note": "mach_vm_allocate(VM_FLAGS_FIXED) succeeded at this exact address in the probe process",
+        "start": "0x400000000000"
+      }
+    ],
+    "exact_mapping": {
+      "evidence": "measured_capability",
+      "source": "rs-env-probe vm (macos): exact placement succeeds for free, in-bounds, page-aligned ranges",
+      "value": "CONDITIONALLY_SUPPORTED"
+    },
+    "exact_mapping_failure_codes": [
+      "KERN_NO_SPACE",
+      "KERN_INVALID_ADDRESS",
+      "ENOMEM"
+    ],
+    "file_map_beyond_eof": {
+      "evidence": "measured_capability",
+      "source": "rs-env-probe vm (macos): an isolated child took SIGBUS reading a whole page past end of file",
+      "value": "sigbus"
+    },
+    "fixed_noreplace_available": {
+      "evidence": "measured_capability",
+      "source": "rs-env-probe vm (macos): mach_vm_allocate(VM_FLAGS_FIXED) refused a collision with KERN_NO_SPACE rather than evicting the neighbour",
+      "value": true
+    },
+    "hinted_mapping_may_relocate": {
+      "evidence": "measured_capability",
+      "source": "rs-env-probe vm (macos): a hinted mapping at an occupied address was relocated",
+      "value": true
+    },
+    "max_user_address": {
+      "evidence": "measured_capability",
+      "source": "rs-env-probe vm (macos): highest placeable probe point was 70368744177664, refined by bisection above it",
+      "value": "0x7ffffe000000"
+    },
+    "min_map_address": {
+      "evidence": "unknown",
+      "value": null
+    },
+    "page_size": {
+      "evidence": "measured_capability",
+      "source": "rs-env-probe vm (macos): sysconf(_SC_PAGESIZE)",
+      "value": 16384
+    },
+    "protection": {
+      "anonymous_executable_mapping": {
+        "evidence": "measured_capability",
+        "source": "rs-env-probe vm (macos): mmap(PROT_READ|PROT_EXEC)",
+        "value": true
+      },
+      "jit_entitlement_required": {
+        "evidence": "measured_capability",
+        "source": "rs-env-probe vm (macos): plain RWX was refused while MAP_JIT succeeded, so executable memory here is gated on the JIT entitlement",
+        "value": true
+      },
+      "write_execute_simultaneous": {
+        "evidence": "measured_capability",
+        "source": "rs-env-probe vm (macos): mmap(PROT_READ|PROT_WRITE|PROT_EXEC) without MAP_JIT",
+        "value": false
+      },
+      "write_then_execute_transition": {
+        "evidence": "measured_capability",
+        "source": "rs-env-probe vm (macos): mprotect(RW -> RX)",
+        "value": true
+      }
+    },
+    "reserve_commit_model": {
+      "evidence": "measured_capability",
+      "source": "rs-env-probe vm (macos): a 1 GiB PROT_NONE reservation succeeded without backing it",
+      "value": "posix_lazy"
+    },
+    "unavailable_ranges": [
+      {
+        "end": "0x104000",
+        "evidence": "measured_capability",
+        "note": "the kernel refused an exact placement here while higher addresses remained placeable, so this is a hole in the address space rather than its end",
+        "start": "0x100000"
+      },
+      {
+        "end": "0x204000",
+        "evidence": "measured_capability",
+        "note": "the kernel refused an exact placement here while higher addresses remained placeable, so this is a hole in the address space rather than its end",
+        "start": "0x200000"
+      },
+      {
+        "end": "0x404000",
+        "evidence": "measured_capability",
+        "note": "the kernel refused an exact placement here while higher addresses remained placeable, so this is a hole in the address space rather than its end",
+        "start": "0x400000"
+      },
+      {
+        "end": "0x804000",
+        "evidence": "measured_capability",
+        "note": "the kernel refused an exact placement here while higher addresses remained placeable, so this is a hole in the address space rather than its end",
+        "start": "0x800000"
+      },
+      {
+        "end": "0x1004000",
+        "evidence": "measured_capability",
+        "note": "the kernel refused an exact placement here while higher addresses remained placeable, so this is a hole in the address space rather than its end",
+        "start": "0x1000000"
+      },
+      {
+        "end": "0x2004000",
+        "evidence": "measured_capability",
+        "note": "the kernel refused an exact placement here while higher addresses remained placeable, so this is a hole in the address space rather than its end",
+        "start": "0x2000000"
+      },
+      {
+        "end": "0x4004000",
+        "evidence": "measured_capability",
+        "note": "the kernel refused an exact placement here while higher addresses remained placeable, so this is a hole in the address space rather than its end",
+        "start": "0x4000000"
+      },
+      {
+        "end": "0x8004000",
+        "evidence": "measured_capability",
+        "note": "the kernel refused an exact placement here while higher addresses remained placeable, so this is a hole in the address space rather than its end",
+        "start": "0x8000000"
+      },
+      {
+        "end": "0x10004000",
+        "evidence": "measured_capability",
+        "note": "the kernel refused an exact placement here while higher addresses remained placeable, so this is a hole in the address space rather than its end",
+        "start": "0x10000000"
+      },
+      {
+        "end": "0x20004000",
+        "evidence": "measured_capability",
+        "note": "the kernel refused an exact placement here while higher addresses remained placeable, so this is a hole in the address space rather than its end",
+        "start": "0x20000000"
+      },
+      {
+        "end": "0x40004000",
+        "evidence": "measured_capability",
+        "note": "the kernel refused an exact placement here while higher addresses remained placeable, so this is a hole in the address space rather than its end",
+        "start": "0x40000000"
+      },
+      {
+        "end": "0x80004000",
+        "evidence": "measured_capability",
+        "note": "the kernel refused an exact placement here while higher addresses remained placeable, so this is a hole in the address space rather than its end",
+        "start": "0x80000000"
+      },
+      {
+        "end": "0x100400000",
+        "evidence": "measured_capability",
+        "note": "exact placement refused inside the allocation arena between the Mach-O __TEXT base and the Rosetta GPU carveout, where a program's own code and heap are placed; region [0x100a8c000, 0x100abc000) starts above it, so nothing covers it",
+        "start": "0x100000000"
+      },
+      {
+        "end": "0x100800000",
+        "evidence": "measured_capability",
+        "note": "exact placement refused inside the allocation arena between the Mach-O __TEXT base and the Rosetta GPU carveout, where a program's own code and heap are placed; region [0x100a8c000, 0x100abc000) starts above it, so nothing covers it",
+        "start": "0x100400000"
+      },
+      {
+        "end": "0x100c00000",
+        "evidence": "measured_capability",
+        "note": "exact placement refused inside the allocation arena between the Mach-O __TEXT base and the Rosetta GPU carveout, where a program's own code and heap are placed; region [0x100a8c000, 0x100abc000) starts above it, so nothing covers it",
+        "start": "0x100800000"
+      },
+      {
+        "end": "0x101400000",
+        "evidence": "measured_capability",
+        "note": "exact placement refused inside the allocation arena between the Mach-O __TEXT base and the Rosetta GPU carveout, where a program's own code and heap are placed; region [0x100fa0000, 0x101390000) covers it, and is a real mapping (reserved=0), protection ---; placement was probed at 0x101000000 and the refusal is recorded across the entry's full extent as the platform reported it, rather than across the window that happened to be probed; the entry begins at 0x100fa0000, below space this walk had already placed successfully, so the recorded start was clamped to 0x101000000 rather than contradicting that measurement",
+        "start": "0x101000000"
+      },
+      {
+        "end": "0x13e000000",
+        "evidence": "measured_capability",
+        "note": "exact placement refused inside the allocation arena between the Mach-O __TEXT base and the Rosetta GPU carveout, where a program's own code and heap are placed; region [0x13de00000, 0x13de04000) starts above it, so nothing covers it",
+        "start": "0x13dc00000"
+      },
+      {
+        "end": "0x16b400000",
+        "evidence": "measured_capability",
+        "note": "exact placement refused inside the allocation arena between the Mach-O __TEXT base and the Rosetta GPU carveout, where a program's own code and heap are placed; region [0x16b374000, 0x16eb78000) starts above it, so nothing covers it",
+        "start": "0x16b000000"
+      },
+      {
+        "end": "0x16ec00000",
+        "evidence": "measured_capability",
+        "note": "exact placement refused inside the allocation arena between the Mach-O __TEXT base and the Rosetta GPU carveout, where a program's own code and heap are placed; region [0x16b374000, 0x16eb78000) covers it, and is a real mapping (reserved=0), protection ---; placement was probed at 0x16e800000 and the refusal is recorded across the entry's full extent as the platform reported it, rather than across the window that happened to be probed",
+        "start": "0x16b374000"
+      },
+      {
+        "end": "0x1f2000000",
+        "evidence": "measured_capability",
+        "note": "exact placement refused inside the allocation arena between the Mach-O __TEXT base and the Rosetta GPU carveout, where a program's own code and heap are placed; region [0x180000000, 0x1f2000000) covers it, and is a system RESERVATION (vm_region reserved=1), protection r--; placement was probed at 0x180000000 and the refusal is recorded across the entry's full extent as the platform reported it, rather than across the window that happened to be probed",
+        "start": "0x180000000"
+      },
+      {
+        "end": "0x1f4000000",
+        "evidence": "measured_capability",
+        "note": "exact placement refused inside the allocation arena between the Mach-O __TEXT base and the Rosetta GPU carveout, where a program's own code and heap are placed; region [0x1f2000000, 0x1f3c0c000) covers it, and is a system RESERVATION (vm_region reserved=1), protection r--; placement was probed at 0x1f3c00000 and the refusal is recorded across the entry's full extent as the platform reported it, rather than across the window that happened to be probed",
+        "start": "0x1f2000000"
+      },
+      {
+        "end": "0x1f8000000",
+        "evidence": "measured_capability",
+        "note": "exact placement refused inside the allocation arena between the Mach-O __TEXT base and the Rosetta GPU carveout, where a program's own code and heap are placed; region [0x1f6000000, 0x1f7f2c000) covers it, and is a system RESERVATION (vm_region reserved=1), protection r--; placement was probed at 0x1f7c00000 and the refusal is recorded across the entry's full extent as the platform reported it, rather than across the window that happened to be probed",
+        "start": "0x1f6000000"
+      },
+      {
+        "end": "0x1fa000000",
+        "evidence": "measured_capability",
+        "note": "exact placement refused inside the allocation arena between the Mach-O __TEXT base and the Rosetta GPU carveout, where a program's own code and heap are placed; region [0x1f8000000, 0x1fa000000) covers it, and is a system RESERVATION (vm_region reserved=1), protection r--; placement was probed at 0x1f8000000 and the refusal is recorded across the entry's full extent as the platform reported it, rather than across the window that happened to be probed",
+        "start": "0x1f8000000"
+      },
+      {
+        "end": "0x1fa800000",
+        "evidence": "measured_capability",
+        "note": "exact placement refused inside the allocation arena between the Mach-O __TEXT base and the Rosetta GPU carveout, where a program's own code and heap are placed; region [0x1fa000000, 0x1fa718000) covers it, and is a system RESERVATION (vm_region reserved=1), protection r--; placement was probed at 0x1fa400000 and the refusal is recorded across the entry's full extent as the platform reported it, rather than across the window that happened to be probed",
+        "start": "0x1fa000000"
+      },
+      {
+        "end": "0x204000000",
+        "evidence": "measured_capability",
+        "note": "exact placement refused inside the allocation arena between the Mach-O __TEXT base and the Rosetta GPU carveout, where a program's own code and heap are placed; region [0x203ab8000, 0x204000000) covers it, and is a system RESERVATION (vm_region reserved=1), protection r--; placement was probed at 0x203c00000 and the refusal is recorded across the entry's full extent as the platform reported it, rather than across the window that happened to be probed; the entry begins at 0x203ab8000, below space this walk had already placed successfully, so the recorded start was clamped to 0x203c00000 rather than contradicting that measurement",
+        "start": "0x203c00000"
+      },
+      {
+        "end": "0x29c000000",
+        "evidence": "measured_capability",
+        "note": "exact placement refused inside the allocation arena between the Mach-O __TEXT base and the Rosetta GPU carveout, where a program's own code and heap are placed; region [0x204000000, 0x29c000000) covers it, and is a system RESERVATION (vm_region reserved=1), protection r--; placement was probed at 0x204000000 and the refusal is recorded across the entry's full extent as the platform reported it, rather than across the window that happened to be probed",
+        "start": "0x204000000"
+      },
+      {
+        "end": "0x29dc00000",
+        "evidence": "measured_capability",
+        "note": "exact placement refused inside the allocation arena between the Mach-O __TEXT base and the Rosetta GPU carveout, where a program's own code and heap are placed; region [0x29c000000, 0x29d8e8000) covers it, and is a system RESERVATION (vm_region reserved=1), protection r--; placement was probed at 0x29d800000 and the refusal is recorded across the entry's full extent as the platform reported it, rather than across the window that happened to be probed",
+        "start": "0x29c000000"
+      },
+      {
+        "end": "0x2a2000000",
+        "evidence": "measured_capability",
+        "note": "exact placement refused inside the allocation arena between the Mach-O __TEXT base and the Rosetta GPU carveout, where a program's own code and heap are placed; region [0x2a0514000, 0x2a2000000) covers it, and is a system RESERVATION (vm_region reserved=1), protection r--; placement was probed at 0x2a0800000 and the refusal is recorded across the entry's full extent as the platform reported it, rather than across the window that happened to be probed; the entry begins at 0x2a0514000, below space this walk had already placed successfully, so the recorded start was clamped to 0x2a0800000 rather than contradicting that measurement",
+        "start": "0x2a0800000"
+      },
+      {
+        "end": "0x2a6000000",
+        "evidence": "measured_capability",
+        "note": "exact placement refused inside the allocation arena between the Mach-O __TEXT base and the Rosetta GPU carveout, where a program's own code and heap are placed; region [0x2a2000000, 0x2a6000000) covers it, and is a system RESERVATION (vm_region reserved=1), protection r--; placement was probed at 0x2a2000000 and the refusal is recorded across the entry's full extent as the platform reported it, rather than across the window that happened to be probed",
+        "start": "0x2a2000000"
+      },
+      {
+        "end": "0x2a6c00000",
+        "evidence": "measured_capability",
+        "note": "exact placement refused inside the allocation arena between the Mach-O __TEXT base and the Rosetta GPU carveout, where a program's own code and heap are placed; region [0x2a6000000, 0x2a6b34000) covers it, and is a system RESERVATION (vm_region reserved=1), protection r--; placement was probed at 0x2a6800000 and the refusal is recorded across the entry's full extent as the platform reported it, rather than across the window that happened to be probed",
+        "start": "0x2a6000000"
+      },
+      {
+        "end": "0x2ae000000",
+        "evidence": "measured_capability",
+        "note": "exact placement refused inside the allocation arena between the Mach-O __TEXT base and the Rosetta GPU carveout, where a program's own code and heap are placed; region [0x2adaa0000, 0x2ae000000) covers it, and is a system RESERVATION (vm_region reserved=1), protection r--; placement was probed at 0x2adc00000 and the refusal is recorded across the entry's full extent as the platform reported it, rather than across the window that happened to be probed; the entry begins at 0x2adaa0000, below space this walk had already placed successfully, so the recorded start was clamped to 0x2adc00000 rather than contradicting that measurement",
+        "start": "0x2adc00000"
+      },
+      {
+        "end": "0x2de000000",
+        "evidence": "measured_capability",
+        "note": "exact placement refused inside the allocation arena between the Mach-O __TEXT base and the Rosetta GPU carveout, where a program's own code and heap are placed; region [0x2ae000000, 0x2de000000) covers it, and is a system RESERVATION (vm_region reserved=1), protection r--; placement was probed at 0x2ae000000 and the refusal is recorded across the entry's full extent as the platform reported it, rather than across the window that happened to be probed",
+        "start": "0x2ae000000"
+      },
+      {
+        "end": "0x2dec00000",
+        "evidence": "measured_capability",
+        "note": "exact placement refused inside the allocation arena between the Mach-O __TEXT base and the Rosetta GPU carveout, where a program's own code and heap are placed; region [0x2de000000, 0x2de9e0000) covers it, and is a system RESERVATION (vm_region reserved=1), protection r--; placement was probed at 0x2de800000 and the refusal is recorded across the entry's full extent as the platform reported it, rather than across the window that happened to be probed",
+        "start": "0x2de000000"
+      },
+      {
+        "end": "0x2e0000000",
+        "evidence": "measured_capability",
+        "note": "exact placement refused inside the allocation arena between the Mach-O __TEXT base and the Rosetta GPU carveout, where a program's own code and heap are placed; region [0x2dec7c000, 0x2e0000000) covers it, and is a system RESERVATION (vm_region reserved=1), protection r--; placement was probed at 0x2df000000 and the refusal is recorded across the entry's full extent as the platform reported it, rather than across the window that happened to be probed; the entry begins at 0x2dec7c000, below space this walk had already placed successfully, so the recorded start was clamped to 0x2df000000 rather than contradicting that measurement",
+        "start": "0x2df000000"
+      },
+      {
+        "end": "0x2e1400000",
+        "evidence": "measured_capability",
+        "note": "exact placement refused inside the allocation arena between the Mach-O __TEXT base and the Rosetta GPU carveout, where a program's own code and heap are placed; region [0x2e0000000, 0x2e10d0000) covers it, and is a system RESERVATION (vm_region reserved=1), protection r--; placement was probed at 0x2e1000000 and the refusal is recorded across the entry's full extent as the platform reported it, rather than across the window that happened to be probed",
+        "start": "0x2e0000000"
+      },
+      {
+        "end": "0x300000000",
+        "evidence": "measured_capability",
+        "note": "exact placement refused inside the allocation arena between the Mach-O __TEXT base and the Rosetta GPU carveout, where a program's own code and heap are placed; region [0x2e2000000, 0x300000000) covers it, and is a system RESERVATION (vm_region reserved=1), protection r--; placement was probed at 0x2e2000000 and the refusal is recorded across the entry's full extent as the platform reported it, rather than across the window that happened to be probed",
+        "start": "0x2e2000000"
+      },
+      {
+        "end": "0x838c00000",
+        "evidence": "measured_capability",
+        "note": "exact placement refused inside the allocation arena between the Mach-O __TEXT base and the Rosetta GPU carveout, where a program's own code and heap are placed; region [0x538000000, 0x838c00000) covers it, and is a real mapping (reserved=0), protection ---; placement was probed at 0x538000000 and the refusal is recorded across the entry's full extent as the platform reported it, rather than across the window that happened to be probed",
+        "start": "0x538000000"
+      },
+      {
+        "end": "0xb38000000",
+        "evidence": "measured_capability",
+        "note": "exact placement refused inside the allocation arena between the Mach-O __TEXT base and the Rosetta GPU carveout, where a program's own code and heap are placed; region [0x839400000, 0xb38000000) covers it, and is a real mapping (reserved=0), protection ---; placement was probed at 0x839400000 and the refusal is recorded across the entry's full extent as the platform reported it, rather than across the window that happened to be probed",
+        "start": "0x839400000"
+      },
+      {
+        "end": "0x1000000000",
+        "evidence": "measured_capability",
+        "note": "exact placement refused inside the allocation arena between the Mach-O __TEXT base and the Rosetta GPU carveout, where a program's own code and heap are placed; region [0xfc0000000, 0x1000000000) covers it, and is a real mapping (reserved=0), protection ---; placement was probed at 0xfc0000000 and the refusal is recorded across the entry's full extent as the platform reported it, rather than across the window that happened to be probed",
+        "start": "0xfc0000000"
+      },
+      {
+        "end": "0x7000000000",
+        "evidence": "measured_capability",
+        "note": "mach_vm_allocate(VM_FLAGS_FIXED) refused with KERN_NO_SPACE; region [0x1000000000, 0x7000000000) covers it, and is a real mapping (reserved=0), protection ---; placement was probed at 0x3fffc00000 and the refusal is recorded across the entry's full extent as vm_region reported it, not across the probe window alone",
+        "start": "0x1000000000"
+      },
+      {
+        "end": "0x800000000000",
+        "evidence": "measured_capability",
+        "note": "mach_vm_allocate(VM_FLAGS_FIXED) refused with KERN_INVALID_ADDRESS; mach_vm_region found no region at or above this address",
+        "start": "0x7fffffc00000"
+      },
+      {
+        "end": "0x800000400000",
+        "evidence": "measured_capability",
+        "note": "mach_vm_allocate(VM_FLAGS_FIXED) refused with KERN_INVALID_ADDRESS; mach_vm_region found no region at or above this address",
+        "start": "0x800000000000"
+      },
+      {
+        "end": "0x1000000000000",
+        "evidence": "measured_capability",
+        "note": "mach_vm_allocate(VM_FLAGS_FIXED) refused with KERN_INVALID_ADDRESS; mach_vm_region found no region at or above this address",
+        "start": "0xffffffc00000"
+      },
+      {
+        "end": "0x1000000400000",
+        "evidence": "measured_capability",
+        "note": "mach_vm_allocate(VM_FLAGS_FIXED) refused with KERN_INVALID_ADDRESS; mach_vm_region found no region at or above this address",
+        "start": "0x1000000000000"
+      },
+      {
+        "end": "0x2000000000000",
+        "evidence": "measured_capability",
+        "note": "mach_vm_allocate(VM_FLAGS_FIXED) refused with KERN_INVALID_ADDRESS; mach_vm_region found no region at or above this address",
+        "start": "0x1ffffffc00000"
+      },
+      {
+        "end": "0x2000000400000",
+        "evidence": "measured_capability",
+        "note": "mach_vm_allocate(VM_FLAGS_FIXED) refused with KERN_INVALID_ADDRESS; mach_vm_region found no region at or above this address",
+        "start": "0x2000000000000"
+      },
+      {
+        "end": "0x4000000000000",
+        "evidence": "measured_capability",
+        "note": "mach_vm_allocate(VM_FLAGS_FIXED) refused with KERN_INVALID_ADDRESS; mach_vm_region found no region at or above this address",
+        "start": "0x3ffffffc00000"
+      },
+      {
+        "end": "0x4000000400000",
+        "evidence": "measured_capability",
+        "note": "mach_vm_allocate(VM_FLAGS_FIXED) refused with KERN_INVALID_ADDRESS; mach_vm_region found no region at or above this address",
+        "start": "0x4000000000000"
+      },
+      {
+        "end": "0x8000000000000",
+        "evidence": "measured_capability",
+        "note": "mach_vm_allocate(VM_FLAGS_FIXED) refused with KERN_INVALID_ADDRESS; mach_vm_region found no region at or above this address",
+        "start": "0x7ffffffc00000"
+      },
+      {
+        "end": "0x8000000400000",
+        "evidence": "measured_capability",
+        "note": "mach_vm_allocate(VM_FLAGS_FIXED) refused with KERN_INVALID_ADDRESS; mach_vm_region found no region at or above this address",
+        "start": "0x8000000000000"
+      },
+      {
+        "end": "0x10000000000000",
+        "evidence": "measured_capability",
+        "note": "mach_vm_allocate(VM_FLAGS_FIXED) refused with KERN_INVALID_ADDRESS; mach_vm_region found no region at or above this address",
+        "start": "0xfffffffc00000"
+      },
+      {
+        "end": "0x10000000400000",
+        "evidence": "measured_capability",
+        "note": "mach_vm_allocate(VM_FLAGS_FIXED) refused with KERN_INVALID_ADDRESS; mach_vm_region found no region at or above this address",
+        "start": "0x10000000000000"
+      },
+      {
+        "end": "0x20000000000000",
+        "evidence": "measured_capability",
+        "note": "mach_vm_allocate(VM_FLAGS_FIXED) refused with KERN_INVALID_ADDRESS; mach_vm_region found no region at or above this address",
+        "start": "0x1fffffffc00000"
+      },
+      {
+        "end": "0x20000000400000",
+        "evidence": "measured_capability",
+        "note": "mach_vm_allocate(VM_FLAGS_FIXED) refused with KERN_INVALID_ADDRESS; mach_vm_region found no region at or above this address",
+        "start": "0x20000000000000"
+      },
+      {
+        "end": "0x40000000000000",
+        "evidence": "measured_capability",
+        "note": "mach_vm_allocate(VM_FLAGS_FIXED) refused with KERN_INVALID_ADDRESS; mach_vm_region found no region at or above this address",
+        "start": "0x3fffffffc00000"
+      },
+      {
+        "end": "0x40000000400000",
+        "evidence": "measured_capability",
+        "note": "mach_vm_allocate(VM_FLAGS_FIXED) refused with KERN_INVALID_ADDRESS; mach_vm_region found no region at or above this address",
+        "start": "0x40000000000000"
+      },
+      {
+        "end": "0x80000000000000",
+        "evidence": "measured_capability",
+        "note": "mach_vm_allocate(VM_FLAGS_FIXED) refused with KERN_INVALID_ADDRESS; mach_vm_region found no region at or above this address",
+        "start": "0x7fffffffc00000"
+      },
+      {
+        "end": "0x80000000400000",
+        "evidence": "measured_capability",
+        "note": "mach_vm_allocate(VM_FLAGS_FIXED) refused with KERN_INVALID_ADDRESS; mach_vm_region found no region at or above this address",
+        "start": "0x80000000000000"
+      },
+      {
+        "end": "0x100000000000000",
+        "evidence": "measured_capability",
+        "note": "mach_vm_allocate(VM_FLAGS_FIXED) refused with KERN_INVALID_ADDRESS; mach_vm_region found no region at or above this address",
+        "start": "0xffffffffc00000"
+      },
+      {
+        "end": "0x100000000400000",
+        "evidence": "measured_capability",
+        "note": "mach_vm_allocate(VM_FLAGS_FIXED) refused with KERN_INVALID_ADDRESS; mach_vm_region found no region at or above this address",
+        "start": "0x100000000000000"
+      },
+      {
+        "end": "0x200000000000000",
+        "evidence": "measured_capability",
+        "note": "mach_vm_allocate(VM_FLAGS_FIXED) refused with KERN_INVALID_ADDRESS; mach_vm_region found no region at or above this address",
+        "start": "0x1ffffffffc00000"
+      },
+      {
+        "end": "0x200000000400000",
+        "evidence": "measured_capability",
+        "note": "mach_vm_allocate(VM_FLAGS_FIXED) refused with KERN_INVALID_ADDRESS; mach_vm_region found no region at or above this address",
+        "start": "0x200000000000000"
+      },
+      {
+        "end": "0x400000000000000",
+        "evidence": "measured_capability",
+        "note": "mach_vm_allocate(VM_FLAGS_FIXED) refused with KERN_INVALID_ADDRESS; mach_vm_region found no region at or above this address",
+        "start": "0x3ffffffffc00000"
+      },
+      {
+        "end": "0x400000000400000",
+        "evidence": "measured_capability",
+        "note": "mach_vm_allocate(VM_FLAGS_FIXED) refused with KERN_INVALID_ADDRESS; mach_vm_region found no region at or above this address",
+        "start": "0x400000000000000"
+      },
+      {
+        "end": "0x800000000000000",
+        "evidence": "measured_capability",
+        "note": "mach_vm_allocate(VM_FLAGS_FIXED) refused with KERN_INVALID_ADDRESS; mach_vm_region found no region at or above this address",
+        "start": "0x7ffffffffc00000"
+      },
+      {
+        "end": "0x800000000400000",
+        "evidence": "measured_capability",
+        "note": "mach_vm_allocate(VM_FLAGS_FIXED) refused with KERN_INVALID_ADDRESS; mach_vm_region found no region at or above this address",
+        "start": "0x800000000000000"
+      },
+      {
+        "end": "0x1000000000000000",
+        "evidence": "measured_capability",
+        "note": "mach_vm_allocate(VM_FLAGS_FIXED) refused with KERN_INVALID_ADDRESS; mach_vm_region found no region at or above this address",
+        "start": "0xfffffffffc00000"
+      },
+      {
+        "end": "0x1000000000400000",
+        "evidence": "measured_capability",
+        "note": "mach_vm_allocate(VM_FLAGS_FIXED) refused with KERN_INVALID_ADDRESS; mach_vm_region found no region at or above this address",
+        "start": "0x1000000000000000"
+      },
+      {
+        "end": "0x2000000000000000",
+        "evidence": "measured_capability",
+        "note": "mach_vm_allocate(VM_FLAGS_FIXED) refused with KERN_INVALID_ADDRESS; mach_vm_region found no region at or above this address",
+        "start": "0x1fffffffffc00000"
+      },
+      {
+        "end": "0x2000000000400000",
+        "evidence": "measured_capability",
+        "note": "mach_vm_allocate(VM_FLAGS_FIXED) refused with KERN_INVALID_ADDRESS; mach_vm_region found no region at or above this address",
+        "start": "0x2000000000000000"
+      },
+      {
+        "end": "0x4000000000000000",
+        "evidence": "measured_capability",
+        "note": "mach_vm_allocate(VM_FLAGS_FIXED) refused with KERN_INVALID_ADDRESS; mach_vm_region found no region at or above this address",
+        "start": "0x3fffffffffc00000"
+      },
+      {
+        "end": "0x4000000000400000",
+        "evidence": "measured_capability",
+        "note": "mach_vm_allocate(VM_FLAGS_FIXED) refused with KERN_INVALID_ADDRESS; mach_vm_region found no region at or above this address",
+        "start": "0x4000000000000000"
+      }
+    ]
+  }
+}
