@@ -282,6 +282,22 @@ CASES = [
                     "docs/x.md": "Verified. <!-- checked: 2027-03-01 -->\n"})],
          expect_fail=True, expect_text="after the newest commit"),
 
+    Case("check_dates.py", "a marked future date is a scheduled event, not a bad clock",
+         {},
+         commits=[("2026-07-26T12:00:00+00:00",
+                   {"docs/PROGRESS.md": "# Progress log\n\n"
+                                        "## 2026-07-26 — honest\n\nbody\n",
+                    "docs/x.md": "Quota resets 2026-08-01. <!-- future -->\n"})],
+         expect_fail=False),
+
+    Case("check_dates.py", "an unmarked future date still fails",
+         {},
+         commits=[("2026-07-26T12:00:00+00:00",
+                   {"docs/PROGRESS.md": "# Progress log\n\n"
+                                        "## 2026-07-26 — honest\n\nbody\n",
+                    "docs/x.md": "Quota resets 2026-08-01.\n"})],
+         expect_fail=True, expect_text="mark the line"),
+
     Case("check_dates.py", "a stale checked marker is reported, not failed",
          {},
          commits=[("2026-07-25T12:00:00+00:00",

@@ -67,12 +67,21 @@ Answered on 2026-07-26; full account in `docs/PROGRESS.md`.
    commit-rounds-to-page asymmetry, which is the RSC-0044 mechanism as a
    `specified_guarantee`.
 
-**What is left needs a runner, and the runner needs a billing decision.** GitHub
-refused the job with `billable.WINDOWS.total_ms: 0` and an annotation naming two
-causes it does not distinguish: a spending limit at the $0 default (resolves 1
-August) or a failed payment (does not). Only the Billing & plans page separates
-them. A third path exists and is the owner's: a public repository is not billed
-at all.
+**What is left needs a runner, and the runner needs a billing decision.**
+Measured on 2026-07-26: payment is fine, it is the included quota - Actions
+minutes at **3,000 / 3,000**, billable `$0`, and the page's own *"Included usage
+limits reset in 6 days"* → **2026-08-01** <!-- future -->. Not a hypothesis.
+
+Three options, all the owner's, and the middle one is cheap enough to be worth
+naming first:
+
+| Option | Cost | Available |
+|---|---|---|
+| set a small spending limit | a Windows minute is $0.016, so one probe run at 2x is about **$0.32** | today |
+| wait for the reset | nothing | 2026-08-01 <!-- future --> |
+| make the repository public | public repositories are not billed at all; the corpus, campaign data and every document become public | today |
+
+"Impossible until 1 August" was wrong and is corrected in both workflow files.
 
 **What is written and what it is not.** `src/probe/vm_probe_windows.cpp`
 cross-compiles clean with `-Wall -Wextra` under mingw-w64, the whole project

@@ -16,6 +16,71 @@ re-litigated; a mistake recorded here does not need to be re-made.
 
 ---
 
+## 2026-07-26 — the project's own sin, committed by the project, against itself
+
+**Changed.** `.github/workflows/macos-probe.yml` and `windows-probe.yml`: a
+causal claim corrected and a figure fixed. The decision they justify is
+unchanged.
+
+**The finding, and it is about this project rather than about a platform.** The
+macOS workflow was moved off per-push on 2026-07-25 and the comment explaining
+why said this:
+
+> three macOS jobs per push (one from ci.yml, two here) at 10x, roughly 75
+> billable minutes a push, twenty pushes in a night, **and a 2,000 minute
+> monthly quota gone**
+
+Two things in that sentence are wrong, and the second one matters.
+
+| Claimed | Billing page, 2026-07-26 |
+|---|---|
+| a 2,000 minute quota | **3,000** minutes (Pro tier) |
+| this repository's pushes exhausted it | `CodeSkeptic` **$32.52 (82%)**, `Runtime_CodeSkeptic` **$4.28 (10.8%)**, `organon-mueller` $2.68 |
+
+**This repository paid about a tenth of the bill.** The sibling repository runs
+five workflows per push - CI, Windows, Docker, a Juliet benchmark, Docs - and its
+last heavy day was 2026-07-24, immediately before this repository hit the wall at
+`2026-07-25T01:09:39Z`.
+
+So the story was: our arithmetic, our pushes, our exhaustion. The measurement
+says: 89% of it was somebody else's, and adjacency in time was read as cause.
+
+**This is precisely what the project forbids, done to the project, with the
+evidence one page away.** `docs/PLAN.md` Phase 0 exit criterion 5 is that no
+claim depends solely on generated interpretation. `corpus/runtime_failures/`
+has forty-four entries about programs that took an observation for a
+guarantee - and the one recorded here is a plausible arithmetic taken for a
+cause, by the author of that corpus, about a bill that was itemised and never
+opened. Nobody asked for the number. The number existed.
+
+**The decision stands and the reasoning is replaced.** Three macOS jobs per push
+at 10x is wasteful whoever is paying, and the case for per-push measurement was
+always weak - the host cannot change between two commits. That is a sound
+argument about waste and it survives intact. What does not survive is "we ran
+out", which was never ours to say.
+
+The wrong sentence is left in the workflow file above its correction rather than
+tidied away. A comment that quietly became right teaches nothing.
+
+**Not guardable, and saying so rather than building something fragile.** There is
+no mechanical check for "this causal claim was never measured" - the same
+conclusion this log reached about a wrong past date in prose. What *was* done is
+the systematic version of the fix: every quota, billing and minutes claim in the
+repository was grepped and each one checked, rather than only the line the
+reviewer named. There were two.
+
+**And the block is not what it was recorded as either.** A Windows minute is
+$0.016, so one probe run at the 2x multiplier is roughly **$0.32**. "Impossible
+until 1 August" is false: a small spending limit lifts it today. Both workflow
+files now carry that figure, because a blocker whose price is thirty-two cents
+should not be described as a wait.
+
+**Next.** Unchanged in substance: `T-004` needs a runner. What changed is that
+the owner now has three options rather than one - wait six days, set a spending
+limit of a few dollars, or make the repository public.
+
+---
+
 ## 2026-07-26 — the control plane, read from outside, and the block is wider than recorded
 
 **Changed.** `src/probe/vm_probe_windows.cpp`: the exclusive-bound conversion is
@@ -61,16 +126,15 @@ reader assumes when a commit message says guards are green.
 ### And the hypothesis was one cause too narrow
 
 This log said "the quota was exhausted and resets on 1 August". GitHub's message
-names **two** causes and does not distinguish them:
+names **two** causes and does not distinguish them - a spending limit, or a
+failed payment. The record asserted the first as if it were established.
 
-| Cause | Resolves on 1 August? |
-|---|---|
-| spending limit at the $0 default, private repo, free 2000 minutes spent | **yes** |
-| a failed account payment | **no** |
-
-Only the Billing & plans page separates them. The record asserted the first as
-if it were established. It was not; it is one of two, and the difference is the
-difference between waiting six days and waiting forever.
+**Settled the next day by reading the billing page, and it is the first one:**
+payment is fine, billable is `$0` (`$39.50` usage against `$39.50` discount),
+Actions minutes stand at **3,000 / 3,000** - exactly full - and the page itself
+says *"Included usage limits reset in 6 days"*, which is 2026-08-01 <!-- future -->. So "resets
+on 1 August" is now a **measured finding, not a hypothesis**, and this paragraph
+is the record of it having been one.
 
 **There is a third path and the owner already offered it, early in this
 session:** making the repository public restores unlimited Actions minutes

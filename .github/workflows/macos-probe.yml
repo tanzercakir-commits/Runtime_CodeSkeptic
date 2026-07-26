@@ -16,16 +16,38 @@ name: macOS measurement
 # GitHub bills macOS runners at 10x and this workflow starts two of them, so it
 # does NOT run on push.
 #
-# That is a deliberate reversal. It used to run on every commit to main, and on
-# 2026-07-25 the arithmetic caught up: three macOS jobs per push (one from
-# ci.yml, two here) at 10x, roughly 75 billable minutes a push, twenty pushes in
-# a night, and a 2,000 minute monthly quota gone. Every run in the repository
-# then failed at startup in under fifteen seconds with `Billable Time -`.
+# That is a deliberate reversal, and the REASON FIRST GIVEN FOR IT WAS WRONG.
 #
-# The reasoning for per-push measurement was never strong: the HOST cannot
-# change between two commits. What changes is the probe and the analyzer, and a
-# weekly run plus a button covers that without spending a tenth of the month's
-# quota on a commit that edited a test comment.
+# What this comment used to say: three macOS jobs per push (one from ci.yml, two
+# here) at 10x, roughly 75 billable minutes a push, twenty pushes in a night,
+# "and a 2,000 minute monthly quota gone" - so the workflow was pulled off
+# per-push because its own arithmetic had burned the account's minutes.
+#
+# The billing page, read on 2026-07-26, says otherwise on both counts:
+#
+#   the quota is 3,000 minutes, not 2,000   (Pro tier)
+#   this month's usage, by repository:
+#     CodeSkeptic            $32.52   82%
+#     Runtime_CodeSkeptic     $4.28   10.8%   <- this repository
+#     organon-mueller         $2.68
+#
+# **This repository did not exhaust the quota. It paid about a tenth of the
+# bill.** The sibling repository runs five workflows per push - CI, Windows,
+# Docker, a Juliet benchmark and Docs - and its last heavy day was 2026-07-24,
+# immediately before this repository hit the wall at 2026-07-25T01:09:39Z.
+# Adjacency in time was read as cause, from arithmetic that was never checked
+# against the one page that had the answer.
+#
+# THE DECISION STANDS AND THE REASONING IS DIFFERENT. Three macOS jobs per push
+# at 10x is wasteful whoever is paying, and the case for per-push measurement was
+# never strong: the HOST cannot change between two commits. What changes is the
+# probe and the analyzer, and a weekly run plus a button covers that. That is a
+# sound argument about waste. It is not the argument that "we ran out", which was
+# not ours to make.
+#
+# Worth leaving in the file rather than tidying away, because this project's own
+# rule is not to attribute without measuring, and the measurement was one page
+# away. See docs/PROGRESS.md.
 #
 #   schedule           one measurement a week, unattended
 #   workflow_dispatch   press Run workflow when you want one now

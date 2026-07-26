@@ -38,6 +38,17 @@ THREE CHECKS.
    failure - an old claim can still be true - but it stops "somebody looked"
    from meaning "somebody looked, once, eight months ago".
 
+Check 2 needs one escape valve, and it needed it two commits after being
+tightened. A date can be legitimately in the future: GitHub's billing page says
+"Included usage limits reset in 6 days", which is 2026-08-01, and recording that
+is not a wrong clock - it is a scheduled event. Check 2 cannot tell the two
+apart, so an intended future date carries `<!-- future -->` on the same line or
+the line before. An UNMARKED future date still fails, which is the case the
+check exists for.
+
+Worth noting the shape: this guard was too lax two commits ago and too strict
+here. Both were real, and neither was found by reasoning about it.
+
 Uncommitted lines blame as "not committed yet" and are dated from the working
 tree, so a new entry written now is checked against now.
 """
@@ -53,6 +64,10 @@ PROGRESS = ROOT / "docs" / "PROGRESS.md"
 HEADING = re.compile(r"^##\s+(\d{4}-\d{2}-\d{2})\b")
 CHECKED = re.compile(r"<!--\s*checked:\s*(\d{4}-\d{2}-\d{2})\s*-->")
 ANY_DATE = re.compile(r"\b(20\d{2}-\d{2}-\d{2})\b")
+# A date that is SUPPOSED to be in the future says so, on the same line or the
+# line before. Without this, check 2 cannot tell a scheduled event from a clock
+# that is wrong.
+FUTURE_OK = re.compile(r"<!--\s*future\s*-->")
 
 # A heading may sit one day either side of its commit ONLY when the commit is
 # actually near midnight. The entry is often written just before midnight UTC
@@ -180,17 +195,21 @@ def main() -> int:
         rel = str(path.relative_to(ROOT))
         if rel in QUOTES_DATES:
             continue
-        for i, line in enumerate(path.read_text().splitlines(), 1):
+        lines = path.read_text().splitlines()
+        for i, line in enumerate(lines, 1):
+            window = "\n".join(lines[max(0, i - 2):i])
+            future_allowed = bool(FUTURE_OK.search(window))
             for raw in ANY_DATE.findall(line):
                 try:
                     d = date.fromisoformat(raw)
                 except ValueError:
                     continue
-                if d > today:
+                if d > today and not future_allowed:
                     problems.append(
                         f"{rel}:{i}: dated {raw}, which is after the newest "
                         f"commit ({today}). Either the clock is wrong or the "
-                        f"date was guessed; both are worth stopping for.")
+                        f"date was guessed; both are worth stopping for. If it "
+                        f"is a scheduled event, mark the line `<!-- future -->`.")
             for raw in CHECKED.findall(line):
                 age = (today - date.fromisoformat(raw)).days
                 if age > STALE_DAYS:

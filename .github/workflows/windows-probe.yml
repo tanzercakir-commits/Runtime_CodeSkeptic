@@ -32,7 +32,14 @@ name: Windows measurement
 
 # Windows runners bill at 2x. That is a fifth of macOS but not free, and the
 # host cannot change between two commits - the same reasoning that moved the
-# macOS workflow off per-push after a quota exhaustion on 2026-07-25.
+# macOS workflow off per-push. Note that the macOS comment's ORIGINAL reason was
+# wrong: the 2026-07-25 exhaustion was 82% another repository's usage, not this
+# one's. The waste argument survives; the "we ran out" argument was never ours.
+#
+# For scale, since the block on this workflow is a billing one: a Windows minute
+# is $0.016, so one probe run at the 2x multiplier is roughly $0.32. The block
+# is not "impossible until the quota resets" - a small spending limit lifts it
+# today. That is the owner's call and it is a cheap one.
 #
 # So: weekly, a button, AND a path filter.
 #
