@@ -227,6 +227,16 @@ jobs:
           # configuration.  (Missing "-C <config>"?)" and exits non-zero, so
           # every Windows failure this channel ever carried said that instead of
           # saying what failed. See tools/guards/check_workflow_ctest.py.
+          # THE BUILD LOG, which this channel did not carry - and on 2026-07-26
+          # `windows---msvc` failed with `build: failure` and the diagnostics
+          # published a ctest run of a tree that had never finished compiling.
+          # Every "Could not find executable" line in it was a symptom; the
+          # compiler error that caused them was only in the Actions web log,
+          # which is the position this channel exists to avoid. A re-run is cheap
+          # because every object that did compile is still cached.
+          cmake --build build --config RelWithDebInfo \
+            > /tmp/diag/build.txt 2>&1 || true
+          tail -c 30000 /tmp/diag/build.txt > /tmp/diag/build_tail.txt || true
           ctest --test-dir build --build-config RelWithDebInfo \
             --rerun-failed --output-on-failure \
             > /tmp/diag/ctest.txt 2>&1 || true
@@ -265,7 +275,7 @@ jobs:
           git config user.email "ci-logs@localhost"
           git checkout --detach -q
           cp /tmp/diag/*.txt /tmp/diag/steps.json /tmp/diag/profile.json .
-          git add -f steps.json ctest_tail.txt guards.txt gt_selftest.txt gt_run.txt reproducible.txt profile.json
+          git add -f steps.json build_tail.txt ctest_tail.txt guards.txt gt_selftest.txt gt_run.txt reproducible.txt profile.json
           git commit -qm "${slug} diagnostics @ ${{ github.sha }}"
           git push --force origin \
             "HEAD:refs/ci-logs/${{ github.sha }}/${slug}"
@@ -401,6 +411,16 @@ jobs:
           # configuration.  (Missing "-C <config>"?)" and exits non-zero, so
           # every Windows failure this channel ever carried said that instead of
           # saying what failed. See tools/guards/check_workflow_ctest.py.
+          # THE BUILD LOG, which this channel did not carry - and on 2026-07-26
+          # `windows---msvc` failed with `build: failure` and the diagnostics
+          # published a ctest run of a tree that had never finished compiling.
+          # Every "Could not find executable" line in it was a symptom; the
+          # compiler error that caused them was only in the Actions web log,
+          # which is the position this channel exists to avoid. A re-run is cheap
+          # because every object that did compile is still cached.
+          cmake --build build --config RelWithDebInfo \
+            > /tmp/diag/build.txt 2>&1 || true
+          tail -c 30000 /tmp/diag/build.txt > /tmp/diag/build_tail.txt || true
           ctest --test-dir build --build-config RelWithDebInfo \
             --rerun-failed --output-on-failure \
             > /tmp/diag/ctest.txt 2>&1 || true
@@ -439,7 +459,7 @@ jobs:
           git config user.email "ci-logs@localhost"
           git checkout --detach -q
           cp /tmp/diag/*.txt /tmp/diag/steps.json /tmp/diag/profile.json .
-          git add -f steps.json ctest_tail.txt guards.txt gt_selftest.txt gt_run.txt reproducible.txt profile.json
+          git add -f steps.json build_tail.txt ctest_tail.txt guards.txt gt_selftest.txt gt_run.txt reproducible.txt profile.json
           git commit -qm "${slug} diagnostics @ ${{ github.sha }}"
           git push --force origin \
             "HEAD:refs/ci-logs/${{ github.sha }}/${slug}"
@@ -608,6 +628,16 @@ jobs:
           # configuration.  (Missing "-C <config>"?)" and exits non-zero, so
           # every Windows failure this channel ever carried said that instead of
           # saying what failed. See tools/guards/check_workflow_ctest.py.
+          # THE BUILD LOG, which this channel did not carry - and on 2026-07-26
+          # `windows---msvc` failed with `build: failure` and the diagnostics
+          # published a ctest run of a tree that had never finished compiling.
+          # Every "Could not find executable" line in it was a symptom; the
+          # compiler error that caused them was only in the Actions web log,
+          # which is the position this channel exists to avoid. A re-run is cheap
+          # because every object that did compile is still cached.
+          cmake --build build --config RelWithDebInfo \
+            > /tmp/diag/build.txt 2>&1 || true
+          tail -c 30000 /tmp/diag/build.txt > /tmp/diag/build_tail.txt || true
           ctest --test-dir build --build-config RelWithDebInfo \
             --rerun-failed --output-on-failure \
             > /tmp/diag/ctest.txt 2>&1 || true
@@ -646,7 +676,7 @@ jobs:
           git config user.email "ci-logs@localhost"
           git checkout --detach -q
           cp /tmp/diag/*.txt /tmp/diag/steps.json /tmp/diag/profile.json .
-          git add -f steps.json ctest_tail.txt guards.txt gt_selftest.txt gt_run.txt reproducible.txt profile.json
+          git add -f steps.json build_tail.txt ctest_tail.txt guards.txt gt_selftest.txt gt_run.txt reproducible.txt profile.json
           git commit -qm "${slug} diagnostics @ ${{ github.sha }}"
           git push --force origin \
             "HEAD:refs/ci-logs/${{ github.sha }}/${slug}"
@@ -743,6 +773,16 @@ jobs:
           # configuration.  (Missing "-C <config>"?)" and exits non-zero, so
           # every Windows failure this channel ever carried said that instead of
           # saying what failed. See tools/guards/check_workflow_ctest.py.
+          # THE BUILD LOG, which this channel did not carry - and on 2026-07-26
+          # `windows---msvc` failed with `build: failure` and the diagnostics
+          # published a ctest run of a tree that had never finished compiling.
+          # Every "Could not find executable" line in it was a symptom; the
+          # compiler error that caused them was only in the Actions web log,
+          # which is the position this channel exists to avoid. A re-run is cheap
+          # because every object that did compile is still cached.
+          cmake --build build --config RelWithDebInfo \
+            > /tmp/diag/build.txt 2>&1 || true
+          tail -c 30000 /tmp/diag/build.txt > /tmp/diag/build_tail.txt || true
           ctest --test-dir build --build-config RelWithDebInfo \
             --rerun-failed --output-on-failure \
             > /tmp/diag/ctest.txt 2>&1 || true
@@ -781,7 +821,7 @@ jobs:
           git config user.email "ci-logs@localhost"
           git checkout --detach -q
           cp /tmp/diag/*.txt /tmp/diag/steps.json /tmp/diag/profile.json .
-          git add -f steps.json ctest_tail.txt guards.txt gt_selftest.txt gt_run.txt reproducible.txt profile.json
+          git add -f steps.json build_tail.txt ctest_tail.txt guards.txt gt_selftest.txt gt_run.txt reproducible.txt profile.json
           git commit -qm "${slug} diagnostics @ ${{ github.sha }}"
           git push --force origin \
             "HEAD:refs/ci-logs/${{ github.sha }}/${slug}"

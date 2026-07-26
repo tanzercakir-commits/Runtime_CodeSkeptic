@@ -211,6 +211,10 @@ jobs:
         run: |
           mkdir -p /tmp/diag
           echo "$STEPS_JSON" > /tmp/diag/steps.json
+          # The build log, which this channel did not carry. See ci.yml.
+          cmake --build build --config RelWithDebInfo \
+            > /tmp/diag/build.txt 2>&1 || true
+          tail -c 30000 /tmp/diag/build.txt > /tmp/diag/build_tail.txt || true
           ctest --test-dir build --build-config RelWithDebInfo \
             --rerun-failed --output-on-failure \
             > /tmp/diag/ctest_failed.txt 2>&1 || true
@@ -222,9 +226,9 @@ jobs:
           git config user.name "ci-logs"
           git config user.email "ci-logs@localhost"
           git checkout --detach -q
-          cp /tmp/diag/steps.json /tmp/diag/ctest_tail.txt \
+          cp /tmp/diag/steps.json /tmp/diag/build_tail.txt /tmp/diag/ctest_tail.txt \
              /tmp/diag/reproducible.txt /tmp/diag/groundtruth.txt .
-          git add -f steps.json ctest_tail.txt reproducible.txt groundtruth.txt
+          git add -f steps.json build_tail.txt ctest_tail.txt reproducible.txt groundtruth.txt
           git commit -qm "macos diagnostics @ ${{ github.sha }}"
           git push --force origin \
             "HEAD:refs/ci-logs/${{ github.sha }}/native-arm64"
@@ -417,6 +421,10 @@ jobs:
         run: |
           mkdir -p /tmp/diag
           echo "$STEPS_JSON" > /tmp/diag/steps.json
+          # The build log, which this channel did not carry. See ci.yml.
+          cmake --build build-x64 --config RelWithDebInfo \
+            > /tmp/diag/build.txt 2>&1 || true
+          tail -c 30000 /tmp/diag/build.txt > /tmp/diag/build_tail.txt || true
           ctest --test-dir build-x64 --build-config RelWithDebInfo \
             --rerun-failed --output-on-failure \
             > /tmp/diag/ctest_failed.txt 2>&1 || true
@@ -428,9 +436,9 @@ jobs:
           git config user.name "ci-logs"
           git config user.email "ci-logs@localhost"
           git checkout --detach -q
-          cp /tmp/diag/steps.json /tmp/diag/ctest_tail.txt \
+          cp /tmp/diag/steps.json /tmp/diag/build_tail.txt /tmp/diag/ctest_tail.txt \
              /tmp/diag/reproducible.txt /tmp/diag/groundtruth.txt .
-          git add -f steps.json ctest_tail.txt reproducible.txt groundtruth.txt
+          git add -f steps.json build_tail.txt ctest_tail.txt reproducible.txt groundtruth.txt
           git commit -qm "macos diagnostics @ ${{ github.sha }}"
           git push --force origin \
             "HEAD:refs/ci-logs/${{ github.sha }}/rosetta-x86_64"

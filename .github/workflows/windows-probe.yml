@@ -263,6 +263,10 @@ jobs:
         run: |
           mkdir -p /tmp/diag
           echo "$STEPS_JSON" > /tmp/diag/steps.json
+          # The build log, which this channel did not carry. See ci.yml.
+          cmake --build build --config RelWithDebInfo \
+            > /tmp/diag/build.txt 2>&1 || true
+          tail -c 30000 /tmp/diag/build.txt > /tmp/diag/build_tail.txt || true
           ctest --test-dir build -C RelWithDebInfo --rerun-failed \
             --output-on-failure > /tmp/diag/ctest.txt 2>&1 || true
           tail -c 30000 /tmp/diag/ctest.txt > /tmp/diag/ctest_tail.txt || true
@@ -278,7 +282,8 @@ jobs:
                  > /tmp/diag/profile.json
           bash tools/ci/publish_measurement.sh ci-logs \
             "windows-x86_64" "${{ github.sha }}" \
-            /tmp/diag/steps.json /tmp/diag/ctest_tail.txt \
+            /tmp/diag/steps.json /tmp/diag/build_tail.txt \
+            /tmp/diag/ctest_tail.txt \
             /tmp/diag/reproducible.txt /tmp/diag/profile.json
 
       - name: Publish the measurement to refs/measurements/*

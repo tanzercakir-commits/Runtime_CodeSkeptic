@@ -65,7 +65,37 @@ for key in sorted(set(a) | set(b)):
     if a.get(key) == b.get(key):
         continue
     if key.endswith("_ranges") or key.endswith("_codes"):
-        print(f"  {key}: {len(a.get(key, []))} vs {len(b.get(key, []))} entries")
+        la, lb = a.get(key, []), b.get(key, [])
+        print(f"  {key}: {len(la)} vs {len(lb)} entries")
+        # AND WHICH ONES, because the count is the least informative thing this
+        # can say and it was all it said. On 2026-07-26 the macOS runner reported
+        #
+        #     available_ranges: 22 vs 22 entries
+        #
+        # and stopped there - the ONE case where the count carries no information
+        # is the case where the counts are equal, which is exactly the shape of
+        # the bug this check exists for (the same ranges, differently placed).
+        # Whoever read that had to reproduce it on a macOS host to learn anything,
+        # and this project's whole method is that a failure carries its evidence.
+        def sig(entry):
+            if isinstance(entry, dict):
+                return f"[{entry.get('start')}, {entry.get('end')})"
+            return repr(entry)
+        sa, sb = [sig(x) for x in la], [sig(x) for x in lb]
+        only_a = [s for s in sa if s not in sb]
+        only_b = [s for s in sb if s not in sa]
+        if not only_a and not only_b and sa != sb:
+            print("    same entries in a different ORDER, which the canonical "
+                  "form is supposed to remove - that is a serialization bug, "
+                  "not a probe one")
+        for s in only_a[:12]:
+            print(f"    only in run 1: {s}")
+        if len(only_a) > 12:
+            print(f"    ... and {len(only_a) - 12} more only in run 1")
+        for s in only_b[:12]:
+            print(f"    only in run 2: {s}")
+        if len(only_b) > 12:
+            print(f"    ... and {len(only_b) - 12} more only in run 2")
         continue
     va = (a.get(key) or {}).get("value")
     vb = (b.get(key) or {}).get("value")
