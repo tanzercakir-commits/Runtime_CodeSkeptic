@@ -1,0 +1,42 @@
+
+=== guards themselves ===
+
+guard selftest: 58/58 cases
+
+=== plan structure ===
+plan: blocked=4  done=42  n/a=1  open=9  partial=14  (total 70, across 2 document(s))
+
+=== documentation drift ===
+doc guard: scanned 71 document(s)
+
+=== finding registry ===
+registry: 25 ids declared, 25 emitted by rules
+
+=== schemas vs code ===
+validated 58 artifact(s) against 3 schema(s)
+
+=== normative non-goals ===
+non-goals: no conflicts, no stale names
+
+=== dates against git ===
+dates: checked against git, newest commit 2026-07-26
+
+=== compass vs map ===
+todo: blocked=2  done=4  later=3  next=3  now=2  (14 items, 6 plan tag(s))
+
+=== published numbers ===
+campaigns: 4 population(s) checked against docs/campaigns/
+
+=== corpus rules ===
+corpus: 54 entries, 44 counting toward 30, 35 toward the virtual-memory 10
+
+=== includes vs MSVC ===
+includes: 37 translation unit(s) and header(s) checked against 15 standard headers
+
+=== shell vs bash 3.2 ===
+shell: 8 script(s) checked against bash 3.2 and BSD userland
+
+=== shell dead variables ===
+shell vars: 8 script(s) checked for assigned-and-never-read
+
+all guards passed

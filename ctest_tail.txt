@@ -1,0 +1,55 @@
+Internal ctest changing into directory: /home/runner/work/Runtime_CodeSkeptic/Runtime_CodeSkeptic/build
+Test project /home/runner/work/Runtime_CodeSkeptic/Runtime_CodeSkeptic/build
+    Start 13: test_probe
+1/1 Test #13: test_probe .......................***Failed    1.06 sec
+== probe conformance (14 cases)
+  ok   probe_produces_a_schema_valid_profile_on_every_platform
+  ok   probe_never_attaches_a_value_to_unknown_evidence
+  ok   unimplemented_platforms_report_synthetic_origin
+  ok   repeated_calls_in_one_process_produce_the_same_profile_id
+  ok   profile_id_survives_a_write_read_round_trip
+  ok   range_order_does_not_affect_identity
+  ok   canonical_serialization_is_byte_stable
+  ok   measured_page_size_is_a_power_of_two
+  ok   measured_bounds_are_ordered
+  ok   no_recorded_range_carries_unknown_evidence
+  ok   available_and_unavailable_ranges_do_not_overlap
+  ok   disabling_the_scan_drops_the_sweep_but_keeps_measured_bounds
+  FAIL the_scan_covers_where_this_process_is_actually_mapped
+    /home/runner/work/Runtime_CodeSkeptic/Runtime_CodeSkeptic/tests/conformance/test_probe.cpp:368
+    the profile establishes nothing about an address this process is executing from or allocating in; the scan is looking in the wrong part of the address space
+      code page      : 0x560991643000
+      max_user_address: 0xfffffffffff000
+      nearest below: [0x400000000000, 0x400000400000)  gap 0x160991243000
+        note: mapped successfully at this exact address in the probe process
+      nearest above: [0x7fff00000000, 0x7fff00400000)  gap 0x29f56e9bd000
+        note: mapped successfully at this exact address in the probe process
+      containing   : (none - this is a scan-window gap, not a query bug)
+      established: 76 available, 1 unavailable
+      arena: kernel's mmap allocation arena [0xfffc0000000000, 0xfffffffffff000) sampled every 0x1000000000 bytes: 64 granted, 0 already held by the probe process, 0 structurally refused. The first two are treated identically on purpose; only the third is a host limitation
+      arena: ET_DYN base region, where a position-independent executable is placed [0xaaaa0000000000, 0xaaae0000000000) sampled every 0x1000000000 bytes: 64 granted, 0 already held by the probe process, 0 structurally refused. The first two are treated identically on purpose; only the third is a host limitation
+  FAIL the_scan_covers_where_this_process_is_actually_mapped
+    /home/runner/work/Runtime_CodeSkeptic/Runtime_CodeSkeptic/tests/conformance/test_probe.cpp:368
+    the profile establishes nothing about an address this process is executing from or allocating in; the scan is looking in the wrong part of the address space
+      heap page      : 0x7fb8780ff000
+      max_user_address: 0xfffffffffff000
+      nearest below: [0x400000000000, 0x400000400000)  gap 0x3fb877cff000
+        note: mapped successfully at this exact address in the probe process
+      nearest above: [0x7fff00000000, 0x7fff00400000)  gap 0x4687f01000
+        note: mapped successfully at this exact address in the probe process
+      containing   : (none - this is a scan-window gap, not a query bug)
+      established: 76 available, 1 unavailable
+      arena: kernel's mmap allocation arena [0xfffc0000000000, 0xfffffffffff000) sampled every 0x1000000000 bytes: 64 granted, 0 already held by the probe process, 0 structurally refused. The first two are treated identically on purpose; only the third is a host limitation
+      arena: ET_DYN base region, where a position-independent executable is placed [0xaaaa0000000000, 0xaaae0000000000) sampled every 0x1000000000 bytes: 64 granted, 0 already held by the probe process, 0 structurally refused. The first two are treated identically on purpose; only the third is a host limitation
+  ok   probe_leaves_the_process_address_space_usable
+
+2 failure(s) in probe conformance
+
+
+0% tests passed, 1 tests failed out of 1
+
+Total Test time (real) =   1.06 sec
+
+The following tests FAILED:
+	 13 - test_probe (Failed)
+Errors while running CTest
