@@ -67,21 +67,20 @@ Answered on 2026-07-26; full account in `docs/PROGRESS.md`.
    commit-rounds-to-page asymmetry, which is the RSC-0044 mechanism as a
    `specified_guarantee`.
 
-**What is left needs a runner, and the runner needs a billing decision.**
-Measured on 2026-07-26: payment is fine, it is the included quota - Actions
-minutes at **3,000 / 3,000**, billable `$0`, and the page's own *"Included usage
-limits reset in 6 days"* → **2026-08-01** <!-- future -->. Not a hypothesis.
+**The runner arrived.** Of the three billing options this item listed, one was
+measured and eliminated and one is proven:
 
-Three options, all the owner's, and the middle one is cheap enough to be worth
-naming first:
+| Option | Outcome |
+|---|---|
+| a small spending limit | **tried, did not work.** A repository-scoped `Actions Windows` SKU budget at $10 hard-stop; nine minutes, two dispatches, `0 ms`, job never started. This item claimed it "lifts it today" and that was wrong. |
+| make the repository public | **done, and it opened instantly.** |
+| wait for the reset | not needed |
 
-| Option | Cost | Available |
-|---|---|---|
-| set a small spending limit | a Windows minute is $0.016, so one probe run at 2x is about **$0.32** | today |
-| wait for the reset | nothing | 2026-08-01 <!-- future --> |
-| make the repository public | public repositories are not billed at all; the corpus, campaign data and every document become public | today |
-
-"Impossible until 1 August" was wrong and is corrected in both workflow files.
+**Windows then ran and failed to build** — `std::back_inserter` without
+`<iterator>`, MSVC 19.51.36248.0. Fixed, and `tools/guards/check_includes.py`
+now catches the class without a Windows runner. The `Measure` step has still
+never executed, so the measurement leg of the end-to-end cycle remains the one
+untested piece.
 
 **What is written and what it is not.** `src/probe/vm_probe_windows.cpp`
 cross-compiles clean with `-Wall -Wextra` under mingw-w64, the whole project

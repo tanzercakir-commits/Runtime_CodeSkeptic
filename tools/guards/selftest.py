@@ -322,6 +322,31 @@ CASES = [
                                         "## 2026-07-25 — stale sense of today\n\nbody\n"})],
          expect_fail=True, expect_text="too far for a timezone artifact"),
 
+    # ---- check_includes: the MSVC class, caught without MSVC -----------
+    Case("check_includes.py", "back_inserter without <iterator> fails",
+         {"src/vm/impact.cpp": "#include <algorithm>\n#include <set>\n"
+                               "void f(){ std::back_inserter(v); }\n"},
+         expect_fail=True, expect_text="MSVC does not"),
+
+    Case("check_includes.py", "the same file passes once <iterator> is there",
+         {"src/vm/impact.cpp": "#include <algorithm>\n#include <iterator>\n"
+                               "#include <set>\n"
+                               "void f(){ std::back_inserter(v); }\n"},
+         expect_fail=False),
+
+    # The 42-hits-of-noise case: a .cpp getting <string> from its OWN header is
+    # not relying on an accident, and a guard that says otherwise gets ignored.
+    Case("check_includes.py", "a project header supplying the include is enough",
+         {"include/runtimeskeptic/vm/thing.hpp": "#include <string>\n",
+          "src/vm/thing.cpp": '#include "runtimeskeptic/vm/thing.hpp"\n'
+                              "std::string f(){ return {}; }\n"},
+         expect_fail=False),
+
+    Case("check_includes.py", "a symbol named only in a comment is not a use",
+         {"src/vm/thing.cpp": "// std::back_inserter is what broke on MSVC\n"
+                              "int f(){ return 0; }\n"},
+         expect_fail=False),
+
     # ---- check_todo: the compass and the map must agree ----------------
     Case("check_todo.py", "an open plan criterion with no owner fails",
          {"docs/TODO.md": TODO_OK,

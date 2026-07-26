@@ -2,6 +2,8 @@
 #include "runtimeskeptic/vm/impact.hpp"
 
 #include <algorithm>
+#include <iterator>   // back_inserter: libstdc++ and libc++ hand it over
+                      // transitively, MSVC does not. See tools/guards/check_includes.py
 #include <set>
 
 #include "runtimeskeptic/core/io.hpp"

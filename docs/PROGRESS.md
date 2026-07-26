@@ -16,6 +16,96 @@ re-litigated; a mistake recorded here does not need to be re-made.
 
 ---
 
+## 2026-07-26 — Windows ran, and the failure was one missing include
+
+**Changed.** `src/vm/impact.cpp` gains `<iterator>`;
+`tools/guards/check_includes.py` is new and wired into `run_all.sh`; the record
+is corrected in three places. Selftest 44 to **48 cases**.
+
+**The repository is public and Windows ran for the first time.** Not a
+measurement - a build failure, which is better than the silence that preceded
+it:
+
+```
+src/vm/impact.cpp(89,47): error C2039: 'back_inserter' is not a member of 'std'
+src/vm/impact.cpp(91,47): error C3861
+                                            MSVC 19.51.36248.0, VS 18 Enterprise
+```
+
+`impact.cpp` included `<algorithm>` and `<set>` and used `std::back_inserter`,
+declared in `<iterator>`. libstdc++ and libc++ supply it transitively; MSVC does
+not. Every local build, every mingw cross-build and both macOS runners had been
+green for as long as the file existed.
+
+**The systematic version, and what stopped it being noise.** The owner's report
+was explicit that other files also rely on transitive includes but that MSVC
+compiled them all - hygiene, not a proven defect - and that it should not be
+written up as a finding. Resolving it rather than asserting either way:
+
+| Method | Result |
+|---|---|
+| grep for symbols, report files missing the declaring header | **42 hits** |
+| ...following each `#include "runtimeskeptic/..."` recursively, so a header a file OWNS counts | **1 hit** |
+
+The one is `impact.cpp`. **The scan agrees with the compiler exactly**, which is
+the bar this class of guard has to clear, so it became one. `check_includes.py`
+resolves the project-header chain and checks a narrow table of symbols whose
+declaring header is unambiguous. It does not claim to predict MSVC; it reports a
+symbol whose header is nowhere in the include graph.
+
+The 42 were the interesting part. A `.cpp` getting `<string>` from its own
+`.hpp` is not relying on an accident, and a guard saying otherwise gets switched
+off - which this project has written down three times now. There is a selftest
+case for that exact false positive.
+
+### Three corrections, all to claims this log made
+
+**1. "A small spending limit lifts it today" was wrong, and it was mine.** The
+owner set a repository-scoped `Actions Windows` SKU budget at $10 with a
+hard-stop. Over nine minutes and two dispatches the block did not lift: `0 ms`,
+job never started. **Going public opened it instantly.** So of the three options
+this log offered, one is measured and eliminated, one is proven, and the
+eliminated one was the one presented as cheapest.
+
+**2. `if: always()` is no longer an inference.** The run published
+`refs/status/c13285c…/windows-x86_64/failure` - the project's first Windows ref.
+A job that starts and fails does leave a trace. That chain had been reasoning
+from the workflow's own text; it is now observed.
+
+**3. The `0 ms` signal is dead, and every past use of it is now date-bound.**
+Public repositories are not billed, so `billable.total_ms` is permanently `0`
+here - the 37-second run that really executed returned `0` as well. Everywhere
+this log reads "`0 ms` → blocked", that inference was valid **only while the
+repository was private**, before 2026-07-26. It is not a diagnostic any more.
+
+### The end-to-end cycle: two legs of three
+
+The claim this log marked as *assumed, not measured* was "the git protocol is
+sufficient for the measurement plane". It is now partly measured.
+
+| Leg | State |
+|---|---|
+| **control** - dispatch a run | **proven.** Dispatched from the owner's `gh`, run started. |
+| **status** - read the outcome from here | **proven.** `refs/status/.../failure` read with `ls-remote`, nobody opened the Actions tab. |
+| **measurement** - a profile published and fetched | **still untested.** The `Measure` step was never reached; the build failed first. |
+
+**And the control-plane dependency was resolved, but not by `add_repo`.** The
+owner's machine has `gh` with `repo`+`workflow` scope. This sandbox still cannot
+reach the API. What changed is that a second station exists which can press the
+button - so "a named human dependency" remains the right description, with the
+human now holding a terminal.
+
+**Deliberately left to be done here.** The owner did not push the one-line fix,
+because this project writes every change into this file with its reasoning and an
+unlogged commit from elsewhere would break that. Correct, and the reason it is
+worth naming: the discipline held under the temptation to just fix it.
+
+**Next.** The measurement leg. The queued rerun on `c13285c` will fail the same
+way and carries no new information; the next useful run is the one after this
+commit.
+
+---
+
 ## 2026-07-26 — the project's own sin, committed by the project, against itself
 
 **Changed.** `.github/workflows/macos-probe.yml` and `windows-probe.yml`: a

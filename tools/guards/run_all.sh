@@ -28,6 +28,10 @@
 #                    is two of them quietly disagreeing
 #   check_campaign   a measured number is a claim like any other, and prose
 #                    drifts from data exactly the way prose drifts from code
+#   check_includes   the first real Windows build failed on std::back_inserter
+#                    without <iterator> - a class of defect that is invisible on
+#                    every platform this project builds on locally, and costs a
+#                    Windows runner minute to find
 #
 # `selftest` runs FIRST and is not one of them. All five pass on a repository
 # that has already been fixed - and so would five guards whose patterns never
@@ -62,6 +66,7 @@ run "dates against git"     python3 "$HERE/check_dates.py"
 run "compass vs map"        python3 "$HERE/check_todo.py"
 run "published numbers"     python3 "$HERE/check_campaign.py"
 run "corpus rules"          python3 "$HERE/check_corpus.py"
+run "includes vs MSVC"      python3 "$HERE/check_includes.py"
 
 echo
 if [ "$failed" -eq 0 ]; then
