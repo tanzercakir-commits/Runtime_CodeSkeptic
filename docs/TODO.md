@@ -43,65 +43,6 @@ completes without leaving a trace in the log is work that will be redone.
 
 ## Now
 
-### T-004 — Windows probe `[now]`
-
-**Serves:** S3 (Wine — the scenario that makes it unavoidable), S7
-**Plan:** `docs/PLAN.md` Phase 1 — Windows fixtures, and "three platform families"
-**Done when:** a profile measured on a **real Windows host** is published by
-`.github/workflows/windows-probe.yml` and committed, with the two-process
-reproducibility step green in that run.
-
-**The two pieces that needed no runner are done, and both came back negative.**
-Answered on 2026-07-26; full account in `docs/PROGRESS.md`.
-
-1. **`lpMaximumApplicationAddress + 1` is not documented either way**, so it
-   became an experiment — and the first experiment was wrong. A reservation at the
-   top page is refused by Windows' no-access guard region, which is equally
-   consistent with "in bounds" and "out of bounds". `VirtualQuery` separates them,
-   because it fails only when the address is outside the process's space. Measured
-   inclusive; `+ 1` stands, now for a measured reason.
-2. **64 KiB granularity is not documented as a value at all** — neither
-   `SYSTEM_INFO` nor `VirtualAlloc` states it. So it stays `measured_capability`
-   and a host reporting something else is a **finding**, not a probe bug. What
-   *is* documented is the reserve-rounds-to-granularity /
-   commit-rounds-to-page asymmetry, which is the RSC-0044 mechanism as a
-   `specified_guarantee`.
-
-**The runner arrived.** Of the three billing options this item listed, one was
-measured and eliminated and one is proven:
-
-| Option | Outcome |
-|---|---|
-| a small spending limit | **tried, did not work.** A repository-scoped `Actions Windows` SKU budget at $10 hard-stop; nine minutes, two dispatches, `0 ms`, job never started. This item claimed it "lifts it today" and that was wrong. |
-| make the repository public | **done, and it opened instantly.** |
-| wait for the reset | not needed |
-
-**Windows then ran and failed to build** — `std::back_inserter` without
-`<iterator>`, MSVC 19.51.36248.0. Fixed, and `tools/guards/check_includes.py`
-now catches the class without a Windows runner. The `Measure` step has still
-never executed, so the measurement leg of the end-to-end cycle remains the one
-untested piece.
-
-**What is written and what it is not.** `src/probe/vm_probe_windows.cpp`
-cross-compiles clean with `-Wall -Wextra` under mingw-w64, the whole project
-builds for Windows, and the probe runs correctly under **Wine** — measuring a
-64 KiB allocation granularity against a 4 KiB page, a working reserve/commit
-model, non-destructive exact placement, and `error` for file-mapping past EOF.
-Every one is the right answer for the Win32 model and **none is a Windows
-measurement.** The probe detects Wine through `wine_get_version` and renames
-itself `wine-on-posix-x86_64`; the CI job refuses to publish a profile whose
-name or version says Wine.
-
-**The control-plane half is a named human dependency, not a design.** The run is
-triggered by a push to the workflow's own path, which works. Everything after
-that — is it queued, did it fail at startup, is the Actions quota out — is only
-readable through the GitHub API, which this sandbox cannot reach for this
-repository. The substitute is the owner opening the Actions tab. That is
-recorded as an accepted cost in `docs/PROGRESS.md`, with its price, and it is
-the reason this item can be worked on but not finished from inside.
-
----
-
 ### T-014 — T-013 was done for Linux only, and macOS says so `[now]`
 
 **Serves:** S3, S9 — and the credibility of `RS-VM-0001` on the platform half
@@ -497,6 +438,108 @@ Each needs a reason, so this cannot quietly become a way to empty the list.
 Items land here with the commit that finished them, and they are not deleted:
 a compass with no wake behind it cannot show whether the heading has been
 holding.
+
+### T-004 — Windows probe `[done]`
+
+**Serves:** S3 (Wine — the scenario that makes it unavoidable), S7
+**Plan:** `docs/PLAN.md` Phase 1 — Windows fixtures, and "three platform families"
+**Done when:** a profile measured on a **real Windows host** is published by
+`.github/workflows/windows-probe.yml` and committed, with the two-process
+reproducibility step green in that run.
+
+**The two pieces that needed no runner are done, and both came back negative.**
+Answered on 2026-07-26; full account in `docs/PROGRESS.md`.
+
+1. **`lpMaximumApplicationAddress + 1` is not documented either way**, so it
+   became an experiment — and the first experiment was wrong. A reservation at the
+   top page is refused by Windows' no-access guard region, which is equally
+   consistent with "in bounds" and "out of bounds". `VirtualQuery` separates them,
+   because it fails only when the address is outside the process's space. Measured
+   inclusive; `+ 1` stands, now for a measured reason.
+2. **64 KiB granularity is not documented as a value at all** — neither
+   `SYSTEM_INFO` nor `VirtualAlloc` states it. So it stays `measured_capability`
+   and a host reporting something else is a **finding**, not a probe bug. What
+   *is* documented is the reserve-rounds-to-granularity /
+   commit-rounds-to-page asymmetry, which is the RSC-0044 mechanism as a
+   `specified_guarantee`.
+
+**The runner arrived.** Of the three billing options this item listed, one was
+measured and eliminated and one is proven:
+
+| Option | Outcome |
+|---|---|
+| a small spending limit | **tried, did not work.** A repository-scoped `Actions Windows` SKU budget at $10 hard-stop; nine minutes, two dispatches, `0 ms`, job never started. This item claimed it "lifts it today" and that was wrong. |
+| make the repository public | **done, and it opened instantly.** |
+| wait for the reset | not needed |
+
+**Windows then ran and failed to build** — `std::back_inserter` without
+`<iterator>`, MSVC 19.51.36248.0. Fixed, and `tools/guards/check_includes.py`
+now catches the class without a Windows runner. The `Measure` step has still
+never executed, so the measurement leg of the end-to-end cycle remains the one
+untested piece.
+
+**What is written and what it is not.** `src/probe/vm_probe_windows.cpp`
+cross-compiles clean with `-Wall -Wextra` under mingw-w64, the whole project
+builds for Windows, and the probe runs correctly under **Wine** — measuring a
+64 KiB allocation granularity against a 4 KiB page, a working reserve/commit
+model, non-destructive exact placement, and `error` for file-mapping past EOF.
+Every one is the right answer for the Win32 model and **none is a Windows
+measurement.** The probe detects Wine through `wine_get_version` and renames
+itself `wine-on-posix-x86_64`; the CI job refuses to publish a profile whose
+name or version says Wine.
+
+---
+
+**MET on 2026-07-26, `4b9ebf4`.** `windows-x86_64: success`, the first green run of
+this workflow in the project's history, and the first Windows profile that is not a
+stub:
+
+```
+origin  measured        os 10.0.26100        x86_64 / process x86_64
+page_size                  4096                     measured_capability
+allocation_granularity     65536                    measured_capability
+min_map_address            0x10000                  measured_capability
+max_user_address           0x7fffffff0000           measured_capability
+max_single_reservation     70368744177664           measured_capability
+exact_mapping              CONDITIONALLY_SUPPORTED  measured_capability
+fixed_noreplace_available  true                     measured_capability
+reserve_commit_model       windows_reserve_commit   measured_capability
+file_map_beyond_eof        error                    measured_capability
+```
+
+Committed as `profiles/measured/windows-server-2025-x86_64.measured.json`. The
+two-process reproducibility step passed in that run, which is the other half of the
+`Done when` above.
+
+**64 KiB allocation granularity is now measured**, not read from a document that
+never states it — so `RSC-0044`'s mechanism is confirmed on the platform it is
+about, and a host reporting something else is a finding rather than a probe bug.
+
+**Three defects had to be removed first, and each hid the next:**
+
+1. `vm_probe_unimplemented.cpp` guarded itself with `!LINUX && !MACOS`, true on
+   Windows, so **the Windows probe was never in the binary** — every "measurement"
+   was synthetic while every job was green.
+2. `windows-probe.yml`'s push filter named the implementation but not the file that
+   can replace it, so the commit fixing (1) triggered nothing.
+3. Two steps ran a **bash heredoc under `shell: pwsh`**, so `What was measured` had
+   failed on every Windows run there had ever been, and `Refuse a profile that is
+   not from real Windows` had never executed at all.
+
+**What is still open, and it is not small:** `available: 0, unavailable: 0`. The
+Windows probe establishes no address ranges — no arena, no landmark ladder — so
+every address question on Windows answers UNKNOWN. That is T-013 and T-014's work,
+third platform, and it is now reachable for the first time.
+
+**The control-plane half is a named human dependency, not a design.** The run is
+triggered by a push to the workflow's own path, which works. Everything after
+that — is it queued, did it fail at startup, is the Actions quota out — is only
+readable through the GitHub API, which this sandbox cannot reach for this
+repository. The substitute is the owner opening the Actions tab. That is
+recorded as an accepted cost in `docs/PROGRESS.md`, with its price, and it is
+the reason this item can be worked on but not finished from inside.
+
+---
 
 ### T-003 — Corpus: 30 classified real incidents `[done]`
 

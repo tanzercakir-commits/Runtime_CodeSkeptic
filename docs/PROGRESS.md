@@ -1186,6 +1186,31 @@ been making claims about Windows since it started and has never once had this.
 | **−** | `available: 0, unavailable: 0`. **The Windows probe establishes no address ranges at all** — no arena, no landmark ladder. Every address question on Windows still answers UNKNOWN, honestly and uselessly. That is T-013 and T-014's gap, third platform |
 | **−** | the job still failed, in a step **with no id**, so `steps.json` said `build/test/measure success` and nothing more. Third time this exact omission has cost a round trip; `reproducible`, `report` and `refuse_wine` have ids now, and the reproducibility output is written to a file so the channel carries it |
 
+### T-004 IS MET. The Windows measurement leg completed, first time ever.
+
+`4b9ebf4`: **`windows-x86_64: success`**. The first green run of that workflow in
+this project's history, and `profiles/measured/windows-server-2025-x86_64.measured.json`
+is committed.
+
+The last defect was two steps running a **bash heredoc under `shell: pwsh`**.
+PowerShell has no heredoc, so `What was measured` had failed on **every Windows run
+there has ever been** — and because it runs first, `Refuse a profile that is not
+from real Windows` was `skipped` every time and has never executed at all.
+
+**Which corrects the entry two above.** It credited that Wine-refusal step with
+catching the synthetic profile — *"written for Wine, it turned out to guard
+something much larger"*. It guarded nothing. What found the synthetic profile was
+the diagnostics channel and a reading of the artifact it published. The claim is
+struck through in place rather than deleted.
+
+| | |
+|---|---|
+| **+** | the second heredoc was found by **sweeping for the shape** across all workflows rather than waiting for the next run to reveal it. One round trip instead of two |
+| **+** | `reproducible: success` — the Windows probe agrees across two processes, which is the other half of T-004's `Done when` |
+| **+** | three defects, each hiding the next: the stub replacing the probe, the trigger not naming the file that replaces the probe, and the shell that could not run the step that would have reported either |
+| **−** | `available: 0, unavailable: 0`. **The Windows probe establishes no address ranges at all.** Every address question on Windows answers UNKNOWN — honestly, and uselessly. T-013 did Linux, T-014 did macOS, and nobody has done this one |
+| **−** | the measurement ref arrived wrapped in a **full copy of the repository**, because `windows-probe.yml`'s publish step still used `git add` on the checked-out tree. Now on the shared publisher, and it carries `repro.txt` too |
+
 **Also next.** Windows has no arena. That question was never reachable before now:
 the probe that would need one was not in the binary. The Rosetta lane still needs a dispatch —
 `gh workflow run macos-probe.yml --ref main` — and it now publishes its ground-truth

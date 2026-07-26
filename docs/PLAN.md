@@ -25,7 +25,8 @@ must name a test, a tool invocation, or a committed artifact.
 
 ```
 Phase 0  taxonomy + corpus        DONE      corpus 44/30, vm 35/10
-Phase 1  environment probe        PARTIAL   Linux + macOS x2 measured; Windows is a stub
+Phase 1  environment probe        PARTIAL   Linux + macOS x2 + Windows measured;
+                                            no address ranges on Windows yet
 Phase 2  semantic IR + evaluator  DONE
 Phase 3  VM analyzer MVP          PARTIAL   one exit criterion never measured
 Phase 4  runtime wrapper          OPEN      not started
@@ -97,7 +98,13 @@ findings from the set itself:
 - `[done]` environment profile schema — `schemas/environment-profile.v1.json`,
   validated against every committed artifact by
   `tools/guards/validate_schemas.py`
-- `[open]` Windows x64 profile fixtures — the probe is **written**
+- `[done]` Windows x64 profile fixtures — **measured on a real Windows host**
+  (`windows-latest`, 10.0.26100) and committed as
+  `profiles/measured/windows-server-2025-x86_64.measured.json`, published by
+  `.github/workflows/windows-probe.yml` with the two-process reproducibility step
+  green in that run. Allocation granularity 65536 against a 4096 page size, both
+  `measured_capability`. Previously (and for the project's whole life until now)
+  the probe was
   (`src/probe/vm_probe_windows.cpp`), cross-compiles clean under mingw-w64,
   and runs correctly under Wine
   (`profiles/measured/wine-9.0-on-linux-x86_64.measured.json`). **No Windows
