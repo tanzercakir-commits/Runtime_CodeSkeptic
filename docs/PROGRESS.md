@@ -694,6 +694,45 @@ declined to adjust the expectation, which is what it is for.
 Two findings from one runner class, on a project whose thesis is that the bug is
 always on the platform nobody runs.
 
+### The macOS arena decision, taken
+
+**Changed.** `arena_walk.{hpp,cpp}`: a refusal covered by a no-access region of
+this task is resolved as **held**, not as a limitation; `ArenaWalk` gains
+`held_no_access`. `vm_probe_macos.cpp`: `kArenaTop` moves from the carveout start
+`0x10_0000_0000` down to the **commpage start `0xfc0000000`**.
+`test_arena_walk.cpp` rewritten, 13 cases.
+
+The rule the walk now applies:
+
+```
+Refused + a no-access region of THIS TASK covers it   -> held. Says nothing
+                                                         about the host, the same
+                                                         argument EEXIST gets.
+                                                         Run is NOT split.
+Refused + nothing of ours covering it                 -> structural. Recorded.
+```
+
+**Why the top had to come down.** That resolution is only sound while no band the
+*platform* puts in every task lies inside the arena. The commpage
+`[0xfc0000000, 0x1000000000)` is exactly such a band and it was inside. Both it
+and the carveout stay with the landmark ladder, which probes them at their
+documented addresses; the arena's job is the space between, where programs are.
+
+| | |
+|---|---|
+| **+** | the test that matters is `the_output_does_not_move_when_our_own_reservations_move`: four layouts differing **only** in where our own no-access regions sit, and every recorded range must be identical. Forced to fail on demand — reverting the resolution breaks it five times |
+| **+** | it is the property `check_reproducible.sh` caught on the runner, and now it is checked on a machine with no Mach headers at all. That is the only version of this fix that scales |
+| **+** | structural refusals still survive, which is the half a careless fix would have thrown away with the false ones |
+| **+** | Linux `profile_id` is untouched (`sha256:37a2fa0c03cc838…`) — the Linux probe does not use `walk_arena`, so the false-positive campaign cannot have moved |
+| **−** | **residual risk, stated rather than discovered:** if a macOS version puts an undocumented no-access band inside `[0x1_0000_0000, 0xfc0000000)`, this arena will claim it available. `held_no_access` is the number that exposes it — it rises while `unavailable_ranges` stays empty — so it is in the note and asserted non-zero by a test |
+| **−** | the widening-and-clamping path is now **unreachable** and was deleted rather than guarded: it fired exactly when a no-access entry covered the window, which is now the held branch. It cost a runner round trip to get right, so the reason is kept as a comment for whoever needs it back |
+
+**What this cost, in the honest accounting:** the arena's macOS output is now one
+available range and no limitations, where before it was 35 ranges and 83
+limitations. Almost all of that was noise about the probe's own morning — but the
+new answer is also *weaker*, and the note is the only place a reader learns how
+much was resolved rather than measured.
+
 **Also next.** Windows still has no arena at all.
 
 ---

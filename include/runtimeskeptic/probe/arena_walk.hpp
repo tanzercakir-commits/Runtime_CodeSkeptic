@@ -42,9 +42,30 @@ namespace rs::probe {
 // Deciding which is a platform question and stays in the platform probe.
 enum class ArenaPlacement { Placed, HeldByProbe, Refused };
 
-// What the platform says covers an address, when a placement was refused. An
-// entry that grants no access refuses placement everywhere inside itself by
-// construction, so its extent is reportable evidence rather than extrapolation.
+// What the platform says covers an address, when a placement was refused.
+//
+// `covers` MEANS: a region of this task's map covers the address and grants no
+// access at all. That is not the same thing as a host limitation, and conflating
+// them is what made the macOS arena irreproducible:
+//
+//   available_ranges:    35 vs 32 entries      two runs, one binary, one machine
+//   unavailable_ranges:  83 vs 74 entries
+//
+// A macOS process is full of its own PROT_NONE reservations - malloc guards,
+// dyld, thread stack guards - and their addresses move with ASLR. Filing them as
+// host limitations put ~80 facts about the probe's own morning into an id that is
+// supposed to name the host: the exact defect `min_map_address` was once guilty
+// of. Linux never showed it because MAP_FIXED_NOREPLACE answers EEXIST for ANY
+// existing mapping, and EEXIST is treated as held.
+//
+// So a refusal WITH such an entry is ambiguous - ours, or a band the platform
+// puts in every task - and the walk resolves it by treating it as held, on the
+// same argument EEXIST gets: it says nothing about the host. That is only sound
+// while no platform band lies inside the arena's bounds, which is the caller's
+// responsibility and is why the macOS arena now stops at the commpage.
+//
+// A refusal WITHOUT such an entry is structural: a hard error, or KERN_NO_SPACE
+// with nothing of ours in the way. Those are recorded.
 struct ArenaEntry {
     bool covers = false;
     std::uint64_t start = 0;
@@ -65,8 +86,13 @@ struct ArenaWalk {
     // the facts subtree - they belong in notes, outside profile_id.
     std::size_t placed = 0;
     std::size_t held_by_probe = 0;
-    std::size_t refused = 0;
-    std::size_t skipped = 0;   // inside an entry already described
+    std::size_t refused = 0;      // structural: recorded as a limitation
+    std::size_t skipped = 0;      // inside an entry already described
+    // Refused, but a no-access region of this task covers it. Treated as held.
+    // THIS COUNT IS THE SAFETY VALVE for the assumption above: if a platform band
+    // ever does lie inside an arena, this is the number that goes up while
+    // `unavailable` stays empty, so it must stay readable in the note.
+    std::size_t held_no_access = 0;
 };
 
 // Walks `[bottom, top)` in CONTIGUOUS windows of `window_size`, merging adjacent

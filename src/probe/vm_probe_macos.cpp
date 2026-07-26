@@ -639,9 +639,24 @@ struct ScanOutcome {
 //                          arm64 alike. A per-architecture constant, the same
 //                          in every task - which is the property Linux's
 //                          ELF_ET_DYN_BASE has and /proc/self/maps does not.
-//   top     0x10_0000_0000 the start of the band shadPS4 documents as
-//                          GPU-reserved under Rosetta 2, already a named
-//                          constant in the ladder above.
+//   top     0xfc0000000    the start of the COMMPAGE, already a named constant
+//                          in the ladder above.
+//
+// The top was the carveout start `0x10_0000_0000` and had to come down, because
+// the arena's resolution of an ambiguous refusal depends on it. Inside the arena a
+// refusal covered by a no-access region of this task is treated as HELD - it says
+// nothing about the host, the same argument EEXIST gets on Linux - and that is
+// only sound while no band the PLATFORM puts in every task lies inside the bounds.
+// The commpage `[0xfc0000000, 0x1000000000)` is such a band and was inside them.
+//
+// Both bands stay with the ladder above, which probes them at their documented
+// addresses and records them properly. The arena's job is the space between, where
+// programs are.
+//
+// Residual risk, stated rather than discovered later: if a macOS version puts an
+// undocumented no-access band inside `[0x1_0000_0000, 0xfc0000000)`, this arena
+// will claim it available. `held_no_access` in the note is the number that would
+// expose it - it goes up while `unavailable_ranges` stays empty.
 //
 // `mach_vm_region` was the obvious-looking alternative and it is the same trap
 // T-013 refused on Linux wearing a Mach name: it reports THIS task's slide, so
@@ -654,7 +669,7 @@ struct ScanOutcome {
 // this arena was wrong, and the check that found it was a throwaway program that
 // stubbed these two calls.
 constexpr std::uint64_t kMachOTextBase = 0x100000000ull;
-constexpr std::uint64_t kArenaTop = 0x1000000000ull;
+constexpr std::uint64_t kArenaTop = 0xfc0000000ull;   // commpage start
 // A floor, so a caller passing a small max_test_mapping_bytes cannot turn a
 // 60 GiB walk into four million windows.
 constexpr std::uint64_t kMinArenaWindow = 4ull * 1024 * 1024;
@@ -753,10 +768,15 @@ void scan_allocation_arenas(std::uint64_t page_size, std::uint64_t probe_length,
         json::to_hex(window) + " bytes: " + std::to_string(walk.placed) +
         " placed, " + std::to_string(walk.held_by_probe) +
         " already held by the probe process, " + std::to_string(walk.refused) +
-        " structurally refused, and " + std::to_string(walk.skipped) +
-        " not probed because they lie inside an entry the platform had already "
-        "described as granting no access. The first two are treated identically "
-        "on purpose; only the third and fourth are host limitations");
+        " structurally refused, " + std::to_string(walk.held_no_access) +
+        " refused but covered by a no-access region of this task (treated as held, "
+        "because nothing here distinguishes one of our own guard reservations from "
+        "a platform band - and this arena stops below the commpage so that no "
+        "platform band is inside it; if this number rises while unavailable_ranges "
+        "stays empty, that assumption has broken), and " +
+        std::to_string(walk.skipped) +
+        " not probed because they lie inside an entry already described. Only the "
+        "structurally refused count is a host limitation");
 }
 
 ScanOutcome scan_address_space(std::size_t page_size, std::uint64_t probe_length,

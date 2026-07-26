@@ -74,6 +74,47 @@ ArenaWalk walk_arena(const std::string& what, std::uint64_t bottom,
             continue;
         }
 
+        const ArenaEntry entry = probe.describe(base);
+
+        // AMBIGUOUS, AND RESOLVED THE SAME WAY EEXIST IS.
+        //
+        // A no-access region of this task covers the window. That is either one of
+        // ours - a malloc guard, a dyld reservation, a thread stack guard - or a
+        // band the platform puts in every task. Nothing distinguishable here says
+        // which, and treating it as a host limitation is what made this walk
+        // irreproducible: 83 vs 74 unavailable entries across two runs of one
+        // binary on one machine, because our own reservations move with ASLR.
+        //
+        // So it is treated as HELD: it says nothing about the host, exactly as
+        // EEXIST does on Linux. That is sound only while no platform band lies
+        // inside `[bottom, top)`, which is the caller's job - and `held_no_access`
+        // is the number that exposes a violation, so it must reach the note.
+        //
+        // Crucially the run is NOT split, which is what makes the recorded ranges
+        // independent of our layout. A structural refusal below still splits it.
+        if (entry.covers) {
+            ++out.held_no_access;
+            if (!in_run) {
+                run_start = base;
+                in_run = true;
+            }
+            last_window_end = base + window_size;
+
+            // Still skip the rest of the entry: probing inside it cannot return
+            // anything new, and on the runner one such entry was twelve GiB.
+            const std::uint64_t held_end = entry.start + entry.size;
+            if (entry.size > 0 && held_end > base + window_size) {
+                const std::uint64_t jump =
+                    (held_end - (base + window_size)) / window_size;
+                out.skipped += static_cast<std::size_t>(jump);
+                // The run must reach where the walk resumes, or the skipped
+                // windows become a hole in a range that is otherwise continuous.
+                last_window_end = base + (jump + 1) * window_size;
+                base += jump * window_size;
+            }
+            continue;
+        }
+
         ++out.refused;
         // Close at the last PLACED window's end. With contiguous windows that is
         // exactly this window's base, so the available range and the refused
@@ -86,91 +127,25 @@ ArenaWalk walk_arena(const std::string& what, std::uint64_t bottom,
         ClassifiedRange cr;
         cr.range = *window;
         cr.evidence = EvidenceClass::MeasuredCapability;
-        const ArenaEntry entry = probe.describe(base);
         cr.note = "exact placement refused inside the " + what + "; " +
                   entry.text;
 
-        const std::uint64_t entry_end = entry.start + entry.size;
-        const bool widened =
-            entry.covers && entry.size > 0 && entry_end > entry.start;
-        if (widened) {
-            // CLAMPED, and the clamp is not tidying - it is the fix for a real
-            // failure on a real runner.
-            //
-            // A platform entry does not begin on a window boundary. On the macOS
-            // runner the extents came back at 0x2a7224000 and 0x2df0d0000, so
-            // widening downwards reached back INSIDE a window this walk had just
-            // placed successfully - and the probe emitted
-            // [0x2a7224000, 0x2ae224000) as both available and unavailable.
-            // `available_and_unavailable_ranges_do_not_overlap` caught it: seven
-            // failures where the simulation had none, because the simulated deny
-            // band happened to start window-aligned.
-            //
-            // Both readings are measurements, taken at different moments: the
-            // placement succeeded, then a later query described an entry
-            // overlapping it. Keeping the positive measurement and trimming the
-            // negative one is the conservative choice - it narrows a claimed
-            // limitation rather than widening one - and the note says the extent
-            // was cut so nobody reads the range as the platform's own answer.
-            const std::uint64_t floor =
-                last_window_end > bottom ? last_window_end : bottom;
-            std::uint64_t start = std::min(cr.range.start, entry.start);
-            if (start < floor) start = floor;
-            cr.range.start = start;
-            cr.range.end = std::max(cr.range.end, entry_end);
-            cr.note += "; placement was probed at " + json::to_hex(base) +
-                       " and the refusal is recorded across the entry's full "
-                       "extent as the platform reported it, rather than across "
-                       "the window that happened to be probed";
-            if (start > entry.start) {
-                cr.note += "; the entry begins at " + json::to_hex(entry.start) +
-                           ", below space this walk had already placed "
-                           "successfully, so the recorded start was clamped to " +
-                           json::to_hex(start) +
-                           " rather than contradicting that measurement";
-            }
-        }
-
-        // Do not record one entry once per window. On the runner that exposed
-        // this gap a single no-access entry is twelve GiB wide - 3067 windows,
-        // every one widening to the identical range. The caller's
-        // collapse_contained_ranges() reduces them to one regardless, so this
-        // changes no fact; it stops the probe building 3067 identical note
-        // strings in order to discard 3066 of them.
-        if (out.unavailable.empty() ||
-            !(out.unavailable.back().range == cr.range)) {
-            out.unavailable.push_back(cr);
-        }
-
-        // And do not keep probing inside an entry the platform has already
-        // described. The widening above rests on the argument that an entry
-        // granting no access refuses placement everywhere inside itself by
-        // construction, so a window inside the same entry cannot return anything
-        // new. This is that argument applied to the walk rather than to the
-        // record: if skipping were unsound, the widening would already be.
+        // NOTHING TO WIDEN TO, and the code that did it is gone rather than
+        // guarded.
         //
-        // Counted, because `refused` otherwise silently changes meaning - on the
-        // runner it would have read "1 structurally refused" for twelve GiB.
+        // Until the ambiguous case above existed, a refusal was widened to the
+        // extent `describe` reported, clamped so it could not reach back into space
+        // already placed - which was itself the fix for the probe reporting
+        // [0x2a7224000, 0x2ae224000) as both available and unavailable on the macOS
+        // runner. That widening applied exactly when a no-access entry covered the
+        // window, and that is now the condition for treating the window as HELD, so
+        // the widening branch became unreachable. A structural refusal has no
+        // covering entry by definition - that is what makes it structural.
         //
-        // Jump WHOLE windows, so the walk stays on its original grid. The first
-        // version set `base = entry_end - window_size`, which left the walk
-        // aligned to a platform-reported extent instead: with `entry_end`
-        // unaligned, every subsequent `base % page_size` check could fail and
-        // `continue` past the rest of the arena in silence.
-        //
-        // The jump count is a FLOOR, deliberately. Rounding up would leave the
-        // sliver between `entry_end` and the next boundary unexamined - reported
-        // as neither available nor refused. Flooring lands on the window that
-        // contains `entry_end`, which usually overlaps the entry's tail and is
-        // refused again; the duplicate is dropped above, and the skip cannot fire
-        // twice from there because `entry_end` is then below `base + window_size`.
-        // So it terminates with no hole.
-        if (widened && entry_end > base + window_size) {
-            const std::uint64_t jump = (entry_end - (base + window_size)) /
-                                       window_size;
-            out.skipped += static_cast<std::size_t>(jump);
-            base += jump * window_size;
-        }
+        // Kept as a comment because the clamp cost a runner round trip to find, and
+        // a future `describe` that reports an extent for a structural refusal will
+        // need it back along with the reason.
+        out.unavailable.push_back(cr);
     }
     close_run(last_window_end);
     return out;

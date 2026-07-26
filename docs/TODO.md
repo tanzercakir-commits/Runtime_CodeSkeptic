@@ -230,9 +230,11 @@ dropped:**
    reservations that move with ASLR. The arena is filing ~80 host limitations that
    are its own guard pages.
 
-   **This needs a decision, not a patch**, and `try_place()`'s rule is not the
-   thing to change — it was reasoned out over four iterations and is right for the
-   commpage and the carveout. The candidate:
+   **Decided and implemented.** `try_place()`'s rule was not changed — it is right
+   for the commpage and the carveout. The walk resolves the ambiguity instead, and
+   the arena's top came down to the commpage start so that the resolution is sound.
+   `the_output_does_not_move_when_our_own_reservations_move` is the test, and it
+   fails on demand. What was decided:
 
    > Bound the arena at the **commpage start `0xfc0000000`** instead of the
    > carveout start `0x10_0000_0000`. Then no documented platform no-access band
