@@ -8,8 +8,11 @@
 #include "runtimeskeptic/probe/vm_probe.hpp"
 
 #include <algorithm>
+#include <cstdint>
 #include <memory>
+#include <sstream>   // ostringstream, for the coverage diagnosis below
 #include <string>
+#include <vector>
 
 #include "runtimeskeptic/core/json.hpp"
 #include "test_support.hpp"
@@ -41,6 +44,102 @@ bool has_value_with_unknown_evidence(const json::Value& v) {
         }
     }
     return false;
+}
+
+// Everything a reader needs to tell "the scan looked in the wrong place" apart
+// from "the scan looked in the right place and one sample was refused". Those
+// two have the same symptom and completely different fixes, and guessing between
+// them is what this exists to stop.
+std::string coverage_diagnosis(const EnvironmentProfile& profile,
+                               const char* which, std::uint64_t page) {
+    std::ostringstream out;
+    out << "\n      " << which << " page      : " << json::to_hex(page);
+    out << "\n      max_user_address: "
+        << (profile.vm.max_user_address.is_known()
+                ? json::to_hex(profile.vm.max_user_address.value().value)
+                : std::string("unknown"));
+
+    // The nearest established range on each side, whichever list it is in.
+    // "Nothing below and nothing above" means no arena reached this address;
+    // "a range that stops just short" means one did and a sample broke the run.
+    const ClassifiedRange* below = nullptr;
+    const ClassifiedRange* above = nullptr;
+    auto consider = [&](const std::vector<ClassifiedRange>& ranges) {
+        for (const auto& r : ranges) {
+            if (r.range.end <= page) {
+                if (below == nullptr || r.range.end > below->range.end) below = &r;
+            } else if (r.range.start > page) {
+                if (above == nullptr || r.range.start < above->range.start) {
+                    above = &r;
+                }
+            }
+        }
+    };
+    consider(profile.vm.available_ranges);
+    consider(profile.vm.unavailable_ranges);
+
+    auto show = [&](const char* label, const ClassifiedRange* r) {
+        out << "\n      " << label << " ";
+        if (r == nullptr) {
+            out << "(none - no established range on this side at all)";
+            return;
+        }
+        out << "[" << json::to_hex(r->range.start) << ", "
+            << json::to_hex(r->range.end) << ")  gap "
+            << json::to_hex(r->range.start > page ? r->range.start - page
+                                                  : page - r->range.end)
+            << "\n        note: " << r->note.substr(0, 160);
+    };
+    show("nearest below:", below);
+    show("nearest above:", above);
+
+    // "Not covered" and "covered, and the query still said UNKNOWN" have the
+    // same symptom and different fixes: the first is a scan-window bug, the
+    // second is a query bug. Neither is guessable from the two lines above,
+    // because both deliberately exclude a range that CONTAINS the page.
+    const ClassifiedRange* containing = nullptr;
+    for (const auto* list : {&profile.vm.available_ranges,
+                             &profile.vm.unavailable_ranges}) {
+        for (const auto& r : *list) {
+            if (r.range.start <= page && page < r.range.end) containing = &r;
+        }
+    }
+    out << "\n      containing   : "
+        << (containing == nullptr
+                ? std::string("(none - this is a scan-window gap, not a query bug)")
+                : "[" + json::to_hex(containing->range.start) + ", " +
+                      json::to_hex(containing->range.end) +
+                      ") EXISTS and the query still answered UNKNOWN - look at "
+                      "query_range, not at the scan");
+
+    out << "\n      established: " << profile.vm.available_ranges.size()
+        << " available, " << profile.vm.unavailable_ranges.size()
+        << " unavailable";
+
+    // The per-arena granted/occupied/refused split is the single most useful
+    // line here, because it moves with the probe's own layout - which is what
+    // makes it the right thing to read when the answer moved with the probe's
+    // own layout.
+    //
+    // It lives in `run.warnings`, NOT in `profile.notes`. The first version of
+    // this function read `profile.notes`, printed nothing, and looked correct -
+    // and would have printed nothing on the CI failure it was written for. It
+    // was caught only by forcing the assertion to fail on a passing host, which
+    // is the only way an error path ever gets tested.
+    bool any = false;
+    for (const auto& note : profile.run.warnings) {
+        if (note.find("sampled every") != std::string::npos) {
+            out << "\n      arena: " << note;
+            any = true;
+        }
+    }
+    if (!any) {
+        out << "\n      arena: NO arena was scanned on this platform. "
+               "scan_allocation_arenas() exists in vm_probe_linux.cpp only; "
+               "macOS and Windows still sample the landmark ladder, which is "
+               "the coverage gap T-013 fixed for Linux and nowhere else.";
+    }
+    return out.str();
 }
 
 }  // namespace
@@ -231,6 +330,14 @@ RS_TEST(disabling_the_scan_drops_the_sweep_but_keeps_measured_bounds) {
 //
 // This asserts the COVERAGE, not the implementation, so a future rewrite of
 // the sweep is free as long as the answer survives.
+//
+// WHY THE FAILURE CARRIES ITS OWN EVIDENCE. This test failed on two GitHub
+// runners and passes 200 consecutive times on the machine it was written on, so
+// the only diagnosis available from here was a hypothesis. That is the exact
+// position the git-ref log channel was built to get out of. The message now
+// carries where the address was, what the nearest established ranges were, and
+// which arenas the probe reported sampling - so the next failure is read, not
+// guessed.
 // ---------------------------------------------------------------------------
 RS_TEST(the_scan_covers_where_this_process_is_actually_mapped) {
     const probe::Result result = probe::probe_virtual_memory();
@@ -247,6 +354,8 @@ RS_TEST(the_scan_covers_where_this_process_is_actually_mapped) {
     const auto heap = std::make_unique<char[]>(1 << 20);
     const auto heap_addr = reinterpret_cast<std::uint64_t>(heap.get());
 
+    const char* which[] = {"code", "heap"};
+    int i = 0;
     for (std::uint64_t addr : {code_addr, heap_addr}) {
         const std::uint64_t page = addr & ~std::uint64_t{0xfff};
         const RangeVerdict verdict =
@@ -256,10 +365,13 @@ RS_TEST(the_scan_covers_where_this_process_is_actually_mapped) {
         // profile has SOMETHING to say, because saying nothing is the failure
         // this test exists for.
         RS_CHECK_MESSAGE(verdict.level != SupportLevel::Unknown,
-                         "the profile establishes nothing about an address "
-                         "this process is executing from or allocating in; "
-                         "the scan is looking in the wrong part of the "
-                         "address space");
+                         std::string(
+                             "the profile establishes nothing about an address "
+                             "this process is executing from or allocating in; "
+                             "the scan is looking in the wrong part of the "
+                             "address space") +
+                             coverage_diagnosis(result.profile, which[i], page));
+        ++i;
     }
 }
 

@@ -143,6 +143,109 @@ guard can substitute for: a profile measured on a real Windows host.
 
 ---
 
+## 2026-07-26 — six green did not happen, and the reason is worth more than six green
+
+**Changed.** `tests/conformance/test_probe.cpp` — the coverage test's failure
+message now carries its own evidence; `docs/TODO.md` gains **T-014**. No probe
+code touched, deliberately.
+
+| | |
+|---|---|
+| **−** | the push above did not go green. `linux---gcc` **and** `macos---apple-clang` both failed `the_scan_covers_where_this_process_is_actually_mapped` |
+| **−** | **T-013 was done for Linux only.** `scan_allocation_arenas()` is in `vm_probe_linux.cpp` and nowhere else, so on macOS the profile says nothing about the address the test is executing from — the exact defect T-013 exists for, on a platform it did not touch |
+| **−** | this had been failing on macOS since the test was added, and **I read past it** one push earlier: I opened the same log ref, found the bash-3.2 error, fixed it, and did not read to the end of the file |
+| **−** | `linux---gcc` failed on C++ **identical** to the commit where it passed. Nondeterministic, not caused by anything in `650d510` |
+| **+** | the failure is now self-diagnosing: address, nearest established ranges either side, whether a containing range exists, and the per-arena granted/held/refused split |
+| **+** | that diagnostic had a bug that only forcing the failure could find, and one round of forcing found it |
+| **+** | three of my own measurement errors caught before any of them reached a claim |
+
+### What the two failures are, kept apart
+
+They print the same message and they are not the same bug, which is most of the
+work here.
+
+```
+linux---gcc   52f541e success  ->  650d510 failure     C++ unchanged between them
+macos         52f541e failure  ->  650d510 failure     failing since the test landed
+```
+
+`650d510` touched `.gitignore`, two documents, one shell script and three
+guards — no `src/`, no `tests/conformance/`. So there is no mechanism by which it
+changed a probe conformance result, and `linux---clang` passed on both pushes.
+That leaves nondeterminism on the runner. It does **not** reproduce here:
+
+```
+test_probe: 200 runs, 0 failure(s)     randomize_va_space=2, mmap_rnd_bits=28
+```
+
+macOS is a different animal and has a mechanism:
+
+```
+grep -c scan_allocation_arenas src/probe/vm_probe_*.cpp
+  linux    3
+  macos    0
+  windows  0
+```
+
+T-013's entry does say "the credibility of `RS-VM-0001` **on Linux**", so the
+scope was written down. What was missing is that the conformance test it added
+asserts coverage on **every** platform — so the test was correct, macOS was
+genuinely uncovered, and nothing connected the two until a runner did.
+
+### Reading past the answer
+
+The macOS `ctest` failure was in `refs/ci-logs/52f541e/macos---apple-clang`, in
+`ctest_tail.txt`, in the same log ref I fetched one push earlier. I read
+`gt_selftest.txt`, found the bash-3.2 error, fixed it, and stopped.
+
+This is the third time in this project's log that a sweep I called systematic was
+not: the quota claim that survived a line-based grep, the `check_docs` guard that
+passed over a repo broken in every fresh clone, and now this. The pattern is not
+carelessness about the *first* finding, it is treating the first finding as the
+last. The channel had already delivered the evidence; the cost was entirely in
+not finishing the file.
+
+### The diagnostic, and the bug in it
+
+Written because the only diagnosis available from here was a hypothesis: two
+runners fail, this machine passes 200 times, and nothing in the log says where
+the addresses were. Same position the git-ref log channel was built to escape.
+
+It reports, on failure: the queried page, `max_user_address`, the nearest
+established range on each side with the gap, **whether a range containing the
+page exists** — because "not covered" and "covered and the query still said
+UNKNOWN" have identical symptoms and different fixes — and the per-arena
+granted/held/refused split.
+
+**Its first version printed nothing.** It read `profile.notes`; the arena split
+is in `profile.run.warnings`. It compiled, it looked right, and it would have
+produced an empty diagnosis on the exact CI failure it was written for. Found by
+forcing the assertion to fail on a passing host, which is the only way an error
+path ever gets exercised. There is now also an explicit line for the case where
+no arena ran at all, which is what macOS will print.
+
+### Three measurement errors, mine, all before any claim
+
+Kept because the project's whole subject is not trusting an unmeasured number,
+and the author is not exempt:
+
+| What I ran | What it actually measured |
+|---|---|
+| `echo "$(basename $p) -> exit $?"` | the command substitution runs first and resets `$?`. Reported SUPPORTED for both profiles — i.e. "there is no macOS failure" |
+| `run_all.sh \| tail -20; echo $?` | `tail`'s status. Reported `exit=0` for a failing run |
+| `rs-env-probe vm --output` from `build/` | a **stale binary**. It produced 56 ranges and no arenas, and I concluded T-013's arenas were absent from published profiles. `cmake --build build` — 58 ranges, both arenas. `ctest` went 12 tests to 13 in the same rebuild, so the earlier green did not include `test_impact` either |
+
+The third is the interesting one: the other two are shell trivia, but that one is
+this project's own thesis turned on its author — reasoning about code while
+measuring a binary that predates it.
+
+**Next.** T-014, and its first step is a decision rather than code: what the
+macOS region is *derived from*, given that `mach_vm_region` is the same
+this-process's-slide trap T-013 already refused on Linux. The `linux---gcc`
+flake stays unfixed on purpose until the new diagnostic has printed once.
+
+---
+
 ## 2026-07-26 — the log channel answered in 60 seconds, and there were two bugs
 
 **Changed.** `tests/groundtruth/selftest.sh` and `run.sh` and

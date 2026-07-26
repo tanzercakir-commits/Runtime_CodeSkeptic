@@ -102,6 +102,58 @@ the reason this item can be worked on but not finished from inside.
 
 ---
 
+### T-014 — T-013 was done for Linux only, and macOS says so `[now]`
+
+**Serves:** S3, S9 — and the credibility of `RS-VM-0001` on the platform half
+this project's corpus is about
+**Plan:** `docs/PLAN.md` Phase 1 — the scan; Gate B "three platform families"
+**Done when:** `the_scan_covers_where_this_process_is_actually_mapped` passes on
+the macOS runner, and it passes because the macOS probe establishes the region —
+not because the test was weakened.
+
+**Found by CI, not by reasoning, and it had been true for a while.**
+`scan_allocation_arenas()` exists in `src/probe/vm_probe_linux.cpp` and nowhere
+else:
+
+```
+grep -c scan_allocation_arenas src/probe/vm_probe_*.cpp
+  linux    3
+  macos    0     <- still the landmark ladder T-013 replaced
+  windows  0
+```
+
+So on macOS the profile has nothing to say about the address the test process is
+executing from — the exact defect T-013 was raised for, on a platform T-013 did
+not touch. The conformance test asserts coverage on **every** platform, so it has
+been failing on macOS since the day it was added. Invisible because `ci.yml` ran
+macOS only in `expensive-platforms`, gated off pushes.
+
+**Not the same fix twice.** Linux's arenas come from `TASK_SIZE`
+(`max_user_address` and `ELF_ET_DYN_BASE = TASK_SIZE/3*2`), both kernel
+constants. macOS has no such published constant: `dyld` places the main
+executable low (around `0x1_0000_0000`), the shared cache elsewhere, and
+`malloc` zones elsewhere again. Deriving the region from `/proc/self/maps` was
+the trap T-013 already avoided and the macOS equivalent (`mach_vm_region`) is the
+same trap wearing a different name — it reports **this** process's slide.
+
+**First step:** decide what the macOS region is *derived from* before writing any
+scan. Candidates, in the order they should be ruled out: (1) `vm_page_size` plus
+the documented `MACH_VM_MIN_ADDRESS`/`MACH_VM_MAX_ADDRESS` pair, (2) the
+already-measured `min_map_address` and `max_user_address` facts the macOS probe
+computes, (3) `SHARED_REGION_BASE_*` from `<mach/shared_region.h>`, which IS a
+documented per-architecture constant. Whichever is chosen, the reason it is not
+this process's own layout goes in the code, next to the arena.
+
+**Second, and separately:** `linux---gcc` failed this same test on `650d510`
+with C++ identical to the `52f541e` that passed it, and it passes 200/200 here.
+That is nondeterminism on the runner and it is NOT the macOS gap. The test's
+failure message now carries the address, the nearest established ranges, whether
+a containing range exists, and the per-arena granted/held/refused split, so the
+next occurrence is read rather than guessed. Do not fix that one until it has
+been read once.
+
+---
+
 ## Next
 
 ---
