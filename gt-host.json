@@ -1,0 +1,461 @@
+{
+  "notes": [
+    "Ranges the probe found occupied by its own process image are NOT recorded as host limitations; see probe_run.warnings."
+  ],
+  "origin": "measured",
+  "platform": {
+    "host_arch": "x86_64",
+    "kernel_version": "6.17.0-1020-azure",
+    "os": "linux",
+    "os_version": "Linux 6.17.0-1020-azure",
+    "pointer_width_bits": 64,
+    "process_arch": "x86_64",
+    "translation_mode": "unknown"
+  },
+  "probe_run": {
+    "duration_ms": 0,
+    "probe_binary_hash": "",
+    "probe_version": "rs-env-probe/vm/0.1.0",
+    "run_id": "92cdfbdeb232e0be",
+    "timestamp_utc": "2026-07-26T16:44:53Z",
+    "tool_version": "runtimeskeptic/0.1.0",
+    "warnings": [
+      "translation_mode was not probed in v0.1 and is reported as unknown rather than assumed to be 'none'",
+      "kernel's mmap allocation arena [0x7c0000000000, 0x7ffffffff000) sampled every 0x1000000000 bytes: 65 granted, 0 already held by the probe process, 0 structurally refused. The first two are treated identically on purpose; only the third is a host limitation",
+      "ET_DYN base region, where a position-independent executable is placed [0x550000000000, 0x590000000000) sampled every 0x1000000000 bytes: 65 granted, 0 already held by the probe process, 0 structurally refused. The first two are treated identically on purpose; only the third is a host limitation"
+    ]
+  },
+  "profile_id": "sha256:f2611054077a13d5695044e713ed76b2d017791bf942a6ccc91f528fec700a5f",
+  "profile_name": "gt-host",
+  "schema": "runtime-skeptic.environment-profile.v1",
+  "virtual_memory": {
+    "allocation_granularity": {
+      "evidence": "specified_guarantee",
+      "source": "Linux mmap(2): addr is rounded to page granularity",
+      "value": 4096
+    },
+    "anonymous_mapping_supported": {
+      "evidence": "measured_capability",
+      "source": "rs-env-probe vm (linux): mmap(NULL, page_size, RW, MAP_PRIVATE|MAP_ANONYMOUS)",
+      "value": true
+    },
+    "available_ranges": [
+      {
+        "end": "0x410000",
+        "evidence": "measured_capability",
+        "note": "mapped successfully at this exact address in the probe process",
+        "start": "0x10000"
+      },
+      {
+        "end": "0x420000",
+        "evidence": "measured_capability",
+        "note": "mapped successfully at this exact address in the probe process",
+        "start": "0x20000"
+      },
+      {
+        "end": "0x440000",
+        "evidence": "measured_capability",
+        "note": "mapped successfully at this exact address in the probe process",
+        "start": "0x40000"
+      },
+      {
+        "end": "0x480000",
+        "evidence": "measured_capability",
+        "note": "mapped successfully at this exact address in the probe process",
+        "start": "0x80000"
+      },
+      {
+        "end": "0x500000",
+        "evidence": "measured_capability",
+        "note": "mapped successfully at this exact address in the probe process",
+        "start": "0x100000"
+      },
+      {
+        "end": "0x600000",
+        "evidence": "measured_capability",
+        "note": "mapped successfully at this exact address in the probe process",
+        "start": "0x200000"
+      },
+      {
+        "end": "0x800000",
+        "evidence": "measured_capability",
+        "note": "mapped successfully at this exact address in the probe process",
+        "start": "0x400000"
+      },
+      {
+        "end": "0xc00000",
+        "evidence": "measured_capability",
+        "note": "mapped successfully at this exact address in the probe process",
+        "start": "0x800000"
+      },
+      {
+        "end": "0x1000000",
+        "evidence": "measured_capability",
+        "note": "mapped successfully at this exact address in the probe process",
+        "start": "0xc00000"
+      },
+      {
+        "end": "0x1400000",
+        "evidence": "measured_capability",
+        "note": "mapped successfully at this exact address in the probe process",
+        "start": "0x1000000"
+      },
+      {
+        "end": "0x2000000",
+        "evidence": "measured_capability",
+        "note": "mapped successfully at this exact address in the probe process",
+        "start": "0x1c00000"
+      },
+      {
+        "end": "0x2400000",
+        "evidence": "measured_capability",
+        "note": "mapped successfully at this exact address in the probe process",
+        "start": "0x2000000"
+      },
+      {
+        "end": "0x4000000",
+        "evidence": "measured_capability",
+        "note": "mapped successfully at this exact address in the probe process",
+        "start": "0x3c00000"
+      },
+      {
+        "end": "0x4400000",
+        "evidence": "measured_capability",
+        "note": "mapped successfully at this exact address in the probe process",
+        "start": "0x4000000"
+      },
+      {
+        "end": "0x8000000",
+        "evidence": "measured_capability",
+        "note": "mapped successfully at this exact address in the probe process",
+        "start": "0x7c00000"
+      },
+      {
+        "end": "0x8400000",
+        "evidence": "measured_capability",
+        "note": "mapped successfully at this exact address in the probe process",
+        "start": "0x8000000"
+      },
+      {
+        "end": "0x10000000",
+        "evidence": "measured_capability",
+        "note": "mapped successfully at this exact address in the probe process",
+        "start": "0xfc00000"
+      },
+      {
+        "end": "0x10400000",
+        "evidence": "measured_capability",
+        "note": "mapped successfully at this exact address in the probe process",
+        "start": "0x10000000"
+      },
+      {
+        "end": "0x20000000",
+        "evidence": "measured_capability",
+        "note": "mapped successfully at this exact address in the probe process",
+        "start": "0x1fc00000"
+      },
+      {
+        "end": "0x20400000",
+        "evidence": "measured_capability",
+        "note": "mapped successfully at this exact address in the probe process",
+        "start": "0x20000000"
+      },
+      {
+        "end": "0x40000000",
+        "evidence": "measured_capability",
+        "note": "mapped successfully at this exact address in the probe process",
+        "start": "0x3fc00000"
+      },
+      {
+        "end": "0x40400000",
+        "evidence": "measured_capability",
+        "note": "mapped successfully at this exact address in the probe process",
+        "start": "0x40000000"
+      },
+      {
+        "end": "0x80000000",
+        "evidence": "measured_capability",
+        "note": "mapped successfully at this exact address in the probe process",
+        "start": "0x7fc00000"
+      },
+      {
+        "end": "0x80400000",
+        "evidence": "measured_capability",
+        "note": "mapped successfully at this exact address in the probe process",
+        "start": "0x80000000"
+      },
+      {
+        "end": "0x100000000",
+        "evidence": "measured_capability",
+        "note": "mapped successfully at this exact address in the probe process",
+        "start": "0xffc00000"
+      },
+      {
+        "end": "0x100400000",
+        "evidence": "measured_capability",
+        "note": "mapped successfully at this exact address in the probe process",
+        "start": "0x100000000"
+      },
+      {
+        "end": "0x200000000",
+        "evidence": "measured_capability",
+        "note": "mapped successfully at this exact address in the probe process",
+        "start": "0x1ffc00000"
+      },
+      {
+        "end": "0x200400000",
+        "evidence": "measured_capability",
+        "note": "mapped successfully at this exact address in the probe process",
+        "start": "0x200000000"
+      },
+      {
+        "end": "0x400000000",
+        "evidence": "measured_capability",
+        "note": "mapped successfully at this exact address in the probe process",
+        "start": "0x3ffc00000"
+      },
+      {
+        "end": "0x400400000",
+        "evidence": "measured_capability",
+        "note": "mapped successfully at this exact address in the probe process",
+        "start": "0x400000000"
+      },
+      {
+        "end": "0x800000000",
+        "evidence": "measured_capability",
+        "note": "mapped successfully at this exact address in the probe process",
+        "start": "0x7ffc00000"
+      },
+      {
+        "end": "0x800400000",
+        "evidence": "measured_capability",
+        "note": "mapped successfully at this exact address in the probe process",
+        "start": "0x800000000"
+      },
+      {
+        "end": "0x1000000000",
+        "evidence": "measured_capability",
+        "note": "mapped successfully at this exact address in the probe process",
+        "start": "0xfffc00000"
+      },
+      {
+        "end": "0x1000400000",
+        "evidence": "measured_capability",
+        "note": "mapped successfully at this exact address in the probe process",
+        "start": "0x1000000000"
+      },
+      {
+        "end": "0x2000000000",
+        "evidence": "measured_capability",
+        "note": "mapped successfully at this exact address in the probe process",
+        "start": "0x1fffc00000"
+      },
+      {
+        "end": "0x2000400000",
+        "evidence": "measured_capability",
+        "note": "mapped successfully at this exact address in the probe process",
+        "start": "0x2000000000"
+      },
+      {
+        "end": "0x4000000000",
+        "evidence": "measured_capability",
+        "note": "mapped successfully at this exact address in the probe process",
+        "start": "0x3fffc00000"
+      },
+      {
+        "end": "0x4000400000",
+        "evidence": "measured_capability",
+        "note": "mapped successfully at this exact address in the probe process",
+        "start": "0x4000000000"
+      },
+      {
+        "end": "0x70003f0000",
+        "evidence": "measured_capability",
+        "note": "mapped successfully at this exact address in the probe process",
+        "start": "0x6fffff0000"
+      },
+      {
+        "end": "0x8000000000",
+        "evidence": "measured_capability",
+        "note": "mapped successfully at this exact address in the probe process",
+        "start": "0x7fffc00000"
+      },
+      {
+        "end": "0x8000400000",
+        "evidence": "measured_capability",
+        "note": "mapped successfully at this exact address in the probe process",
+        "start": "0x8000000000"
+      },
+      {
+        "end": "0x10000000000",
+        "evidence": "measured_capability",
+        "note": "mapped successfully at this exact address in the probe process",
+        "start": "0xffffc00000"
+      },
+      {
+        "end": "0x10000400000",
+        "evidence": "measured_capability",
+        "note": "mapped successfully at this exact address in the probe process",
+        "start": "0x10000000000"
+      },
+      {
+        "end": "0x20000000000",
+        "evidence": "measured_capability",
+        "note": "mapped successfully at this exact address in the probe process",
+        "start": "0x1ffffc00000"
+      },
+      {
+        "end": "0x20000400000",
+        "evidence": "measured_capability",
+        "note": "mapped successfully at this exact address in the probe process",
+        "start": "0x20000000000"
+      },
+      {
+        "end": "0x40000000000",
+        "evidence": "measured_capability",
+        "note": "mapped successfully at this exact address in the probe process",
+        "start": "0x3ffffc00000"
+      },
+      {
+        "end": "0x40000400000",
+        "evidence": "measured_capability",
+        "note": "mapped successfully at this exact address in the probe process",
+        "start": "0x40000000000"
+      },
+      {
+        "end": "0x80000000000",
+        "evidence": "measured_capability",
+        "note": "mapped successfully at this exact address in the probe process",
+        "start": "0x7ffffc00000"
+      },
+      {
+        "end": "0x80000400000",
+        "evidence": "measured_capability",
+        "note": "mapped successfully at this exact address in the probe process",
+        "start": "0x80000000000"
+      },
+      {
+        "end": "0x100000000000",
+        "evidence": "measured_capability",
+        "note": "mapped successfully at this exact address in the probe process",
+        "start": "0xfffffc00000"
+      },
+      {
+        "end": "0x100000400000",
+        "evidence": "measured_capability",
+        "note": "mapped successfully at this exact address in the probe process",
+        "start": "0x100000000000"
+      },
+      {
+        "end": "0x200000000000",
+        "evidence": "measured_capability",
+        "note": "mapped successfully at this exact address in the probe process",
+        "start": "0x1fffffc00000"
+      },
+      {
+        "end": "0x200000400000",
+        "evidence": "measured_capability",
+        "note": "mapped successfully at this exact address in the probe process",
+        "start": "0x200000000000"
+      },
+      {
+        "end": "0x400000000000",
+        "evidence": "measured_capability",
+        "note": "mapped successfully at this exact address in the probe process",
+        "start": "0x3fffffc00000"
+      },
+      {
+        "end": "0x400000400000",
+        "evidence": "measured_capability",
+        "note": "mapped successfully at this exact address in the probe process",
+        "start": "0x400000000000"
+      },
+      {
+        "end": "0x590000000000",
+        "evidence": "measured_capability",
+        "note": "inside the ET_DYN base region, where a position-independent executable is placed, sampled on a fixed ladder derived from max_user_address; every sample was either granted or already held by the probe process (EEXIST), and none was structurally refused. Which samples were which depends on the probe's own ASLR slide and is deliberately not recorded",
+        "start": "0x550000000000"
+      },
+      {
+        "end": "0x7ffffffff000",
+        "evidence": "measured_capability",
+        "note": "inside the kernel's mmap allocation arena, sampled on a fixed ladder derived from max_user_address; every sample was either granted or already held by the probe process (EEXIST), and none was structurally refused. Which samples were which depends on the probe's own ASLR slide and is deliberately not recorded",
+        "start": "0x7c0000000000"
+      }
+    ],
+    "exact_mapping": {
+      "evidence": "measured_capability",
+      "source": "rs-env-probe vm (linux): exact placement succeeds for free, in-bounds, page-aligned ranges",
+      "value": "CONDITIONALLY_SUPPORTED"
+    },
+    "exact_mapping_failure_codes": [
+      "EEXIST",
+      "EINVAL",
+      "ENOMEM",
+      "EPERM"
+    ],
+    "file_map_beyond_eof": {
+      "evidence": "measured_capability",
+      "source": "rs-env-probe vm (linux): an isolated child took SIGBUS reading a whole page past end of file",
+      "value": "sigbus"
+    },
+    "fixed_noreplace_available": {
+      "evidence": "measured_capability",
+      "source": "rs-env-probe vm (linux): MAP_FIXED_NOREPLACE refused a collision with EEXIST",
+      "value": true
+    },
+    "hinted_mapping_may_relocate": {
+      "evidence": "measured_capability",
+      "source": "rs-env-probe vm (linux): a hinted mapping at an occupied address was relocated",
+      "value": true
+    },
+    "max_single_reservation": {
+      "evidence": "measured_capability",
+      "source": "rs-env-probe vm (linux): largest power-of-two PROT_NONE MAP_NORESERVE reservation the kernel granted",
+      "value": 70368744177664
+    },
+    "max_user_address": {
+      "evidence": "measured_capability",
+      "source": "rs-env-probe vm (linux): binary search with MAP_FIXED_NOREPLACE",
+      "value": "0x7ffffffff000"
+    },
+    "min_map_address": {
+      "evidence": "measured_capability",
+      "source": "rs-env-probe vm (linux): /proc/sys/vm/mmap_min_addr",
+      "value": "0x10000"
+    },
+    "page_size": {
+      "evidence": "measured_capability",
+      "source": "rs-env-probe vm (linux): sysconf(_SC_PAGESIZE)",
+      "value": 4096
+    },
+    "protection": {
+      "anonymous_executable_mapping": {
+        "evidence": "measured_capability",
+        "source": "rs-env-probe vm (linux): mmap(PROT_READ|PROT_EXEC)",
+        "value": true
+      },
+      "jit_entitlement_required": {
+        "evidence": "measured_capability",
+        "source": "rs-env-probe vm (linux): executable memory was obtained without any entitlement",
+        "value": false
+      },
+      "write_execute_simultaneous": {
+        "evidence": "measured_capability",
+        "source": "rs-env-probe vm (linux): mmap(PROT_READ|PROT_WRITE|PROT_EXEC)",
+        "value": true
+      },
+      "write_then_execute_transition": {
+        "evidence": "measured_capability",
+        "source": "rs-env-probe vm (linux): mprotect(RW -> RX)",
+        "value": true
+      }
+    },
+    "reserve_commit_model": {
+      "evidence": "measured_capability",
+      "source": "rs-env-probe vm (linux): a 1 GiB PROT_NONE reservation succeeded without backing it",
+      "value": "posix_lazy"
+    },
+    "unavailable_ranges": []
+  }
+}
