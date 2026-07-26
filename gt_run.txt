@@ -1,0 +1,44 @@
+host: macos/aarch64+none
+profile: gt-host.json
+
+CASE                               PREDICTED     REALITY     PAIRING
+------------------------------------------------------------------------------------------------------------
+exact-mapping-in-carveout          UNSUPPORTED   refused     held
+    mmap(0x1307200000, 131072, MAP_FIXED) failed: errno=13 EACCES (Permission denied)
+exact-mapping-at-a-free-address    SUPPORTED     satisfied   held
+    mmap(0x7000000000, 131072, MAP_FIXED) placed the mapping exactly there and it accepted reads and writes
+rwx-anonymous-2mib                 UNSUPPORTED   refused     held
+    mmap(PROT_READ|PROT_WRITE|PROT_EXEC) of 2097152 bytes failed: errno=13 EACCES (Permission denied)
+page-size-at-most-4kib             UNSUPPORTED   refused     held
+    sysconf(_SC_PAGESIZE) is 16384 and the build assumes 4096; os_page > PAGE, so the shipping check aborts the process
+page-size-at-most-64kib            SUPPORTED     satisfied   held
+    sysconf(_SC_PAGESIZE) is 16384 and the build assumes 65536; os_page <= PAGE, so the shipping check passes
+tests/groundtruth/run.sh: line 111: args[@]: unbound variable
+file-map-beyond-eof                UNSUPPORTED   no-output   CASE BROKEN
+    the case produced no parsable output
+tests/groundtruth/run.sh: line 111: args[@]: unbound variable
+file-map-partial-page              CONDITIONAL   no-output   not asserted
+    the case produced no parsable output
+write-then-execute-2mib            CONDITIONAL   satisfied   not asserted
+    2097152 bytes mapped RW, written, flipped to RX with mprotect, and executed - W and X were never live together
+hinted-mapping-requires-identity   UNSUPPORTED   relocated   held
+    the hint 0x102cdc000 was occupied, so the kernel placed the mapping at 0x102cfc000 instead and reported SUCCESS - a program requiring guest/host identity has already lost here, and no error code told it
+oversized-reservation-4pib         UNSUPPORTED   refused     held
+    mmap of 4503599627370496 bytes (4096.0 TiB) was refused: errno=12 ENOMEM (Cannot allocate memory)
+reserve-then-commit-1gib           SUPPORTED     satisfied   held
+    1073741824 bytes reserved PROT_NONE, then one 16384-byte page inside it committed with mprotect and written
+exact-mapping-below-minimum        UNSUPPORTED   refused     held
+    mmap(0x800, 131072, MAP_FIXED) failed: errno=22 EINVAL (Invalid argument)
+exact-mapping-above-user-space     UNSUPPORTED   refused     held
+    mmap(0x800000000000, 131072, MAP_FIXED) failed: errno=12 ENOMEM (Cannot allocate memory)
+identity-without-translation       CONDITIONAL   relocated   not asserted
+    the hint 0x102354000 was occupied, so the kernel placed the mapping at 0x102374000 instead and reported SUCCESS - a program requiring guest/host identity has already lost here, and no error code told it
+
+cases: 14   held: 10   contradicted: 1   not asserted: 3
+
+CONTRADICTED PREDICTIONS - each is a finding, not a flake:
+  - file-map-beyond-eof: the case produced no parsable output, so nothing was observed - a broken case must not read as a confirmed refusal
+
+Either the analyzer is wrong about this platform or the contract
+misdescribes the program. Decide which by reading the case source; do
+not adjust the expectation to match the output.
