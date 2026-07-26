@@ -1,0 +1,2 @@
+tests/groundtruth/selftest.sh: precondition failed - exact-mapping-in-carveout predicts UNSUPPORTED on this host, not UNKNOWN
+  the selftest's rows are keyed on that; fix the row, not this check
