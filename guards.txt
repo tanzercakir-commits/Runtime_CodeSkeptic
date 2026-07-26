@@ -1,0 +1,145 @@
+
+=== guards themselves ===
+
+3 guard(s) did not behave as specified:
+  FAIL [check_docs.py] the scenarios may describe an unbuilt project
+        expected the guard to pass; it failed
+        --- guard output ---
+        doc guard: scanned 1 document(s)
+        
+        1 unverified or false claim(s) about the code:
+          - docs\scenarios\assessment.md:1: asserts something is absent or unimplemented with no `<!-- checked: YYYY-MM-DD -->` marker: "A Windows probe does not exist yet, so S3 is dead."
+        
+        Either fix the claim, or date it with <!-- checked: YYYY-MM-DD -->.
+  FAIL [check_non_goals.py] the same name in the progress log is history
+        expected the guard to pass; it failed
+        --- guard output ---
+        non-goal guard failed:
+          - docs\PROGRESS.md:1: names `rs-extract`, which was removed 2026-07-25 (d6276e0); extraction belongs to CodeSkeptic per non_goals.md section 18. The code is gone; this claim is not. Fix the sentence, or record it in docs/PROGRESS.md where history belongs: "rs-extract was removed on 2026-07-25."
+          - tools\guards\check_non_goals.py:13: names `rs-extract`, which was removed 2026-07-25 (d6276e0); extraction belongs to CodeSkeptic per non_goals.md section 18. The code is gone; this claim is not. Fix the sentence, or record it in docs/PROGRESS.md where history belongs: "`tools/rs-extract` performs contract extraction and fatal-sink identific"
+          - tools\guards\check_non_goals.py:22: names `rs-extract`, which was removed 2026-07-25 (d6276e0); extraction belongs to CodeSkeptic per non_goals.md section 18. The code is gone; this claim is not. Fix the sentence, or record it in docs/PROGRESS.md where history belongs: "1. remove rs-extract"
+          - tools\guards\check_non_goals.py:31: names `rs-extract`, which was removed 2026-07-25 (d6276e0); extraction belongs to CodeSkeptic per non_goals.md section 18. The code is gone; this claim is not. Fix the sentence, or record it in docs/PROGRESS.md where history belongs: "requirements could be "written by rs-extract", and the shadPS4 case stud"
+          - tools\guards\check_non_goals.py:48: names `rs-extract`, which was removed 2026-07-25 (d6276e0); extraction belongs to CodeSkeptic per non_goals.md section 18. The code is gone; this claim is not. Fix the sentence, or record it in docs/PROGRESS.md where history belongs: ""rs-extract": "removed 2026-07-25 (d6276e0); extraction belongs to ""
+          - tools\guards\check_non_goals.py:50: names `rs_extract`, which was same component, underscore spelling. The code is gone; this claim is not. Fix the sentence, or record it in docs/PROGRESS.md where history belongs: ""rs_extract": "same component, underscore spelling","
+  FAIL [check_non_goals.py] a dated section-18 exception permits it
+        expected the guard to pass; it failed
+        --- guard output ---
+        non-goal guard failed:
+          - tools\guards\check_non_goals.py:13: names `rs-extract`, which was removed 2026-07-25 (d6276e0); extraction belongs to CodeSkeptic per non_goals.md section 18. The code is gone; this claim is not. Fix the sentence, or record it in docs/PROGRESS.md where history belongs: "`tools/rs-extract` performs contract extraction and fatal-sink identific"
+          - tools\guards\check_non_goals.py:22: names `rs-extract`, which was removed 2026-07-25 (d6276e0); extraction belongs to CodeSkeptic per non_goals.md section 18. The code is gone; this claim is not. Fix the sentence, or record it in docs/PROGRESS.md where history belongs: "1. remove rs-extract"
+          - tools\guards\check_non_goals.py:31: names `rs-extract`, which was removed 2026-07-25 (d6276e0); extraction belongs to CodeSkeptic per non_goals.md section 18. The code is gone; this claim is not. Fix the sentence, or record it in docs/PROGRESS.md where history belongs: "requirements could be "written by rs-extract", and the shadPS4 case stud"
+          - tools\guards\check_non_goals.py:48: names `rs-extract`, which was removed 2026-07-25 (d6276e0); extraction belongs to CodeSkeptic per non_goals.md section 18. The code is gone; this claim is not. Fix the sentence, or record it in docs/PROGRESS.md where history belongs: ""rs-extract": "removed 2026-07-25 (d6276e0); extraction belongs to ""
+          - tools\guards\check_non_goals.py:50: names `rs_extract`, which was same component, underscore spelling. The code is gone; this claim is not. Fix the sentence, or record it in docs/PROGRESS.md where history belongs: ""rs_extract": "same component, underscore spelling","
+
+A guard that cannot be made to fail on demand is not protecting anything.
+
+guard selftest: 63/66 cases
+
+=== plan structure ===
+plan: blocked=4  done=43  n/a=1  open=8  partial=14  (total 70, across 2 document(s))
+
+=== documentation drift ===
+Traceback (most recent call last):
+  File "D:\a\Runtime_CodeSkeptic\Runtime_CodeSkeptic\tools\guards\check_docs.py", line 250, in <module>
+    sys.exit(main())
+             ^^^^^^
+  File "D:\a\Runtime_CodeSkeptic\Runtime_CodeSkeptic\tools\guards\check_docs.py", line 176, in main
+    lines = path.read_text().splitlines()
+            ^^^^^^^^^^^^^^^^
+  File "C:\hostedtoolcache\windows\Python\3.12.10\x64\Lib\pathlib.py", line 1028, in read_text
+    return f.read()
+           ^^^^^^^^
+  File "C:\hostedtoolcache\windows\Python\3.12.10\x64\Lib\encodings\cp1252.py", line 23, in decode
+    return codecs.charmap_decode(input,self.errors,decoding_table)[0]
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+UnicodeDecodeError: 'charmap' codec can't decode byte 0x9d in position 7396: character maps to <undefined>
+
+=== finding registry ===
+registry: 27 ids declared, 27 emitted by rules
+
+=== schemas vs code ===
+jsonschema is not installed; skipping schema validation
+
+=== normative non-goals ===
+non-goal guard failed:
+  - docs\PLAN.md:221: names `rs-extract`, which was removed 2026-07-25 (d6276e0); extraction belongs to CodeSkeptic per non_goals.md section 18. The code is gone; this claim is not. Fix the sentence, or record it in docs/PROGRESS.md where history belongs: "An extractor (tools/rs-extract) was built here to close the "no path fro"
+  - docs\PROGRESS.md:2567: names `rs-extract`, which was removed 2026-07-25 (d6276e0); extraction belongs to CodeSkeptic per non_goals.md section 18. The code is gone; this claim is not. Fix the sentence, or record it in docs/PROGRESS.md where history belongs: "**Changed.** Three documents still described `rs-extract` after the code"
+  - docs\PROGRESS.md:2579: names `rs-extract`, which was removed 2026-07-25 (d6276e0); extraction belongs to CodeSkeptic per non_goals.md section 18. The code is gone; this claim is not. Fix the sentence, or record it in docs/PROGRESS.md where history belongs: "| `schemas/application-requirements.v1.json` | requirements may be "writ"
+  - docs\PROGRESS.md:2581: names `rs-extract`, which was removed 2026-07-25 (d6276e0); extraction belongs to CodeSkeptic per non_goals.md section 18. The code is gone; this claim is not. Fix the sentence, or record it in docs/PROGRESS.md where history belongs: "| `docs/PLAN.md` §16 | the differential test is "now possible since rs-"
+  - docs\PROGRESS.md:2603: names `rs-extract`, which was removed 2026-07-25 (d6276e0); extraction belongs to CodeSkeptic per non_goals.md section 18. The code is gone; this claim is not. Fix the sentence, or record it in docs/PROGRESS.md where history belongs: "## 2026-07-25 — rs-extract removed; the boundary holds"
+  - docs\PROGRESS.md:2605: names `rs-extract`, which was removed 2026-07-25 (d6276e0); extraction belongs to CodeSkeptic per non_goals.md section 18. The code is gone; this claim is not. Fix the sentence, or record it in docs/PROGRESS.md where history belongs: "**Changed.** `tools/rs-extract`, `src/extract`, `include/runtimeskeptic/"
+  - docs\PROGRESS.md:2690: names `rs-extract`, which was removed 2026-07-25 (d6276e0); extraction belongs to CodeSkeptic per non_goals.md section 18. The code is gone; this claim is not. Fix the sentence, or record it in docs/PROGRESS.md where history belongs: "| `README.md` | "no extractor is bundled" | `rs-extract` exists |"
+  - docs\PROGRESS.md:2700: names `rs-extract`, which was removed 2026-07-25 (d6276e0); extraction belongs to CodeSkeptic per non_goals.md section 18. The code is gone; this claim is not. Fix the sentence, or record it in docs/PROGRESS.md where history belongs: "for CodeSkeptic. `rs-extract`, built earlier the same day, does both. Gr"
+  - docs\PROGRESS.md:2707: names `rs-extract`, which was removed 2026-07-25 (d6276e0); extraction belongs to CodeSkeptic per non_goals.md section 18. The code is gone; this claim is not. Fix the sentence, or record it in docs/PROGRESS.md where history belongs: "1. Decide the §18 conflict — remove `rs-extract`, rename it, or amend"
+  - tools\guards\check_docs.py:14: names `rs-extract`, which was removed 2026-07-25 (d6276e0); extraction belongs to CodeSkeptic per non_goals.md section 18. The code is gone; this claim is not. Fix the sentence, or record it in docs/PROGRESS.md where history belongs: "README.md                         "no extractor is bundled" -> rs-extrac"
+  - tools\guards\check_docs.py:35: names `rs-extract`, which was removed 2026-07-25 (d6276e0); extraction belongs to CodeSkeptic per non_goals.md section 18. The code is gone; this claim is not. Fix the sentence, or record it in docs/PROGRESS.md where history belongs: "is not there passed silently. That is how `tools/rs-extract` survived it"
+  - tools\guards\check_non_goals.py:13: names `rs-extract`, which was removed 2026-07-25 (d6276e0); extraction belongs to CodeSkeptic per non_goals.md section 18. The code is gone; this claim is not. Fix the sentence, or record it in docs/PROGRESS.md where history belongs: "`tools/rs-extract` performs contract extraction and fatal-sink identific"
+  - tools\guards\check_non_goals.py:22: names `rs-extract`, which was removed 2026-07-25 (d6276e0); extraction belongs to CodeSkeptic per non_goals.md section 18. The code is gone; this claim is not. Fix the sentence, or record it in docs/PROGRESS.md where history belongs: "1. remove rs-extract"
+  - tools\guards\check_non_goals.py:31: names `rs-extract`, which was removed 2026-07-25 (d6276e0); extraction belongs to CodeSkeptic per non_goals.md section 18. The code is gone; this claim is not. Fix the sentence, or record it in docs/PROGRESS.md where history belongs: "requirements could be "written by rs-extract", and the shadPS4 case stud"
+  - tools\guards\check_non_goals.py:48: names `rs-extract`, which was removed 2026-07-25 (d6276e0); extraction belongs to CodeSkeptic per non_goals.md section 18. The code is gone; this claim is not. Fix the sentence, or record it in docs/PROGRESS.md where history belongs: ""rs-extract": "removed 2026-07-25 (d6276e0); extraction belongs to ""
+  - tools\guards\check_non_goals.py:50: names `rs_extract`, which was same component, underscore spelling. The code is gone; this claim is not. Fix the sentence, or record it in docs/PROGRESS.md where history belongs: ""rs_extract": "same component, underscore spelling","
+  - tools\guards\selftest.py:143: names `rs-extract`, which was removed 2026-07-25 (d6276e0); extraction belongs to CodeSkeptic per non_goals.md section 18. The code is gone; this claim is not. Fix the sentence, or record it in docs/PROGRESS.md where history belongs: "{"docs/x.md": "The extractor lives in `tools/rs-extract` and works.\n","
+  - tools\guards\selftest.py:148: names `rs-extract`, which was removed 2026-07-25 (d6276e0); extraction belongs to CodeSkeptic per non_goals.md section 18. The code is gone; this claim is not. Fix the sentence, or record it in docs/PROGRESS.md where history belongs: "{"docs/x.md": "The extractor lives in `tools/rs-extract` and works.\n","
+  - tools\guards\selftest.py:149: names `rs-extract`, which was removed 2026-07-25 (d6276e0); extraction belongs to CodeSkeptic per non_goals.md section 18. The code is gone; this claim is not. Fix the sentence, or record it in docs/PROGRESS.md where history belongs: ""tools/rs-extract/main.cpp": "int main(){}\n"},"
+  - tools\guards\selftest.py:224: names `rs-extract`, which was removed 2026-07-25 (d6276e0); extraction belongs to CodeSkeptic per non_goals.md section 18. The code is gone; this claim is not. Fix the sentence, or record it in docs/PROGRESS.md where history belongs: ""schemas/a.v1.json": '{"description": "written by rs-extract"}\n'},"
+  - tools\guards\selftest.py:225: names `rs-extract`, which was removed 2026-07-25 (d6276e0); extraction belongs to CodeSkeptic per non_goals.md section 18. The code is gone; this claim is not. Fix the sentence, or record it in docs/PROGRESS.md where history belongs: "expect_fail=True, expect_text="names `rs-extract`"),"
+  - tools\guards\selftest.py:229: names `rs-extract`, which was removed 2026-07-25 (d6276e0); extraction belongs to CodeSkeptic per non_goals.md section 18. The code is gone; this claim is not. Fix the sentence, or record it in docs/PROGRESS.md where history belongs: ""docs/PROGRESS.md": "rs-extract was removed on 2026-07-25.\n"},"
+  - tools\guards\selftest.py:234: names `rs_extract`, which was same component, underscore spelling. The code is gone; this claim is not. Fix the sentence, or record it in docs/PROGRESS.md where history belongs: ""src/a.cpp": "// see rs_extract for the recogniser\n"},"
+  - tools\guards\selftest.py:235: names `rs_extract`, which was same component, underscore spelling. The code is gone; this claim is not. Fix the sentence, or record it in docs/PROGRESS.md where history belongs: "expect_fail=True, expect_text="rs_extract"),"
+
+=== dates against git ===
+Traceback (most recent call last):
+  File "D:\a\Runtime_CodeSkeptic\Runtime_CodeSkeptic\tools\guards\check_dates.py", line 283, in <module>
+    sys.exit(main())
+             ^^^^^^
+  File "D:\a\Runtime_CodeSkeptic\Runtime_CodeSkeptic\tools\guards\check_dates.py", line 245, in main
+    lines = path.read_text().splitlines()
+            ^^^^^^^^^^^^^^^^
+  File "C:\hostedtoolcache\windows\Python\3.12.10\x64\Lib\pathlib.py", line 1028, in read_text
+    return f.read()
+           ^^^^^^^^
+  File "C:\hostedtoolcache\windows\Python\3.12.10\x64\Lib\encodings\cp1252.py", line 23, in decode
+    return codecs.charmap_decode(input,self.errors,decoding_table)[0]
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+UnicodeDecodeError: 'charmap' codec can't decode byte 0x9d in position 7396: character maps to <undefined>
+
+=== compass vs map ===
+
+7 disagreement(s) between the compass and the map:
+  - docs/TODO.md has no `### T-nnn � title `[state]`` items - has the format changed?
+  - docs/PLAN.md:198: cites `T-006`, which is not an item in docs/TODO.md
+  - docs/PLAN.md:206: cites `T-009`, which is not an item in docs/TODO.md
+  - docs/PLAN.md:216: cites `T-011`, which is not an item in docs/TODO.md
+  - docs/PLAN.md:273: cites `T-011`, which is not an item in docs/TODO.md
+  - docs/PLAN.md:284: cites `T-007`, which is not an item in docs/TODO.md
+  - docs/PLAN.md:286: cites `T-011`, which is not an item in docs/TODO.md
+todo:   (0 items, 5 plan tag(s))
+
+=== published numbers ===
+
+4 campaign number(s) that no longer match their data:
+  - campaigns\false-positive\2026-07-linux-x86_64-after-T013.json: committed campaign data that no document under docs/campaigns/ cites. A result nobody can find is a result nobody can check.
+  - campaigns\false-positive\2026-07-linux-x86_64-after-T015.json: committed campaign data that no document under docs/campaigns/ cites. A result nobody can find is a result nobody can check.
+  - campaigns\false-positive\2026-07-linux-x86_64-after-top-window.json: committed campaign data that no document under docs/campaigns/ cites. A result nobody can find is a result nobody can check.
+  - campaigns\false-positive\2026-07-linux-x86_64.json: committed campaign data that no document under docs/campaigns/ cites. A result nobody can find is a result nobody can check.
+campaigns: 8 population(s) checked against docs/campaigns/
+
+=== corpus rules ===
+corpus: 54 entries, 44 counting toward 30, 35 toward the virtual-memory 10
+
+=== includes vs MSVC ===
+includes: 37 translation unit(s) and header(s) checked against 15 standard headers
+
+=== shell vs bash 3.2 ===
+shell: 9 script(s) checked against bash 3.2 and BSD userland
+
+=== shell dead variables ===
+shell vars: 9 script(s) checked for assigned-and-never-read
+
+=== one probe per platform ===
+probe platforms: 4 implementation(s), checked against 5 platform settings
+
+6 guard(s) failed: guards themselves documentation drift normative non-goals dates against git compass vs map published numbers
+
+These are project rules, not style. Fix the repository or change the
+rule deliberately - do not silence the guard.

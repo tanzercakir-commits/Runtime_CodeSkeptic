@@ -1,0 +1,12 @@
+Test project D:/a/Runtime_CodeSkeptic/Runtime_CodeSkeptic/build
+    Start 13: test_probe
+Test not available without configuration.  (Missing "-C <config>"?)
+1/1 Test #13: test_probe .......................***Not Run   0.00 sec
+
+0% tests passed, 1 tests failed out of 1
+
+Total Test time (real) =   0.00 sec
+
+The following tests FAILED:
+	 13 - test_probe (Not Run)
+Errors while running CTest
