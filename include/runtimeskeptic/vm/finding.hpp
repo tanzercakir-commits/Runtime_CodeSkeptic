@@ -142,6 +142,10 @@ inline constexpr const char* kReservationAlignmentUnguaranteed = "RS-VM-0022";
 inline constexpr const char* kAddressBoundUnsatisfiable = "RS-VM-0023";
 inline constexpr const char* kDisplacementConstraintNotEvaluable = "RS-VM-0024";
 inline constexpr const char* kAddressBoundIsTight = "RS-VM-0025";
+// Fitting in the address space is necessary, not sufficient. See
+// VirtualMemoryModel::max_single_reservation.
+inline constexpr const char* kSizeExceedsGrantedReservation = "RS-VM-0026";
+inline constexpr const char* kReservationGrantabilityUnknown = "RS-VM-0027";
 }  // namespace ids
 
 }  // namespace rs::vm

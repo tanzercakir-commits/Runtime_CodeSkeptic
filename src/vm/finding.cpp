@@ -188,6 +188,20 @@ const std::vector<FindingDefinition>& registry_storage() {
          "page granularity. The mapping call does not provide that; it has to "
          "be achieved by over-allocating and trimming, and nothing in the "
          "profile can confirm the program does so."},
+        {ids::kSizeExceedsGrantedReservation,
+         "Requested reservation is larger than any this host granted",
+         Severity::Critical,
+         "The request fits the address space, and the host still refuses a "
+         "reservation this large. Fitting is necessary, not sufficient: whether a "
+         "reservation is granted also depends on overcommit policy, RLIMIT_AS and "
+         "how much contiguous space is free. Measured, not assumed."},
+        {ids::kReservationGrantabilityUnknown,
+         "Whether a reservation of this size is grantable was never established",
+         Severity::Medium,
+         "The request fits the address space and is larger than any reservation "
+         "this project has observed a real program make, and the profile does not "
+         "record the largest reservation the host grants. Fitting is not "
+         "sufficient, so nothing here supports a positive answer."},
         {ids::kAddressHintNotHonourable,
          "Address hint points into a range the host cannot provide", Severity::Low,
          "The requested address is a hint rather than a demand, and it falls "

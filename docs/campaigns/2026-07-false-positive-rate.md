@@ -266,6 +266,61 @@ genuinely beyond the top is what `max_user_address` already states, so the ladde
 now skips a candidate whose window would cross it. `unavailable_ranges` on this
 host is consequently empty — the profile records no limitation it cannot defend.
 
+# 6. After RS-VM-0026 (T-015): the numbers that did not move, and why that matters
+
+Data: `campaigns/false-positive/2026-07-linux-x86_64-after-T015.json` — **byte-identical
+to §5**.
+
+`RS-VM-0021` compared a request's size against the width of the address space and,
+when it fitted, said nothing further. Its own rejected-fix text asserted the
+reasoning: *"the limit is the width of the address space, not the amount of free
+memory in it."* A 5-level-paging CI runner disproved that in one line:
+
+```
+oversized-reservation-4pib   SUPPORTED   refused   CONTRADICTED
+    mmap of 4503599627370496 bytes (4096.0 TiB) was refused: ENOMEM
+```
+
+On a 4-level host 4 PiB does not fit, the verdict is UNSUPPORTED, the kernel
+refuses, and the prediction holds **for the wrong reason**. On a 56-bit host it
+fits, the verdict became SUPPORTED, and the kernel refused anyway. A false positive
+in the dangerous direction — the analyzer told a caller a 4 PiB reservation would
+work.
+
+The profile now carries `max_single_reservation`, the largest power-of-two
+reservation the host actually granted (this host: 70368744177664 bytes, 64 TiB),
+and `RS-VM-0026` compares against it.
+
+**And the campaign did not move by a single requirement.**
+
+| | after the top window (§5) | after `RS-VM-0026` |
+|---|---|---|
+| shape population, evaluated | 1292 | 1292 |
+| shape, `SUPPORTED` / `CONDITIONALLY_SUPPORTED` | 748 / 544 | 748 / 544 |
+| address population, evaluated | 639 | 639 |
+| address, `SUPPORTED` / `UNKNOWN` | 536 / 1 | 536 / 1 |
+| **false positives, both populations** | 0 | **0** |
+
+That is the finding, not a footnote. **The corpus does not contain the defect.**
+Across 1292 requirements observed from 13 real programs, the largest single request
+was **2103443456 bytes — about 1.96 GiB** — and the 99th percentile was 32 MiB.
+Nothing a real program on this machine asked for comes within four orders of
+magnitude of the 64 TiB this host grants, so no amount of running this campaign
+harder would ever have found the bug.
+
+It took a **host** the project had never run on, not a program. That is the same
+lesson as `<iterator>` on MSVC and `declare -A` on bash 3.2, arriving for the third
+time in one week — and it is the argument for the measurement channel rather than
+for a bigger corpus.
+
+**What this does to the published rate.** Nothing, on this host. The claim below is
+unchanged and now rests on a rule that no longer asserts sufficiency from
+necessity: a request the host was measured to refuse gets `UNSUPPORTED`, a size in
+the untested band between the largest success and the smallest failure gets
+`CONDITIONALLY_SUPPORTED`, and a profile that never measured the fact gets
+`UNKNOWN` for anything above 4 GiB — the next power of two above anything this
+corpus has observed.
+
 ## The reproducibility trap, and how it was avoided
 
 `min_map_address` was once the probe's own ASLR slide recorded as a host fact,

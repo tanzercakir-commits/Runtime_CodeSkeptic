@@ -150,6 +150,7 @@ private:
     void rule_internal_fallback_contradiction();
     void rule_baseline_mapping_capability();
     void rule_size_feasibility();
+    void rule_reservation_grantable(std::uint64_t usable);
     void rule_address_bounds();
     void rule_displacement_constraint();
     void rule_reservation_alignment();
@@ -309,9 +310,20 @@ void Analysis::rule_size_feasibility() {
     if (top <= bottom) return;
     const std::uint64_t usable = top - bottom;
     if (req_.request.size <= usable) {
-        satisfied("a reservation of " + dec(req_.request.size) + " bytes",
+        satisfied("a reservation of " + dec(req_.request.size) +
+                      " bytes fits the address space",
                   "the usable address space is " + dec(usable) + " bytes",
                   profile_.vm.max_user_address.evidence());
+        // AND THAT IS WHERE THIS RULE USED TO STOP, which was the bug.
+        //
+        // Fitting is necessary, not sufficient - and the rule's own rejected-fix
+        // text asserted the opposite: "the limit is the width of the address
+        // space, not the amount of free memory in it". On a 4-level host QEMU's
+        // 4 PiB request did not fit, the verdict was UNSUPPORTED, the kernel
+        // refused, and the prediction held for the wrong reason. On a 56-bit
+        // host it fits, the verdict became SUPPORTED, and the kernel refused
+        // anyway with ENOMEM. A false positive in the dangerous direction.
+        rule_reservation_grantable(usable);
         return;
     }
 
@@ -344,8 +356,122 @@ void Analysis::rule_size_feasibility() {
          "a smaller reservation"});
     f.rejected_fixes.push_back(
         {"Retry, or wait for memory pressure to ease",
-         "The limit is the width of the address space, not the amount of free "
-         "memory in it."});
+         "This limit is the width of the address space. A reservation that DOES "
+         "fit can still be refused for accounting reasons - see RS-VM-0026 - but "
+         "this one cannot fit at any address."});
+    emit(std::move(f));
+}
+
+// ---------------------------------------------------------------------------
+// RS-VM-0026 / RS-VM-0027: it fits, but is it granted?
+//
+// Reached only when the request fits the address space. `max_single_reservation`
+// is the largest power-of-two reservation the host actually granted, so:
+//
+//   size > 2 * granted     the next power of two above `granted` was REFUSED and
+//                          this is larger still. Measured, UNSUPPORTED.
+//   granted < size <= 2*granted
+//                          between the largest success and the smallest failure.
+//                          Nothing measured this size. CONDITIONAL, not a guess
+//                          dressed as either answer.
+//   size <= granted        the host granted at least this much. Nothing to say.
+//
+// The fact absent is a different case, and the threshold below is the only
+// constant in this rule that is not measured from the host - so it is measured
+// from the corpus instead. Across 1292 requirements observed from 13 real programs
+// (`campaigns/false-positive/`), the largest single request was 2103443456 bytes,
+// about 1.96 GiB; the 99th percentile was 32 MiB. 4 GiB is the next power of two
+// above anything this project has ever seen a real program ask for, so above it
+// the analyzer has no observational basis at all and says so rather than
+// defaulting to yes.
+// ---------------------------------------------------------------------------
+void Analysis::rule_reservation_grantable(std::uint64_t usable) {
+    const std::uint64_t size = req_.request.size;
+
+    if (!profile_.vm.max_single_reservation.is_known()) {
+        constexpr std::uint64_t kLargestObservedRequest = 4ull << 30;
+        if (size <= kLargestObservedRequest) return;
+        Finding f = start(ids::kReservationGrantabilityUnknown,
+                          Confidence::Hypothesis, SupportLevel::Unknown);
+        f.required = "a single reservation of " + dec(size) + " bytes";
+        f.host_capability =
+            "the profile records that " + dec(usable) +
+            " bytes of address space exist, and does NOT record the largest "
+            "reservation this host grants";
+        f.modeled_fallback =
+            "unknown: fitting the address space does not establish that the "
+            "kernel will account for the reservation";
+        f.conclusion =
+            "This is larger than any request this project has observed a real "
+            "program make (1.96 GiB, across 1292 observations), and nothing in "
+            "the profile bounds it. Re-probe with a build that records "
+            "max_single_reservation.";
+        add_application_claim(f, "program reserves " + dec(size) +
+                                     " bytes in one call");
+        f.evidence.add(Layer::OperatingSystem, EvidenceClass::Unknown,
+                       "max_single_reservation is not recorded in this profile",
+                       profile_.profile_name);
+        f.remediations.push_back(
+            {RemediationClass::SelectDifferentHostConfiguration,
+             "measure the host with a probe that records "
+             "max_single_reservation, then re-run this analysis"});
+        emit(std::move(f));
+        return;
+    }
+
+    const std::uint64_t granted = profile_.vm.max_single_reservation.value();
+    if (size <= granted) {
+        satisfied("a reservation of " + dec(size) + " bytes",
+                  "this host granted a reservation of " + dec(granted) + " bytes",
+                  profile_.vm.max_single_reservation.evidence());
+        return;
+    }
+
+    const bool above_a_known_failure =
+        granted <= (~std::uint64_t{0}) / 2 && size > 2 * granted;
+
+    Finding f = start(ids::kSizeExceedsGrantedReservation,
+                      above_a_known_failure ? Confidence::Proven
+                                            : Confidence::Hypothesis,
+                      above_a_known_failure ? SupportLevel::Unsupported
+                                            : SupportLevel::ConditionallySupported);
+    f.required = "a single reservation of " + dec(size) + " bytes (" +
+                 json::to_hex(size) + ")";
+    f.host_capability =
+        "the largest reservation this host granted was " + dec(granted) +
+        " bytes, while " + dec(usable) + " bytes of address space exist";
+    if (above_a_known_failure) {
+        f.modeled_fallback =
+            "the reservation is refused; a request of " + dec(2 * granted) +
+            " bytes was already refused on this host and this one is larger";
+        f.conclusion =
+            "The request fits the address space and the host still will not "
+            "grant it. Fitting is necessary, not sufficient.";
+    } else {
+        f.modeled_fallback =
+            "unmeasured: this size lies between the largest reservation that "
+            "succeeded (" + dec(granted) + ") and the smallest that failed (" +
+            dec(2 * granted) + ")";
+        f.conclusion =
+            "Larger than anything this host was measured to grant, smaller than "
+            "anything it was measured to refuse. The honest answer is that it "
+            "depends, and on what was not measured.";
+    }
+    add_application_claim(f, "program reserves " + dec(size) + " bytes in one call");
+    f.evidence.add(Layer::OperatingSystem,
+                   profile_.vm.max_single_reservation.evidence(),
+                   "largest reservation granted is " + dec(granted) + " bytes",
+                   profile_.profile_name);
+    f.evidence.add(Layer::Analyzer, EvidenceClass::SpecifiedGuarantee,
+                   dec(size) + " > " + dec(granted), "analyzer: size arithmetic");
+    f.remediations.push_back(
+        {RemediationClass::ReserveAddressSpaceEarlier,
+         "reserve in several smaller pieces, or lower the reservation the build "
+         "asks for, or reserve before the address space fragments"});
+    f.rejected_fixes.push_back(
+        {"Assume it works because the address space is wide enough",
+         "That is the exact reasoning this finding exists to replace: 4 PiB fits "
+         "below a 56-bit max_user_address and is refused with ENOMEM."});
     emit(std::move(f));
 }
 

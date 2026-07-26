@@ -275,11 +275,7 @@ been read once.
 
 ---
 
-## Next
-
----
-
-### T-015 — Fitting in the address space is not enough to reserve it `[next]`
+### T-015 — Fitting in the address space is not enough to reserve it `[now]`
 
 **Serves:** the credibility of every `SUPPORTED` the analyzer emits
 **Plan:** `docs/PLAN.md` cross-cutting — rule coverage, and Gate B's false-positive
@@ -308,18 +304,50 @@ direction — the analyzer told a caller a 4 PiB reservation would work.
 **Not to be fixed by adjusting the expectation.** The harness said so itself, and
 the contract describes what the program does.
 
-**First step:** decide what the honest verdict is. A reservation that fits the
-address space but exceeds what the kernel will account for is not UNSUPPORTED
-either — it depends on `vm.overcommit_memory`, `RLIMIT_AS` and free VA, none of
-which the profile currently measures. `CONDITIONALLY_SUPPORTED` with a named
-condition is the likely answer, and if so the condition has to be a measured fact
-rather than a sentence.
+**Answered, and the condition is a measured fact rather than a sentence.**
+`VirtualMemoryModel::max_single_reservation` is the largest **power-of-two**
+reservation the host actually granted — a power of two because the exact figure
+moves between two runs as the process's own mappings shift, and a fact that moves
+is a fact about the probe. `RS-VM-0026` gives three honest bands:
+
+```
+size > 2 x granted        the next power of two was measured to FAIL and this is
+                          larger still           -> UNSUPPORTED, PROVEN
+granted < size <= 2x      between the largest success and the smallest failure;
+                          nothing measured it    -> CONDITIONAL, HYPOTHESIS
+size <= granted           the host granted at least this much -> nothing to say
+```
+
+`RS-VM-0027` covers the fact being absent, above 4 GiB — the next power of two
+above the largest request this project has ever observed a real program make
+(1.96 GiB across 1292 observations, p99 32 MiB). Below that, silence, or every
+ordinary mapping on every fixture would carry the finding.
+
+**Still open on this item:**
+
+1. **The Linux probe measures it; macOS and Windows do not.** Until they do,
+   `RS-VM-0027` fires on their profiles for anything above 4 GiB — which is the
+   honest reading of a profile that has not measured it, and also the reason to
+   measure it there.
+2. **`oversized-reservation-4pib` is `held` on a 4-level host and unverified on a
+   5-level one**, because CI lands on LA57 hardware only sometimes. The
+   `Done when` above asks for both, and the second cannot be arranged on demand.
+   The unit tests pin the logic against a synthetic 56-bit profile in the meantime.
+3. **`exact-mapping-above-user-space` derives its address from a constant**
+   (`0x800000000000`), which is not above user space on an LA57 host. Renaming is
+   not the fix; deriving it from the measured bound is.
 
 **Also note:** `exact-mapping-above-user-space` is the same host difference from
 the other side. `0x800000000000` is not above user space on an LA57 host, and the
 case's own name stops being true there. Renaming it is not the fix; deriving the
 address from the measured bound is.
 
+
+---
+
+---
+
+## Next
 
 ---
 

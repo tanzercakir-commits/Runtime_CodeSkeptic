@@ -1,6 +1,6 @@
 # Finding ID Registry — Virtual Memory Domain
 
-The 25 registered `RS-VM-*` finding IDs, their default severities, taxonomy categories and typical confidence, plus the policy that makes an ID permanent once published.
+The 27 registered `RS-VM-*` finding IDs, their default severities, taxonomy categories and typical confidence, plus the policy that makes an ID permanent once published.
 
 **Status:** ROADMAP Phase 0 deliverable ("initial finding-ID registry"), consumed by the Phase 3 analyzer. **Implemented and fully reachable.** All 25 IDs are declared in `include/runtimeskeptic/vm/finding.hpp` (`namespace rs::vm::ids`), defined in `src/vm/finding.cpp` (`registry_storage()`), and every one is emitted by a rule in `src/vm/analyzer.cpp`. `tools/guards/check_registry.py` fails CI if those three ever disagree — they did, for months, while this line said 18.
 
@@ -233,6 +233,8 @@ could not say - and in five of the seven cases, something it was saying
 | `RS-VM-0023` | The host cannot place the mapping inside the program's address bound | critical | LuaJIT below 2^31, Box64 box32 below 2^32, Box64 dynarec above 2^32. With nowhere to express a bound, authors reached for identity requirements and the analyzer reported a contradiction it had manufactured. |
 | `RS-VM-0024` | A relative-displacement constraint was carried but not evaluated | info | Every JIT with a rel32 branch needs "within ±N bytes of another region". v0.1 cannot decide it. Saying so turns an unnoticed question into an unanswered one. |
 | `RS-VM-0025` | The program can use only a small part of this host's address space | low | Removing the (incorrect) truncation story from LuaJIT also removed the only warning that it depends on winning an address-space lottery. `PREDICTIVE` per ROADMAP section 11. |
+| `RS-VM-0026` | Requested reservation is larger than any this host granted | critical | A 5-level-paging CI runner refused QEMU's 4 PiB reservation with `ENOMEM` while the analyzer said SUPPORTED, because `RS-VM-0021` compared the size against the width of the address space and nothing else. Fitting is necessary, not sufficient. `PROVEN` when the size exceeds a power of two the host was measured to refuse; `HYPOTHESIS` in the untested band between the largest success and the smallest failure. |
+| `RS-VM-0027` | Whether a reservation of this size is grantable was never established | medium | The other half of the same defect: with `max_single_reservation` absent from a profile, a request larger than anything this project has observed a real program make (1.96 GiB across 1292 observations) has no basis for a positive answer, and silence used to read as yes. |
 
 ### Two ids whose meaning changed
 

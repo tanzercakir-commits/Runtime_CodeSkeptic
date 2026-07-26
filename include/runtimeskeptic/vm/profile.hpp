@@ -93,6 +93,38 @@ struct VirtualMemoryModel {
     // Exclusive upper bound of the usable user-mode virtual address space.
     Fact<Address> max_user_address;
 
+    // The largest single address-space reservation this host actually granted,
+    // as a power of two. Unknown means "not measured", never "unlimited".
+    //
+    // FITTING IN THE ADDRESS SPACE IS NECESSARY, NOT SUFFICIENT, and this project
+    // asserted otherwise until a 5-level-paging runner proved it. `RS-VM-0021`
+    // compared a request against `max_user_address - min_map_address` and, when it
+    // fitted, called the reservation SUPPORTED - its own rejected-fix text saying
+    // "the limit is the width of the address space, not the amount of free memory
+    // in it". On a 4-level host QEMU's 4 PiB request did not fit, the verdict was
+    // UNSUPPORTED, the kernel refused, and the prediction held FOR THE WRONG
+    // REASON. On a 56-bit host 4 PiB fits, the verdict became SUPPORTED, and the
+    // kernel refused anyway with ENOMEM:
+    //
+    //   oversized-reservation-4pib   SUPPORTED   refused   CONTRADICTED
+    //
+    // A false positive in the dangerous direction - the analyzer told a caller a
+    // 4 PiB reservation would work. Whether it does depends on overcommit policy,
+    // `RLIMIT_AS` and how much contiguous space is free, none of which the profile
+    // measured, so the rule had nothing to compare against and guessed.
+    //
+    // WHY A POWER OF TWO. The exact largest reservation moves between two runs of
+    // one binary as the process's own mappings shift, and a fact that moves is a
+    // fact about the probe: `check_reproducible.sh` would fail and `profile_id`
+    // would stop naming the host. The largest power of two that succeeded is
+    // stable, cheap to probe, and enough for the only question asked of it -
+    // whether a request of this order is plausible on this host at all.
+    //
+    // Measured with the flags the ground-truth case uses, `PROT_NONE` and
+    // `MAP_NORESERVE`, so it answers a question about address space rather than
+    // about swap.
+    Fact<std::uint64_t> max_single_reservation;
+
     // Can this host create an ordinary anonymous mapping at all, with the
     // operating system choosing the address?
     //

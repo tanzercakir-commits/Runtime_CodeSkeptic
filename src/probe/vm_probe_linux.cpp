@@ -163,6 +163,46 @@ bool can_map_exactly_at(std::uint64_t address, std::size_t length) {
     return exact;
 }
 
+// The largest single reservation the kernel actually grants, as a power of two.
+//
+// This exists because `RS-VM-0021` had nothing to compare a size against except
+// the width of the address space, and asserted SUPPORTED whenever a request fitted
+// - its own rejected-fix text saying "the limit is the width of the address space,
+// not the amount of free memory in it". A 5-level-paging runner disproved that in
+// one line: 4 PiB fits below a 56-bit `max_user_address` and the kernel refused it
+// with ENOMEM. Fitting is necessary, not sufficient.
+//
+// A POWER OF TWO ON PURPOSE. The exact largest reservation moves between two runs
+// of one binary as the process's own mappings shift, and a fact that moves is a
+// fact about the probe rather than the host - `check_reproducible.sh` would fail
+// and `profile_id` would stop naming anything. Powers of two are stable across
+// runs, and the only question asked of this fact is whether a request of a given
+// order is plausible here at all.
+//
+// Ascending, not bisecting: the answer is not monotone in the way a bisection
+// needs. A reservation can fail at 2^k and succeed at 2^(k+1) if the kernel
+// happens to find a differently-shaped hole, so the loop keeps the LARGEST success
+// rather than stopping at the first failure - the same mistake `find_max_user_address`
+// documents having made once.
+//
+// PROT_NONE and MAP_NORESERVE, matching `tests/groundtruth/cases/
+// oversized_reservation.c`, so this is a question about address space and not
+// about swap.
+std::uint64_t find_max_single_reservation() {
+    std::uint64_t largest = 0;
+    for (unsigned bit = 20; bit < 63; ++bit) {   // from 1 MiB
+        const std::uint64_t size = std::uint64_t{1} << bit;
+        MapAttempt attempt =
+            try_map(nullptr, static_cast<std::size_t>(size), PROT_NONE,
+                    MAP_PRIVATE | MAP_ANONYMOUS | MAP_NORESERVE);
+        if (attempt.ok()) {
+            largest = size;
+            unmap(attempt, static_cast<std::size_t>(size));
+        }
+    }
+    return largest;
+}
+
 std::uint64_t find_max_user_address(std::size_t page_size) {
     // Lower bound: an address we know works. Upper bound: one we know fails.
     // Do NOT stop at the first failure. Linux user space happens to be one
@@ -860,6 +900,20 @@ Result probe_virtual_memory(const Options& options) {
                 std::string(kSourceProbe) +
                     ": binary search with MAP_FIXED_NOREPLACE");
         }
+    }
+
+    // -- largest single reservation ----------------------------------------
+    if (const std::uint64_t biggest = find_max_single_reservation(); biggest != 0) {
+        profile.vm.max_single_reservation = Fact<std::uint64_t>::known(
+            biggest, EvidenceClass::MeasuredCapability,
+            std::string(kSourceProbe) +
+                ": largest power-of-two PROT_NONE MAP_NORESERVE reservation the "
+                "kernel granted");
+    } else {
+        warnings.emplace_back(
+            "no power-of-two reservation from 1 MiB upward was granted, so "
+            "max_single_reservation was left unknown rather than recorded as "
+            "zero");
     }
 
     // -- hint relocation ---------------------------------------------------

@@ -162,6 +162,27 @@
           },
           "additionalProperties": false
         },
+        "max_single_reservation": {
+          "type": "object",
+          "description": "The largest single reservation this host actually granted, as a power of two. Fitting in the address space is necessary, not sufficient: a 4 PiB request fits on a 56-bit host and is still refused with ENOMEM. Unknown means not measured, never unlimited. A power of two so the fact does not move between two runs of one binary.",
+          "required": [
+            "value",
+            "evidence"
+          ],
+          "properties": {
+            "value": {},
+            "evidence": {
+              "$ref": "#/$defs/evidenceClass"
+            },
+            "source": {
+              "type": "string"
+            },
+            "note": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        },
         "exact_mapping": {
           "type": "object",
           "description": "A value that cannot be carried without saying how it is known. `value: null` with `evidence: unknown` is the only way to say 'not established'.",

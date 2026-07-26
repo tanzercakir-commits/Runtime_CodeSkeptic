@@ -424,6 +424,113 @@ RS_TEST(a_reservation_that_fits_is_not_refused) {
     RS_CHECK(!has_finding(result, ids::kSizeExceedsAddressSpace));
 }
 
+// ---------------------------------------------------------------------------
+// Fitting the address space is NECESSARY, NOT SUFFICIENT.
+//
+// A 5-level-paging CI runner proved it in one line. On a 4-level host QEMU's
+// 4 PiB request does not fit, the verdict is UNSUPPORTED, the kernel refuses, and
+// the prediction holds FOR THE WRONG REASON. On a 56-bit host it fits, the verdict
+// became SUPPORTED, and the kernel refused anyway:
+//
+//   oversized-reservation-4pib   SUPPORTED   refused   CONTRADICTED
+//       mmap of 4503599627370496 bytes (4096.0 TiB) refused: ENOMEM
+// ---------------------------------------------------------------------------
+namespace {
+
+// A host with 56-bit user space - so 4 PiB FITS - that was measured to grant no
+// more than 64 TiB in one reservation.
+vm::EnvironmentProfile five_level_paging_host() {
+    vm::EnvironmentProfile p = permissive_host();
+    p.profile_name = "synthetic-la57";
+    p.vm.max_user_address = Fact<Address>::known(
+        Address(0xfffffffffff000ull), EvidenceClass::MeasuredCapability,
+        "synthetic: a host with 5-level paging");
+    p.vm.max_single_reservation = Fact<std::uint64_t>::known(
+        std::uint64_t{1} << 46, EvidenceClass::MeasuredCapability,
+        "synthetic: largest power-of-two reservation granted");
+    return p;
+}
+
+}  // namespace
+
+RS_TEST(a_4pib_reservation_that_fits_is_still_refused_when_the_host_will_not_grant_it) {
+    Requirement r = plain_anonymous_mapping();
+    r.operation = OperationKind::VirtualMemoryReserve;
+    r.request.size = std::uint64_t{1} << 52;
+
+    const auto result = analyze(r, five_level_paging_host());
+    RS_CHECK_MESSAGE(result.overall == SupportLevel::Unsupported,
+                     "4 PiB fits below a 56-bit max_user_address, and this host "
+                     "was measured to grant 64 TiB. Answering SUPPORTED is the "
+                     "false positive an LA57 runner caught");
+    // RS-VM-0021 must NOT fire: it does fit.
+    RS_CHECK(!has_finding(result, ids::kSizeExceedsAddressSpace));
+    RS_CHECK(has_finding(result, ids::kSizeExceedsGrantedReservation));
+
+    const Finding* f = get_finding(result, ids::kSizeExceedsGrantedReservation);
+    if (f != nullptr) {
+        // 4 PiB is above 2 x 64 TiB, so a reservation of 128 TiB was measured to
+        // FAIL on this host and this is larger still. That is proof, not a guess.
+        RS_CHECK(f->confidence == Confidence::Proven);
+    }
+}
+
+RS_TEST(a_size_between_the_largest_success_and_the_smallest_failure_is_conditional) {
+    // 96 TiB: above the 64 TiB that succeeded, below the 128 TiB that failed.
+    // Nothing measured this size, and saying either UNSUPPORTED or SUPPORTED
+    // would be a guess dressed as an answer.
+    Requirement r = plain_anonymous_mapping();
+    r.operation = OperationKind::VirtualMemoryReserve;
+    r.request.size = (std::uint64_t{1} << 46) + (std::uint64_t{1} << 45);
+
+    const auto result = analyze(r, five_level_paging_host());
+    RS_CHECK(has_finding(result, ids::kSizeExceedsGrantedReservation));
+    const Finding* f = get_finding(result, ids::kSizeExceedsGrantedReservation);
+    if (f != nullptr) {
+        RS_CHECK_MESSAGE(f->support_impact == SupportLevel::ConditionallySupported,
+                         "an unmeasured size was reported as if it had been "
+                         "measured");
+        RS_CHECK(f->confidence == Confidence::Hypothesis);
+    }
+}
+
+RS_TEST(a_reservation_within_what_the_host_granted_is_not_flagged) {
+    Requirement r = plain_anonymous_mapping();
+    r.operation = OperationKind::VirtualMemoryReserve;
+    r.request.size = std::uint64_t{1} << 40;   // 1 TiB, well under 64
+    const auto result = analyze(r, five_level_paging_host());
+    RS_CHECK(!has_finding(result, ids::kSizeExceedsGrantedReservation));
+    RS_CHECK(!has_finding(result, ids::kReservationGrantabilityUnknown));
+}
+
+RS_TEST(without_the_measurement_a_huge_reservation_is_unknown_not_supported) {
+    // The other half of the defect: silence used to read as yes. A profile that
+    // never measured the largest reservation must not license a positive answer
+    // for a size no real program in this project's corpus has ever requested
+    // (the largest observed was 1.96 GiB across 1292 observations).
+    vm::EnvironmentProfile p = five_level_paging_host();
+    p.vm.max_single_reservation = Fact<std::uint64_t>{};   // unknown
+
+    Requirement r = plain_anonymous_mapping();
+    r.operation = OperationKind::VirtualMemoryReserve;
+    r.request.size = std::uint64_t{1} << 52;
+
+    const auto result = analyze(r, p);
+    RS_CHECK_MESSAGE(result.overall == SupportLevel::Unknown,
+                     "a 4 PiB reservation against a profile that never measured "
+                     "reservation grantability came back as something other than "
+                     "UNKNOWN");
+    RS_CHECK(has_finding(result, ids::kReservationGrantabilityUnknown));
+
+    // And a size within what real programs actually request stays quiet, because
+    // otherwise every ordinary mapping on every hand-authored fixture would carry
+    // this finding.
+    Requirement small = plain_anonymous_mapping();
+    small.request.size = std::uint64_t{1} << 20;
+    const auto quiet = analyze(small, p);
+    RS_CHECK(!has_finding(quiet, ids::kReservationGrantabilityUnknown));
+}
+
 RS_TEST(alignment_of_the_reservation_is_checked_without_an_address) {
     // V8's pointer-compression cage is 4 GiB aligned to 4 GiB, placed
     // anywhere. mimalloc needs 32 MiB segment alignment. required_alignment

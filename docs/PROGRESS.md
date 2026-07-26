@@ -768,9 +768,65 @@ derived from the entry the platform reported rather than from where our own
 reservations happen to fall — but that is a hypothesis, and the next run will print
 the notes that decide it.
 
-**Also next.** Windows still has no arena at all.
+### The overlap: measured, and my hypothesis was wrong
 
-`linux---clang` stays red on LA57 runners: that is T-015, filed, not a regression.
+`f2aeefe` printed both sides, and the answer was not the one I reasoned to:
+
+```
+available   [0x169c00000, 0xfc0000000)   the ARENA, walking 4 MiB windows
+unavailable [0x200000000, 0x200004000)   16 KiB: "a hole in the address space"
+```
+
+I had guessed the 57 GiB span was a platform band the ladder had recorded, and
+concluded the arena's held-resolution was unsound. It is the arena's own run, and
+the conflicting entry is **16 KiB** from the max-address survey. The arena placed a
+4 MiB window across the very page the survey called a host limitation.
+
+So the survey's note carried the unjustified step: *"higher addresses remained
+placeable, so this is a hole in the address space"* — a one-page refusal while
+higher addresses work is equally consistent with **our own reservation sitting
+there**. The same ambiguity as the arena's, inherited through `try_place()`, in a
+producer I had not suspected.
+
+| | |
+|---|---|
+| **+** | the survey now applies the same discriminator: a refusal covered by a no-access region of this task is not recorded, and the count of those goes into a warning |
+| **+** | nothing is lost. The commpage and the carveout are no-access bands *and* real limitations, and `scan_address_space` records them at their documented addresses across their real extents; a 16 KiB duplicate inside one was already being dropped by `collapse_contained_ranges` |
+| **−** | I was about to redesign the arena on the strength of a hypothesis. Printing both notes cost one push and one commit; the redesign would have cost a day and been wrong |
+
+### T-015: fitting the address space is not sufficient, and the corpus could never have said so
+
+**Changed.** `VirtualMemoryModel::max_single_reservation` is a new measured fact;
+`RS-VM-0026` and `RS-VM-0027` are new findings; `rule_size_feasibility` no longer
+stops at "it fits"; the Linux probe measures the fact; schema, registry and
+`test_analyzer` updated (54 cases). Campaign re-run as
+`…-after-T015.json`.
+
+```
+oversized-reservation-4pib   SUPPORTED   refused   CONTRADICTED
+```
+
+The rule compared a size against `max_user_address - min_map_address` and said
+nothing more. **Its own rejected-fix text asserted the error:** *"the limit is the
+width of the address space, not the amount of free memory in it."* On a 4-level
+host 4 PiB does not fit, so UNSUPPORTED was returned, the kernel refused, and the
+prediction held for the wrong reason for the project's whole life.
+
+| | |
+|---|---|
+| **+** | the fact is a **power of two** on purpose. The exact largest reservation moves between two runs as the process's own mappings shift, and a fact that moves is a fact about the probe — `check_reproducible.sh` would fail and `profile_id` would stop naming the host. Verified: two processes agree |
+| **+** | three honest bands instead of one guess: above a size the host was measured to **refuse** → UNSUPPORTED `PROVEN`; between the largest success and the smallest failure → CONDITIONAL `HYPOTHESIS`, because nothing measured it; within what was granted → nothing to say |
+| **+** | the one constant not measured from the host is measured from the **corpus**: the largest request across 1292 observations from 13 real programs is **1.96 GiB**, p99 is 32 MiB. So 4 GiB is the line above which a profile lacking the fact answers UNKNOWN rather than yes |
+| **+** | `RS-VM-0021`'s rejected-fix sentence is corrected in place rather than deleted — it now points at `RS-VM-0026` for the case it got wrong |
+| **−** | **the campaign did not move by a single requirement.** 1292/639, 0 false positives, byte-identical. The corpus does not contain the defect and no amount of running it harder would have found it: nothing a real program asked for comes within four orders of magnitude of the 64 TiB this host grants |
+
+That null result is the point. It took a **host** the project had never run on, not a
+program — the third time in one week, after `<iterator>` on MSVC and `declare -A` on
+bash 3.2. It is an argument for the measurement channel, not for a bigger corpus.
+
+**Also next.** Windows still has no arena at all, and `RS-VM-0027` will fire on
+every Windows and macOS profile until those probes measure the new fact — which is
+the honest reading of a profile that has not.
 
 ---
 

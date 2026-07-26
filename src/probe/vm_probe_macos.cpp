@@ -1151,19 +1151,61 @@ Result probe_virtual_memory(const Options& options) {
                 "guessed");
         }
         // Structural refusals BELOW the highest placeable address are holes,
-        // not the ceiling. Recording them is the whole point on this platform.
+        // not the ceiling. Recording them is the whole point on this platform -
+        // but only the ones that are really the host's.
+        //
+        // THE SAME AMBIGUITY AS THE ARENA'S, INHERITED THROUGH try_place().
+        //
+        // A survey refusal means `try_place` said Refused at the candidate and at
+        // the next fifteen pages. That happens when a no-access region covers them
+        // - and a macOS process is full of its own PROT_NONE reservations. The
+        // runner showed exactly this:
+        //
+        //   available   [0x169c00000, 0xfc0000000)   the arena, placing 4 MiB
+        //                                            windows across 0x200000000
+        //   unavailable [0x200000000, 0x200004000)   "a hole in the address space"
+        //
+        // Both from one profile. The arena placed a 4 MiB window over the same
+        // page the survey had called a host limitation - so the note's inference,
+        // "higher addresses remained placeable, so this is a hole", was the
+        // unjustified step: a one-page refusal while higher addresses work is
+        // equally consistent with our own reservation sitting there.
+        //
+        // Nothing is lost by declining to record it. The commpage and the GPU
+        // carveout are no-access bands AND genuine host limitations, and
+        // `scan_address_space` records them at their documented addresses across
+        // their real extents; a 16 KiB duplicate inside one of them was already
+        // being dropped by collapse_contained_ranges.
+        std::size_t holes_recorded = 0, holes_ours = 0;
         for (std::uint64_t refused : survey.refused) {
             if (refused >= survey.highest_placed) continue;
             const auto hole = AddressRange::from_base_size(
                 refused, static_cast<std::uint64_t>(page_size));
             if (!hole) continue;
+            const RegionInfo region = describe_region(refused);
+            if (region.covers &&
+                (region.reserved || region.protection == VM_PROT_NONE)) {
+                ++holes_ours;
+                continue;
+            }
             ClassifiedRange cr;
             cr.range = *hole;
             cr.evidence = EvidenceClass::MeasuredCapability;
             cr.note = "the kernel refused an exact placement here while higher "
-                      "addresses remained placeable, so this is a hole in the "
-                      "address space rather than its end";
+                      "addresses remained placeable, and no region of this task "
+                      "covers it, so this is a hole in the address space rather "
+                      "than its end or a reservation of our own";
             profile.vm.unavailable_ranges.push_back(cr);
+            ++holes_recorded;
+        }
+        if (holes_ours != 0) {
+            warnings.emplace_back(
+                "survey: " + std::to_string(holes_recorded) +
+                " structural hole(s) recorded, and " + std::to_string(holes_ours) +
+                " refusal(s) NOT recorded because a no-access region of this task "
+                "covers them - those are indistinguishable from the probe's own "
+                "reservations and moved between runs, which is what made "
+                "profile_id irreproducible");
         }
     }
 
