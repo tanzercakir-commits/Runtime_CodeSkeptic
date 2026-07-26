@@ -27,6 +27,16 @@ std::uint64_t arena_ceiling_for(std::uint64_t max_user_address,
     return ((effective + granularity - 1) / granularity) * granularity;
 }
 
+std::uint64_t arena_floor_for(std::uint64_t max_user_address,
+                              std::uint64_t span) {
+    // Two spans, not one: an arena that would start at 0 is not an arena, and a
+    // host that small has no top region distinct from its bottom one.
+    if (span == 0 || max_user_address < 2 * span) return 0;
+    // `max - 1` so an exact multiple yields the bucket BELOW it rather than an
+    // empty arena starting at the ceiling. See the header.
+    return ((max_user_address - 1) / span) * span;
+}
+
 ArenaWalk walk_arena(const std::string& what, std::uint64_t bottom,
                      std::uint64_t top, std::uint64_t page_size,
                      std::uint64_t window_size, const ArenaProbe& probe) {

@@ -1289,6 +1289,54 @@ concrete: 128 TiB cannot be walked contiguously, so a Windows arena must choose
 its regions, and choosing them from what the author remembers about Windows ASLR
 is what the macOS arena's five wrong versions were each made of.
 
+### The Windows arena, and the first one designed from a measurement
+
+The runner's note came back and it settles the design outright:
+
+```
+occupied [0x7ffe0000, 0x7ff9fa967000), 4349464576 bytes in 3 bucket(s):
+  0x0            =       6299648      <- lowest occupied is KUSER_SHARED_DATA
+  0x10000000000  =       2633728
+  0x7f0000000000 =    4340531200      <- 99.8%: image, DLLs, stacks, heaps
+largest free run 139217018867712      (126.6 TiB, contiguous)
+```
+
+High-entropy ASLR puts essentially everything in the **top TiB**. So the arena is
+`[arena_floor_for(max_user_address, 1 TiB), max_user_address)` =
+`[0x7f0000000000, 0x7fffffff0000)`, walked in 64 MiB windows — 16,384 placements,
+within a rounding error of the macOS arena's 15,360. The floor comes from
+`lpMaximumApplicationAddress + 1`, a system constant identical in every process;
+the note chose the *shape*, it did not supply the bound.
+
+| | |
+|---|---|
+| **+** | the macOS arena needed five wrong versions and six runner round trips to arrive at bounds that were, in the end, two constants. This one was written **after** the measurement instead of before it, and that is the whole difference |
+| **+** | `arena_walk.hpp`'s treat-a-covered-refusal-as-held rule is sound only while no system-wide band lies inside the arena. Windows has one obvious candidate — KUSER_SHARED_DATA, mapped into every x64 process — and the runner printed it at `0x7ffe0000`, **127 TiB below the floor**. Outside by measurement, which is more than the macOS arena can say about its commpage |
+| **+** | `held_no_access` keeps its macOS meaning, because `place` answers `HeldByProbe` when the region at the *base* is ours — the faithful analogue of EEXIST, which Windows has no errno for |
+| **−** | none of it has executed on Windows. Six new tests, a cross-compile and a mutation check are not a runner, and this project has been wrong about exactly that before |
+
+**Where the line between tested and untestable now sits.** `classify_window()` —
+whose is this refusal? — moved to `probe/windows_regions.hpp` with `VirtualQuery`
+injected, so `tests/unit/test_arena_walk.cpp` drives **the probe's own code**, not
+a model of it. The one thing the test fakes is `VirtualQuery` itself. That matters
+because the whole-window scan is the load-bearing part: `VirtualQuery(base)`
+describes only the region containing `base`, so a 64 MiB window whose first byte
+is free but whose middle holds one of our DLLs is refused by `VirtualAlloc` while
+the query at the base says `MEM_FREE`. Answering from the base alone would file
+the loader's choice as a host limitation at an address that redraws every run —
+the macOS irreproducibility bug arriving through a different door.
+
+Restricting the scan to the base on purpose breaks
+`the_windows_output_does_not_move_when_aslr_redraws` six times over, which is the
+only evidence that these six cases are protecting anything.
+
+The reason to draw the line here rather than trust the platform file: the Windows
+probe sat in the tree for a day having never executed **on any machine, including
+Windows**; `test_probe` was 14/14 on a real runner while it established zero
+ranges; and the diagnostics channel dropped every Windows failure for the life of
+the repository. Three chances to notice, none taken, because everything about
+Windows here was reachable only from Windows.
+
 ### And this file was lying about its own order
 
 `docs/PROGRESS.md` is the past, and it had two entries in the wrong order: *the

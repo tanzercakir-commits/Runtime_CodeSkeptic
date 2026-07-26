@@ -428,8 +428,42 @@ dropped:**
    prediction held. First time any of that claim has been measured; the Rosetta
    half is still open, because the runner is native.
 
-**Also still open:** Windows has no arena at all. Same gap, third platform,
-untracked until T-004's measurement makes it visible.
+**Also, and now closed:** Windows had no arena at all — `available: 0,
+unavailable: 0` on a real runner, so `RS-VM-0001/0002/0003` answered UNKNOWN for
+every address on the platform. It has one, and it is the first of the three whose
+bounds were **measured before they were written**:
+
+```
+a8bc15f: the runner's own occupancy, 1 TiB buckets over 128 TiB
+  0x0            =       6299648      lowest occupied 0x7ffe0000 (KUSER_SHARED_DATA)
+  0x10000000000  =       2633728
+  0x7f0000000000 =    4340531200      99.8%: image, DLLs, stacks, heaps
+  largest free run 139217018867712    126.6 TiB, contiguous
+
+arena = [arena_floor_for(max_user_address, 1 TiB), max_user_address)
+      = [0x7f0000000000, 0x7fffffff0000)      1 TiB in 64 MiB windows = 16,384
+```
+
+`arena_floor_for()` is in `probe/arena_walk.hpp`, not in the Windows probe, for
+the reason `arena_ceiling_for()` is: a derivation that only a Windows runner can
+check has moved the platform dependency, not removed it. Likewise the refusal
+decision — whose is this? — is `probe/windows_regions.hpp`, with `VirtualQuery`
+injected, so `tests/unit/test_arena_walk.cpp` drives **the probe's own code** on
+every platform this project builds on rather than a mirror of it. Made to fail on
+demand: restricting the window scan to its base breaks 2 of the 6 new cases,
+including the reproducibility one, 6 times over.
+
+| file | what it is for |
+|---|---|
+| `include/runtimeskeptic/probe/windows_regions.hpp`, `src/probe/windows_regions.cpp` | is a placement refusal ours or the host's, with `VirtualQuery` injected |
+| `arena_floor_for()` in `probe/arena_walk.{hpp,cpp}` | the arena's floor from a system constant, never from our layout |
+| `tests/unit/test_arena_walk.cpp` | 20 cases; 6 of them Windows, against the layout `a8bc15f` measured |
+
+**Not yet measured on a runner.** Everything above is checked off-Windows; the
+walk itself has never executed on Windows. The number to read is `placed` /
+`held_by_probe` / `refused` / `held_no_access` in the arena note, and the one
+that matters is `refused`: if it is not 0, either a system band lies in the top
+TiB or the walk is filing our own layout as a limitation.
 
 **Second, and separately:** `linux---gcc` failed this same test on `650d510`
 with C++ identical to the `52f541e` that passed it, and it passes 200/200 here.

@@ -148,6 +148,37 @@ ArenaWalk walk_arena(const std::string& what, std::uint64_t bottom,
 std::uint64_t arena_ceiling_for(std::uint64_t max_user_address,
                                 std::uint64_t granularity);
 
+// The FLOOR of an arena occupying the top `span` of the user address space, or 0
+// meaning "there is no room for one". Returns the base of the `span`-sized bucket
+// that `max_user_address` falls in, so the arena is `[result, max_user_address)`.
+//
+// This is the Windows arena's bound, and it is here for the same reason
+// `arena_ceiling_for` is: the file that uses it compiles on exactly one machine
+// this project cannot obtain on demand, so a version of the derivation that lives
+// there has not removed the platform dependency - it has moved it into the one
+// place a test cannot reach. That lesson cost two days as a suspected flaky test.
+//
+// WHY THE TOP BUCKET IS THE RIGHT ONE, MEASURED RATHER THAN RECALLED. A Windows
+// Server 2025 runner reported its own occupancy across the 128 TiB user space in
+// 1 TiB buckets:
+//
+//   0x0            =       6299648 bytes   (lowest occupied 0x7ffe0000)
+//   0x10000000000  =       2633728 bytes
+//   0x7f0000000000 =    4340531200 bytes   <- 99.8%: image, DLLs, stacks, heaps
+//
+// High-entropy ASLR puts essentially everything in the top TiB. `max_user_address`
+// is `lpMaximumApplicationAddress + 1` - a system constant, identical in every
+// process on the machine - so a floor derived from it does not move with ours,
+// which is the rule `min_map_address` broke once and six campaign contracts
+// returned confident UNSUPPORTED off.
+//
+// The exact-multiple case is why this is not written inline as `(max / span) *
+// span`: on a host whose `max_user_address` IS a span multiple, that expression
+// returns the maximum itself and the arena is empty - a silent zero-coverage
+// probe, which is the failure this whole exercise exists to end.
+std::uint64_t arena_floor_for(std::uint64_t max_user_address,
+                              std::uint64_t span);
+
 }  // namespace rs::probe
 
 #endif  // RUNTIMESKEPTIC_PROBE_ARENA_WALK_HPP

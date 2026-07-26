@@ -27,6 +27,7 @@
 // the defect `min_map_address` was once guilty of, and no amount of coverage
 // testing finds it - only asking twice does.
 #include "runtimeskeptic/probe/arena_walk.hpp"
+#include "runtimeskeptic/probe/windows_regions.hpp"
 
 #include <algorithm>
 #include <cstdint>
@@ -104,6 +105,99 @@ ArenaProbe with_structural_refusal_at(std::uint64_t start, std::uint64_t end) {
         return e;
     };
     return p;
+}
+
+// --- the measured Windows runner layout -----------------------------------
+//
+// From the note `a8bc15f` published off a Windows Server 2025 runner. The
+// arena is the top TiB, where 99.8% of the process's 4.05 GiB actually sits;
+// 64 MiB windows put 16,384 placements in it, within a rounding error of the
+// macOS arena's 15,360.
+constexpr std::uint64_t kWinTiB = 1ull << 40;
+constexpr std::uint64_t kWinMax = 0x7fffffff0000ull;   // lpMaximumApplicationAddress + 1
+constexpr std::uint64_t kWinFloor = 0x7f0000000000ull; // the bucket holding 99.8%
+constexpr std::uint64_t kWinWindow = 64ull << 20;
+constexpr std::uint64_t kWinGranularity = 65536;       // NOT dwPageSize, which is 4096
+
+using Occupied = std::vector<std::pair<std::uint64_t, std::uint64_t>>;
+
+// `VirtualQuery` over a synthetic map: the ONE thing a test has to fake, and the
+// smallest thing it could be. Everything the Windows arena decides from here on
+// is the real `classify_window` / `region_at_is_occupied` from
+// `probe/windows_regions.cpp` - the same code the probe calls.
+//
+// Reports the containing region for an occupied address, and otherwise the free
+// gap running up to the next occupied region, which is what VirtualQuery does.
+RegionQuery query_over(const Occupied& occupied, std::uint64_t space_end) {
+    return [occupied, space_end](std::uint64_t address, MemRegion& out) -> bool {
+        if (address >= space_end) return false;
+        for (const auto& r : occupied) {
+            if (address >= r.first && address < r.second) {
+                out.base = r.first;
+                out.size = r.second - r.first;
+                out.free = false;
+                out.state = "MEM_COMMIT";
+                return true;
+            }
+        }
+        std::uint64_t gap_end = space_end;
+        for (const auto& r : occupied) {
+            if (r.first > address) gap_end = std::min(gap_end, r.first);
+        }
+        out.base = address;
+        out.size = gap_end - address;
+        out.free = true;
+        out.state = "MEM_FREE";
+        return true;
+    };
+}
+
+// WINDOWS SEMANTICS, WITH THE DECISIONS MADE BY THE PROBE'S OWN CODE:
+//
+//   VirtualAlloc succeeds                        -> Placed
+//   fails, and the region AT THE BASE is ours    -> HeldByProbe   (EEXIST's analogue)
+//   fails, base free, something else in window   -> Refused + classify_window covers
+//   fails, whole window free                     -> Refused + classify_window does not
+//
+// Only the VirtualAlloc outcome is modelled here; `region_at_is_occupied` and
+// `classify_window` are called for real. A test that mirrors an implementation
+// proves the mirror.
+ArenaProbe windows_probe(Occupied occupied, Occupied structural = {}) {
+    ArenaProbe p;
+    const RegionQuery query = query_over(occupied, kWinMax);
+    p.place = [occupied, structural, query](std::uint64_t base,
+                                            std::uint64_t size) {
+        const std::uint64_t end = base + size;
+        const bool refused_by_host =
+            std::any_of(structural.begin(), structural.end(), [&](const auto& r) {
+                return base < r.second && end > r.first;
+            });
+        const bool overlaps_ours =
+            std::any_of(occupied.begin(), occupied.end(), [&](const auto& r) {
+                return base < r.second && end > r.first;
+            });
+        if (!refused_by_host && !overlaps_ours) return ArenaPlacement::Placed;
+        if (region_at_is_occupied(base, query)) return ArenaPlacement::HeldByProbe;
+        return ArenaPlacement::Refused;
+    };
+    p.describe = [query](std::uint64_t base) {
+        return classify_window(base, kWinWindow, query, "ERROR_INVALID_ADDRESS");
+    };
+    return p;
+}
+
+// One plausible draw of high-entropy ASLR in the top TiB: the image, a few DLL
+// clusters, a thread stack and two heaps. Parameterised by a slide, because the
+// load-bearing property is that MOVING all of it changes nothing recorded.
+Occupied windows_layout(std::uint64_t slide) {
+    const std::uint64_t b = kWinFloor + slide;
+    return {
+        {b + 0x0a000000ull, b + 0x0a800000ull},   // the exe image
+        {b + 0x1f000000ull, b + 0x21400000ull},   // a DLL cluster, ~36 MiB
+        {b + 0x40000000ull, b + 0x40100000ull},   // a thread stack
+        {b + 0x91000000ull, b + 0x95000000ull},   // a heap, 64 MiB: spans windows
+        {b + 0xd2000000ull, b + 0xd2040000ull},   // a small private block
+    };
 }
 
 bool covered(const std::vector<ClassifiedRange>& v, std::uint64_t page) {
@@ -412,6 +506,117 @@ RS_TEST(a_held_entry_reaching_past_the_top_does_not_push_the_range_past_it) {
         RS_CHECK(r.range.start >= kTextBase);
     }
     RS_CHECK(!walk.available.empty());
+}
+
+// ---------------------------------------------------------------------------
+// The Windows arena. Same walk, third platform, and the first one whose bounds
+// were measured before they were written.
+// ---------------------------------------------------------------------------
+RS_TEST(the_windows_arena_covers_the_top_tib_where_the_runner_said_things_are) {
+    const ArenaWalk walk =
+        walk_arena("test arena", kWinFloor, kWinMax, kWinGranularity, kWinWindow,
+                   windows_probe(windows_layout(0)));
+
+    // Everything of ours is transparent, so one contiguous range, not six.
+    RS_CHECK_MESSAGE(walk.available.size() == 1,
+                     "expected ONE merged range, got " + show(bounds(walk.available)));
+    RS_CHECK(walk.unavailable.empty());
+    RS_CHECK(walk.available.front().range.start == kWinFloor);
+    RS_CHECK(walk.available.front().range.end <= kWinMax);
+
+    // And it must actually answer for where a Windows program lives. The runner's
+    // own occupied span ended at 0x7ff9fa967000.
+    RS_CHECK_MESSAGE(covered(walk.available, 0x7ff9fa967000ull - 4096),
+                     "the arena does not cover the top of the runner's own "
+                     "occupied span, which is where its image and heaps were");
+}
+
+RS_TEST(the_windows_output_does_not_move_when_aslr_redraws) {
+    // THE LOAD-BEARING TEST, and the Windows half of the one that took five
+    // rounds on macOS. High-entropy ASLR redraws every load address on every
+    // run; if any of that reaches the recorded set, `profile_id` names our
+    // morning rather than the host - which is what `min_map_address` did once
+    // and what six campaign contracts returned confident UNSUPPORTED off.
+    std::vector<std::vector<std::pair<std::uint64_t, std::uint64_t>>> seen;
+    for (std::uint64_t slide : {0ull, 0x3000000ull, 0x1c800000ull,
+                                0x64000000ull, 0xf0000000ull}) {
+        const ArenaWalk walk =
+            walk_arena("test arena", kWinFloor, kWinMax, kWinGranularity,
+                       kWinWindow, windows_probe(windows_layout(slide)));
+        RS_CHECK(walk.unavailable.empty());
+        seen.push_back(bounds(walk.available));
+    }
+    for (std::size_t i = 1; i < seen.size(); ++i) {
+        RS_CHECK_MESSAGE(seen[i] == seen[0],
+                         "the recorded set moved with our own layout: draw 0 gave " +
+                             show(seen[0]) + " and draw " + std::to_string(i) +
+                             " gave " + show(seen[i]));
+    }
+}
+
+RS_TEST(a_windows_refusal_with_the_window_wholly_free_is_a_host_limitation) {
+    // The other half: something that is NOT ours must still be recorded, or the
+    // fix for irreproducibility has bought it by recording nothing at all.
+    const std::uint64_t band_start = kWinFloor + 0x50000000ull;
+    const std::uint64_t band_end = band_start + kWinWindow;
+    const ArenaWalk walk =
+        walk_arena("test arena", kWinFloor, kWinMax, kWinGranularity, kWinWindow,
+                   windows_probe(windows_layout(0), {{band_start, band_end}}));
+
+    RS_CHECK_MESSAGE(walk.unavailable.size() == 1,
+                     "expected the structural band to be recorded, got " +
+                         show(bounds(walk.unavailable)));
+    RS_CHECK(walk.unavailable.front().range.start == band_start);
+    RS_CHECK(walk.refused == 1);
+    // And it splits the run, so nothing claims the band is available.
+    RS_CHECK(walk.available.size() == 2);
+    for (const auto& r : walk.available) {
+        RS_CHECK_MESSAGE(r.range.end <= band_start || r.range.start >= band_end,
+                         "an available range overlaps the structural band: " +
+                             r.range.to_string());
+    }
+}
+
+RS_TEST(a_dll_in_the_middle_of_a_window_is_not_a_host_limitation) {
+    // Asking VirtualQuery at the window's BASE alone would answer MEM_FREE here
+    // and file our own loader's choice as a fact about Windows. The probe scans
+    // the whole window; this is that requirement, stated as a test.
+    const std::uint64_t window_base = kWinFloor + 4 * kWinWindow;
+    const std::uint64_t dll = window_base + kWinWindow / 2;
+    const ArenaWalk walk =
+        walk_arena("test arena", kWinFloor, kWinMax, kWinGranularity, kWinWindow,
+                   windows_probe({{dll, dll + 0x100000ull}}));
+
+    RS_CHECK_MESSAGE(walk.unavailable.empty(),
+                     "a mapping of ours in the middle of a window was recorded as "
+                     "a host limitation: " + show(bounds(walk.unavailable)));
+    RS_CHECK(walk.held_no_access == 1);   // ambiguous-but-held, counted for the note
+    RS_CHECK(walk.available.size() == 1);
+}
+
+RS_TEST(kuser_shared_data_is_below_the_windows_arena_by_measurement) {
+    // `arena_walk`'s treat-a-covered-refusal-as-held rule is sound only while no
+    // system-wide band lies inside the arena. On Windows there is one obvious
+    // candidate - KUSER_SHARED_DATA, mapped into every x64 process - and the
+    // runner printed its address as the lowest thing it occupied.
+    constexpr std::uint64_t kKuserSharedData = 0x7ffe0000ull;
+    RS_CHECK(arena_floor_for(kWinMax, kWinTiB) == kWinFloor);
+    RS_CHECK_MESSAGE(kKuserSharedData < arena_floor_for(kWinMax, kWinTiB),
+                     "KUSER_SHARED_DATA is inside the arena, so a system band "
+                     "would be silently swallowed as one of ours");
+}
+
+RS_TEST(an_arena_floor_on_an_exact_multiple_is_not_an_empty_arena) {
+    // `(max / span) * span` returns the ceiling itself here, and the arena would
+    // be empty: a probe that establishes nothing, silently, which is the exact
+    // condition this whole exercise exists to end.
+    constexpr std::uint64_t kSpan = 1ull << 40;
+    RS_CHECK(arena_floor_for(128 * kSpan, kSpan) == 127 * kSpan);
+    RS_CHECK(arena_floor_for(128 * kSpan - 4096, kSpan) == 127 * kSpan);
+    // A host too small for a distinct top region gets no arena rather than a bad one.
+    RS_CHECK(arena_floor_for(kSpan, kSpan) == 0);
+    RS_CHECK(arena_floor_for(0, kSpan) == 0);
+    RS_CHECK(arena_floor_for(kWinMax, 0) == 0);
 }
 
 RS_TEST_MAIN("arena walk")

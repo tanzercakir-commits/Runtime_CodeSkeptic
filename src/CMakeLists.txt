@@ -46,8 +46,15 @@ add_library(RuntimeSkeptic::reports ALIAS rs_reports)
 # arena logic with the platform calls injected, so it compiles and is tested
 # everywhere. The first version of that logic lived inside the macOS probe,
 # where the only way to check it was a runner - and it was wrong.
+# windows_regions.cpp is unguarded for the same reason and a stronger one: the
+# Windows probe sat in the tree for a day having never executed on any machine
+# including Windows, `test_probe` was 14/14 on a real runner while it established
+# zero ranges, and the diagnostics channel dropped every Windows failure for the
+# life of the repository. Three chances to notice, none taken, because everything
+# about Windows here was reachable only from Windows.
 add_library(rs_probe STATIC
     probe/arena_walk.cpp
+    probe/windows_regions.cpp
     probe/vm_probe_linux.cpp
     probe/vm_probe_macos.cpp
     probe/vm_probe_windows.cpp
