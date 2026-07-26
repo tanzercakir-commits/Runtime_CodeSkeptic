@@ -1,0 +1,11 @@
+NOT REPRODUCIBLE: two runs of the probe on this host disagree
+  run 1  sha256:a70c91e2e66c0b92cfe6900a7588b5bb15b711fa850b16a0ca229380a8a1f45c
+  run 2  sha256:12909f0e34195bcb2e5d1854586b2873a6ef9cb10c5480d995d30fdd58497a38
+
+Facts that differ:
+  available_ranges: 22 vs 22 entries
+  unavailable_ranges: 50 vs 66 entries
+
+A fact that changes while the host does not is a fact about the PROBE.
+Record it as a probe_run warning, not as a host capability - a measured
+capability permits a PROVEN verdict, and this one cannot support it.
