@@ -463,11 +463,74 @@ Three instances, three shapes, one platform nobody develops on: a missing
 *feature* (`declare -A`, `mapfile`), a different *semantic* (`${arr[@]}` under
 `set -u`), and a *version* older than every developer machine by eighteen years.
 
-**Next.** `file-map-beyond-eof` and `file-map-partial-page` should now produce
-output on macOS; whether native arm64 raises SIGBUS where Rosetta returns zeroes is
-the question that case exists to answer, and it has never been measured. Remaining
-on T-014: `check_reproducible.sh` on the macOS runner. Windows still has no arena
-at all.
+### `15ea3f3`: **macOS is green.** First time in this project's history.
+
+```
+compatibility-gate/failure     <- an LA57 runner; see below
+determinism/success
+linux---clang/success          linux---gcc/success
+macos---apple-clang/success    windows---msvc/success
+```
+
+**T-014 is met on a real macOS host**: build, 14/14 ctest including `test_probe`,
+all 13 guards, and the ground-truth harness through all 14 cases. The platform that
+went from `line 57: supported: unbound variable` this morning to green.
+
+And the LA57 cap worked. On the 5-level runner the arena is now where mappings
+actually are, and the **code page passes**:
+
+```
+max_user_address: 0xfffffffffff000
+arena:            [0x7c0000000000, 0x800000000000)     <- was 0xfffc0000000000
+code page   ok
+heap page   0x7ffa6bcff000   FAIL
+```
+
+#### The last remaining gap, and its price
+
+The heap page is 41.7 GiB above the arena's recorded top, `0x7ff000400000`. Not a
+bug in the cap — a consequence of the sampled design meeting a different
+`mmap_base`. Samples run every 64 GiB and the run closes at the **last sample**,
+never at `top`, because closing further than the evidence reaches once produced a
+range asserted both available and not. So the final 64 GiB stride is unclaimed.
+
+On a 4-level host `mmap_base` lands around `0x7f3…`, comfortably inside. With
+LA57, `mmap_base` is derived from `DEFAULT_MAP_WINDOW` rather than `TASK_SIZE`, so
+randomization is subtracted from 2^47 and it lands at `0x7ffa…` — inside the one
+stride the arena will not claim.
+
+**Fixing it means probing near the top, and any such probe changes the 4-level
+profile.** A window at the highest position fitting below `probe_top` is a new
+sample on every host, so `profile_id` moves and
+`campaigns/false-positive/2026-07-linux-x86_64-after-T013.json` no longer describes
+the probe that produced it — `check_campaign.py` exists to say so. That is a
+re-measurement, not a one-line fix, and it is a decision rather than a detail:
+
+| Option | Cost |
+|---|---|
+| probe the top window; re-run `run_false_positive.sh` | correct on both host kinds; the published 0-of-1293 has to be re-measured and re-committed |
+| special-case it — extra sample only when `ceiling != max_user_address + page` | no re-measurement, and a branch whose only justification is "it keeps a number we already published" |
+| leave it, record it | `compatibility-gate` stays red on LA57 runners, which hides the next failure |
+
+The second is the tempting one and is the shape of thing this project exists to
+object to. Recorded here rather than chosen quietly.
+
+#### And the green run threw away a measurement
+
+`file-map-beyond-eof` and `file-map-partial-page` produced output on macOS for the
+first time. Whether native arm64 raises SIGBUS where Rosetta 2 returns zeroes is
+the question that case exists to answer, and nobody has ever measured it.
+
+**It is not readable.** `refs/ci-logs/*` publishes `if: failure()`, so the run that
+finally produced the observation is the run that discarded it. The channel was
+built to diagnose failures and it does that well; the measurement plane's own
+output is only retrievable when something goes wrong. A first-ever platform
+measurement arriving inside a green job is exactly the case the design misses, and
+it is a small fix — publish the ground-truth output unconditionally on the
+expensive platforms.
+
+**Also next.** `check_reproducible.sh` on the macOS runner is still outstanding.
+Windows still has no arena at all.
 
 ---
 

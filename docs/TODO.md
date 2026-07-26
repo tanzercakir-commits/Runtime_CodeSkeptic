@@ -206,6 +206,31 @@ that, and nothing connected it to the arena. Fixed by `arena_ceiling_for()`,
 which is a byte-identical no-op on a 4-level host — same `profile_id`, same
 bounds, `check_reproducible.sh` still agreeing.
 
+**Met on a real macOS host** (`15ea3f3`): build, 14/14 ctest including
+`test_probe`, all 13 guards, and the ground-truth harness through all 14 cases.
+macOS green for the first time in the project's history. `test_probe` takes 0.15 s
+for ~10 full probes, so the 15,360-window walk costs ~15 ms — the cost question is
+answered.
+
+**Three things this item is NOT finished by, all recorded rather than quietly
+dropped:**
+
+1. **`check_reproducible.sh` has not run on the macOS runner.** The arena's bounds
+   are constants so it should agree across two processes, and "should" is the word
+   this project does not accept.
+2. **The Linux arena's last 64 GiB stride is unclaimed**, which an LA57 runner
+   exposes: `mmap_base` derives from `DEFAULT_MAP_WINDOW` there, so it lands at
+   `0x7ffa…`, inside the one stride the arena will not claim. Any fix probes near
+   the top, which is a new sample on **every** host — so `profile_id` moves and the
+   published `campaigns/false-positive/…-after-T013.json` has to be re-measured.
+   A decision, not a detail; the three options and their prices are in
+   `docs/PROGRESS.md`.
+3. **The green run discarded a first-ever measurement.** `file-map-beyond-eof` and
+   `file-map-partial-page` produced output on macOS at last, and `refs/ci-logs/*`
+   publishes `if: failure()` — so the run that produced the observation is the run
+   that threw it away. Publish the ground-truth output unconditionally on the
+   expensive platforms.
+
 **Also still open:** Windows has no arena at all. Same gap, third platform,
 untracked until T-004's measurement makes it visible.
 
