@@ -222,7 +222,13 @@ jobs:
           slug="$(printf '%s' "${{ matrix.name }}" | tr -c 'A-Za-z0-9._-' '-')"
           mkdir -p /tmp/diag
           echo "$STEPS_JSON" > /tmp/diag/steps.json
-          ctest --test-dir build --rerun-failed --output-on-failure \
+          # --build-config is NOT optional here. On a multi-config generator
+          # (MSVC) ctest without it answers "Test not available without
+          # configuration.  (Missing "-C <config>"?)" and exits non-zero, so
+          # every Windows failure this channel ever carried said that instead of
+          # saying what failed. See tools/guards/check_workflow_ctest.py.
+          ctest --test-dir build --build-config RelWithDebInfo \
+            --rerun-failed --output-on-failure \
             > /tmp/diag/ctest.txt 2>&1 || true
           tail -c 30000 /tmp/diag/ctest.txt > /tmp/diag/ctest_tail.txt || true
           bash tools/guards/run_all.sh > /tmp/diag/guards.txt 2>&1 || true
@@ -390,7 +396,13 @@ jobs:
           slug="$(printf '%s' "${{ matrix.name }}" | tr -c 'A-Za-z0-9._-' '-')"
           mkdir -p /tmp/diag
           echo "$STEPS_JSON" > /tmp/diag/steps.json
-          ctest --test-dir build --rerun-failed --output-on-failure \
+          # --build-config is NOT optional here. On a multi-config generator
+          # (MSVC) ctest without it answers "Test not available without
+          # configuration.  (Missing "-C <config>"?)" and exits non-zero, so
+          # every Windows failure this channel ever carried said that instead of
+          # saying what failed. See tools/guards/check_workflow_ctest.py.
+          ctest --test-dir build --build-config RelWithDebInfo \
+            --rerun-failed --output-on-failure \
             > /tmp/diag/ctest.txt 2>&1 || true
           tail -c 30000 /tmp/diag/ctest.txt > /tmp/diag/ctest_tail.txt || true
           bash tools/guards/run_all.sh > /tmp/diag/guards.txt 2>&1 || true
@@ -591,7 +603,13 @@ jobs:
           slug="$(printf '%s' "compatibility-gate" | tr -c 'A-Za-z0-9._-' '-')"
           mkdir -p /tmp/diag
           echo "$STEPS_JSON" > /tmp/diag/steps.json
-          ctest --test-dir build --rerun-failed --output-on-failure \
+          # --build-config is NOT optional here. On a multi-config generator
+          # (MSVC) ctest without it answers "Test not available without
+          # configuration.  (Missing "-C <config>"?)" and exits non-zero, so
+          # every Windows failure this channel ever carried said that instead of
+          # saying what failed. See tools/guards/check_workflow_ctest.py.
+          ctest --test-dir build --build-config RelWithDebInfo \
+            --rerun-failed --output-on-failure \
             > /tmp/diag/ctest.txt 2>&1 || true
           tail -c 30000 /tmp/diag/ctest.txt > /tmp/diag/ctest_tail.txt || true
           bash tools/guards/run_all.sh > /tmp/diag/guards.txt 2>&1 || true
@@ -720,7 +738,13 @@ jobs:
           slug="$(printf '%s' "determinism" | tr -c 'A-Za-z0-9._-' '-')"
           mkdir -p /tmp/diag
           echo "$STEPS_JSON" > /tmp/diag/steps.json
-          ctest --test-dir build --rerun-failed --output-on-failure \
+          # --build-config is NOT optional here. On a multi-config generator
+          # (MSVC) ctest without it answers "Test not available without
+          # configuration.  (Missing "-C <config>"?)" and exits non-zero, so
+          # every Windows failure this channel ever carried said that instead of
+          # saying what failed. See tools/guards/check_workflow_ctest.py.
+          ctest --test-dir build --build-config RelWithDebInfo \
+            --rerun-failed --output-on-failure \
             > /tmp/diag/ctest.txt 2>&1 || true
           tail -c 30000 /tmp/diag/ctest.txt > /tmp/diag/ctest_tail.txt || true
           bash tools/guards/run_all.sh > /tmp/diag/guards.txt 2>&1 || true

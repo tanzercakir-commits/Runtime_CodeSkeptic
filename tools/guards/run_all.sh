@@ -43,6 +43,10 @@
 #                    `unknown` rows were keyed on the measured host, and the
 #                    profile that would have made them host-independent was
 #                    assigned and never read since the day the file was written
+#   check_workflow.. the diagnostics channel this project reads INSTEAD of the
+#                    Actions tab ran `ctest` with no `-C` on MSVC's multi-config
+#                    generator, so every Windows failure it ever published said
+#                    "Missing -C <config>?" in place of the failure
 #
 # `selftest` runs FIRST and is not one of them. Every other guard here passes on
 # a repository that has already been fixed - and so would a guard whose patterns
@@ -81,6 +85,7 @@ run "includes vs MSVC"      python3 "$HERE/check_includes.py"
 run "shell vs bash 3.2"     python3 "$HERE/check_shell_portability.py"
 run "shell dead variables"  python3 "$HERE/check_shell_vars.py"
 run "one probe per platform" python3 "$HERE/check_probe_platforms.py"
+run "ctest names a config"  python3 "$HERE/check_workflow_ctest.py"
 
 echo
 if [ "$failed" -eq 0 ]; then

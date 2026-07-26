@@ -122,7 +122,7 @@ jobs:
           cmake --build build --parallel
 
       - name: Test
-        run: ctest --test-dir build --output-on-failure
+        run: ctest --test-dir build --build-config RelWithDebInfo --output-on-failure
 
       # ctest's reproducibility test calls the probe twice in ONE process, so
       # it cannot see anything ASLR decides at exec time. This runs two.
@@ -211,7 +211,8 @@ jobs:
         run: |
           mkdir -p /tmp/diag
           echo "$STEPS_JSON" > /tmp/diag/steps.json
-          ctest --test-dir build --rerun-failed --output-on-failure \
+          ctest --test-dir build --build-config RelWithDebInfo \
+            --rerun-failed --output-on-failure \
             > /tmp/diag/ctest_failed.txt 2>&1 || true
           tail -c 30000 /tmp/diag/ctest_failed.txt > /tmp/diag/ctest_tail.txt || true
           cp /tmp/reproducible.txt /tmp/diag/reproducible.txt 2>/dev/null \
@@ -270,7 +271,7 @@ jobs:
 
       - name: Test under translation
         if: steps.rosetta.outputs.available == 'true'
-        run: ctest --test-dir build-x64 --output-on-failure
+        run: ctest --test-dir build-x64 --build-config RelWithDebInfo --output-on-failure
 
       - name: Probe is reproducible across processes (x86-64)
         run: |
@@ -416,7 +417,8 @@ jobs:
         run: |
           mkdir -p /tmp/diag
           echo "$STEPS_JSON" > /tmp/diag/steps.json
-          ctest --test-dir build-x64 --rerun-failed --output-on-failure \
+          ctest --test-dir build-x64 --build-config RelWithDebInfo \
+            --rerun-failed --output-on-failure \
             > /tmp/diag/ctest_failed.txt 2>&1 || true
           tail -c 30000 /tmp/diag/ctest_failed.txt > /tmp/diag/ctest_tail.txt || true
           cp /tmp/reproducible.txt /tmp/diag/reproducible.txt 2>/dev/null \

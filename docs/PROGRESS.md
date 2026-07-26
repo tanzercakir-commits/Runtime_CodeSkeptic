@@ -16,133 +16,6 @@ re-litigated; a mistake recorded here does not need to be re-made.
 
 ---
 
-## 2026-07-26 — the fix was in the file, assigned and never read
-
-**Changed.** `tests/groundtruth/selftest.sh` gets `profile_for()`, so an UNKNOWN
-row is checked against a profile that knows nothing instead of against the
-measured host; `tools/guards/check_shell_vars.py` is new;
-`tools/guards/selftest.py` now recomputes the case count `docs/PLAN.md` states
-about it. Selftest 52 to **58 cases**.
-
-| | |
-|---|---|
-| **+** | macOS's remaining failure was substantive, not portability, and the check that caught it was written for exactly this |
-| **+** | the correct fix had been sitting in the file since the day it was written — `PROFILE`, assigned, referenced zero times |
-| **+** | new guard: 1 true positive on the historical tree, **0 false positives** across 8 scripts |
-| **+** | `docs/PLAN.md` said the guard selftest had `25` cases; it had 58. Now recomputed, so it cannot drift again |
-| **−** | the same dead-variable class exists in Python and is **not** checked — `ROOT` in `selftest.py` was dead too, found by eye, not by a guard |
-| **−** | the guard catches the symptom (a dead name), not the disease (a host-dependent expected value) |
-| **−** | still no measurement from a real Windows host. Three green legs is not the fourth. |
-
-### What macOS was actually complaining about
-
-After `52f541e` the channel reported five green and one red:
-
-```
-compatibility-gate/success   determinism/success
-linux---clang/success        linux---gcc/success
-windows---msvc/success       macos---apple-clang/failure
-```
-
-`refs/ci-logs/<sha>/macos---apple-clang` held the reason:
-
-```
-tests/groundtruth/selftest.sh: precondition failed - exact-mapping-in-carveout
-predicts UNSUPPORTED on this host, not UNKNOWN
-  the selftest's rows are keyed on that; fix the row, not this check
-```
-
-Not bash 3.2 this time. The selftest's two `unknown` rows were checked against
-the **measured** host, on the assumption that no real machine knows anything
-about `0x1307200000`. True on Linux. False on macOS, where the probe **measures**
-the Rosetta/GPU carveout `[0x1000000000, 0x7000000000)` as unavailable and the
-address falls inside it — so the contract predicts UNSUPPORTED, and a row whose
-whole job is to exercise UNKNOWN was exercising nothing.
-
-Reproduced here without a macOS runner, against the committed fixture:
-
-```
-rs-check exact-mapping-in-carveout --profile ...
-  unknown-host.synthetic.json          exit 3   UNKNOWN
-  macos-arm64-rosetta-x86_64.fixture   exit 1   UNSUPPORTED   <- the CI failure
-```
-
-**The precondition check did its job.** Its comment says: *"checked here rather
-than assumed — if a rule change moves one of these the selftest says so instead
-of quietly testing the wrong row."* It fired for a platform difference rather
-than a rule change, which is a use it was not written for and covers anyway.
-
-### The fix was already written down
-
-```sh
-PROFILE="$ROOT/profiles/fixtures/unknown-host.synthetic.json"
-```
-
-Assigned on the day the file was written, above a comment explaining that it
-exists so *"an UNKNOWN prediction is guaranteed rather than hoped for"* — and
-then referenced **zero times**. `grep -c '\$PROFILE'` returned `0`. The author
-wrote the right answer, did not use it, and nothing objected for the file's
-entire life. `profile_for()` now routes `unknown` rows to it and everything else
-to the measured host, which is host-independent by construction rather than by
-luck.
-
-### The guard, and what it does not cover
-
-`check_shell_vars.py` flags a variable assigned as a whole statement and never
-read. Measured both ways before being believed:
-
-| | |
-|---|---|
-| on `52f541e` (before the fix) | **1** finding: `selftest.sh:47: PROFILE` |
-| on this tree | 0 findings, 8 scripts |
-
-Zero false positives against real code is the bar `check_includes.py` set, and
-the reason the rules are narrow: a `FOO=bar cmd` prefix sets a **child's**
-environment and is not a variable of the script; `export` and `local` are skipped
-because something outside may read them; a name appearing only in a comment is
-not a use.
-
-**It catches the symptom, not the disease.** The defect was a test whose expected
-value depended on the host it happened to run on. That is not mechanically
-checkable and this guard should not be read as having checked it. What makes the
-cheap version worth having is that here the symptom sat directly on top of the
-disease, and would have named the exact line three weeks early.
-
-**And the class is wider than the check.** `ROOT` in `tools/guards/selftest.py`
-was assigned and never read — same shape, in the file that tests the guards, in
-Python, where nothing here looks. It is used now (it reads `docs/PLAN.md`), but it
-was found by reading, not by a guard. `pyflakes` would cover it; it is not
-installed and adding a dependency to CI for one finding was not judged worth it
-today. Recorded as a known hole rather than closed.
-
-### A number in prose is a claim like any other
-
-`docs/PLAN.md` stated `tools/guards/selftest.py`, 25 cases. There were 58. It had
-already survived the increases to 48 and to 52 — `check_campaign.py` exists for
-exactly this failure on measured numbers, and nothing was doing it for this one.
-`selftest.py` now parses the number out of `PLAN.md` and fails on disagreement,
-because the only thing that reliably knows the count is the file that holds it.
-
-### Two measurement mistakes made while writing this entry
-
-Both mine, both in verification commands, both worth writing down because the
-project's whole claim is about not trusting an unmeasured number:
-
-- `echo "$(basename $p) -> exit $?"` — the command substitution runs first and
-  resets `$?`. It reported `SUPPORTED` for both profiles, i.e. "there is no
-  macOS failure", which would have been a confident retraction of a real bug.
-- `run_all.sh | tail -20; echo $?` — the pipeline's status is `tail`'s. It
-  reported `exit=0` for a run that failed.
-
-Neither reached a commit. Both are the same error as the one this session fixed:
-reading a value from something that is not the thing you meant to measure.
-
-**Next.** Push and watch `refs/status/<sha>/*` for six green — the first time
-this project will have had that. Then T-004's only remaining piece, which no
-guard can substitute for: a profile measured on a real Windows host.
-
----
-
 ## 2026-07-26 — six green did not happen, and the reason is worth more than six green
 
 **Changed.** `tests/conformance/test_probe.cpp` — the coverage test's failure
@@ -1366,10 +1239,197 @@ is *this process's* free space, which is the fact-about-our-morning problem in i
 purest form. The bounds can come from constants; what is between them still has to be
 placed, not read.
 
+### The runner answered, and the answer was that the alarm was broken
+
+`268bb3e` went out so that a Windows runner would print three addresses. It ran,
+it failed as designed — `refs/status/268bb3e…/windows---msvc/failure`, five other
+jobs green — and `refs/ci-logs/268bb3e…/windows---msvc` carried this, in full:
+
+```
+Test project D:/a/Runtime_CodeSkeptic/Runtime_CodeSkeptic/build
+    Start 13: test_probe
+Test not available without configuration.  (Missing "-C <config>"?)
+```
+
+Not the assertion. Not the code page, the heap page or `max_user_address`. The
+name of a missing flag.
+
+`ci.yml`'s diagnostics step ran `ctest --test-dir build --rerun-failed` with no
+configuration. On Linux and macOS the generator is single-config and that works.
+**MSVC's generator is multi-config**, where ctest without `-C` does not run the
+test at all — it prints the sentence above and exits non-zero. So for the entire
+life of this repository, every Windows entry in the log channel has carried that
+sentence in place of the failure it was published to describe.
+
+| | |
+|---|---|
+| **−** | the diagnostics channel — the thing this project reads *instead of* the Actions tab — has never once worked on Windows. Three commits were spent making a failure carry its evidence into a channel that was dropping it |
+| **−** | `windows-probe.yml` had `-C RelWithDebInfo` and was correct, because it is Windows-only and was written while looking at Windows. `ci.yml` is the shared workflow, and shared code is where the platform-specific defect hides |
+| **−** | **third defect of one shape in this one channel**: two bash heredocs under `shell: pwsh` (so `report` had failed on every Windows run ever and `refuse_wine` had never executed), and now this. A diagnostics step only speaks when something else has already gone wrong, so nobody checks the alarm on a day nothing is burning |
+| **+** | fixed at all 12 `ctest` invocations across the three workflows, and `tools/guards/check_workflow_ctest.py` makes it un-repeatable without a runner: every `ctest` in a workflow must name a config, and that config must be one a `-DCMAKE_BUILD_TYPE=` in the same file actually builds |
+| **+** | the guard had a false positive on its first run and the repository caught it: `\bctest\b` matched `tail /tmp/diag/ctest.txt`, because `.` is a word boundary, and five *correct* lines were reported as defects. It is a command-word match now, with that exact case in the selftest — **a guard that fires on the fixed tree is worse than no guard, because the next person silences it** |
+| **+** | selftest 66 → **72 cases** |
+
+### Two channels for one number, deliberately
+
+The next push has to ask the same question `268bb3e` asked, and the reason that
+one went unanswered is that a single channel was read for a single signal — the
+error this session already made once, reporting "still running" for 40 minutes
+when the truth was "never started". So the Windows probe's `VirtualQuery` walk
+now also reports **where this process actually sits**: lowest and highest
+occupied address, total occupied bytes, and occupancy per 1 TiB bucket. That
+travels in `profile.json`, which the diagnostics ref already carries, so it
+arrives whether or not the ctest fix works.
+
+It is `notes`, not facts — outside the facts subtree, outside `profile_id`,
+alongside the walk counts that were already there. The rule this project keeps
+relearning is not *record less*; it is that **the recorded set must not move with
+the probe's own layout**, and a note is not the recorded set. What it is for is
+concrete: 128 TiB cannot be walked contiguously, so a Windows arena must choose
+its regions, and choosing them from what the author remembers about Windows ASLR
+is what the macOS arena's five wrong versions were each made of.
+
+### And this file was lying about its own order
+
+`docs/PROGRESS.md` is the past, and it had two entries in the wrong order: *the
+fix was in the file, assigned and never read* (`650d510`, 12:49) sat **above**
+*six green did not happen* (`90dc74b`, 13:01), against the newest-first rule
+stated in this file's own header. Swapped. Every entry carries the same date, so
+no date-comparison guard would have caught it, and none is being added that
+pretends otherwise — the check that would work has to ask git which commit
+introduced each header. Filed, not faked.
+
 **Also next.** The Windows arena, once the runner says where its code and heap are. The Rosetta lane still needs a dispatch —
 `gh workflow run macos-probe.yml --ref main` — and it now publishes its ground-truth
 output, so the second half of the `file_map_beyond_eof` claim will be readable from
 the sandbox when it runs.
+
+---
+
+## 2026-07-26 — the fix was in the file, assigned and never read
+
+**Changed.** `tests/groundtruth/selftest.sh` gets `profile_for()`, so an UNKNOWN
+row is checked against a profile that knows nothing instead of against the
+measured host; `tools/guards/check_shell_vars.py` is new;
+`tools/guards/selftest.py` now recomputes the case count `docs/PLAN.md` states
+about it. Selftest 52 to **58 cases**.
+
+| | |
+|---|---|
+| **+** | macOS's remaining failure was substantive, not portability, and the check that caught it was written for exactly this |
+| **+** | the correct fix had been sitting in the file since the day it was written — `PROFILE`, assigned, referenced zero times |
+| **+** | new guard: 1 true positive on the historical tree, **0 false positives** across 8 scripts |
+| **+** | `docs/PLAN.md` said the guard selftest had `25` cases; it had 58. Now recomputed, so it cannot drift again |
+| **−** | the same dead-variable class exists in Python and is **not** checked — `ROOT` in `selftest.py` was dead too, found by eye, not by a guard |
+| **−** | the guard catches the symptom (a dead name), not the disease (a host-dependent expected value) |
+| **−** | still no measurement from a real Windows host. Three green legs is not the fourth. |
+
+### What macOS was actually complaining about
+
+After `52f541e` the channel reported five green and one red:
+
+```
+compatibility-gate/success   determinism/success
+linux---clang/success        linux---gcc/success
+windows---msvc/success       macos---apple-clang/failure
+```
+
+`refs/ci-logs/<sha>/macos---apple-clang` held the reason:
+
+```
+tests/groundtruth/selftest.sh: precondition failed - exact-mapping-in-carveout
+predicts UNSUPPORTED on this host, not UNKNOWN
+  the selftest's rows are keyed on that; fix the row, not this check
+```
+
+Not bash 3.2 this time. The selftest's two `unknown` rows were checked against
+the **measured** host, on the assumption that no real machine knows anything
+about `0x1307200000`. True on Linux. False on macOS, where the probe **measures**
+the Rosetta/GPU carveout `[0x1000000000, 0x7000000000)` as unavailable and the
+address falls inside it — so the contract predicts UNSUPPORTED, and a row whose
+whole job is to exercise UNKNOWN was exercising nothing.
+
+Reproduced here without a macOS runner, against the committed fixture:
+
+```
+rs-check exact-mapping-in-carveout --profile ...
+  unknown-host.synthetic.json          exit 3   UNKNOWN
+  macos-arm64-rosetta-x86_64.fixture   exit 1   UNSUPPORTED   <- the CI failure
+```
+
+**The precondition check did its job.** Its comment says: *"checked here rather
+than assumed — if a rule change moves one of these the selftest says so instead
+of quietly testing the wrong row."* It fired for a platform difference rather
+than a rule change, which is a use it was not written for and covers anyway.
+
+### The fix was already written down
+
+```sh
+PROFILE="$ROOT/profiles/fixtures/unknown-host.synthetic.json"
+```
+
+Assigned on the day the file was written, above a comment explaining that it
+exists so *"an UNKNOWN prediction is guaranteed rather than hoped for"* — and
+then referenced **zero times**. `grep -c '\$PROFILE'` returned `0`. The author
+wrote the right answer, did not use it, and nothing objected for the file's
+entire life. `profile_for()` now routes `unknown` rows to it and everything else
+to the measured host, which is host-independent by construction rather than by
+luck.
+
+### The guard, and what it does not cover
+
+`check_shell_vars.py` flags a variable assigned as a whole statement and never
+read. Measured both ways before being believed:
+
+| | |
+|---|---|
+| on `52f541e` (before the fix) | **1** finding: `selftest.sh:47: PROFILE` |
+| on this tree | 0 findings, 8 scripts |
+
+Zero false positives against real code is the bar `check_includes.py` set, and
+the reason the rules are narrow: a `FOO=bar cmd` prefix sets a **child's**
+environment and is not a variable of the script; `export` and `local` are skipped
+because something outside may read them; a name appearing only in a comment is
+not a use.
+
+**It catches the symptom, not the disease.** The defect was a test whose expected
+value depended on the host it happened to run on. That is not mechanically
+checkable and this guard should not be read as having checked it. What makes the
+cheap version worth having is that here the symptom sat directly on top of the
+disease, and would have named the exact line three weeks early.
+
+**And the class is wider than the check.** `ROOT` in `tools/guards/selftest.py`
+was assigned and never read — same shape, in the file that tests the guards, in
+Python, where nothing here looks. It is used now (it reads `docs/PLAN.md`), but it
+was found by reading, not by a guard. `pyflakes` would cover it; it is not
+installed and adding a dependency to CI for one finding was not judged worth it
+today. Recorded as a known hole rather than closed.
+
+### A number in prose is a claim like any other
+
+`docs/PLAN.md` stated `tools/guards/selftest.py`, 25 cases. There were 58. It had
+already survived the increases to 48 and to 52 — `check_campaign.py` exists for
+exactly this failure on measured numbers, and nothing was doing it for this one.
+`selftest.py` now parses the number out of `PLAN.md` and fails on disagreement,
+because the only thing that reliably knows the count is the file that holds it.
+
+### Two measurement mistakes made while writing this entry
+
+Both mine, both in verification commands, both worth writing down because the
+project's whole claim is about not trusting an unmeasured number:
+
+- `echo "$(basename $p) -> exit $?"` — the command substitution runs first and
+  resets `$?`. It reported `SUPPORTED` for both profiles, i.e. "there is no
+  macOS failure", which would have been a confident retraction of a real bug.
+- `run_all.sh | tail -20; echo $?` — the pipeline's status is `tail`'s. It
+  reported `exit=0` for a run that failed.
+
+Neither reached a commit. Both are the same error as the one this session fixed:
+reading a value from something that is not the thing you meant to measure.
+
+**Next.** Push and watch `refs/status/<sha>/*` for six green — the first time
+this project will have had that. Then T-004's only remaining piece, which no
+guard can substitute for: a profile measured on a real Windows host.
 
 ---
 

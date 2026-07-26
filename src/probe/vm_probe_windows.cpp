@@ -71,6 +71,7 @@
 #include <ctime>
 #include <limits>
 #include <string>
+#include <utility>
 #include <vector>
 
 // clang-format off
@@ -529,13 +530,36 @@ ProtectionOutcome probe_protection(std::uint64_t page_size,
 // -------------------------------------------------------------------------
 // The address-space walk. Counts only - see the header comment.
 // -------------------------------------------------------------------------
+// WHY THIS ALSO REPORTS WHERE, AND WHY THAT IS SAFE.
+//
+// The counts alone answered the question "did the walk work". They do not answer
+// the question the Windows arena needs answered: 128 TiB is far too wide to walk
+// contiguously, so an arena must choose REGIONS, and choosing them from what this
+// author remembers about Windows ASLR is the guess that the macOS arena's five
+// wrong versions were all made of. The macOS bounds were settled by a runner
+// printing three addresses; these are the same three, for Windows.
+//
+// Occupancy per 1 TiB bucket IS a fact about this process and would poison
+// `profile_id` - so it goes into `notes`, which is outside the facts subtree and
+// outside the hash, exactly like the counts already there. The rule this project
+// keeps relearning is not "record less", it is that the RECORDED SET must not
+// move with the probe's own layout. A note is not the recorded set.
 struct WalkSummary {
     std::size_t free_regions = 0;
     std::size_t reserved_regions = 0;
     std::size_t committed_regions = 0;
     std::uint64_t largest_free_bytes = 0;
     bool completed = false;
+
+    // Note-only, all of it. See above.
+    std::uint64_t lowest_occupied = 0;
+    std::uint64_t highest_occupied_end = 0;
+    std::uint64_t occupied_bytes = 0;
+    // Bucket index -> occupied bytes, one bucket per TiB, non-empty only.
+    std::vector<std::pair<std::uint64_t, std::uint64_t>> occupied_by_tib;
 };
+
+constexpr std::uint64_t kWinTiB = 1ull << 40;
 
 WalkSummary walk_address_space(std::uint64_t min_address,
                                std::uint64_t max_address) {
@@ -547,18 +571,45 @@ WalkSummary walk_address_space(std::uint64_t min_address,
         const SIZE_T n = ::VirtualQuery(reinterpret_cast<LPCVOID>(address),
                                         &info, sizeof(info));
         if (n == 0) break;
+        const std::uint64_t base =
+            reinterpret_cast<std::uint64_t>(info.BaseAddress);
+        const std::uint64_t size = static_cast<std::uint64_t>(info.RegionSize);
         switch (info.State) {
             case MEM_FREE:
                 ++out.free_regions;
-                out.largest_free_bytes = std::max<std::uint64_t>(
-                    out.largest_free_bytes, info.RegionSize);
+                out.largest_free_bytes =
+                    std::max<std::uint64_t>(out.largest_free_bytes, size);
                 break;
-            case MEM_RESERVE: ++out.reserved_regions; break;
-            case MEM_COMMIT:  ++out.committed_regions; break;
+            case MEM_RESERVE:
+            case MEM_COMMIT: {
+                if (info.State == MEM_RESERVE) {
+                    ++out.reserved_regions;
+                } else {
+                    ++out.committed_regions;
+                }
+                if (out.lowest_occupied == 0) out.lowest_occupied = base;
+                out.highest_occupied_end =
+                    std::max(out.highest_occupied_end, base + size);
+                out.occupied_bytes += size;
+                // A region may span buckets; attribute each part to its own.
+                for (std::uint64_t at = base; at < base + size;) {
+                    const std::uint64_t bucket = at / kWinTiB;
+                    const std::uint64_t bucket_end =
+                        std::min((bucket + 1) * kWinTiB, base + size);
+                    const std::uint64_t part = bucket_end - at;
+                    if (!out.occupied_by_tib.empty() &&
+                        out.occupied_by_tib.back().first == bucket) {
+                        out.occupied_by_tib.back().second += part;
+                    } else {
+                        out.occupied_by_tib.emplace_back(bucket, part);
+                    }
+                    at = bucket_end;
+                }
+                break;
+            }
             default: break;
         }
-        const std::uint64_t next =
-            reinterpret_cast<std::uint64_t>(info.BaseAddress) + info.RegionSize;
+        const std::uint64_t next = base + size;
         if (next <= address) break;   // no forward progress; stop rather than spin
         address = next;
         out.completed = address >= max_address;
@@ -770,6 +821,31 @@ Result probe_virtual_memory(const Options& options) {
             "are free is a property of this process's ASLR layout, and a "
             "profile that hashed it would differ between two runs on one "
             "machine.");
+
+        // Where this process actually sits. Note-only for the same reason, and
+        // present because an arena over 128 TiB has to choose its regions from
+        // something, and a measurement beats a recollection.
+        std::string where =
+            "VirtualQuery occupancy (NOT a fact about the host - this "
+            "process's own layout, for designing an arena's bounds): occupied "
+            "[" + json::to_hex(walk.lowest_occupied) + ", " +
+            json::to_hex(walk.highest_occupied_end) + "), " +
+            std::to_string(walk.occupied_bytes) + " bytes total, in " +
+            std::to_string(walk.occupied_by_tib.size()) + " TiB bucket(s):";
+        // Bounded: a hundred buckets is already more than a reader needs, and an
+        // unbounded note is a way to put a megabyte in a profile by accident.
+        std::size_t shown = 0;
+        for (const auto& [bucket, bytes] : walk.occupied_by_tib) {
+            if (shown++ == 100) {
+                where += " ... and " +
+                         std::to_string(walk.occupied_by_tib.size() - 100) +
+                         " more";
+                break;
+            }
+            where += " " + json::to_hex(bucket * kWinTiB) + "=" +
+                     std::to_string(bytes);
+        }
+        profile.notes.push_back(where);
     }
 
     const ProtectionOutcome protection = probe_protection(page_size, warnings);

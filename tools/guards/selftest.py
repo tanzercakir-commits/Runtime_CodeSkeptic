@@ -137,6 +137,19 @@ OK_PROBES = {
         "    !defined(RS_PLATFORM_WINDOWS)\n",
 }
 
+# A workflow with everything `check_workflow_ctest.py` looks at and nothing else:
+# a build type to compare against, and one ctest invocation that names it.
+WORKFLOW_OK = """name: CI
+jobs:
+  build:
+    steps:
+      - name: Configure
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=RelWithDebInfo
+      - name: Diagnostics
+        run: |
+          ctest --test-dir build --build-config RelWithDebInfo --rerun-failed --output-on-failure > /tmp/diag/ctest.txt
+"""
+
 CASES = [
     # ---- check_docs: check 3, named paths must exist -------------------
     Case("check_docs.py", "a doc naming a path that is not there fails",
@@ -535,6 +548,51 @@ CASES = [
                           "**Done when:** `ctest` passes.\n",
           "docs/PLAN.md": "# Plan\n\n## Phase 1\n\n- `[open]` later (untracked)\n"},
          expect_fail=True, expect_text="no \"Deliberately not tracked\""),
+
+    # ---- check_workflow_ctest: the diagnostics channel's own blind spot --
+    Case("check_workflow_ctest.py", "the real bug: diagnostics ctest with no -C",
+         {".github/workflows/ci.yml": WORKFLOW_OK.replace(
+             "ctest --test-dir build --build-config RelWithDebInfo "
+             "--rerun-failed", "ctest --test-dir build --rerun-failed")},
+         expect_fail=True, expect_text="no configuration"),
+
+    Case("check_workflow_ctest.py", "the corrected workflow passes",
+         {".github/workflows/ci.yml": WORKFLOW_OK}, expect_fail=False),
+
+    # THE FALSE POSITIVE THAT THIS GUARD ACTUALLY HAD. The first version matched
+    # `\bctest\b`, and `.` is a word boundary, so `tail /tmp/diag/ctest.txt`
+    # counted as an invocation and five correct lines in this repository's own
+    # workflows were reported as defects. A guard that fires on the fixed tree is
+    # worse than no guard, because the next person turns it off.
+    Case("check_workflow_ctest.py", "a FILE named ctest.txt is not an invocation",
+         {".github/workflows/ci.yml": WORKFLOW_OK.replace(
+             "ctest --test-dir build --build-config RelWithDebInfo "
+             "--rerun-failed --output-on-failure > /tmp/diag/ctest.txt\n",
+             "tail -c 100 /tmp/diag/ctest.txt > /tmp/diag/ctest_tail.txt\n")},
+         expect_fail=False),
+
+    # Prose about a command is not the command. Every guard in this directory
+    # explains itself in comments, and several of those comments name ctest.
+    Case("check_workflow_ctest.py", "a comment mentioning ctest is not a call",
+         {".github/workflows/ci.yml": WORKFLOW_OK +
+             "          # ctest without -C is the defect this rule is about\n"},
+         expect_fail=False),
+
+    # Naming a config nobody builds reports exactly as much as naming none.
+    Case("check_workflow_ctest.py", "a config no CMAKE_BUILD_TYPE builds fails",
+         {".github/workflows/ci.yml":
+             WORKFLOW_OK.replace("--build-config RelWithDebInfo",
+                                 "--build-config Debug")},
+         expect_fail=True, expect_text="which no -DCMAKE_BUILD_TYPE="),
+
+    # The line continuation matters: the flag is usually on the NEXT line.
+    Case("check_workflow_ctest.py", "a flag on a continuation line still counts",
+         {".github/workflows/ci.yml":
+             "name: CI\njobs:\n  t:\n    steps:\n      - run: |\n"
+             "          cmake -S . -B build -DCMAKE_BUILD_TYPE=RelWithDebInfo\n"
+             "          ctest --test-dir build \\\n"
+             "            --build-config RelWithDebInfo --output-on-failure\n"},
+         expect_fail=False),
 ]
 
 
