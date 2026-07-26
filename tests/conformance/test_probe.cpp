@@ -285,10 +285,22 @@ RS_TEST(available_and_unavailable_ranges_do_not_overlap) {
     const probe::Result result = probe::probe_virtual_memory();
     for (const auto& a : result.profile.vm.available_ranges) {
         for (const auto& u : result.profile.vm.unavailable_ranges) {
+            // BOTH NOTES, because the two ranges come from different producers -
+            // the landmark ladder and the arena walk - and which one is wrong
+            // depends entirely on which said what. On the macOS runner this
+            // reported `[0x167c00000, 0xfc0000000)` twice and nothing in the
+            // message said whether that 57 GiB span was one ladder record of a
+            // vm_region extent or a merged arena run, so the next step was a
+            // guess between architectural options. A conflict is only diagnosable
+            // if it names both sides.
             RS_CHECK_MESSAGE(
                 !a.range.intersects(u.range),
                 "the probe reported " + a.range.to_string() +
-                    " as both available and unavailable");
+                    " as both available and unavailable"
+                    "\n      available " + a.range.to_string() + "\n        " +
+                    a.note.substr(0, 220) +
+                    "\n      unavailable " + u.range.to_string() + "\n        " +
+                    u.note.substr(0, 220));
         }
     }
 }

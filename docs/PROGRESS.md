@@ -733,7 +733,44 @@ limitations. Almost all of that was noise about the probe's own morning — but 
 new answer is also *weaker*, and the note is the only place a reader learns how
 much was resolved rather than measured.
 
+### The residual risk fired on the first run, and it is not a guard page
+
+`59d886c`. macOS: `the_scan_covers_where_this_process_is_actually_mapped` **ok**,
+one failure left:
+
+```
+available_and_unavailable_ranges_do_not_overlap
+  the probe reported [0x167c00000, 0xfc0000000) as both available and unavailable
+```
+
+That span is 5.6 GiB to 63 GiB — **57 GiB**, ending exactly at the new arena top.
+The paragraph I wrote one commit earlier said: *"if a macOS version puts an
+undocumented no-access band inside `[0x1_0000_0000, 0xfc0000000)`, this arena will
+claim it available."* It does, and the valve worked — but the assumption behind
+the resolution was wrong on the first host that tested it.
+
+**And the message could not tell me which side was wrong.** A 57 GiB span could be
+one ladder record of a `vm_region` extent, or a merged arena run, and the fix
+differs completely between those. The next step was going to be a guess between
+architectural options, which is the position this session has repeatedly paid to
+get out of. So, before choosing:
+
+| | |
+|---|---|
+| **+** | the overlap message now prints **both** ranges with their notes, and the notes name their producer |
+| **+** | the failure diagnostics now carry the **measured profile** — which they never did, on a project whose subject is what a probe measured. When ctest fails before the ground-truth step there is no profile to copy, so the step runs the probe directly, and a probe that cannot run says so in the file rather than leaving it absent |
+| **−** | three candidate resolutions are on the table and **all three are unsatisfying**, which is why this is being measured rather than decided: (a) treat ambiguous refusals as available — wrong here by 57 GiB; (b) record them — irreproducible, that was the original defect; (c) record neither, leaving the span UNKNOWN — but the *run boundaries* then still move with our layout, so it is not reproducible either |
+| **−** | the only discriminator that actually answers "ours or the platform's" is asking a **freshly spawned process**, where our reservations move and a platform band does not. That is what `check_reproducible.sh` already does at the script level, and pulling it inside the probe is a real design change, not a patch |
+
+The 57 GiB is the useful number: a malloc guard is pages, a thread stack guard is
+one page. Something that size is not ours, which points at (c) plus a bound
+derived from the entry the platform reported rather than from where our own
+reservations happen to fall — but that is a hypothesis, and the next run will print
+the notes that decide it.
+
 **Also next.** Windows still has no arena at all.
+
+`linux---clang` stays red on LA57 runners: that is T-015, filed, not a regression.
 
 ---
 
