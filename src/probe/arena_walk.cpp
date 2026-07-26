@@ -41,6 +41,9 @@ ArenaWalk walk_arena(const std::string& what, std::uint64_t bottom,
     auto close_run = [&](std::uint64_t end) {
         if (!in_run) return;
         in_run = false;
+        // Never past the arena's own ceiling. The caller's bounds are the claim's
+        // bounds; anything beyond them was not walked.
+        if (end > top) end = top;
         if (end <= run_start) return;
         ClassifiedRange cr;
         cr.range = AddressRange{run_start, end};
@@ -109,7 +112,19 @@ ArenaWalk walk_arena(const std::string& what, std::uint64_t bottom,
                 out.skipped += static_cast<std::size_t>(jump);
                 // The run must reach where the walk resumes, or the skipped
                 // windows become a hole in a range that is otherwise continuous.
-                last_window_end = base + (jump + 1) * window_size;
+                //
+                // CLAMPED TO `top`, because `jump` is derived from the entry's
+                // extent - a platform-reported value that moves with this task's
+                // own layout. Unclamped, the last run could end ABOVE the arena's
+                // own ceiling at a position that differs between two runs of one
+                // binary: `available_ranges: 22 vs 22 entries` on the macOS runner,
+                // the same count with different contents, after the counts had
+                // already been made stable.
+                //
+                // A walk bounded by [bottom, top) must not emit a range outside it
+                // under any circumstances, which is true independently of this bug.
+                const std::uint64_t reached = base + (jump + 1) * window_size;
+                last_window_end = reached < top ? reached : top;
                 base += jump * window_size;
             }
             continue;

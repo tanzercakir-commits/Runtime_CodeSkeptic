@@ -381,4 +381,37 @@ RS_TEST(the_ceiling_rounds_up_never_down) {
     RS_CHECK(arena_ceiling_for(~std::uint64_t{0}, kTiB) >= 0x800000000000ull);
 }
 
+RS_TEST(a_held_entry_reaching_past_the_top_does_not_push_the_range_past_it) {
+    // `available_ranges: 22 vs 22 entries` on the macOS runner - the same COUNT
+    // with different CONTENTS, after the counts had already been made stable.
+    //
+    // The skip past an already-described entry sets the run's end from that
+    // entry's extent, which is a platform-reported value that moves with this
+    // task's own layout. If the entry reaches beyond the arena's ceiling, the
+    // emitted range ended above `top` at a position that differed between two runs
+    // of one binary.
+    //
+    // A walk bounded by [bottom, top) must not emit a range outside it, which is
+    // true whether or not anything moves.
+    constexpr std::uint64_t kTop = kTextBase + 16 * kWindow;
+    // A no-access region of ours that starts inside the arena and runs far past
+    // its ceiling.
+    ArenaProbe overhanging =
+        with_our_no_access_at(kTextBase + 8 * kWindow, kTop + 4096 * kWindow);
+
+    const ArenaWalk walk =
+        walk_arena("test arena", kTextBase, kTop, kPage, kWindow, overhanging);
+    for (const auto& r : walk.available) {
+        RS_CHECK_MESSAGE(r.range.end <= kTop,
+                         "an available range ends past the arena ceiling: " +
+                             r.range.to_string() + " with top " +
+                             json::to_hex(kTop));
+        RS_CHECK(r.range.start >= kTextBase);
+    }
+    for (const auto& r : walk.unavailable) {
+        RS_CHECK(r.range.start >= kTextBase);
+    }
+    RS_CHECK(!walk.available.empty());
+}
+
 RS_TEST_MAIN("arena walk")

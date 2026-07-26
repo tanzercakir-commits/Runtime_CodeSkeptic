@@ -1276,6 +1276,35 @@ ground-truth harness. `tests/groundtruth/run.sh` is in that list because the bug
 broke the Rosetta lane was in the harness, not the probe — and a filter written for
 probes only would have missed it again.
 
+### `rosetta-x86_64: success` — and the last thing that moved was the ceiling
+
+`393196b`. The path-filtered trigger fired **by itself**, and:
+
+```
+native-arm64/success      rosetta-x86_64/success     <- first time ever
+```
+
+The `CC` fix is confirmed by the one lane that could never pass. The trigger change
+is confirmed by not having to ask for a dispatch.
+
+`ci.yml`'s macOS job went red on the same push, one layer further in again:
+
+```
+available_ranges: 22 vs 22 entries     <- the same COUNT, different CONTENTS
+```
+
+The counts were made stable four commits ago; the *values* were not. The skip past an
+already-described entry sets the run's end from **that entry's extent** — a
+platform-reported number that moves with this task's layout — so when an entry
+reached beyond the arena's ceiling, the emitted range ended above `top` at a position
+that differed between two runs.
+
+| | |
+|---|---|
+| **+** | clamped, in both places: where the skip computes the reach, and again at emission. **A walk bounded by `[bottom, top)` must not emit a range outside it**, which is true whether or not anything moves |
+| **+** | `a_held_entry_reaching_past_the_top_does_not_push_the_range_past_it` — and it fails on demand: removing the clamp breaks it |
+| **−** | fifth round on this one boundary, and the shape shifted again. The first four asked *"whose is this?"*. This one is *"how far did we actually walk?"* — a different question with the same symptom, which is why counting stability was not sufficiency |
+
 **Also next.** Windows has no arena. That question was never reachable before now:
 the probe that would need one was not in the binary. The Rosetta lane still needs a dispatch —
 `gh workflow run macos-probe.yml --ref main` — and it now publishes its ground-truth
