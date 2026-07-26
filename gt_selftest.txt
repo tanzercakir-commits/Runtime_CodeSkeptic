@@ -1,0 +1,1 @@
+tests/groundtruth/selftest.sh: line 57: supported: unbound variable
