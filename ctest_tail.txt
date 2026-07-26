@@ -1,0 +1,49 @@
+Test project /Users/runner/work/Runtime_CodeSkeptic/Runtime_CodeSkeptic/build
+    Start 13: test_probe
+1/1 Test #13: test_probe .......................***Failed    0.09 sec
+== probe conformance (14 cases)
+  ok   probe_produces_a_schema_valid_profile_on_every_platform
+  ok   probe_never_attaches_a_value_to_unknown_evidence
+  ok   unimplemented_platforms_report_synthetic_origin
+  ok   repeated_calls_in_one_process_produce_the_same_profile_id
+  ok   profile_id_survives_a_write_read_round_trip
+  ok   range_order_does_not_affect_identity
+  ok   canonical_serialization_is_byte_stable
+  ok   measured_page_size_is_a_power_of_two
+  ok   measured_bounds_are_ordered
+  ok   no_recorded_range_carries_unknown_evidence
+  FAIL available_and_unavailable_ranges_do_not_overlap
+    /Users/runner/work/Runtime_CodeSkeptic/Runtime_CodeSkeptic/tests/conformance/test_probe.cpp:291
+    the probe reported [0x1f4400000, 0x1f6800000) as both available and unavailable
+  FAIL available_and_unavailable_ranges_do_not_overlap
+    /Users/runner/work/Runtime_CodeSkeptic/Runtime_CodeSkeptic/tests/conformance/test_probe.cpp:291
+    the probe reported [0x1f861c000, 0x1fa21c000) as both available and unavailable
+  FAIL available_and_unavailable_ranges_do_not_overlap
+    /Users/runner/work/Runtime_CodeSkeptic/Runtime_CodeSkeptic/tests/conformance/test_probe.cpp:291
+    the probe reported [0x1fae08000, 0x204208000) as both available and unavailable
+  FAIL available_and_unavailable_ranges_do_not_overlap
+    /Users/runner/work/Runtime_CodeSkeptic/Runtime_CodeSkeptic/tests/conformance/test_probe.cpp:291
+    the probe reported [0x29dfd8000, 0x2a0fd8000) as both available and unavailable
+  FAIL available_and_unavailable_ranges_do_not_overlap
+    /Users/runner/work/Runtime_CodeSkeptic/Runtime_CodeSkeptic/tests/conformance/test_probe.cpp:291
+    the probe reported [0x2a7224000, 0x2ae224000) as both available and unavailable
+  FAIL available_and_unavailable_ranges_do_not_overlap
+    /Users/runner/work/Runtime_CodeSkeptic/Runtime_CodeSkeptic/tests/conformance/test_probe.cpp:291
+    the probe reported [0x2df0d0000, 0x2df4d0000) as both available and unavailable
+  FAIL available_and_unavailable_ranges_do_not_overlap
+    /Users/runner/work/Runtime_CodeSkeptic/Runtime_CodeSkeptic/tests/conformance/test_probe.cpp:291
+    the probe reported [0x2e17c0000, 0x2e27c0000) as both available and unavailable
+  ok   disabling_the_scan_drops_the_sweep_but_keeps_measured_bounds
+  ok   the_scan_covers_where_this_process_is_actually_mapped
+  ok   probe_leaves_the_process_address_space_usable
+
+7 failure(s) in probe conformance
+
+
+0% tests passed, 1 tests failed out of 1
+
+Total Test time (real) =   0.11 sec
+
+The following tests FAILED:
+	 13 - test_probe (Failed)
+Errors while running CTest
