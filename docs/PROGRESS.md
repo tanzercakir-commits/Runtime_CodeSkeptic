@@ -1444,6 +1444,57 @@ blocker 256 MiB into a window. That surfaced as a red test locally rather than a
 an irreproducible profile on a runner, which is the entire argument for
 `probe/windows_regions.hpp` existing.
 
+### Windows is green, and Phase 1 is closed
+
+`86fef1a`, `windows---msvc/success` and `windows-x86_64/success`. Both arenas ran
+on a real Windows Server 2025 host:
+
+```
+top arena [0x7f0000000000, 0x7ffffffeffff)  windows of 0x4000000
+  16313 placed   1 held at base   0 structurally refused   6 held elsewhere   63 skipped
+
+low arena [0x10000000000, 0x7f0000000000)   windows of 0x1000000000
+   2015 placed   0 held at base   0 structurally refused   1 held elsewhere    0 skipped
+
+available_ranges:   2       [0x10000000000, 0x7f0000000000)
+                            [0x7f0000000000, 0x7ffffc000000)
+unavailable_ranges: 0
+```
+
+**`0` structural refusals in both.** Windows went from establishing *nothing*
+— every address answering UNKNOWN for `RS-VM-0001/0002/0003` — to 127 TiB of
+`measured_capability` coverage in two ranges, with the two-process reproducibility
+step green in the same run.
+
+`docs/PLAN.md`'s Phase 1 exit criterion **at least three platform families** moves
+from `[partial]` to `[done]`. Wine still does not count and the probe still renames
+itself `wine-on-posix-x86_64` so it cannot be mistaken for one.
+
+### The reproducibility diff missed for the same reason twice
+
+The improved `check_reproducible.sh` met its first real macOS failure and printed:
+
+```
+Facts that differ:
+  available_ranges: 22 vs 22 entries
+```
+
+— the same as before. Because the new diff keyed entries on `[start, end)`, and
+in this failure **all 22 bounds are identical in both runs**; what differs is
+inside the entries. So the version written to fix "a count is not a diagnosis"
+reproduced the same silence one level down.
+
+It now keys on the bounds and compares in **full**, reporting three cases
+separately: only in run 1, only in run 2, and *same bounds, different content* —
+with the differing field named and both values shown. Verified against a fixture
+carrying one of each. The third branch says explicitly that entries matching by
+bounds and content but differing in order would be a serialization bug rather than
+a probe one, because the canonical form exists to make that impossible.
+
+The two macOS profile ids alternate between exactly two values across pushes
+(`621881a4…` / `5f5f73a7…`), so this is bistable rather than drifting — which the
+next failure will now name.
+
 ### And this file was lying about its own order
 
 `docs/PROGRESS.md` is the past, and it had two entries in the wrong order: *the

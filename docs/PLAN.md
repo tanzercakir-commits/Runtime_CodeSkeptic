@@ -25,8 +25,8 @@ must name a test, a tool invocation, or a committed artifact.
 
 ```
 Phase 0  taxonomy + corpus        DONE      corpus 44/30, vm 35/10
-Phase 1  environment probe        PARTIAL   Linux + macOS x2 + Windows measured;
-                                            no address ranges on Windows yet
+Phase 1  environment probe        DONE      Linux + macOS x2 + Windows, all
+                                            measured, all establishing ranges
 Phase 2  semantic IR + evaluator  DONE
 Phase 3  VM analyzer MVP          PARTIAL   one exit criterion never measured
 Phase 4  runtime wrapper          OPEN      not started
@@ -134,11 +134,16 @@ findings from the set itself:
 - `[done]` profile schema is versioned — `runtime-skeptic.environment-profile.v1`,
   published as `schemas/environment-profile.v1.json`
 - `[done]` deterministic canonicalization — `tests/conformance/test_probe.cpp`
-- `[partial]` **at least three platform families** — Linux, macOS-native and
-  macOS-under-Rosetta are three *process environments* on two *families*. The
-  Windows probe exists and has run under Wine, which is **not** a third family:
-  the probe detects Wine via `wine_get_version` and renames itself
-  `wine-on-posix-x86_64` so the two cannot be confused. (T-004)
+- `[done]` **at least three platform families** — Linux, macOS (native and under
+  Rosetta) and **Windows**, the last measured on a real `windows-latest` host
+  (10.0.26100) and published to `refs/measurements/<sha>/windows-x86_64` with the
+  two-process reproducibility step green in that run. Windows establishes two
+  arenas totalling `[0x10000000000, 0x7ffffc000000)` — 127 TiB — where until
+  2026-07-26 it established **nothing at all** (`available: 0, unavailable: 0`,
+  so `RS-VM-0001/0002/0003` answered UNKNOWN for every address on the platform).
+  Wine is deliberately **not** counted: the probe detects it via
+  `wine_get_version` and renames itself `wine-on-posix-x86_64` so the two cannot
+  be confused.
 
 ---
 

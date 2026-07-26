@@ -77,25 +77,58 @@ for key in sorted(set(a) | set(b)):
         # the bug this check exists for (the same ranges, differently placed).
         # Whoever read that had to reproduce it on a macOS host to learn anything,
         # and this project's whole method is that a failure carries its evidence.
+        # KEYED ON THE BOUNDS, BUT COMPARED IN FULL, and the difference between
+        # those two is not academic. The first version of this printed only what
+        # was in one list and not the other, keyed on `[start, end)` - and the
+        # first macOS failure it met had 22 ranges with IDENTICAL bounds in both
+        # runs, differing in the `note`. So it printed the count, then nothing,
+        # exactly like the version it replaced. A diagnostic that reports "these
+        # differ" and cannot say how is the shape this whole session kept meeting.
         def sig(entry):
             if isinstance(entry, dict):
                 return f"[{entry.get('start')}, {entry.get('end')})"
             return repr(entry)
-        sa, sb = [sig(x) for x in la], [sig(x) for x in lb]
-        only_a = [s for s in sa if s not in sb]
-        only_b = [s for s in sb if s not in sa]
-        if not only_a and not only_b and sa != sb:
-            print("    same entries in a different ORDER, which the canonical "
-                  "form is supposed to remove - that is a serialization bug, "
-                  "not a probe one")
-        for s in only_a[:12]:
+
+        def brief(v, n=160):
+            s = v if isinstance(v, str) else repr(v)
+            return s if len(s) <= n else s[:n] + f"... (+{len(s) - n} chars)"
+
+        by_a, by_b = {}, {}
+        for x in la:
+            by_a.setdefault(sig(x), []).append(x)
+        for x in lb:
+            by_b.setdefault(sig(x), []).append(x)
+        only_a = [k for k in by_a if k not in by_b]
+        only_b = [k for k in by_b if k not in by_a]
+        # Same bounds, different content: the case the bounds-only diff missed.
+        changed = [k for k in by_a if k in by_b and by_a[k] != by_b[k]]
+
+        for s in only_a[:8]:
             print(f"    only in run 1: {s}")
-        if len(only_a) > 12:
-            print(f"    ... and {len(only_a) - 12} more only in run 1")
-        for s in only_b[:12]:
+        if len(only_a) > 8:
+            print(f"    ... and {len(only_a) - 8} more only in run 1")
+        for s in only_b[:8]:
             print(f"    only in run 2: {s}")
-        if len(only_b) > 12:
-            print(f"    ... and {len(only_b) - 12} more only in run 2")
+        if len(only_b) > 8:
+            print(f"    ... and {len(only_b) - 8} more only in run 2")
+
+        for s in changed[:8]:
+            ea, eb = by_a[s][0], by_b[s][0]
+            print(f"    same bounds, different content: {s}")
+            fields = sorted(set(ea) | set(eb)) if isinstance(ea, dict) else []
+            for f in fields:
+                if ea.get(f) != eb.get(f):
+                    print(f"      {f}:")
+                    print(f"        run 1: {brief(ea.get(f))}")
+                    print(f"        run 2: {brief(eb.get(f))}")
+        if len(changed) > 8:
+            print(f"    ... and {len(changed) - 8} more with the same bounds")
+
+        if not only_a and not only_b and not changed:
+            print("    every entry matches by bounds AND content, so the lists "
+                  "differ only in ORDER - which the canonical form is supposed "
+                  "to remove, making this a serialization bug rather than a "
+                  "probe one")
         continue
     va = (a.get(key) or {}).get("value")
     vb = (b.get(key) or {}).get("value")
