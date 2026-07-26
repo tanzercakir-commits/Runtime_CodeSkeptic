@@ -1,0 +1,8 @@
+Internal ctest changing into directory: /home/runner/work/Runtime_CodeSkeptic/Runtime_CodeSkeptic/build
+Test project /home/runner/work/Runtime_CodeSkeptic/Runtime_CodeSkeptic/build
+    Start 12: test_probe
+1/1 Test #12: test_probe .......................   Passed    1.49 sec
+
+100% tests passed, 0 tests failed out of 1
+
+Total Test time (real) =   1.50 sec
