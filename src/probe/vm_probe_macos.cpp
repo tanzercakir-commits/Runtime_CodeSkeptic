@@ -346,6 +346,41 @@ Placement try_place_nearby(std::uint64_t address, std::size_t length,
 // link-time choice that differs between a native arm64 binary and a
 // translated x86-64 one. Measured, never assumed.
 // -------------------------------------------------------------------------
+// The largest single reservation the kernel actually grants, as a power of two.
+//
+// The Linux probe measures this; without it every macOS analysis of a request
+// above 4 GiB answers UNKNOWN through `RS-VM-0027` - the correct reading of a
+// profile that has not measured it, and a visible piece of missing work.
+//
+// Why it exists at all: `RS-VM-0021` compared a request against the width of the
+// address space and, when it fitted, said nothing more. A 5-level-paging Linux
+// runner refused a 4 PiB reservation with ENOMEM while the analyzer said
+// SUPPORTED. Fitting is necessary, not sufficient.
+//
+// A POWER OF TWO on purpose: the exact largest reservation moves between two runs
+// as the task's own mappings shift, and a fact that moves is a fact about the
+// probe - `check_reproducible.sh` would fail and `profile_id` would stop naming
+// the host.
+//
+// mmap with MAP_NORESERVE rather than mach_vm_allocate, matching
+// `tests/groundtruth/cases/oversized_reservation.c` and the Linux probe, so the
+// three are answering the same question. MAP_NORESERVE is #defined to 0 above
+// where the SDK lacks it, which changes nothing: macOS does not pre-commit swap.
+std::uint64_t find_max_single_reservation() {
+    std::uint64_t largest = 0;
+    for (unsigned bit = 20; bit < 63; ++bit) {   // from 1 MiB
+        const std::uint64_t size = std::uint64_t{1} << bit;
+        MapAttempt attempt =
+            try_map(nullptr, static_cast<std::size_t>(size), PROT_NONE,
+                    MAP_PRIVATE | MAP_ANON | MAP_NORESERVE);
+        if (attempt.ok()) {
+            largest = size;
+            unmap(attempt, static_cast<std::size_t>(size));
+        }
+    }
+    return largest;
+}
+
 std::uint64_t find_min_map_address(std::size_t page_size) {
     std::uint64_t first_ok = 0;
     for (unsigned bit = 12; bit < 48; ++bit) {
@@ -1234,6 +1269,20 @@ Result probe_virtual_memory(const Options& options) {
                 "the top of the address space could not be pinned down "
                 "consistently; max_user_address was left unknown rather than "
                 "guessed");
+        }
+
+        if (const std::uint64_t biggest = find_max_single_reservation();
+            biggest != 0) {
+            profile.vm.max_single_reservation = Fact<std::uint64_t>::known(
+                biggest, EvidenceClass::MeasuredCapability,
+                std::string(kSourceProbe) +
+                    ": largest power-of-two PROT_NONE MAP_NORESERVE reservation "
+                    "the kernel granted");
+        } else {
+            warnings.emplace_back(
+                "no power-of-two reservation from 1 MiB upward was granted, so "
+                "max_single_reservation was left unknown rather than recorded as "
+                "zero");
         }
         // Structural refusals BELOW the highest placeable address are holes,
         // not the ceiling. Recording them is the whole point on this platform -

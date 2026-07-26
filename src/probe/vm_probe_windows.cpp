@@ -69,6 +69,7 @@
 #include <cstdio>
 #include <cstring>
 #include <ctime>
+#include <limits>
 #include <string>
 #include <vector>
 
@@ -407,6 +408,39 @@ ExactPlacement probe_exact_placement(std::uint64_t granularity,
 // Reserve/commit. The fact the model has carried since it was written and no
 // probe has ever established.
 // -------------------------------------------------------------------------
+// The largest single reservation the kernel actually grants, as a power of two.
+//
+// The third platform to answer this. `RS-VM-0021` compared a request against the
+// width of the address space and, when it fitted, said nothing more; a
+// 5-level-paging Linux runner refused a 4 PiB reservation with ENOMEM while the
+// analyzer said SUPPORTED. Fitting is necessary, not sufficient, and without this
+// fact every analysis of a request above 4 GiB answers UNKNOWN via `RS-VM-0027`.
+//
+// A POWER OF TWO on purpose: the exact figure moves between two runs as the
+// process's own mappings shift, and a fact that moves is a fact about the probe -
+// `check_reproducible.sh` would fail and `profile_id` would stop naming the host.
+//
+// `MEM_RESERVE | PAGE_NOACCESS` is the Win32 spelling of the question the other
+// two probes ask with `PROT_NONE | MAP_NORESERVE`: address space, not commit. On
+// Windows that distinction is not a flag but the whole memory model - a reserve
+// costs no pagefile, and it is the commit that can fail for accounting reasons.
+// So this measures a genuinely narrower thing here than on POSIX, and the note
+// says which.
+std::uint64_t find_max_single_reservation() {
+    std::uint64_t largest = 0;
+    for (unsigned bit = 20; bit < 63; ++bit) {   // from 1 MiB
+        const std::uint64_t size = std::uint64_t{1} << bit;
+        if (size > static_cast<std::uint64_t>(
+                       std::numeric_limits<SIZE_T>::max())) {
+            break;
+        }
+        Reservation r(nullptr, static_cast<SIZE_T>(size), MEM_RESERVE,
+                      PAGE_NOACCESS);
+        if (r.ok()) largest = size;
+    }
+    return largest;
+}
+
 bool probe_reserve_then_commit(std::uint64_t page_size,
                                std::uint64_t probe_length,
                                std::vector<std::string>& warnings) {
@@ -643,6 +677,24 @@ Result probe_virtual_memory(const Options& options) {
                     "that decides RS-VM-0003.");
                 break;
         }
+    }
+
+    if (const std::uint64_t biggest = find_max_single_reservation();
+        biggest != 0) {
+        profile.vm.max_single_reservation = Fact<std::uint64_t>::known(
+            biggest, measured,
+            std::string(kSourceProbe) +
+                ": largest power-of-two MEM_RESERVE|PAGE_NOACCESS reservation "
+                "granted. This is a bound on RESERVATION, not on commit - on "
+                "Windows those are separate operations and it is the commit that "
+                "charges the pagefile, so a request within this bound can still "
+                "fail at commit time (RS-VM-0012 is the finding for that model "
+                "difference)");
+    } else {
+        warnings.emplace_back(
+            "no power-of-two reservation from 1 MiB upward was granted, so "
+            "max_single_reservation was left unknown rather than recorded as "
+            "zero");
     }
 
     const std::uint64_t probe_length =

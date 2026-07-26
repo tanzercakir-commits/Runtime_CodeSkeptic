@@ -1014,8 +1014,46 @@ than the green:
 | **−** | `max_single_reservation` is **unknown** on macOS — the Linux probe measures it and the macOS one does not yet. So every macOS analysis of a request above 4 GiB now answers UNKNOWN via `RS-VM-0027`. That is the correct reading of a profile that has not measured it, and it is also a visible piece of missing work rather than a silent yes |
 | **−** | 33 windows inside the arena are unplaceable and unattributed. If a platform band is among them, this profile says the space is available. The count is the only thing that would ever say otherwise |
 
-**Also next.** Windows has no arena at all, and neither Windows nor macOS measures
-`max_single_reservation`. The Rosetta lane still needs a dispatch —
+### All three probes measure it now, and the red macOS runs were the quota wall
+
+The owner's screenshot of the **macOS measurement** workflow: four runs, all red,
+all 5–6 seconds, a day ago. Checked before reading anything into it:
+
+```
+aacaffb 2026-07-25T12:51Z   0508b99 12:49Z   87d9c13 12:42Z   f3c65e9 12:30Z
+   status refs: none        measurements: none      (for all four)
+```
+
+The status step is `if: always()` and published **nothing**, so the jobs never
+executed a step — "0 ms, job never started", the same signature the owner reported
+for Windows under the $10 budget. Against the timeline:
+
+```
+last successful measurement   2026-07-25 ~01:05Z
+quota exhausted               2026-07-25  01:09:39Z
+the four red runs             2026-07-25  12:30-12:51Z   <- inside that window
+repository made public        2026-07-26
+```
+
+**Not broken code — the quota wall, from before the repository went public.** Run
+#20 is `87d9c13`, *"ci: stop spending macOS minutes on commits that cannot change a
+measurement"*, which is the commit that removed the push trigger; the runs stop
+there because the trigger did, exactly as the file says.
+
+So the workflow has produced nothing since 01:05Z on the 25th, and has **never run
+with any of this session's code**.
+
+**Pre-flight before spending the dispatch**, since it cannot be triggered from here:
+
+| | |
+|---|---|
+| **+** | its assertion steps all end in `\|\| true` — they report, they do not gate — so `RS-VM-0027` firing on a macOS profile cannot fail the job |
+| **+** | `max_single_reservation` is measured on **macOS and Windows** now, so one dispatch returns a complete profile instead of one that makes `RS-VM-0027` fire everywhere |
+| **+** | the macOS helper was extracted and compiled **on Linux** under the full CI warning set, and run: only `mmap` is involved, so nothing needed stubbing |
+| **+** | the Windows probe **cross-compiles clean** with `x86_64-w64-mingw32-g++` and `-Werror -Wconversion -Wsign-conversion` |
+| **−** | Windows measures a genuinely narrower thing: `MEM_RESERVE\|PAGE_NOACCESS` bounds the *reservation*, and on Windows it is the **commit** that charges the pagefile. A request within the bound can still fail at commit time. The source note says so rather than letting the number read as more than it is |
+
+**Also next.** Windows still has no arena at all. The Rosetta lane still needs a dispatch —
 `gh workflow run macos-probe.yml --ref main` — and it now publishes its ground-truth
 output, so the second half of the `file_map_beyond_eof` claim will be readable from
 the sandbox when it runs.
