@@ -12,6 +12,21 @@ using rs::EvidenceClass;
 using vm::AddressRange;
 using vm::ClassifiedRange;
 
+std::uint64_t arena_ceiling_for(std::uint64_t max_user_address,
+                                std::uint64_t granularity) {
+    // The window Linux allocates in without an explicit high hint. See the
+    // header for why TASK_SIZE is the wrong input.
+    constexpr std::uint64_t kDefaultMapWindow = 1ull << 47;
+    if (granularity == 0) return max_user_address;
+    const std::uint64_t effective = max_user_address < kDefaultMapWindow
+                                        ? max_user_address
+                                        : kDefaultMapWindow;
+    // Round UP: rounding down put the whole arena 4 TiB below where anything
+    // maps, into the exact bucket 629 of 639 observed addresses sit above.
+    if (effective > ~std::uint64_t{0} - granularity) return effective;
+    return ((effective + granularity - 1) / granularity) * granularity;
+}
+
 ArenaWalk walk_arena(const std::string& what, std::uint64_t bottom,
                      std::uint64_t top, std::uint64_t page_size,
                      std::uint64_t window_size, const ArenaProbe& probe) {
@@ -79,12 +94,41 @@ ArenaWalk walk_arena(const std::string& what, std::uint64_t bottom,
         const bool widened =
             entry.covers && entry.size > 0 && entry_end > entry.start;
         if (widened) {
-            cr.range.start = std::min(cr.range.start, entry.start);
+            // CLAMPED, and the clamp is not tidying - it is the fix for a real
+            // failure on a real runner.
+            //
+            // A platform entry does not begin on a window boundary. On the macOS
+            // runner the extents came back at 0x2a7224000 and 0x2df0d0000, so
+            // widening downwards reached back INSIDE a window this walk had just
+            // placed successfully - and the probe emitted
+            // [0x2a7224000, 0x2ae224000) as both available and unavailable.
+            // `available_and_unavailable_ranges_do_not_overlap` caught it: seven
+            // failures where the simulation had none, because the simulated deny
+            // band happened to start window-aligned.
+            //
+            // Both readings are measurements, taken at different moments: the
+            // placement succeeded, then a later query described an entry
+            // overlapping it. Keeping the positive measurement and trimming the
+            // negative one is the conservative choice - it narrows a claimed
+            // limitation rather than widening one - and the note says the extent
+            // was cut so nobody reads the range as the platform's own answer.
+            const std::uint64_t floor =
+                last_window_end > bottom ? last_window_end : bottom;
+            std::uint64_t start = std::min(cr.range.start, entry.start);
+            if (start < floor) start = floor;
+            cr.range.start = start;
             cr.range.end = std::max(cr.range.end, entry_end);
             cr.note += "; placement was probed at " + json::to_hex(base) +
                        " and the refusal is recorded across the entry's full "
                        "extent as the platform reported it, rather than across "
                        "the window that happened to be probed";
+            if (start > entry.start) {
+                cr.note += "; the entry begins at " + json::to_hex(entry.start) +
+                           ", below space this walk had already placed "
+                           "successfully, so the recorded start was clamped to " +
+                           json::to_hex(start) +
+                           " rather than contradicting that measurement";
+            }
         }
 
         // Do not record one entry once per window. On the runner that exposed
@@ -107,10 +151,25 @@ ArenaWalk walk_arena(const std::string& what, std::uint64_t bottom,
         //
         // Counted, because `refused` otherwise silently changes meaning - on the
         // runner it would have read "1 structurally refused" for twelve GiB.
+        //
+        // Jump WHOLE windows, so the walk stays on its original grid. The first
+        // version set `base = entry_end - window_size`, which left the walk
+        // aligned to a platform-reported extent instead: with `entry_end`
+        // unaligned, every subsequent `base % page_size` check could fail and
+        // `continue` past the rest of the arena in silence.
+        //
+        // The jump count is a FLOOR, deliberately. Rounding up would leave the
+        // sliver between `entry_end` and the next boundary unexamined - reported
+        // as neither available nor refused. Flooring lands on the window that
+        // contains `entry_end`, which usually overlaps the entry's tail and is
+        // refused again; the duplicate is dropped above, and the skip cannot fire
+        // twice from there because `entry_end` is then below `base + window_size`.
+        // So it terminates with no hole.
         if (widened && entry_end > base + window_size) {
-            out.skipped += static_cast<std::size_t>(
-                (entry_end - (base + window_size)) / window_size);
-            base = entry_end - window_size;
+            const std::uint64_t jump = (entry_end - (base + window_size)) /
+                                       window_size;
+            out.skipped += static_cast<std::size_t>(jump);
+            base += jump * window_size;
         }
     }
     close_run(last_window_end);

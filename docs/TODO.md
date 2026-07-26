@@ -196,6 +196,16 @@ milliseconds rather than seconds, and that
 arena's bounds are constants, so it should, but "should" is the word this project
 does not accept.
 
+**The runner also settled the `linux---gcc` "flake", and it was the same class of
+bug on the other platform.** `max_user_address: 0xfffffffffff000` — 56-bit, 5-level
+paging. `TASK_SIZE` is 2^56 there, so both Linux arenas sat in the top 4 TiB of a
+64 PiB space while the code and heap pages were at 47 bits, because the kernel
+refuses to allocate above 47 bits without an explicit high hint.
+`corpus/runtime_failures/RSC-0049-la57-vs-jit-pointer-tagging.md` says exactly
+that, and nothing connected it to the arena. Fixed by `arena_ceiling_for()`,
+which is a byte-identical no-op on a 4-level host — same `profile_id`, same
+bounds, `check_reproducible.sh` still agreeing.
+
 **Also still open:** Windows has no arena at all. Same gap, third platform,
 untracked until T-004's measurement makes it visible.
 

@@ -357,12 +357,79 @@ The pattern in both diagnostic failures is the same and worth naming: a check th
 keys on prose owned by another file will keep breaking, silently, in the direction
 of saying nothing is wrong.
 
-**Next.** Push and read `refs/status/*` again. Then T-014's real remainder, which
-no test here can substitute for: `check_reproducible.sh` across two processes, and
-what 12,294 `mach_vm_allocate` calls actually cost. Windows still has no arena.
-The `linux---gcc` flake stays unfixed on purpose — it has now failed twice and
-passed twice on identical code, which makes it more interesting and still not a
-diagnosis.
+### `6533633`: the coverage case passes on macOS — and the flake was never a flake
+
+**Changed.** `arena_walk.cpp` clamps a widened refusal and jumps whole windows;
+`arena_ceiling_for()` is new in `probe/arena_walk.hpp` and caps the Linux arena at
+the default map window; `vm_probe_linux.cpp` uses it. `test_arena_walk.cpp` 10 to
+**14 cases**.
+
+```
+macOS   the_scan_covers_where_this_process_is_actually_mapped   ok     <- T-014
+        available_and_unavailable_ranges_do_not_overlap         FAIL x7  (new)
+linux   linux---gcc                                            success
+        compatibility-gate                                     failure  (the same
+                                                                bug, seen at last)
+```
+
+**T-014's target is met.** macOS establishes the region its own code and heap are
+in. Contiguous windows, the collapse, the skip and the constant floor all behaved
+on a real runner exactly as the unit test predicted.
+
+#### The new macOS failure: a refusal reaching backwards
+
+> the probe reported `[0x2a7224000, 0x2ae224000)` as both available and unavailable
+
+A platform entry does not begin on a window boundary. Widening a refusal down to
+`vm_region`'s extent reached back **inside a window the walk had just placed
+successfully**. The simulation missed it for an embarrassing reason: the layout I
+built from the runner's report had its deny band starting at `0x7bf400000`, which
+happens to be 4 MiB-aligned. The one property I did not vary was the one that
+mattered.
+
+Clamped now — the earlier positive measurement is kept, the later negative one is
+trimmed, and the note says the extent was cut so nobody reads it as the
+platform's own answer. Trimming a claimed limitation is the conservative
+direction. `a_refusal_extent_never_overlaps_space_already_placed` uses a
+deliberately unaligned extent.
+
+#### `linux---gcc` was different hardware, not nondeterminism
+
+Two days of "flaky", recorded as nondeterminism and **deliberately left alone
+pending a second reading**. The second reading was a mechanism:
+
+```
+max_user_address: 0xfffffffffff000        <- 56-bit. 5-level paging.
+arena:            [0xfffc0000000000, 0xfffffffffff000)
+code page 0x5606b35a0000   heap page 0x7fe8df6ff000     <- both 47-bit
+```
+
+GitHub's Linux fleet is not homogeneous. On an LA57 host `TASK_SIZE` is 2^56, so
+both arenas were placed in the top 4 TiB of a 64 PiB space — where nothing is
+ever mapped, because the kernel *refuses to allocate above 47 bits without an
+explicit high hint*. Coverage was zero and the conformance case was right on
+every push it failed. Same code, different CPU.
+
+**And this project had already written the rule down.**
+`corpus/runtime_failures/RSC-0049-la57-vs-jit-pointer-tagging.md`, entered during
+T-003, says it in as many words: *"it refuses to allocate above 47 bits by default
+and requires an explicit high hint to opt in."* The corpus exists so that this
+project does not repeat the failures it collects, and the arena walked into RSC-0049
+with the entry in the same repository. That is the quota mistake again — the
+evidence one page away — and it is the second time in three days.
+
+| | |
+|---|---|
+| **+** | the flake is a diagnosis now, and the discipline that produced it was refusing to "fix" it after one reading |
+| **+** | the fix is provably a no-op where it must be: on this 4-level host `profile_id` is **byte-identical** before and after (`sha256:efade64a07f6750…`), arena bounds unchanged, `check_reproducible.sh` agrees across two processes. So the measured false-positive campaign cannot have regressed |
+| **+** | `arena_ceiling_for()` lives in the testable header, so the LA57 case is covered **on a host without LA57** — the one form of fix that removes the dependency instead of moving it |
+| **−** | the corpus contained the answer and nothing connected it to the code. A guard could plausibly have: 47, 2^47 and `DEFAULT_MAP_WINDOW` are greppable |
+| **−** | my simulation varied the addresses and not the *alignment*, which is why the overlap bug reached a runner at all |
+
+**Next.** Push and read `refs/status/*`. Remaining on T-014: the cost of 12,294
+`mach_vm_allocate` calls, and `check_reproducible.sh` on the macOS runner — the
+arena's bounds are constants so it should hold, and "should" is the word this
+project does not accept. Windows still has no arena at all.
 
 ---
 

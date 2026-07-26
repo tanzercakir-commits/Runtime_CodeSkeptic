@@ -22,6 +22,7 @@
 #include <unistd.h>
 
 #include "runtimeskeptic/core/sha256.hpp"
+#include "runtimeskeptic/probe/arena_walk.hpp"
 
 #ifndef MAP_FIXED_NOREPLACE
 #define MAP_FIXED_NOREPLACE 0x100000
@@ -515,17 +516,17 @@ void scan_allocation_arenas(std::uint64_t page_size,
                             ScanOutcome& outcome) {
     if (max_user_address <= kArenaSpan) return;
 
-    // Align the top UP to a TiB. Aligning DOWN was the first attempt and it
-    // put the whole arena 4 TiB below where anything maps: on this host
-    // max_user_address is 0x7ffffffff000, which rounds down to
-    // 0x7f0000000000 - the exact bucket that 629 of the 639 observed
-    // addresses sit ABOVE. The arena is the TOP of the space, so the boundary
-    // has to be the ceiling. Probing still stops at max_user_address.
-    const std::uint64_t ceiling =
-        ((max_user_address + kTiB - 1) / kTiB) * kTiB;
+    // See `arena_ceiling_for()` in probe/arena_walk.hpp. It is there rather than
+    // here so that the LA57 case can be tested on a host that does not have
+    // LA57 - which is the whole lesson of the two days this cost.
+    const std::uint64_t ceiling = arena_ceiling_for(max_user_address, kTiB);
+    // Probing stops at whichever is lower: the measured top of the space, or the
+    // default map window the kernel actually allocates in.
+    const std::uint64_t probe_top =
+        max_user_address < ceiling ? max_user_address : ceiling;
     if (ceiling > kArenaSpan) {
         scan_one_arena("kernel's mmap allocation arena", ceiling - kArenaSpan,
-                       max_user_address, page_size, probe_length, outcome);
+                       probe_top, page_size, probe_length, outcome);
     }
 
     const std::uint64_t dyn_base = (ceiling / 3) * 2;

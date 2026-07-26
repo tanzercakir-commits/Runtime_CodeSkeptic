@@ -88,6 +88,40 @@ ArenaWalk walk_arena(const std::string& what, std::uint64_t bottom,
                      std::uint64_t top, std::uint64_t page_size,
                      std::uint64_t window_size, const ArenaProbe& probe);
 
+// The ceiling an arena at the TOP of the user address space should use, given a
+// measured `max_user_address`. `granularity` is what the result is rounded up to.
+//
+// `TASK_SIZE` IS NOT WHERE PROGRAMS ARE, and that mistake cost two days as a
+// suspected flaky test. `linux---gcc` failed the coverage conformance case on some
+// pushes and passed on others with byte-identical C++, so it was recorded as
+// nondeterminism on the runner and deliberately left alone pending a second
+// reading. The second reading was not noise - it was different hardware:
+//
+//   max_user_address: 0xfffffffffff000          <- 56-bit: 5-level paging
+//   arena:            [0xfffc0000000000, 0xfffffffffff000)
+//   code page 0x5606b35a0000  heap page 0x7fe8df6ff000   <- both 47-bit
+//
+// On a host with 5-level paging the kernel gives userspace 56-bit addresses but
+// "refuses to allocate above 47 bits by default and requires an explicit high
+// hint to opt in" - the compatibility rule that exists precisely because JIT
+// compilers pack tags into the high bits. This project already had that written
+// down, in `corpus/runtime_failures/RSC-0049-la57-vs-jit-pointer-tagging.md`. The
+// arena derived its bounds from TASK_SIZE anyway, landed in the top 4 TiB of a
+// 64 PiB space where nothing is ever mapped, and the conformance test was right
+// on every push it failed.
+//
+// arch/x86/include/asm/processor.h: DEFAULT_MAP_WINDOW is ((1UL << 47) -
+// PAGE_SIZE) on x86-64, and both `mmap_base` and `ELF_ET_DYN_BASE` derive from
+// it, not from TASK_SIZE_MAX. On a 4-level host `max_user_address` is exactly
+// (1<<47) - PAGE_SIZE, so the cap changes the answer by nothing at all and cannot
+// regress the measured false-positive campaign.
+//
+// It lives in this header, away from the platform file, for one reason: an LA57
+// host is one this project cannot obtain on demand, and the version of the fix
+// that needs one to be checked has not removed the dependency - it has moved it.
+std::uint64_t arena_ceiling_for(std::uint64_t max_user_address,
+                                std::uint64_t granularity);
+
 }  // namespace rs::probe
 
 #endif  // RUNTIMESKEPTIC_PROBE_ARENA_WALK_HPP

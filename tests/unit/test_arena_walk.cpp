@@ -256,4 +256,111 @@ RS_TEST(the_walk_stops_at_the_top_of_the_address_space_without_wrapping) {
     for (const auto& r : walk.unavailable) RS_CHECK(r.range.end > r.range.start);
 }
 
+// ---------------------------------------------------------------------------
+// arena_ceiling_for: the two-day "flake" that was a 5-level-paging runner.
+// ---------------------------------------------------------------------------
+RS_TEST(a_five_level_paging_host_does_not_move_the_arena_to_the_top_of_56_bits) {
+    constexpr std::uint64_t kTiB = 1ull << 40;
+    // What GitHub's LA57 Linux runners report. TASK_SIZE is 2^56, but the kernel
+    // refuses to allocate above 47 bits without an explicit high hint, so the
+    // code page was at 0x5606b35a0000 and the heap at 0x7fe8df6ff000 while the
+    // arena sat in [0xfffc0000000000, 0xfffffffffff000) - 64 PiB up, where
+    // nothing is ever mapped. Coverage was zero and the conformance case was
+    // right on every push it failed.
+    const std::uint64_t la57 = arena_ceiling_for(0xfffffffffff000ull, kTiB);
+    RS_CHECK_EQ(la57, 0x800000000000ull);
+
+    // And the 4-level host is unchanged, which is what makes the cap safe: the
+    // measured false-positive campaign cannot regress.
+    const std::uint64_t normal = arena_ceiling_for(0x7ffffffff000ull, kTiB);
+    RS_CHECK_EQ(normal, 0x800000000000ull);
+    RS_CHECK_EQ(la57, normal);
+}
+
+RS_TEST(the_ceiling_rounds_up_never_down) {
+    constexpr std::uint64_t kTiB = 1ull << 40;
+    // Rounding DOWN was the original bug: 0x7ffffffff000 became 0x7f0000000000,
+    // the exact 1 TiB bucket that 629 of 639 observed addresses sit ABOVE.
+    RS_CHECK(arena_ceiling_for(0x7ffffffff000ull, kTiB) > 0x7ffffffff000ull);
+    RS_CHECK_EQ(arena_ceiling_for(kTiB, kTiB), kTiB);
+    RS_CHECK_EQ(arena_ceiling_for(kTiB + 1, kTiB), 2 * kTiB);
+    // A small address space is left alone rather than inflated to a TiB... it is
+    // rounded up, which the caller guards against with `max_user_address <=
+    // kArenaSpan`. Asserted so the guard's necessity stays visible.
+    RS_CHECK_EQ(arena_ceiling_for(4096, kTiB), kTiB);
+    // Degenerate granularity must not divide by zero.
+    RS_CHECK_EQ(arena_ceiling_for(0x7ffffffff000ull, 0), 0x7ffffffff000ull);
+    // And must not wrap at the very top.
+    RS_CHECK(arena_ceiling_for(~std::uint64_t{0}, kTiB) >= 0x800000000000ull);
+}
+
+RS_TEST(a_refusal_extent_never_overlaps_space_already_placed) {
+    // The macOS runner failure on 6533633, seven times over:
+    //   "the probe reported [0x2a7224000, 0x2ae224000) as both available and
+    //    unavailable"
+    // A platform entry does not start on a window boundary. Widening a refusal
+    // down to the entry's extent reached back inside a window this walk had just
+    // placed. The simulation missed it because the simulated band happened to
+    // start window-aligned - so this case makes it deliberately UNaligned.
+    constexpr std::uint64_t kUnalignedDeny = 0x2a7224000ull;
+    constexpr std::uint64_t kUnalignedEnd = 0x2ae224000ull;
+
+    ArenaProbe unaligned;
+    unaligned.place = [](std::uint64_t base, std::uint64_t size) {
+        return (base < kUnalignedEnd && base + size > kUnalignedDeny)
+                   ? ArenaPlacement::Refused
+                   : ArenaPlacement::Placed;
+    };
+    unaligned.describe = [](std::uint64_t) {
+        ArenaEntry e;
+        e.covers = true;
+        e.start = kUnalignedDeny;
+        e.size = kUnalignedEnd - kUnalignedDeny;
+        e.text = "region covers it, protection ---";
+        return e;
+    };
+
+    const ArenaWalk walk = walk_arena("test arena", kTextBase, 0x300000000ull,
+                                      kPage, kWindow, unaligned);
+    for (const auto& a : walk.available) {
+        for (const auto& u : walk.unavailable) {
+            RS_CHECK_MESSAGE(
+                !(a.range.start < u.range.end && u.range.start < a.range.end),
+                "available " + a.range.to_string() + " overlaps unavailable " +
+                    u.range.to_string() +
+                    ". A refusal widened to a platform extent must be clamped to "
+                    "space this walk had not already placed");
+        }
+    }
+    RS_CHECK(!walk.unavailable.empty());
+}
+
+RS_TEST(the_walk_terminates_when_an_entry_end_is_not_window_aligned) {
+    // The skip advances by WHOLE windows and by a FLOOR count. An earlier version
+    // set base = entry_end - window_size, which left the walk aligned to a
+    // platform extent instead of its own grid; with page_size checks that can
+    // silently `continue` past the rest of the arena. A ceiling count would leave
+    // an unexamined sliver. Either way the walk must finish.
+    ArenaProbe wide_unaligned;
+    wide_unaligned.place = [](std::uint64_t base, std::uint64_t size) {
+        return (base < 0x900000000ull && base + size > 0x500000123ull)
+                   ? ArenaPlacement::Refused
+                   : ArenaPlacement::Placed;
+    };
+    wide_unaligned.describe = [](std::uint64_t) {
+        ArenaEntry e;
+        e.covers = true;
+        e.start = 0x500000123ull;      // deliberately not page or window aligned
+        e.size = 0x900000000ull - 0x500000123ull;
+        e.text = "unaligned entry";
+        return e;
+    };
+    const ArenaWalk walk = walk_arena("test arena", kTextBase, 0xa00000000ull,
+                                      kPage, kWindow, wide_unaligned);
+    // Reaching here at all is the assertion. The rest checks it did not silently
+    // abandon the space above the entry.
+    RS_CHECK(!walk.available.empty());
+    RS_CHECK(covered(walk.available, 0x980000000ull));
+}
+
 RS_TEST_MAIN("arena walk")
