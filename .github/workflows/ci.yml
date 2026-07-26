@@ -115,8 +115,14 @@ jobs:
       - name: Ground truth vs prediction
         if: runner.os != 'Windows'
         run: |
-          build/bin/rs-env-probe vm --name gt-host --output /tmp/gt-host.json
-          bash tests/groundtruth/run.sh /tmp/gt-host.json
+          set -o pipefail
+          mkdir -p /tmp/meas
+          build/bin/rs-env-probe vm --name gt-host --output /tmp/meas/gt-host.json
+          # tee, not >: the output belongs in the job log AND in a file, because
+          # the file is what gets published to refs/measurements/*. pipefail so
+          # tee's success cannot mask the harness's exit code.
+          bash tests/groundtruth/run.sh /tmp/meas/gt-host.json 2>&1 \
+            | tee /tmp/meas/gt_run.txt
 
       # The probe is only implemented for Linux. On other platforms this step
       # proves the honest fallback: a schema-valid profile in which every fact
@@ -203,8 +209,8 @@ jobs:
           tail -c 30000 /tmp/diag/ctest.txt > /tmp/diag/ctest_tail.txt || true
           bash tools/guards/run_all.sh > /tmp/diag/guards.txt 2>&1 || true
           bash tests/groundtruth/selftest.sh > /tmp/diag/gt_selftest.txt 2>&1 || true
-          if [ -f /tmp/gt-host.json ]; then
-            bash tests/groundtruth/run.sh /tmp/gt-host.json \
+          if [ -f /tmp/meas/gt-host.json ]; then
+            bash tests/groundtruth/run.sh /tmp/meas/gt-host.json \
               > /tmp/diag/gt_run.txt 2>&1 || true
           else
             echo "(no host profile: the probe step did not run)" > /tmp/diag/gt_run.txt
@@ -217,6 +223,27 @@ jobs:
           git commit -qm "${slug} diagnostics @ ${{ github.sha }}"
           git push --force origin \
             "HEAD:refs/ci-logs/${{ github.sha }}/${slug}"
+      # A GREEN run can carry a first-ever measurement, and until now it threw it
+      # away. `refs/ci-logs/*` publishes `if: failure()`, so on 2026-07-26 the run
+      # that finally produced macOS ground-truth output - including whether native
+      # arm64 raises SIGBUS where Rosetta 2 hands back zeroes, which nothing had
+      # ever measured - was the run that discarded it. The failure channel was
+      # right to exist and was answering the wrong question.
+      #
+      #   git ls-remote origin "refs/measurements/<sha>/*"
+      #   git fetch origin "refs/measurements/<sha>/<slug>:refs/tmp/m"
+      #   git show refs/tmp/m:gt_run.txt
+      #
+      # The commit holds ONLY these files - see tools/ci/publish_measurement.sh -
+      # so this is cheap enough to run on every push, unlike the diagnostics refs
+      # which carry a copy of the tree.
+      - name: Publish measurements -> refs/measurements/*
+        if: success() && runner.os != 'Windows' && github.event_name != 'pull_request'
+        shell: bash
+        run: |
+          bash tools/ci/publish_measurement.sh measurements \
+            "${{ matrix.name }}" "${{ github.sha }}" \
+            /tmp/meas/gt_run.txt /tmp/meas/gt-host.json
       - name: Publish job status to refs/status/*
         if: always() && github.event_name != 'pull_request'
         shell: bash
@@ -263,8 +290,11 @@ jobs:
       - name: Ground truth vs prediction
         if: runner.os != 'Windows'
         run: |
-          build/bin/rs-env-probe vm --name gt-host --output /tmp/gt-host.json
-          bash tests/groundtruth/run.sh /tmp/gt-host.json
+          set -o pipefail
+          mkdir -p /tmp/meas
+          build/bin/rs-env-probe vm --name gt-host --output /tmp/meas/gt-host.json
+          bash tests/groundtruth/run.sh /tmp/meas/gt-host.json 2>&1 \
+            | tee /tmp/meas/gt_run.txt
 
       # Publish the outcome as a namespaced ref, so it is readable from a
       # development sandbox that can reach this repository over the git protocol
@@ -307,8 +337,8 @@ jobs:
           tail -c 30000 /tmp/diag/ctest.txt > /tmp/diag/ctest_tail.txt || true
           bash tools/guards/run_all.sh > /tmp/diag/guards.txt 2>&1 || true
           bash tests/groundtruth/selftest.sh > /tmp/diag/gt_selftest.txt 2>&1 || true
-          if [ -f /tmp/gt-host.json ]; then
-            bash tests/groundtruth/run.sh /tmp/gt-host.json \
+          if [ -f /tmp/meas/gt-host.json ]; then
+            bash tests/groundtruth/run.sh /tmp/meas/gt-host.json \
               > /tmp/diag/gt_run.txt 2>&1 || true
           else
             echo "(no host profile: the probe step did not run)" > /tmp/diag/gt_run.txt
@@ -321,6 +351,27 @@ jobs:
           git commit -qm "${slug} diagnostics @ ${{ github.sha }}"
           git push --force origin \
             "HEAD:refs/ci-logs/${{ github.sha }}/${slug}"
+      # A GREEN run can carry a first-ever measurement, and until now it threw it
+      # away. `refs/ci-logs/*` publishes `if: failure()`, so on 2026-07-26 the run
+      # that finally produced macOS ground-truth output - including whether native
+      # arm64 raises SIGBUS where Rosetta 2 hands back zeroes, which nothing had
+      # ever measured - was the run that discarded it. The failure channel was
+      # right to exist and was answering the wrong question.
+      #
+      #   git ls-remote origin "refs/measurements/<sha>/*"
+      #   git fetch origin "refs/measurements/<sha>/<slug>:refs/tmp/m"
+      #   git show refs/tmp/m:gt_run.txt
+      #
+      # The commit holds ONLY these files - see tools/ci/publish_measurement.sh -
+      # so this is cheap enough to run on every push, unlike the diagnostics refs
+      # which carry a copy of the tree.
+      - name: Publish measurements -> refs/measurements/*
+        if: success() && runner.os != 'Windows' && github.event_name != 'pull_request'
+        shell: bash
+        run: |
+          bash tools/ci/publish_measurement.sh measurements \
+            "${{ matrix.name }}" "${{ github.sha }}" \
+            /tmp/meas/gt_run.txt /tmp/meas/gt-host.json
       - name: Publish job status to refs/status/*
         if: always() && github.event_name != 'pull_request'
         shell: bash
@@ -444,8 +495,8 @@ jobs:
           tail -c 30000 /tmp/diag/ctest.txt > /tmp/diag/ctest_tail.txt || true
           bash tools/guards/run_all.sh > /tmp/diag/guards.txt 2>&1 || true
           bash tests/groundtruth/selftest.sh > /tmp/diag/gt_selftest.txt 2>&1 || true
-          if [ -f /tmp/gt-host.json ]; then
-            bash tests/groundtruth/run.sh /tmp/gt-host.json \
+          if [ -f /tmp/meas/gt-host.json ]; then
+            bash tests/groundtruth/run.sh /tmp/meas/gt-host.json \
               > /tmp/diag/gt_run.txt 2>&1 || true
           else
             echo "(no host profile: the probe step did not run)" > /tmp/diag/gt_run.txt
@@ -458,6 +509,15 @@ jobs:
           git commit -qm "${slug} diagnostics @ ${{ github.sha }}"
           git push --force origin \
             "HEAD:refs/ci-logs/${{ github.sha }}/${slug}"
+      # The gate measures the host too, and its profile is the one the shipped
+      # contracts were evaluated against - so it is the measurement most worth
+      # being able to read back. See the note in build-and-test above.
+      - name: Publish measurements -> refs/measurements/*
+        if: success() && github.event_name != 'pull_request'
+        shell: bash
+        run: |
+          bash tools/ci/publish_measurement.sh measurements \
+            "compatibility-gate" "${{ github.sha }}" host-profile.json
       - name: Publish job status to refs/status/*
         if: always() && github.event_name != 'pull_request'
         shell: bash
@@ -542,8 +602,8 @@ jobs:
           tail -c 30000 /tmp/diag/ctest.txt > /tmp/diag/ctest_tail.txt || true
           bash tools/guards/run_all.sh > /tmp/diag/guards.txt 2>&1 || true
           bash tests/groundtruth/selftest.sh > /tmp/diag/gt_selftest.txt 2>&1 || true
-          if [ -f /tmp/gt-host.json ]; then
-            bash tests/groundtruth/run.sh /tmp/gt-host.json \
+          if [ -f /tmp/meas/gt-host.json ]; then
+            bash tests/groundtruth/run.sh /tmp/meas/gt-host.json \
               > /tmp/diag/gt_run.txt 2>&1 || true
           else
             echo "(no host profile: the probe step did not run)" > /tmp/diag/gt_run.txt

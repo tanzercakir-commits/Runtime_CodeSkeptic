@@ -529,6 +529,21 @@ measurement arriving inside a green job is exactly the case the design misses, a
 it is a small fix — publish the ground-truth output unconditionally on the
 expensive platforms.
 
+### `refs/measurements/*`: the channel now publishes on green
+
+**Changed.** `tools/ci/publish_measurement.sh` is new; `ci.yml`'s three measuring
+jobs publish `refs/measurements/<sha>/<job>` on success.
+
+| | |
+|---|---|
+| **+** | the commit holds **only** the artifacts, built with a temporary index and `git commit-tree`. Tree size **78 bytes**, against the diagnostics refs which each carry a copy of the repository — cheap enough for every push |
+| **+** | verified end to end against the real remote before wiring it in: pushed under a throwaway namespace, fetched back, `git show` read the file, ref deleted |
+| **+** | the working tree is never touched, so it cannot disturb a build still in flight — which is what the `ci-logs` step's `git checkout --detach` + `cp` does |
+| **−** | capturing the output moved `/tmp/gt-host.json` to `/tmp/meas/`, and **four failure-diagnostics steps still pointed at the old path**. They would have silently reported "(no host profile: the probe step did not run)" — degrading the failure channel while adding the success one. Caught by grepping the file rather than by any guard |
+
+`tee` rather than `>`, with `set -o pipefail`, so the output stays in the job log
+*and* becomes a file, and `tee`'s success cannot mask the harness's exit code.
+
 **Also next.** `check_reproducible.sh` on the macOS runner is still outstanding.
 Windows still has no arena at all.
 
