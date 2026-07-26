@@ -43,28 +43,6 @@ completes without leaving a trace in the log is work that will be redone.
 
 ## Now
 
-<!-- pending-promotion: T-004 -->
-
-*(`Now` is empty, and `T-004` under `## Next` carries a `[now]` marker. That is
-a contradiction, recorded as an open decision rather than resolved as a side
-effect: this file warns against promotion "by drift", and moving the item to
-settle a consistency check would be exactly that.*
-
-*The decision is the owner's, and it is a real one. In favour: the Windows
-measurement is the only thing the project is blocked on, so nothing else can
-honestly be "now". Against: it is blocked on an Actions quota rather than on
-work, and an item nobody can advance sitting in `Now` makes the section mean
-something weaker.*
-
-*Resolve it by moving `T-004` here, or by changing its marker to `[next]` and
-leaving `Now` genuinely empty until the quota resets.
-`tools/guards/check_todo.py` check 6 accepts either, and accepts this marker in
-the meantime — but not silence.)*
-
----
-
-## Next
-
 ### T-004 — Windows probe `[now]`
 
 **Serves:** S3 (Wine — the scenario that makes it unavoidable), S7
@@ -73,28 +51,47 @@ the meantime — but not silence.)*
 `.github/workflows/windows-probe.yml` and committed, with the two-process
 reproducibility step green in that run.
 
-**The code is written and it is not done.** `src/probe/vm_probe_windows.cpp`
+**Two pieces of this need no runner and neither is done.** They are why this item
+belongs in `Now` rather than in a waiting room, and they should be finished
+before a measurement arrives, not after — a profile checked against
+documentation *after* it lands is a profile that has already been believed.
+
+1. **`lpMaximumApplicationAddress + 1` is asserted, not verified.** The model's
+   `max_user_address` is an *exclusive* bound; Win32 documents this field as the
+   last usable address. The `+ 1` in `src/probe/vm_probe_windows.cpp` follows
+   from that reading and the reading has not been checked against Microsoft's
+   own text. Half-open-versus-inclusive is the error class this project has
+   already written a section about (`docs/domains/shadps4-case-study.md`, on
+   shadPS4's inclusive maxima), and getting it backwards moves every boundary
+   by a page.
+2. **`dwAllocationGranularity` is measured on the runner but 64 KiB is an
+   assumption about what it will say.** Every claim this probe is interesting
+   for — RSC-0044, the granularity-versus-page-size split — rests on the two
+   differing. Confirm from documentation that 64 KiB is the architectural value
+   on x86-64 and ARM64 Windows, so that a runner reporting something else is
+   read as a finding rather than as a bug in the probe.
+
+**What is written and what it is not.** `src/probe/vm_probe_windows.cpp`
 cross-compiles clean with `-Wall -Wextra` under mingw-w64, the whole project
-builds for Windows, and the probe runs correctly under **Wine** — where it
-measures a 64 KiB allocation granularity against a 4 KiB page, a working
-reserve/commit model, non-destructive exact placement, and `error` for
-file-mapping past EOF. Every one of those is the right answer for the Win32
-model and **none of them is a Windows measurement.**
+builds for Windows, and the probe runs correctly under **Wine** — measuring a
+64 KiB allocation granularity against a 4 KiB page, a working reserve/commit
+model, non-destructive exact placement, and `error` for file-mapping past EOF.
+Every one is the right answer for the Win32 model and **none is a Windows
+measurement.** The probe detects Wine through `wine_get_version` and renames
+itself `wine-on-posix-x86_64`; the CI job refuses to publish a profile whose
+name or version says Wine.
 
-Wine reproduces Win32 well enough that all of it succeeds, which is exactly why
-it cannot stand in: the probe detects Wine through `wine_get_version` and
-renames itself `wine-on-posix-x86_64`, and the CI job refuses to publish a
-profile whose name or version says Wine.
+**The control-plane half is a named human dependency, not a design.** The run is
+triggered by a push to the workflow's own path, which works. Everything after
+that — is it queued, did it fail at startup, is the Actions quota out — is only
+readable through the GitHub API, which this sandbox cannot reach for this
+repository. The substitute is the owner opening the Actions tab. That is
+recorded as an accepted cost in `docs/PROGRESS.md`, with its price, and it is
+the reason this item can be worked on but not finished from inside.
 
-**First step:** dispatch `windows-probe.yml`. It is weekly plus a button, at
-2x billing — a fifth of macOS, and the quota resets on 1 August.
+---
 
-**Trap to avoid:** the profile will look plausible whatever it says, because
-this author has never seen a real one. The two facts to check by hand against
-Microsoft's documentation before believing the run are
-`lpMaximumApplicationAddress` (the model wants an *exclusive* bound and Win32
-reports the last usable byte) and whether `dwAllocationGranularity` is really
-64 KiB on that runner rather than assumed.
+## Next
 
 ---
 

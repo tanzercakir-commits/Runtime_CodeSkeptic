@@ -16,6 +16,60 @@ re-litigated; a mistake recorded here does not need to be re-made.
 
 ---
 
+## 2026-07-26 — an accepted cost, recorded as a cost
+
+**Changed.** `T-004` promoted into `docs/TODO.md`'s `## Now` by the owner's
+decision, framed by the two pieces of it that need no runner. This entry
+replaces a claim made in conversation that should not have been made.
+
+**What was claimed and why it was wrong.** Asked whether to request GitHub API
+access for this sandbox, the answer given was "no need", justified by listing
+what the git protocol had achieved this session: a 27-minute ref poll, 60 refs
+counted through `ls-remote`, "when did Actions last run" inferred from the
+committer date of CI-authored commits. All true, and beside the point.
+
+The owner's objection, which holds:
+
+- **The one open item is blocked on exactly the facts git cannot reach.** Is the
+  quota exhausted, is the run queued, did it trigger at all. The entry two above
+  says **"cannot be determined from here"** twice, in a table. "No need" walks
+  back from that sharpness within hours of writing it.
+- **The example chosen to defend the method undercuts it.** The committer-date
+  inference produced a 17-minute-stale timestamp and a day-wrong quota date on
+  its first application. Both were caught by external verification, not by the
+  git-only channel. The method is valid and it is not costless.
+
+**The distinction that was missing, and it is the whole thing.**
+
+| Plane | Git protocol |
+|---|---|
+| **measurement** — get a measured profile off a runner and into the repository | **sufficient, and better than the alternative.** `refs/measurements/*` beats artifact download: it is content-addressed, fetchable with one command, and survives the run's retention window. This channel exists *because* of the constraint and is now one of the project's more solid pieces. |
+| **control** — start a run, read its state, tell a queue from a quota wall | **not sufficient.** What substitutes for it is the owner opening the Actions tab. |
+
+The second row is a **named human dependency**, not an architecture. It is
+accepted, and the price is: nobody inside this repository can tell a queued run
+from a failed one, so any statement about why a measurement is missing is a
+hypothesis until a person looks. That cost has already been paid once, in the
+entry two above.
+
+**And the claim is marked as what it is.** "The git protocol is sufficient for
+the measurement plane" is currently **assumed, not measured.** What would
+measure it: one end-to-end cycle — probe change pushed, run started, measurement
+published, fetched and committed — completed *without a human reading the
+Actions tab*. That has never happened. The first attempt is the one still
+outstanding at `8ddfd4a`.
+
+By this project's own rule that is `[partial]` reasoning wearing a `[done]`
+sentence, and the correction is the point of writing it down.
+
+**Not changed.** No API access requested; the owner's decision stands and the
+reasoning for it is theirs, not the one given here. What changed is the record.
+
+**Next.** `T-004`'s two documentation checks, which need no runner and are now
+what `## Now` names.
+
+---
+
 ## 2026-07-26 — an external review, and a guard that was green for the wrong reason
 
 **Changed.** `tools/guards/check_docs.py` resolves cited paths against
