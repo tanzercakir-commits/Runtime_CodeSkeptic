@@ -32,6 +32,9 @@
 #                    without <iterator> - a class of defect that is invisible on
 #                    every platform this project builds on locally, and costs a
 #                    Windows runner minute to find
+#   check_shell...   the first real macOS run died on `declare -A`, because macOS
+#                    ships bash 3.2. Same class, other language: green wherever
+#                    anyone runs it, fatal where nobody does
 #
 # `selftest` runs FIRST and is not one of them. All five pass on a repository
 # that has already been fixed - and so would five guards whose patterns never
@@ -67,6 +70,7 @@ run "compass vs map"        python3 "$HERE/check_todo.py"
 run "published numbers"     python3 "$HERE/check_campaign.py"
 run "corpus rules"          python3 "$HERE/check_corpus.py"
 run "includes vs MSVC"      python3 "$HERE/check_includes.py"
+run "shell vs bash 3.2"     python3 "$HERE/check_shell_portability.py"
 
 echo
 if [ "$failed" -eq 0 ]; then

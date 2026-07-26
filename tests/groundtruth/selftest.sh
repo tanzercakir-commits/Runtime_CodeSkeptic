@@ -54,19 +54,48 @@ MEASURED="$WORK/measured.json"
 # Contracts whose verdict on $MEASURED is known, checked here rather than
 # assumed - if a rule change moves one of these the selftest says so instead of
 # quietly testing the wrong row.
-declare -A want=(
-    [supported]="page-size-at-most-64kib:SUPPORTED"
-    [unsupported]="file-map-beyond-eof:UNSUPPORTED"
-    [unknown]="exact-mapping-in-carveout:UNKNOWN"
-)
+# A LOOKUP FUNCTION, not an associative array.
+#
+# This was `declare -A want=(...)` with `${want[$key]}` in three places, and it
+# worked on every Linux runner and every developer machine. macOS ships bash 3.2
+# - GPLv2, frozen in 2007 - which has no associative arrays: `[supported]=...` is
+# parsed as an arithmetic subscript, `supported` is read as a variable name, and
+# under `set -u` the script dies with `line 57: supported: unbound variable`.
+#
+# Broken since this file was written, and invisible because macOS only ran in
+# ci.yml's `expensive-platforms`, which was gated off pushes. Same class as the
+# missing `<iterator>` found the same day: green on every platform anyone was
+# running, broken on the one nobody was.
+#
+# A first attempt replaced it with `printf | while read`, which introduced a
+# worse bug: the loop body ran in a subshell, so its `exit 70` on a failed
+# precondition would have exited the subshell and let the script carry on
+# testing the wrong rows. A function has no subshell and no array.
+#
+# tools/guards/check_shell_portability.py now catches the class.
+want_for() {
+    case "$1" in
+        supported)   echo "page-size-at-most-64kib:SUPPORTED" ;;
+        unsupported) echo "file-map-beyond-eof:UNSUPPORTED" ;;
+        unknown)     echo "exact-mapping-in-carveout:UNKNOWN" ;;
+        *) echo "" ;;
+    esac
+}
+WANT_KEYS="supported unsupported unknown"
+
 verdict_of() {
     case "$1" in
         0) echo SUPPORTED ;; 1) echo UNSUPPORTED ;;
         2) echo CONDITIONAL ;; 3) echo UNKNOWN ;; *) echo "error($1)" ;;
     esac
 }
-for key in "${!want[@]}"; do
-    name="${want[$key]%%:*}"; expect="${want[$key]##*:}"
+
+# Contracts whose verdict on $MEASURED is known, checked here rather than
+# assumed - if a rule change moves one of these the selftest says so instead of
+# quietly testing the wrong row.
+for key in $WANT_KEYS; do
+    pair="$(want_for "$key")"
+    name="${pair%%:*}"; expect="${pair##*:}"
     "$RS_CHECK" "$HERE/contracts/$name.json" --profile "$MEASURED" \
         --format json >/dev/null 2>&1
     got=$(verdict_of $?)
@@ -103,7 +132,7 @@ printf '%.0s-' {1..64}; echo
 
 for row in "${ROWS[@]}"; do
     IFS='|' read -r key outcome expected <<<"$row"
-    name="${want[$key]%%:*}"
+    name="$(want_for "$key")"; name="${name%%:*}"
 
     python3 - "$WORK/manifest.json" "$name" "$outcome" <<'PY'
 import json, sys
@@ -129,7 +158,8 @@ PY
     else
         fail=$((fail + 1)); result="MISMATCH (got '$got')"
     fi
-    printf '%-13s %-11s %-14s %s\n' "${want[$key]##*:}" "$outcome" "$expected" "$result"
+    shown="$(want_for "$key")"
+    printf '%-13s %-11s %-14s %s\n' "${shown##*:}" "$outcome" "$expected" "$result"
 done
 
 echo

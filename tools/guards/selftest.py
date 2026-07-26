@@ -347,6 +347,23 @@ CASES = [
                               "int f(){ return 0; }\n"},
          expect_fail=False),
 
+    # ---- check_shell_portability: macOS ships bash 3.2 -----------------
+    Case("check_shell_portability.py", "declare -A fails, as it did on macOS",
+         {"tests/x.sh": "#!/usr/bin/env bash\ndeclare -A want=( [a]=1 )\n"},
+         expect_fail=True, expect_text="bash 3.2"),
+
+    Case("check_shell_portability.py", "mapfile fails too - the queued next one",
+         {"tests/x.sh": "#!/usr/bin/env bash\nmapfile -t a < <(echo x)\n"},
+         expect_fail=True, expect_text="mapfile"),
+
+    Case("check_shell_portability.py", "the portable rewrite passes",
+         {"tests/x.sh": "#!/usr/bin/env bash\nwant_for(){ case \"$1\" in a) echo 1;; esac; }\n"},
+         expect_fail=False),
+
+    Case("check_shell_portability.py", "a construct named in a comment is not code",
+         {"tests/x.sh": "#!/usr/bin/env bash\n# declare -A is what broke on macOS\ntrue\n"},
+         expect_fail=False),
+
     # ---- check_todo: the compass and the map must agree ----------------
     Case("check_todo.py", "an open plan criterion with no owner fails",
          {"docs/TODO.md": TODO_OK,

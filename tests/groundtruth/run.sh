@@ -82,7 +82,13 @@ import json
 c = json.load(open('$MANIFEST'))['cases'][$i]
 print(c['case'], c['contract'], c['program'])
 ")"
-    mapfile -t args < <(python3 -c "
+    # `mapfile` is bash 4+ and macOS ships bash 3.2, so this file would have
+    # died here the moment the selftest above stopped dying first. Read the
+    # array the portable way.
+    args=()
+    while IFS= read -r _arg; do
+        args+=("$_arg")
+    done < <(python3 -c "
 import json
 for a in json.load(open('$MANIFEST'))['cases'][$i]['args']: print(a)
 ")

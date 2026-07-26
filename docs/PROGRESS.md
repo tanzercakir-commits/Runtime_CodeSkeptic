@@ -16,6 +16,103 @@ re-litigated; a mistake recorded here does not need to be re-made.
 
 ---
 
+## 2026-07-26 — the log channel answered in 60 seconds, and there were two bugs
+
+**Changed.** `tests/groundtruth/selftest.sh` and `run.sh` and
+`tools/campaign/run_campaign.sh` made bash-3.2-safe; `check_dates.py` judges each
+line's blame instead of the clone; `tools/guards/check_shell_portability.py` is
+new; `ci.yml`'s guards job fetches full history. Selftest 48 to **52 cases**.
+
+**The channel added one commit earlier paid for itself immediately.** Sixty
+seconds after the push, `refs/ci-logs/*` held `steps.json`, the ctest tail, the
+full guard output and both ground-truth runs. Two failures, two different causes,
+neither reproducible locally, both read from inside without anyone opening a
+browser.
+
+### macOS: `declare -A`, because macOS ships bash 3.2
+
+```
+tests/groundtruth/selftest.sh: line 57: supported: unbound variable
+```
+
+Bash 3.2 - frozen in 2007, because every later version is GPLv3 - has no
+associative arrays. `[supported]=...` is parsed as an arithmetic subscript,
+`supported` is read as a variable name, and `set -u` kills the script.
+
+**Broken since the file was written.** Invisible because `ci.yml` ran macOS only
+in `expensive-platforms`, gated off pushes until yesterday - so the harness that
+validates this project's comparison table had never once run on macOS.
+
+Writing the guard for it found **two more of the same class**, one of them the
+next failure queued behind the first:
+
+| | |
+|---|---|
+| `tests/groundtruth/run.sh:85` | `mapfile -t args < <(...)` — bash 4. **The harness itself**, which would have died the moment `selftest.sh` stopped dying first. |
+| `tools/campaign/run_campaign.sh:43` | `declare -A counts=( ... )` |
+
+And a bug I introduced while fixing the first one: the initial rewrite was
+`printf | while read`, whose loop body runs in a **subshell** - so its `exit 70`
+on a failed precondition would have exited the subshell and let the script carry
+on testing the wrong rows. A `case`/`esac` lookup function has neither a subshell
+nor an array.
+
+### Linux: the date guard cannot blame what it cannot see
+
+Thirteen confident, wrong accusations:
+
+> `docs/PROGRESS.md:553`: entry is dated 2026-07-25, but git says the line was
+> written 2026-07-26 12:19Z
+
+`actions/checkout@v4` uses `fetch-depth: 1`. In a one-commit repository `git
+blame` attributes **every line to HEAD**, so every heading looks as though it
+were written at HEAD's date. Reproduced exactly with `git clone --depth 1`: 13
+failures there, zero locally.
+
+**It had been failing in CI since the day it was added** - which fell inside the
+33.5-hour blackout, so nobody saw it. Accumulated, not fresh, exactly as the
+previous entry guessed.
+
+**And the first fix was too blunt, which this machine disproved in one command.**
+Skipping check 1 whenever `git rev-parse --is-shallow-repository` returns true
+would have thrown the check away here: this clone reports `true` (cloned with
+`--depth` on 2026-07-24) while carrying 65 commits, and its blame had caught a
+real heading error an hour earlier.
+
+The right question is not "is the clone shallow" but "is THIS line's attribution
+a truncation artifact". A line blamed to a **graft point** - a SHA in
+`.git/shallow` - may belong to a commit that is not present; a line blamed to
+anything else is attributed correctly, shallow or not. Each line is now judged on
+its own blame:
+
+```
+this clone   (65 commits)  0 skipped, check runs
+--depth 1                 19 skipped, counted and named, exit 0
+```
+
+`ci.yml` additionally gives the guards job `fetch-depth: 0`, so the check is
+performed for real somewhere rather than merely not-failing everywhere.
+
+### What the pattern is
+
+Three bugs in two days, one sentence: **green on every platform anyone runs,
+fatal on the platform nobody does.**
+
+| Bug | Invisible because | Now caught by |
+|---|---|---|
+| `std::back_inserter` without `<iterator>` | MSVC never ran on a push | `check_includes.py` |
+| `declare -A` and `mapfile` | macOS never ran on a push | `check_shell_portability.py` |
+| `check_dates` on a shallow clone | CI was dark for 33.5 hours | the guard, judging blame per line |
+
+The first two are now checked without needing the platform at all, which is the
+only version of this that scales: a guard that needs a Windows runner to tell you
+about Windows has not removed the dependency, it has moved it.
+
+**Next.** Whether these three fixes make CI green - readable from
+`refs/status/*` now, which is the point of having built it.
+
+---
+
 ## 2026-07-26 — the workflow that builds the code could not report
 
 **Changed.** All four `ci.yml` jobs publish `refs/status/<sha>/<job>/<state>`.

@@ -40,7 +40,9 @@ HOST_KEY=$(python3 "$(dirname "$0")/host_key.py" "$PROFILE") || exit 65
 
 total=0
 unqualified=0
-declare -A counts=( [SUPPORTED]=0 [UNSUPPORTED]=0 [CONDITIONAL]=0 [UNKNOWN]=0 )
+# Four plain variables, not an associative array: macOS ships bash 3.2, which
+# has none. See tools/guards/check_shell_portability.py.
+count_SUPPORTED=0; count_UNSUPPORTED=0; count_CONDITIONAL=0; count_UNKNOWN=0
 
 echo "host: $HOST_KEY"
 echo
@@ -81,7 +83,12 @@ except Exception:
     code=$?
     verdict=$(verdict_of "$code")
     total=$((total + 1))
-    [ -n "${counts[$verdict]+x}" ] && counts[$verdict]=$(( counts[$verdict] + 1 ))
+    case "$verdict" in
+        SUPPORTED)   count_SUPPORTED=$((count_SUPPORTED + 1)) ;;
+        UNSUPPORTED) count_UNSUPPORTED=$((count_UNSUPPORTED + 1)) ;;
+        CONDITIONAL) count_CONDITIONAL=$((count_CONDITIONAL + 1)) ;;
+        UNKNOWN)     count_UNKNOWN=$((count_UNKNOWN + 1)) ;;
+    esac
 
     findings=$(printf '%s' "$json_out" | python3 -c "
 import json,sys
@@ -106,7 +113,7 @@ except Exception:
 done
 
 echo
-echo "total: $total   supported: ${counts[SUPPORTED]}   unsupported: ${counts[UNSUPPORTED]}   conditional: ${counts[CONDITIONAL]}   unknown: ${counts[UNKNOWN]}"
+echo "total: $total   supported: $count_SUPPORTED   unsupported: $count_UNSUPPORTED   conditional: $count_CONDITIONAL   unknown: $count_UNKNOWN"
 echo "rows marked ! disagree with an expectation recorded for $HOST_KEY."
 if [ "$unqualified" -gt 0 ]; then
     echo "$unqualified of $total contracts have no expectation recorded for this host (EXPECTED n/a)."

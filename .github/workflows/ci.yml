@@ -62,6 +62,15 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          # tools/guards/check_dates.py blames PROGRESS.md headings against the
+          # commit that wrote them. actions/checkout defaults to fetch-depth: 1,
+          # where blame attributes every line to HEAD - which produced thirteen
+          # confident wrong accusations on 2026-07-26 and had been doing so
+          # silently since the guard was added. The guard now skips lines blamed
+          # to a shallow graft point; this makes sure the check is really
+          # performed here rather than merely skipped everywhere.
+          fetch-depth: 0
 
       - name: Configure
         shell: bash

@@ -51,6 +51,34 @@ here. Both were real, and neither was found by reasoning about it.
 
 Uncommitted lines blame as "not committed yet" and are dated from the working
 tree, so a new entry written now is checked against now.
+
+A TRUNCATED HISTORY CANNOT ANSWER CHECK 1, AND MUST NOT PRETEND TO.
+
+`actions/checkout@v4` clones with `fetch-depth: 1` by default. In a repository
+with one commit, `git blame` attributes EVERY line to HEAD - so every heading in
+this log looks as though it were written at HEAD's date, and this guard produced
+**thirteen** confident, wrong accusations on 2026-07-26. Locally it passed. It
+had been doing that since the day it was added, invisibly, because CI was dark
+for 33.5 hours over the same period.
+
+The first fix was to skip check 1 whenever `git rev-parse
+--is-shallow-repository` said true - and that was too blunt, which the machine
+this was written on demonstrated immediately: it reports `true` (cloned with
+`--depth` on 2026-07-24) while carrying 65 commits, and blame there had caught a
+real heading error an hour earlier. Skipping would have thrown away a working
+check.
+
+The precise rule is not "is the clone shallow" but "is THIS LINE'S attribution a
+truncation artifact". A line blamed to a **graft point** - a SHA listed in
+`.git/shallow`, where history was cut - may really belong to an older commit that
+is not present. A line blamed to anything else is attributed correctly, shallow
+clone or not.
+
+So each line is judged on its own blame. In a depth-1 clone every line blames to
+HEAD, HEAD is the graft point, and all of them are skipped with a count. In a
+clone deep enough to see the commit that wrote the line, the check runs.
+`ci.yml` additionally gives the guards job `fetch-depth: 0`, so the check is
+performed for real somewhere rather than merely not-failing everywhere.
 """
 import re
 import subprocess
@@ -99,6 +127,14 @@ def git(*args, cwd=ROOT):
                           text=True)
 
 
+def graft_points() -> set:
+    """SHAs where history was truncated; blame at one of these is unreliable."""
+    path = ROOT / ".git" / "shallow"
+    if not path.exists():
+        return set()
+    return {line.strip() for line in path.read_text().splitlines() if line.strip()}
+
+
 def newest_commit_date():
     """The latest author date in the repository, as the upper bound on 'now'.
 
@@ -122,17 +158,19 @@ def blame_datetimes(rel_path):
     r = git("blame", "--line-porcelain", "--", rel_path)
     if r.returncode != 0:
         return {}
-    out, line_no, pending = {}, 0, None
+    out, line_no, pending, sha = {}, 0, None, None
     for line in r.stdout.splitlines():
-        m = re.match(r"^[0-9a-f]{40} \d+ (\d+)", line)
+        m = re.match(r"^([0-9a-f]{40}) \d+ (\d+)", line)
         if m:
-            line_no = int(m.group(1))
+            sha = m.group(1)
+            line_no = int(m.group(2))
             pending = None
         elif line.startswith("author-time "):
             pending = int(line.split()[1])
         elif line.startswith("\t") and line_no:
             if pending is not None:
-                out[line_no] = datetime.fromtimestamp(pending, tz=timezone.utc)
+                out[line_no] = (datetime.fromtimestamp(pending, tz=timezone.utc),
+                                sha)
             line_no = 0
     return out
 
@@ -156,6 +194,8 @@ def main() -> int:
             today = sys_today
 
     # --- check 1: PROGRESS.md headings match when they were written --------
+    grafts = graft_points()
+    truncated = 0
     if PROGRESS.exists():
         blame = blame_datetimes("docs/PROGRESS.md")
         for i, line in enumerate(PROGRESS.read_text().splitlines(), 1):
@@ -163,9 +203,16 @@ def main() -> int:
             if not m:
                 continue
             claimed = date.fromisoformat(m.group(1))
-            when = blame.get(i)
-            if when is None:            # written now, not yet committed
-                when = datetime.now(timezone.utc)
+            entry = blame.get(i)
+            if entry is None:           # written now, not yet committed
+                when, sha = datetime.now(timezone.utc), None
+            else:
+                when, sha = entry
+            if sha is not None and sha in grafts:
+                # History was cut here; this line may belong to a commit that is
+                # not present. Not evidence of anything.
+                truncated += 1
+                continue
             actual = when.date()
             delta = abs((claimed - actual).days)
             if delta == 0:
@@ -216,7 +263,10 @@ def main() -> int:
                     notes.append(
                         f"{rel}:{i}: last checked {raw}, {age} days ago")
 
-    print(f"dates: checked against git, newest commit {today}")
+    print(f"dates: checked against git, newest commit {today}"
+          + (f"  ({truncated} heading(s) skipped: blamed to a shallow graft "
+             f"point, where attribution is a truncation artifact)"
+             if truncated else ""))
     for n in notes:
         print(f"  stale: {n}")
 
