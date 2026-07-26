@@ -1,0 +1,455 @@
+{
+  "notes": [
+    "Ranges the probe found occupied by its own process image are NOT recorded as host limitations; see probe_run.warnings.",
+    "MAP_FIXED is never used by this probe. Exact placement is probed through mach_vm_allocate(VM_FLAGS_FIXED), which refuses a collision instead of evicting the existing mapping."
+  ],
+  "origin": "measured",
+  "platform": {
+    "host_arch": "aarch64",
+    "kernel_version": "23.6.0",
+    "os": "macos",
+    "os_version": "macOS 14.8.7",
+    "pointer_width_bits": 64,
+    "process_arch": "aarch64",
+    "translation_mode": "none"
+  },
+  "probe_run": {
+    "duration_ms": 0,
+    "probe_binary_hash": "",
+    "probe_version": "rs-env-probe/vm/0.1.0",
+    "run_id": "bd8a40822d7f2a59",
+    "timestamp_utc": "2026-07-26T17:03:47Z",
+    "tool_version": "runtimeskeptic/0.1.0",
+    "warnings": [
+      "the lowest placeable page in this process is 0x300000000, which is where its own __PAGEZERO and image end. macOS has no equivalent of vm.mmap_min_addr to read, so min_map_address is left UNKNOWN rather than filled in with a property of the probe binary; under Rosetta this value moves between runs of the same job because the translated image is slid by ASLR",
+      "survey: 0 structural hole(s) recorded; 3 refusal(s) not recorded because a no-access region of this task covers them, and 13 not recorded because they lie below the lowest page this process can place, which is where its own __PAGEZERO and image end - a link-time choice, not a platform property. Both classes moved between runs, which is what made profile_id irreproducible",
+      "allocation arena [0x100000000, 0xfc0000000) walked in contiguous windows of 0x400000 bytes: 13535 placed, 71 already held by the probe process, 0 structurally refused, 17 refused but covered by a no-access region of this task (treated as held, because nothing here distinguishes one of our own guard reservations from a platform band - and this arena stops below the commpage so that no platform band is inside it; if this number rises while unavailable_ranges stays empty, that assumption has broken), and 1481 not probed because they lie inside an entry already described. Only the structurally refused count is a host limitation"
+    ]
+  },
+  "profile_id": "sha256:8e8af183c4bdf6c119fd88949f02dc81d99ee456936a3ea8af67ec27ea4b9526",
+  "profile_name": "macos-arm64-native-ci",
+  "schema": "runtime-skeptic.environment-profile.v1",
+  "virtual_memory": {
+    "allocation_granularity": {
+      "evidence": "measured_capability",
+      "source": "rs-env-probe vm (macos): mach_vm_allocate places at page granularity",
+      "value": 16384
+    },
+    "anonymous_mapping_supported": {
+      "evidence": "measured_capability",
+      "source": "rs-env-probe vm (macos): mmap(NULL, page_size, RW, MAP_PRIVATE|MAP_ANON)",
+      "value": true
+    },
+    "available_ranges": [
+      {
+        "end": "0xfc0000000",
+        "evidence": "measured_capability",
+        "note": "inside the allocation arena between the Mach-O __TEXT base and the Rosetta GPU carveout, where a program's own code and heap are placed, walked in contiguous windows of 0x400000 bytes. Every window in this range was placed at its exact address or was already held by the probe process, and none was structurally refused. The windows touch, so nothing between them is asserted without having been placed. Which windows were which depends on the probe's own layout and is deliberately not recorded",
+        "start": "0x100000000"
+      },
+      {
+        "end": "0x400000000",
+        "evidence": "measured_capability",
+        "note": "mach_vm_allocate(VM_FLAGS_FIXED) succeeded at this exact address in the probe process",
+        "start": "0x3ffc00000"
+      },
+      {
+        "end": "0x400400000",
+        "evidence": "measured_capability",
+        "note": "mach_vm_allocate(VM_FLAGS_FIXED) succeeded at this exact address in the probe process",
+        "start": "0x400000000"
+      },
+      {
+        "end": "0x800000000",
+        "evidence": "measured_capability",
+        "note": "mach_vm_allocate(VM_FLAGS_FIXED) succeeded at this exact address in the probe process",
+        "start": "0x7ffc00000"
+      },
+      {
+        "end": "0x800400000",
+        "evidence": "measured_capability",
+        "note": "mach_vm_allocate(VM_FLAGS_FIXED) succeeded at this exact address in the probe process",
+        "start": "0x800000000"
+      },
+      {
+        "end": "0x7000400000",
+        "evidence": "measured_capability",
+        "note": "mach_vm_allocate(VM_FLAGS_FIXED) succeeded at this exact address in the probe process",
+        "start": "0x7000000000"
+      },
+      {
+        "end": "0x8000000000",
+        "evidence": "measured_capability",
+        "note": "mach_vm_allocate(VM_FLAGS_FIXED) succeeded at this exact address in the probe process",
+        "start": "0x7fffc00000"
+      },
+      {
+        "end": "0x8000400000",
+        "evidence": "measured_capability",
+        "note": "mach_vm_allocate(VM_FLAGS_FIXED) succeeded at this exact address in the probe process",
+        "start": "0x8000000000"
+      },
+      {
+        "end": "0x10000000000",
+        "evidence": "measured_capability",
+        "note": "mach_vm_allocate(VM_FLAGS_FIXED) succeeded at this exact address in the probe process",
+        "start": "0xffffc00000"
+      },
+      {
+        "end": "0x10000400000",
+        "evidence": "measured_capability",
+        "note": "mach_vm_allocate(VM_FLAGS_FIXED) succeeded at this exact address in the probe process",
+        "start": "0x10000000000"
+      },
+      {
+        "end": "0x20000000000",
+        "evidence": "measured_capability",
+        "note": "mach_vm_allocate(VM_FLAGS_FIXED) succeeded at this exact address in the probe process",
+        "start": "0x1ffffc00000"
+      },
+      {
+        "end": "0x20000400000",
+        "evidence": "measured_capability",
+        "note": "mach_vm_allocate(VM_FLAGS_FIXED) succeeded at this exact address in the probe process",
+        "start": "0x20000000000"
+      },
+      {
+        "end": "0x40000000000",
+        "evidence": "measured_capability",
+        "note": "mach_vm_allocate(VM_FLAGS_FIXED) succeeded at this exact address in the probe process",
+        "start": "0x3ffffc00000"
+      },
+      {
+        "end": "0x40000400000",
+        "evidence": "measured_capability",
+        "note": "mach_vm_allocate(VM_FLAGS_FIXED) succeeded at this exact address in the probe process",
+        "start": "0x40000000000"
+      },
+      {
+        "end": "0x80000000000",
+        "evidence": "measured_capability",
+        "note": "mach_vm_allocate(VM_FLAGS_FIXED) succeeded at this exact address in the probe process",
+        "start": "0x7ffffc00000"
+      },
+      {
+        "end": "0x80000400000",
+        "evidence": "measured_capability",
+        "note": "mach_vm_allocate(VM_FLAGS_FIXED) succeeded at this exact address in the probe process",
+        "start": "0x80000000000"
+      },
+      {
+        "end": "0x100000000000",
+        "evidence": "measured_capability",
+        "note": "mach_vm_allocate(VM_FLAGS_FIXED) succeeded at this exact address in the probe process",
+        "start": "0xfffffc00000"
+      },
+      {
+        "end": "0x100000400000",
+        "evidence": "measured_capability",
+        "note": "mach_vm_allocate(VM_FLAGS_FIXED) succeeded at this exact address in the probe process",
+        "start": "0x100000000000"
+      },
+      {
+        "end": "0x200000000000",
+        "evidence": "measured_capability",
+        "note": "mach_vm_allocate(VM_FLAGS_FIXED) succeeded at this exact address in the probe process",
+        "start": "0x1fffffc00000"
+      },
+      {
+        "end": "0x200000400000",
+        "evidence": "measured_capability",
+        "note": "mach_vm_allocate(VM_FLAGS_FIXED) succeeded at this exact address in the probe process",
+        "start": "0x200000000000"
+      },
+      {
+        "end": "0x400000000000",
+        "evidence": "measured_capability",
+        "note": "mach_vm_allocate(VM_FLAGS_FIXED) succeeded at this exact address in the probe process",
+        "start": "0x3fffffc00000"
+      },
+      {
+        "end": "0x400000400000",
+        "evidence": "measured_capability",
+        "note": "mach_vm_allocate(VM_FLAGS_FIXED) succeeded at this exact address in the probe process",
+        "start": "0x400000000000"
+      }
+    ],
+    "exact_mapping": {
+      "evidence": "measured_capability",
+      "source": "rs-env-probe vm (macos): exact placement succeeds for free, in-bounds, page-aligned ranges",
+      "value": "CONDITIONALLY_SUPPORTED"
+    },
+    "exact_mapping_failure_codes": [
+      "KERN_NO_SPACE",
+      "KERN_INVALID_ADDRESS",
+      "ENOMEM"
+    ],
+    "file_map_beyond_eof": {
+      "evidence": "measured_capability",
+      "source": "rs-env-probe vm (macos): an isolated child took SIGBUS reading a whole page past end of file",
+      "value": "sigbus"
+    },
+    "fixed_noreplace_available": {
+      "evidence": "measured_capability",
+      "source": "rs-env-probe vm (macos): mach_vm_allocate(VM_FLAGS_FIXED) refused a collision with KERN_NO_SPACE rather than evicting the neighbour",
+      "value": true
+    },
+    "hinted_mapping_may_relocate": {
+      "evidence": "measured_capability",
+      "source": "rs-env-probe vm (macos): a hinted mapping at an occupied address was relocated",
+      "value": true
+    },
+    "max_single_reservation": {
+      "evidence": "measured_capability",
+      "source": "rs-env-probe vm (macos): largest power-of-two PROT_NONE MAP_NORESERVE reservation the kernel granted",
+      "value": 70368744177664
+    },
+    "max_user_address": {
+      "evidence": "measured_capability",
+      "source": "rs-env-probe vm (macos): highest placeable probe point was 70368744177664, refined by bisection above it",
+      "value": "0x600000000000"
+    },
+    "min_map_address": {
+      "evidence": "unknown",
+      "value": null
+    },
+    "page_size": {
+      "evidence": "measured_capability",
+      "source": "rs-env-probe vm (macos): sysconf(_SC_PAGESIZE)",
+      "value": 16384
+    },
+    "protection": {
+      "anonymous_executable_mapping": {
+        "evidence": "measured_capability",
+        "source": "rs-env-probe vm (macos): mmap(PROT_READ|PROT_EXEC)",
+        "value": true
+      },
+      "jit_entitlement_required": {
+        "evidence": "measured_capability",
+        "source": "rs-env-probe vm (macos): plain RWX was refused while MAP_JIT succeeded, so executable memory here is gated on the JIT entitlement",
+        "value": true
+      },
+      "write_execute_simultaneous": {
+        "evidence": "measured_capability",
+        "source": "rs-env-probe vm (macos): mmap(PROT_READ|PROT_WRITE|PROT_EXEC) without MAP_JIT",
+        "value": false
+      },
+      "write_then_execute_transition": {
+        "evidence": "measured_capability",
+        "source": "rs-env-probe vm (macos): mprotect(RW -> RX)",
+        "value": true
+      }
+    },
+    "reserve_commit_model": {
+      "evidence": "measured_capability",
+      "source": "rs-env-probe vm (macos): a 1 GiB PROT_NONE reservation succeeded without backing it",
+      "value": "posix_lazy"
+    },
+    "unavailable_ranges": [
+      {
+        "end": "0x1000000000",
+        "evidence": "measured_capability",
+        "note": "mach_vm_allocate(VM_FLAGS_FIXED) refused with KERN_NO_SPACE; region [0xfc0000000, 0x1000000000) covers it, and is a real mapping (reserved=0), protection ---; placement was probed at 0xfc0000000 and the refusal is recorded across the entry's full extent as vm_region reported it, not across the probe window alone",
+        "start": "0xfc0000000"
+      },
+      {
+        "end": "0x7000000000",
+        "evidence": "measured_capability",
+        "note": "mach_vm_allocate(VM_FLAGS_FIXED) refused with KERN_NO_SPACE; region [0x1000000000, 0x7000000000) covers it, and is a real mapping (reserved=0), protection ---; placement was probed at 0x1000000000 and the refusal is recorded across the entry's full extent as vm_region reported it, not across the probe window alone",
+        "start": "0x1000000000"
+      },
+      {
+        "end": "0x800000000000",
+        "evidence": "measured_capability",
+        "note": "mach_vm_allocate(VM_FLAGS_FIXED) refused with KERN_INVALID_ADDRESS; mach_vm_region found no region at or above this address",
+        "start": "0x7fffffc00000"
+      },
+      {
+        "end": "0x800000400000",
+        "evidence": "measured_capability",
+        "note": "mach_vm_allocate(VM_FLAGS_FIXED) refused with KERN_INVALID_ADDRESS; mach_vm_region found no region at or above this address",
+        "start": "0x800000000000"
+      },
+      {
+        "end": "0x1000000000000",
+        "evidence": "measured_capability",
+        "note": "mach_vm_allocate(VM_FLAGS_FIXED) refused with KERN_INVALID_ADDRESS; mach_vm_region found no region at or above this address",
+        "start": "0xffffffc00000"
+      },
+      {
+        "end": "0x1000000400000",
+        "evidence": "measured_capability",
+        "note": "mach_vm_allocate(VM_FLAGS_FIXED) refused with KERN_INVALID_ADDRESS; mach_vm_region found no region at or above this address",
+        "start": "0x1000000000000"
+      },
+      {
+        "end": "0x2000000000000",
+        "evidence": "measured_capability",
+        "note": "mach_vm_allocate(VM_FLAGS_FIXED) refused with KERN_INVALID_ADDRESS; mach_vm_region found no region at or above this address",
+        "start": "0x1ffffffc00000"
+      },
+      {
+        "end": "0x2000000400000",
+        "evidence": "measured_capability",
+        "note": "mach_vm_allocate(VM_FLAGS_FIXED) refused with KERN_INVALID_ADDRESS; mach_vm_region found no region at or above this address",
+        "start": "0x2000000000000"
+      },
+      {
+        "end": "0x4000000000000",
+        "evidence": "measured_capability",
+        "note": "mach_vm_allocate(VM_FLAGS_FIXED) refused with KERN_INVALID_ADDRESS; mach_vm_region found no region at or above this address",
+        "start": "0x3ffffffc00000"
+      },
+      {
+        "end": "0x4000000400000",
+        "evidence": "measured_capability",
+        "note": "mach_vm_allocate(VM_FLAGS_FIXED) refused with KERN_INVALID_ADDRESS; mach_vm_region found no region at or above this address",
+        "start": "0x4000000000000"
+      },
+      {
+        "end": "0x8000000000000",
+        "evidence": "measured_capability",
+        "note": "mach_vm_allocate(VM_FLAGS_FIXED) refused with KERN_INVALID_ADDRESS; mach_vm_region found no region at or above this address",
+        "start": "0x7ffffffc00000"
+      },
+      {
+        "end": "0x8000000400000",
+        "evidence": "measured_capability",
+        "note": "mach_vm_allocate(VM_FLAGS_FIXED) refused with KERN_INVALID_ADDRESS; mach_vm_region found no region at or above this address",
+        "start": "0x8000000000000"
+      },
+      {
+        "end": "0x10000000000000",
+        "evidence": "measured_capability",
+        "note": "mach_vm_allocate(VM_FLAGS_FIXED) refused with KERN_INVALID_ADDRESS; mach_vm_region found no region at or above this address",
+        "start": "0xfffffffc00000"
+      },
+      {
+        "end": "0x10000000400000",
+        "evidence": "measured_capability",
+        "note": "mach_vm_allocate(VM_FLAGS_FIXED) refused with KERN_INVALID_ADDRESS; mach_vm_region found no region at or above this address",
+        "start": "0x10000000000000"
+      },
+      {
+        "end": "0x20000000000000",
+        "evidence": "measured_capability",
+        "note": "mach_vm_allocate(VM_FLAGS_FIXED) refused with KERN_INVALID_ADDRESS; mach_vm_region found no region at or above this address",
+        "start": "0x1fffffffc00000"
+      },
+      {
+        "end": "0x20000000400000",
+        "evidence": "measured_capability",
+        "note": "mach_vm_allocate(VM_FLAGS_FIXED) refused with KERN_INVALID_ADDRESS; mach_vm_region found no region at or above this address",
+        "start": "0x20000000000000"
+      },
+      {
+        "end": "0x40000000000000",
+        "evidence": "measured_capability",
+        "note": "mach_vm_allocate(VM_FLAGS_FIXED) refused with KERN_INVALID_ADDRESS; mach_vm_region found no region at or above this address",
+        "start": "0x3fffffffc00000"
+      },
+      {
+        "end": "0x40000000400000",
+        "evidence": "measured_capability",
+        "note": "mach_vm_allocate(VM_FLAGS_FIXED) refused with KERN_INVALID_ADDRESS; mach_vm_region found no region at or above this address",
+        "start": "0x40000000000000"
+      },
+      {
+        "end": "0x80000000000000",
+        "evidence": "measured_capability",
+        "note": "mach_vm_allocate(VM_FLAGS_FIXED) refused with KERN_INVALID_ADDRESS; mach_vm_region found no region at or above this address",
+        "start": "0x7fffffffc00000"
+      },
+      {
+        "end": "0x80000000400000",
+        "evidence": "measured_capability",
+        "note": "mach_vm_allocate(VM_FLAGS_FIXED) refused with KERN_INVALID_ADDRESS; mach_vm_region found no region at or above this address",
+        "start": "0x80000000000000"
+      },
+      {
+        "end": "0x100000000000000",
+        "evidence": "measured_capability",
+        "note": "mach_vm_allocate(VM_FLAGS_FIXED) refused with KERN_INVALID_ADDRESS; mach_vm_region found no region at or above this address",
+        "start": "0xffffffffc00000"
+      },
+      {
+        "end": "0x100000000400000",
+        "evidence": "measured_capability",
+        "note": "mach_vm_allocate(VM_FLAGS_FIXED) refused with KERN_INVALID_ADDRESS; mach_vm_region found no region at or above this address",
+        "start": "0x100000000000000"
+      },
+      {
+        "end": "0x200000000000000",
+        "evidence": "measured_capability",
+        "note": "mach_vm_allocate(VM_FLAGS_FIXED) refused with KERN_INVALID_ADDRESS; mach_vm_region found no region at or above this address",
+        "start": "0x1ffffffffc00000"
+      },
+      {
+        "end": "0x200000000400000",
+        "evidence": "measured_capability",
+        "note": "mach_vm_allocate(VM_FLAGS_FIXED) refused with KERN_INVALID_ADDRESS; mach_vm_region found no region at or above this address",
+        "start": "0x200000000000000"
+      },
+      {
+        "end": "0x400000000000000",
+        "evidence": "measured_capability",
+        "note": "mach_vm_allocate(VM_FLAGS_FIXED) refused with KERN_INVALID_ADDRESS; mach_vm_region found no region at or above this address",
+        "start": "0x3ffffffffc00000"
+      },
+      {
+        "end": "0x400000000400000",
+        "evidence": "measured_capability",
+        "note": "mach_vm_allocate(VM_FLAGS_FIXED) refused with KERN_INVALID_ADDRESS; mach_vm_region found no region at or above this address",
+        "start": "0x400000000000000"
+      },
+      {
+        "end": "0x800000000000000",
+        "evidence": "measured_capability",
+        "note": "mach_vm_allocate(VM_FLAGS_FIXED) refused with KERN_INVALID_ADDRESS; mach_vm_region found no region at or above this address",
+        "start": "0x7ffffffffc00000"
+      },
+      {
+        "end": "0x800000000400000",
+        "evidence": "measured_capability",
+        "note": "mach_vm_allocate(VM_FLAGS_FIXED) refused with KERN_INVALID_ADDRESS; mach_vm_region found no region at or above this address",
+        "start": "0x800000000000000"
+      },
+      {
+        "end": "0x1000000000000000",
+        "evidence": "measured_capability",
+        "note": "mach_vm_allocate(VM_FLAGS_FIXED) refused with KERN_INVALID_ADDRESS; mach_vm_region found no region at or above this address",
+        "start": "0xfffffffffc00000"
+      },
+      {
+        "end": "0x1000000000400000",
+        "evidence": "measured_capability",
+        "note": "mach_vm_allocate(VM_FLAGS_FIXED) refused with KERN_INVALID_ADDRESS; mach_vm_region found no region at or above this address",
+        "start": "0x1000000000000000"
+      },
+      {
+        "end": "0x2000000000000000",
+        "evidence": "measured_capability",
+        "note": "mach_vm_allocate(VM_FLAGS_FIXED) refused with KERN_INVALID_ADDRESS; mach_vm_region found no region at or above this address",
+        "start": "0x1fffffffffc00000"
+      },
+      {
+        "end": "0x2000000000400000",
+        "evidence": "measured_capability",
+        "note": "mach_vm_allocate(VM_FLAGS_FIXED) refused with KERN_INVALID_ADDRESS; mach_vm_region found no region at or above this address",
+        "start": "0x2000000000000000"
+      },
+      {
+        "end": "0x4000000000000000",
+        "evidence": "measured_capability",
+        "note": "mach_vm_allocate(VM_FLAGS_FIXED) refused with KERN_INVALID_ADDRESS; mach_vm_region found no region at or above this address",
+        "start": "0x3fffffffffc00000"
+      },
+      {
+        "end": "0x4000000000400000",
+        "evidence": "measured_capability",
+        "note": "mach_vm_allocate(VM_FLAGS_FIXED) refused with KERN_INVALID_ADDRESS; mach_vm_region found no region at or above this address",
+        "start": "0x4000000000000000"
+      }
+    ]
+  }
+}
