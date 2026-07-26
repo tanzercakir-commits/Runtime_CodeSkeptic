@@ -636,6 +636,64 @@ sandbox. The same named-human-dependency this project already accepted for the
 control plane, and it is cheaper than it was: previously the run would have
 measured and then thrown the ground-truth result away.
 
+### The two things the new diagnostics immediately produced
+
+`420eb32`. Both channels answered in one push, and both answers are findings.
+
+#### 1. The macOS arena is not reproducible, and it is manufacturing limitations
+
+```
+reproducible   failure                    <- steps.json says which step, at last
+NOT REPRODUCIBLE: two runs of the probe on this host disagree
+  run 1  sha256:4b580726d2057364…      run 2  sha256:3de09f991ea2e43f…
+  available_ranges:    35 vs 32 entries
+  unavailable_ranges:  83 vs 74 entries
+```
+
+**My argument for why this would hold was wrong.** I wrote that `OccupiedByUs` is
+treated as usable, so the probe's own image can move the placed/held split but
+never which windows are *refused*, and only a refusal splits a run. That is true
+on Linux, where `MAP_FIXED_NOREPLACE` answers `EEXIST` for **any** existing
+mapping. It is false on macOS, because `try_place()` returns `Refused` when the
+covering region grants no access — and a macOS process is full of its own
+`PROT_NONE` reservations (malloc guards, dyld, thread stack guards) whose
+addresses move with ASLR.
+
+So the arena is filing **~80 host limitations that are its own guard pages**, and
+`profile_id` moves between two runs of the same binary on the same machine. That
+is the precise defect `min_map_address` was once guilty of — a fact about our
+morning hashed into an id meant to name the host — and the reproducibility gate
+caught it before a single profile was published. It is why that gate exists.
+
+`try_place()`'s no-access rule is not wrong; it was reasoned out over four
+iterations and it is right for the commpage and the GPU carveout, which macOS puts
+in every task's map. It is wrong *inside the arena*, and the fix is a design
+decision rather than a patch — see T-014.
+
+#### 2. The analyzer over-predicts a 4 PiB reservation on a 56-bit host
+
+```
+oversized-reservation-4pib    SUPPORTED   refused   CONTRADICTED
+    mmap of 4503599627370496 bytes (4096.0 TiB) was refused: ENOMEM
+exact-mapping-above-user-space  SUPPORTED  satisfied  held
+    mmap(0x800000000000, …) placed the mapping exactly there
+```
+
+On a 4-level host, 4 PiB does not fit below `max_user_address`, the analyzer says
+UNSUPPORTED, the kernel refuses, and the prediction holds. On the LA57 host it
+**fits** — `max_user_address` is 2^56 — so the analyzer says SUPPORTED, and the
+kernel refuses anyway. `exact-mapping-above-user-space` is the same host
+difference from the other side: `0x800000000000` is not above user space there,
+and the case's own name stops being true.
+
+**Fitting inside the address space is not sufficient for a reservation to
+succeed**, and every host this project had ever run on hid that by refusing the
+request for the other reason. The harness reported it as a contradiction and
+declined to adjust the expectation, which is what it is for.
+
+Two findings from one runner class, on a project whose thesis is that the bug is
+always on the platform nobody runs.
+
 **Also next.** Windows still has no arena at all.
 
 ---

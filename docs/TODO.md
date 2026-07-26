@@ -215,9 +215,37 @@ answered.
 **Three things this item is NOT finished by, all recorded rather than quietly
 dropped:**
 
-1. **`check_reproducible.sh` has not run on the macOS runner.** The arena's bounds
-   are constants so it should agree across two processes, and "should" is the word
-   this project does not accept.
+1. **It ran, and it FAILED.** `check_reproducible.sh` on the macOS runner:
+
+   ```
+   available_ranges:    35 vs 32 entries
+   unavailable_ranges:  83 vs 74 entries
+   ```
+
+   My argument for why it would hold was wrong. `OccupiedByUs` is treated as
+   usable, so our own image cannot move which windows are *refused* — true on
+   Linux, where `MAP_FIXED_NOREPLACE` answers `EEXIST` for any existing mapping;
+   **false on macOS**, where `try_place()` returns `Refused` for a covering region
+   that grants no access, and a macOS process is full of its own `PROT_NONE`
+   reservations that move with ASLR. The arena is filing ~80 host limitations that
+   are its own guard pages.
+
+   **This needs a decision, not a patch**, and `try_place()`'s rule is not the
+   thing to change — it was reasoned out over four iterations and is right for the
+   commpage and the carveout. The candidate:
+
+   > Bound the arena at the **commpage start `0xfc0000000`** instead of the
+   > carveout start `0x10_0000_0000`. Then no documented platform no-access band
+   > lies inside it, so a refusal inside the arena is *ours* and is treated as
+   > held-by-probe — the same argument `EEXIST` already gets — counted in the note
+   > and recorded as no limitation at all. Available output becomes one stable
+   > range; the commpage and the carveout stay with the ladder, which probes them
+   > at documented addresses.
+   >
+   > **Residual risk, which must be stated rather than discovered:** if a macOS
+   > version puts an undocumented platform no-access band inside
+   > `[0x1_0000_0000, 0xfc0000000)`, the arena would claim it available. The note's
+   > held-not-placed count is what would expose that, so it has to stay readable.
 2. **Done.** The Linux arena's last 64 GiB stride was unclaimed, which an LA57
    runner exposed. The arena now probes a window that *ends at* its top, the
    candidate ladder no longer probes a window crossing `max_user_address` (that
@@ -246,6 +274,50 @@ been read once.
 ---
 
 ## Next
+
+---
+
+### T-015 — Fitting in the address space is not enough to reserve it `[next]`
+
+**Serves:** the credibility of every `SUPPORTED` the analyzer emits
+**Plan:** `docs/PLAN.md` cross-cutting — rule coverage, and Gate B's false-positive
+claim
+**Done when:** `oversized-reservation-4pib` is `held` on **both** a 4-level and a
+5-level Linux host, and the rule that changed says why in
+`docs/findings/registry.md`.
+
+**Found by a 5-level-paging CI runner, and every host before it hid the defect.**
+
+```
+oversized-reservation-4pib    SUPPORTED   refused   CONTRADICTED
+    mmap of 4503599627370496 bytes (4096.0 TiB) was refused: ENOMEM
+```
+
+On a 4-level host 4 PiB does not fit below `max_user_address`, so the analyzer
+answers UNSUPPORTED, the kernel refuses, and the prediction holds — **for the wrong
+reason**. On an LA57 host `max_user_address` is 2^56, 4 PiB fits, the analyzer
+answers SUPPORTED, and the kernel refuses anyway.
+
+So the rule behind that verdict treats *fits within the address space* as
+sufficient for a reservation to succeed. It is not: `ENOMEM` here is overcommit and
+VA accounting, not bounds. This is a **false positive** in the dangerous
+direction — the analyzer told a caller a 4 PiB reservation would work.
+
+**Not to be fixed by adjusting the expectation.** The harness said so itself, and
+the contract describes what the program does.
+
+**First step:** decide what the honest verdict is. A reservation that fits the
+address space but exceeds what the kernel will account for is not UNSUPPORTED
+either — it depends on `vm.overcommit_memory`, `RLIMIT_AS` and free VA, none of
+which the profile currently measures. `CONDITIONALLY_SUPPORTED` with a named
+condition is the likely answer, and if so the condition has to be a measured fact
+rather than a sentence.
+
+**Also note:** `exact-mapping-above-user-space` is the same host difference from
+the other side. `0x800000000000` is not above user space on an LA57 host, and the
+case's own name stops being true there. Renaming it is not the fix; deriving the
+address from the measured bound is.
+
 
 ---
 
