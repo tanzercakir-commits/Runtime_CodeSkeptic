@@ -148,6 +148,43 @@ RS_TEST(skipped_windows_are_counted_so_refused_keeps_its_meaning) {
     RS_CHECK(walk.placed > 0);
 }
 
+RS_TEST(the_probes_own_image_does_not_raise_the_arena_floor) {
+    // The bug the runner found on 71af1ee, and the reason it is worth a case of
+    // its own rather than a comment.
+    //
+    // The arena's bottom was `max(find_min_map_address(), kMachOTextBase)`.
+    // find_min_map_address() returns the lowest page THIS PROCESS can place,
+    // which is above its own low image - so the code page is below it by
+    // construction and the arena's floor ended up above the exact page the arena
+    // exists to cover. The heap page was fixed; the code page was not.
+    //
+    // The floor must be the constant. Our own image reports HeldByProbe, which
+    // the walk treats as usable, so it changes the placed/held split (a note,
+    // outside profile_id) and never which windows are refused - and only a
+    // refusal splits a run.
+    ArenaProbe ours_low;
+    ours_low.place = [](std::uint64_t base, std::uint64_t) {
+        // The first 12 windows are this process's own image.
+        return base < kTextBase + 12 * kWindow ? ArenaPlacement::HeldByProbe
+                                               : ArenaPlacement::Placed;
+    };
+    ours_low.describe = [](std::uint64_t) { return ArenaEntry{}; };
+
+    const ArenaWalk walk = walk_arena("test arena", kTextBase,
+                                      kTextBase + 24 * kWindow, kPage, kWindow,
+                                      ours_low);
+    RS_CHECK_EQ(walk.available.size(), std::size_t{1});
+    if (walk.available.empty()) return;
+    RS_CHECK_MESSAGE(walk.available[0].range.start == kTextBase,
+                     "the arena floor moved off the constant. A value derived "
+                     "from where the probe's own image sits must never raise it "
+                     "- that is what put the floor above the code page on "
+                     "71af1ee");
+    RS_CHECK(walk.available[0].range.contains(
+        AddressRange{kTextBase, kTextBase + kWindow}));
+    RS_CHECK_EQ(walk.held_by_probe, std::size_t{12});
+}
+
 RS_TEST(a_host_that_refuses_everything_establishes_nothing_as_available) {
     ArenaProbe all_refused;
     all_refused.place = [](std::uint64_t, std::uint64_t) {

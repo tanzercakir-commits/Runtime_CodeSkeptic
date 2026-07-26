@@ -126,9 +126,18 @@ std::string coverage_diagnosis(const EnvironmentProfile& profile,
     // and would have printed nothing on the CI failure it was written for. It
     // was caught only by forcing the assertion to fail on a passing host, which
     // is the only way an error path ever gets tested.
+    // Matched on "arena", not on the wording of the note.
+    //
+    // This filter has now been wrong TWICE. First it read `profile.notes` while
+    // the arena split is in `run.warnings`, so it printed nothing. Then it
+    // matched "sampled every" - and the macOS arena's note was changed to "walked
+    // in contiguous windows of", so it printed "NO arena was scanned on this
+    // platform" for a push where the arena had demonstrably run and added three
+    // ranges. A diagnostic that keys on prose owned by another file will keep
+    // doing this; "arena" is in the name of the thing, not in its description.
     bool any = false;
     for (const auto& note : profile.run.warnings) {
-        if (note.find("sampled every") != std::string::npos) {
+        if (note.find("arena") != std::string::npos) {
             out << "\n      arena: " << note;
             any = true;
         }

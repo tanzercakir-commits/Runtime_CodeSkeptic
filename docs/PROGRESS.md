@@ -312,11 +312,57 @@ logic, which is the largest remaining place where the answer was "push and wait"
 The arena is still macOS-specific in what it *means*; it is no longer
 macOS-specific in what can be *checked*.
 
-**Next.** Push and read `refs/status/*`. If macOS goes green, T-014's remaining
-work is `check_reproducible.sh` across two processes and the runtime cost — both
-readable from the same channel. Windows still has no arena; same gap, third
-platform. The `linux---gcc` flake stays unfixed on purpose: two passes and one
-failure on identical code is an observation, not a diagnosis.
+### `71af1ee`: half the failure fixed, and the other half was my comment
+
+macOS went from **two** failures to one. The heap page is established; the code
+page is not, and it moved — `0x1023a4000` to `0x102df0000`. `established` went
+19 to 22, so the arena ran and added three ranges.
+
+The cause was a comment I wrote defending the thing it got wrong:
+
+```cpp
+// max() rather than the constant alone: `min_address` is measured, and on
+// x86_64 macOS it IS 0x1_0000_0000 because __PAGEZERO is four GiB. Where the
+// two disagree the measurement wins.
+const std::uint64_t bottom =
+    min_address > kMachOTextBase ? min_address : kMachOTextBase;
+```
+
+`find_min_map_address()` does not return the top of `__PAGEZERO`. It returns the
+lowest page **this process** can place, which is above `__PAGEZERO` *and above
+this process's whole low image*. The code page is below that by construction. So
+the arena's floor ended up above the exact page the arena exists to cover.
+
+**And this file already said so, twenty lines from the call:** `min_map_address`
+is *"DELIBERATELY NOT RECORDED AS A HOST FACT … a property of how this binary was
+linked and where the loader put it."* Three paragraphs of mine congratulate the
+design for refusing `mach_vm_region` because it reports this task's slide — and
+then the bottom of the same function takes a process-derived value as a bound.
+Same trap, different door, forty lines apart.
+
+The floor is the constant now, with the argument for why deferring is unnecessary
+rather than merely inconvenient: `OccupiedByUs` is treated as usable, so our own
+image can change the placed/held split — a note, outside `profile_id` — but never
+which windows are *refused*, and only a refusal splits a run. The recorded ranges
+are identical in every process, which `check_reproducible.sh` can measure.
+
+| | |
+|---|---|
+| **+** | the heap page fix held; the walk, the contiguous windows and the collapse all behaved as the test predicted on a real runner |
+| **+** | `the_probes_own_image_does_not_raise_the_arena_floor` is now case 10, so this cannot come back |
+| **−** | the test suite could not have caught it: the bug was in the *wiring*, choosing what to pass as `bottom`, and the wiring is the part that still only compiles on macOS |
+| **−** | **my diagnostic lied for the second time.** It matched `"sampled every"`, I renamed the note to `"walked in contiguous windows of"`, and it printed "NO arena was scanned on this platform" for a push where the arena had demonstrably run. It matches `"arena"` now — the name of the thing, not a description of it |
+
+The pattern in both diagnostic failures is the same and worth naming: a check that
+keys on prose owned by another file will keep breaking, silently, in the direction
+of saying nothing is wrong.
+
+**Next.** Push and read `refs/status/*` again. Then T-014's real remainder, which
+no test here can substitute for: `check_reproducible.sh` across two processes, and
+what 12,294 `mach_vm_allocate` calls actually cost. Windows still has no arena.
+The `linux---gcc` flake stays unfixed on purpose — it has now failed twice and
+passed twice on identical code, which makes it more interesting and still not a
+diagnosis.
 
 ---
 

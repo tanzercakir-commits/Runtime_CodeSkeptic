@@ -665,14 +665,41 @@ constexpr std::uint64_t kMinArenaWindow = 4ull * 1024 * 1024;
 // 31 GiB - fall inside a single band between two constants, so a second arena
 // would be a guess. If a runner puts either page outside this one, the failure
 // now prints where, and THAT measurement can size the next arena.
+// THE BOTTOM IS THE CONSTANT, AND NOTHING IS ALLOWED TO RAISE IT.
+//
+// The first version wrote `max(min_address, kMachOTextBase)`, with a comment
+// claiming `min_address` is 0x1_0000_0000 on x86_64 because __PAGEZERO is four
+// GiB, so "where the two disagree the measurement wins". That was wrong, and the
+// runner said so on the next push: the code page moved from 0x1023a4000 to
+// 0x102df0000 and was still not established, while the heap page - the other
+// failure - now was.
+//
+// `find_min_map_address()` does not return the top of __PAGEZERO. It returns the
+// lowest page THIS PROCESS can place, which is above __PAGEZERO *and above this
+// process's whole low image*. So the code page is below it by construction, and
+// deferring to it moves the arena's floor above the exact page the arena exists
+// to cover.
+//
+// This file already says so twenty lines from where that call is made:
+// min_map_address is "DELIBERATELY NOT RECORDED AS A HOST FACT ... a property of
+// how this binary was linked and where the loader put it". Feeding it to the
+// arena as a bound is the same value doing the same damage through a different
+// door - the trap the paragraph above congratulates itself on avoiding, walked
+// into at the bottom of the same function.
+//
+// Why the existing `min_address` filter on the LADDER is still right, and this is
+// not: a ladder candidate below our image is recorded as available or occupied
+// according to where our heap and libraries happen to sit, so the candidate set
+// is a fact about our morning. The arena's bounds are constants, and
+// `OccupiedByUs` is treated as usable rather than as a limitation - so our own
+// image can change which windows are `placed` versus `held` (a note, outside
+// profile_id) but never which are `refused`, and only a refusal splits a run. The
+// recorded ranges are therefore identical in every process. That is the property
+// that makes deferring unnecessary, and it is measurable:
+// tools/campaign/check_reproducible.sh across two processes.
 void scan_allocation_arenas(std::uint64_t page_size, std::uint64_t probe_length,
-                            std::uint64_t min_address, ScanOutcome& outcome) {
-    // max() rather than the constant alone: `min_address` is measured, and on
-    // x86_64 macOS it IS 0x1_0000_0000 because __PAGEZERO is four GiB. Where the
-    // two disagree the measurement wins, and the existing filter that keeps our
-    // own low mappings out of the facts is not quietly bypassed.
-    const std::uint64_t bottom =
-        min_address > kMachOTextBase ? min_address : kMachOTextBase;
+                            ScanOutcome& outcome) {
+    const std::uint64_t bottom = kMachOTextBase;
     const std::uint64_t window =
         probe_length > kMinArenaWindow ? probe_length : kMinArenaWindow;
 
@@ -893,7 +920,7 @@ ScanOutcome scan_address_space(std::size_t page_size, std::uint64_t probe_length
     // inside the commpage and the GPU carveout are the measurements the whole
     // macOS story in this project rests on; the arena answers the space between
     // them, which is where programs actually are.
-    scan_allocation_arenas(page_size, probe_length, min_address, outcome);
+    scan_allocation_arenas(page_size, probe_length, outcome);
     collapse_contained_ranges(outcome.unavailable);
     return outcome;
 }
