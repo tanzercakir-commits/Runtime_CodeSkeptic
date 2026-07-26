@@ -1,0 +1,42 @@
+Test project /Users/runner/work/Runtime_CodeSkeptic/Runtime_CodeSkeptic/build
+    Start 13: test_probe
+1/1 Test #13: test_probe .......................***Failed    0.09 sec
+== probe conformance (14 cases)
+  ok   probe_produces_a_schema_valid_profile_on_every_platform
+  ok   probe_never_attaches_a_value_to_unknown_evidence
+  ok   unimplemented_platforms_report_synthetic_origin
+  ok   repeated_calls_in_one_process_produce_the_same_profile_id
+  ok   profile_id_survives_a_write_read_round_trip
+  ok   range_order_does_not_affect_identity
+  ok   canonical_serialization_is_byte_stable
+  ok   measured_page_size_is_a_power_of_two
+  ok   measured_bounds_are_ordered
+  ok   no_recorded_range_carries_unknown_evidence
+  FAIL available_and_unavailable_ranges_do_not_overlap
+    /Users/runner/work/Runtime_CodeSkeptic/Runtime_CodeSkeptic/tests/conformance/test_probe.cpp:303
+    the probe reported [0x169c00000, 0xfc0000000) as both available and unavailable
+      available [0x169c00000, 0xfc0000000)
+        inside the allocation arena between the Mach-O __TEXT base and the Rosetta GPU carveout, where a program's own code and heap are placed, walked in contiguous windows of 0x400000 bytes. Every window in this range was plac
+      unavailable [0x200000000, 0x200004000)
+        the kernel refused an exact placement here while higher addresses remained placeable, so this is a hole in the address space rather than its end
+  FAIL available_and_unavailable_ranges_do_not_overlap
+    /Users/runner/work/Runtime_CodeSkeptic/Runtime_CodeSkeptic/tests/conformance/test_probe.cpp:303
+    the probe reported [0x169c00000, 0xfc0000000) as both available and unavailable
+      available [0x169c00000, 0xfc0000000)
+        inside the allocation arena between the Mach-O __TEXT base and the Rosetta GPU carveout, where a program's own code and heap are placed, walked in contiguous windows of 0x400000 bytes. Every window in this range was plac
+      unavailable [0x5bc000000, 0x8bcc00000)
+        mach_vm_allocate(VM_FLAGS_FIXED) refused with KERN_NO_SPACE; region [0x5bc000000, 0x8bcc00000) covers it, and is a real mapping (reserved=0), protection ---; placement was probed at 0x7ffc00000 and the refusal is recorde
+  ok   disabling_the_scan_drops_the_sweep_but_keeps_measured_bounds
+  ok   the_scan_covers_where_this_process_is_actually_mapped
+  ok   probe_leaves_the_process_address_space_usable
+
+2 failure(s) in probe conformance
+
+
+0% tests passed, 1 tests failed out of 1
+
+Total Test time (real) =   0.11 sec
+
+The following tests FAILED:
+	 13 - test_probe (Failed)
+Errors while running CTest
