@@ -282,6 +282,14 @@ jobs:
       - name: Test
         run: ctest --test-dir build --build-config RelWithDebInfo --output-on-failure
 
+      # T-014 named this as the gap its own completion did not close: the arena's
+      # bounds are constants, so two processes SHOULD agree - and "should" is the
+      # word this project does not accept. `macos-probe.yml` checks it, but only on
+      # a schedule or a dispatch; here it is checked on every push.
+      - name: Probe is reproducible across processes
+        if: runner.os != 'Windows'
+        run: bash tools/campaign/check_reproducible.sh
+
       # POSIX-only: the case programs use mmap/mprotect/fork.
       - name: Ground-truth harness selftest
         if: runner.os != 'Windows'

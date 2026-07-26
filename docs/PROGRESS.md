@@ -611,8 +611,32 @@ The ladder fix is one line plus its argument, and it is the same shape as the
 macOS clamp two entries above: a refusal that is explained by *where the window
 was put* is not a fact about the address.
 
-**Also next.** `check_reproducible.sh` on the macOS runner is still outstanding.
-Windows still has no arena at all.
+### Reproducibility on every push, one channel instead of two, and a dependency
+
+**Changed.** `ci.yml`'s `expensive-platforms` runs `check_reproducible.sh`;
+`macos-probe.yml`'s two publish steps use `tools/ci/publish_measurement.sh`.
+
+| | |
+|---|---|
+| **+** | T-014's named remainder is closed the right way round: `macos-probe.yml` already checked cross-process reproducibility, but only weekly or on a button. It is checked on **every push** now |
+| **+** | `macos-probe.yml`'s measurement refs used `git add` on the checked-out tree, so each one carried **a full copy of the repository** — and the ground-truth output, the thing that workflow exists to produce, was not in them at all. Both lanes now publish the profile, the ground-truth output and the reproducibility result, and nothing else |
+| **−** | **I planned to trigger the Rosetta measurement by editing that file, and it does not work.** `macos-probe.yml` has `schedule` and `workflow_dispatch` and **no push trigger** — deliberately, for the 10x-billing reason argued at length in its own header. The self-trigger-on-its-own-path mechanism belongs to `windows-probe.yml`. I had conflated the two, and checked before asserting it |
+
+So the second half of the `file_map_beyond_eof` claim — *does the same machine
+running x86-64 under Rosetta 2 hand back zeroes where native arm64 raised
+SIGBUS?* — is not obtainable from here. It needs a dispatch:
+
+```
+gh workflow run macos-probe.yml --ref main
+```
+
+The workflow now publishes the ground-truth output, so once that runs the answer
+arrives in `refs/measurements/<sha>/rosetta-x86_64` and is readable from the
+sandbox. The same named-human-dependency this project already accepted for the
+control plane, and it is cheaper than it was: previously the run would have
+measured and then thrown the ground-truth result away.
+
+**Also next.** Windows still has no arena at all.
 
 ---
 

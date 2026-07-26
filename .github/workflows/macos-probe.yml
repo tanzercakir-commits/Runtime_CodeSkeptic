@@ -161,16 +161,16 @@ jobs:
       #
       # Fetch one with:
       #   git fetch origin "refs/measurements/<sha>/<job>:refs/heads/m" && git show m:PROFILE.json
+      # Via the shared script, so this ref holds ONLY the artifacts. It used to
+      # `git add` on top of the checked-out tree, which meant every measurement
+      # ref carried a full copy of the repository - and the ground-truth output,
+      # the thing this workflow exists to produce, was not in it at all.
       - name: Publish the measurement to refs/measurements/*
         if: always() && steps.measure.outcome == 'success'
         run: |
-          git config user.name "ci-measurements"
-          git config user.email "ci-measurements@localhost"
-          git checkout --detach -q
-          git add -f macos-arm64-native.json
-          git commit -qm "native arm64 measured @ ${{ github.sha }}"
-          git push --force origin \
-            "HEAD:refs/measurements/${{ github.sha }}/native-arm64"
+          bash tools/ci/publish_measurement.sh measurements \
+            "native-arm64" "${{ github.sha }}" \
+            macos-arm64-native.json /tmp/groundtruth.txt /tmp/reproducible.txt
 
       - name: Failure diagnostics -> refs/ci-logs/*
         if: failure()
@@ -366,16 +366,16 @@ jobs:
       #
       # Fetch one with:
       #   git fetch origin "refs/measurements/<sha>/<job>:refs/heads/m" && git show m:PROFILE.json
+      # Via the shared script, so this ref holds ONLY the artifacts. It used to
+      # `git add` on top of the checked-out tree, which meant every measurement
+      # ref carried a full copy of the repository - and the ground-truth output,
+      # the thing this workflow exists to produce, was not in it at all.
       - name: Publish the measurement to refs/measurements/*
         if: always() && steps.measure.outcome == 'success'
         run: |
-          git config user.name "ci-measurements"
-          git config user.email "ci-measurements@localhost"
-          git checkout --detach -q
-          git add -f macos-rosetta-x86_64.json
-          git commit -qm "rosetta x86_64 measured @ ${{ github.sha }}"
-          git push --force origin \
-            "HEAD:refs/measurements/${{ github.sha }}/rosetta-x86_64"
+          bash tools/ci/publish_measurement.sh measurements \
+            "rosetta-x86_64" "${{ github.sha }}" \
+            macos-rosetta-x86_64.json /tmp/groundtruth.txt /tmp/reproducible.txt
 
       - name: Failure diagnostics -> refs/ci-logs/*
         if: failure()
