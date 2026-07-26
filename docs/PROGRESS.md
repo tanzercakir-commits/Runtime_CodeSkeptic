@@ -1331,8 +1331,42 @@ measurement** — `oversized-reservation-4pib` unverified on a 5-level host, and
 `exact-mapping-above-user-space` deriving its address from `0x800000000000` rather
 than from the measured bound. Same shape as the four already fixed today.
 
-**Also next.** Windows has no arena. That question was never reachable before now:
-the probe that would need one was not in the binary. The Rosetta lane still needs a dispatch —
+### The coverage test could not fail on Windows
+
+Starting the third arena, and the first thing in the way was the test that was
+supposed to demand one:
+
+```cpp
+if (result.profile.vm.available_ranges.empty() &&
+    result.profile.vm.unavailable_ranges.empty()) {
+    return;  // the sweep was disabled; a different test covers that
+}
+```
+
+`probe::Options::scan_address_space` defaults to **true** and this call passes no
+options, so the sweep is never disabled here. The branch was reachable only when a
+probe genuinely established nothing — which is exactly Windows. So
+`the_scan_covers_where_this_process_is_actually_mapped` **passed vacuously on the one
+platform where it had the most to say**, and `test_probe` was 14/14 on a real Windows
+runner with `available: 0, unavailable: 0`.
+
+| | |
+|---|---|
+| **−** | third instance of one shape in two days: `unimplemented_platforms_report_synthetic_origin` returned early when `implemented` was true and nothing returned early when it was false; this returned early when there was nothing to check. **A test that declines to look, in the case that matters** |
+| **+** | it is an assertion now, carrying the full coverage diagnosis, so the Windows runner will print the code page, the heap page and `max_user_address` — the same three numbers that decided the macOS arena's bounds |
+| **+** | designing from those rather than from a guess is the sequence that worked twice: `90dc74b` made the macOS failure carry its evidence, and the runner answered the derivation question on the next push |
+
+**Why the Windows arena will not be a third copy.** Linux samples two 4 TiB arenas at
+64 GiB across a 128 TiB space; macOS walks one 60 GiB arena in contiguous 4 MiB
+windows. Windows has `lpMinimumApplicationAddress` and `lpMaximumApplicationAddress`
+from `GetSystemInfo` — **system constants, not probed** — which is a better starting
+point than either platform had. It also has `VirtualQuery`, which enumerates the
+address space directly, and that is a trap rather than a shortcut: what it enumerates
+is *this process's* free space, which is the fact-about-our-morning problem in its
+purest form. The bounds can come from constants; what is between them still has to be
+placed, not read.
+
+**Also next.** The Windows arena, once the runner says where its code and heap are. The Rosetta lane still needs a dispatch —
 `gh workflow run macos-probe.yml --ref main` — and it now publishes its ground-truth
 output, so the second half of the `file_map_beyond_eof` claim will be readable from
 the sandbox when it runs.

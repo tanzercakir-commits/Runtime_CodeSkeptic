@@ -391,9 +391,33 @@ RS_TEST(disabling_the_scan_drops_the_sweep_but_keeps_measured_bounds) {
 RS_TEST(the_scan_covers_where_this_process_is_actually_mapped) {
     const probe::Result result = probe::probe_virtual_memory();
     if (!result.implemented) return;
+
+    // ESTABLISHING NOTHING IS A FAILURE, NOT A SKIP - and this early return said
+    // otherwise for as long as it existed.
+    //
+    // It read "the sweep was disabled; a different test covers that". But
+    // `probe::Options::scan_address_space` defaults to TRUE and this call passes no
+    // options, so the sweep is never disabled here. The branch was therefore
+    // reachable only when a probe genuinely established nothing - and on Windows
+    // that is exactly the case, so this test PASSED VACUOUSLY on the one platform
+    // where it had the most to say. `test_probe` was 14/14 on a real Windows runner
+    // with `available: 0, unavailable: 0`.
+    //
+    // Same shape as `unimplemented_platforms_report_synthetic_origin` returning
+    // early when `implemented` was true while nothing returned early when it was
+    // false: a test that declines to look, in the case that matters.
+    RS_CHECK_MESSAGE(
+        !(result.profile.vm.available_ranges.empty() &&
+          result.profile.vm.unavailable_ranges.empty()),
+        "the probe established NO address ranges at all, and the sweep was not "
+        "disabled - so every address question on this platform answers UNKNOWN. "
+        "That is honest and useless: RS-VM-0001/0002/0003 are the project's "
+        "flagship rules and none of them can be evaluated here. T-013 fixed this "
+        "for Linux and T-014 for macOS" +
+            coverage_diagnosis(result.profile, "code", 0));
     if (result.profile.vm.available_ranges.empty() &&
         result.profile.vm.unavailable_ranges.empty()) {
-        return;  // the sweep was disabled; a different test covers that
+        return;   // nothing further to say; the assertion above is the finding
     }
 
     // Two addresses this process is using right now. Nothing about either is
