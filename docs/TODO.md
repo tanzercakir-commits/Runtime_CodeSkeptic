@@ -51,25 +51,28 @@ completes without leaving a trace in the log is work that will be redone.
 `.github/workflows/windows-probe.yml` and committed, with the two-process
 reproducibility step green in that run.
 
-**Two pieces of this need no runner and neither is done.** They are why this item
-belongs in `Now` rather than in a waiting room, and they should be finished
-before a measurement arrives, not after — a profile checked against
-documentation *after* it lands is a profile that has already been believed.
+**The two pieces that needed no runner are done, and both came back negative.**
+Answered on 2026-07-26; full account in `docs/PROGRESS.md`.
 
-1. **`lpMaximumApplicationAddress + 1` is asserted, not verified.** The model's
-   `max_user_address` is an *exclusive* bound; Win32 documents this field as the
-   last usable address. The `+ 1` in `src/probe/vm_probe_windows.cpp` follows
-   from that reading and the reading has not been checked against Microsoft's
-   own text. Half-open-versus-inclusive is the error class this project has
-   already written a section about (`docs/domains/shadps4-case-study.md`, on
-   shadPS4's inclusive maxima), and getting it backwards moves every boundary
-   by a page.
-2. **`dwAllocationGranularity` is measured on the runner but 64 KiB is an
-   assumption about what it will say.** Every claim this probe is interesting
-   for — RSC-0044, the granularity-versus-page-size split — rests on the two
-   differing. Confirm from documentation that 64 KiB is the architectural value
-   on x86-64 and ARM64 Windows, so that a runner reporting something else is
-   read as a finding rather than as a bug in the probe.
+1. **`lpMaximumApplicationAddress + 1` is not documented either way**, so it
+   became an experiment — and the first experiment was wrong. A reservation at the
+   top page is refused by Windows' no-access guard region, which is equally
+   consistent with "in bounds" and "out of bounds". `VirtualQuery` separates them,
+   because it fails only when the address is outside the process's space. Measured
+   inclusive; `+ 1` stands, now for a measured reason.
+2. **64 KiB granularity is not documented as a value at all** — neither
+   `SYSTEM_INFO` nor `VirtualAlloc` states it. So it stays `measured_capability`
+   and a host reporting something else is a **finding**, not a probe bug. What
+   *is* documented is the reserve-rounds-to-granularity /
+   commit-rounds-to-page asymmetry, which is the RSC-0044 mechanism as a
+   `specified_guarantee`.
+
+**What is left needs a runner, and the runner needs a billing decision.** GitHub
+refused the job with `billable.WINDOWS.total_ms: 0` and an annotation naming two
+causes it does not distinguish: a spending limit at the $0 default (resolves 1
+August) or a failed payment (does not). Only the Billing & plans page separates
+them. A third path exists and is the owner's: a public repository is not billed
+at all.
 
 **What is written and what it is not.** `src/probe/vm_probe_windows.cpp`
 cross-compiles clean with `-Wall -Wextra` under mingw-w64, the whole project

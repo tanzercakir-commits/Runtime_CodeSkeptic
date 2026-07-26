@@ -16,6 +16,119 @@ re-litigated; a mistake recorded here does not need to be re-made.
 
 ---
 
+## 2026-07-26 — the control plane, read from outside, and the block is wider than recorded
+
+**Changed.** `src/probe/vm_probe_windows.cpp`: the exclusive-bound conversion is
+now MEASURED, by the right API, after the first version measured it with the
+wrong one. The record is corrected in four places from an external `gh` report.
+
+**The named human dependency was exercised and it paid.** Everything below came
+from the owner reading Actions with `repo`+`workflow` scope. It is what the
+entry two above said the substitute for API access would be, and it produced
+four facts that no amount of `ls-remote` could have.
+
+### The trigger worked. I had recorded "most likely never triggered" as one of three
+
+```
+8ddfd4a  ->  TWO runs at 2026-07-25T22:38:14Z (CI and Windows measurement)
+438c13d  ->  triggered correctly as well
+```
+
+The path filter is sound and nothing about it needed fixing. **The `if: always()`
+inference was right for the right reason**: the job never started, so the step
+never ran. `billable.WINDOWS.total_ms: 0`, zero steps, six seconds.
+
+The annotation names the cause:
+
+> "The job was not started because recent account payments have failed or your
+> spending limit needs to be increased."
+
+### The blackout has a measured start, and it narrows the record
+
+| | |
+|---|---|
+| last successful run | `2026-07-25T01:05:41Z` |
+| first refused run | `2026-07-25T01:09:39Z` |
+
+A four-minute window, where this log had `01:06:39Z`–`12:42:26Z`. **Every run
+since dies in 4-14 seconds, ubuntu CI included: 33.5 hours of total darkness.**
+
+**So "10 guards green" in the last several commit messages is LOCAL
+verification.** CI has confirmed nothing since `01:05:41Z`. The claims are true -
+they were run here, and once on a genuinely fresh clone - but they are not what a
+reader assumes when a commit message says guards are green.
+
+### And the hypothesis was one cause too narrow
+
+This log said "the quota was exhausted and resets on 1 August". GitHub's message
+names **two** causes and does not distinguish them:
+
+| Cause | Resolves on 1 August? |
+|---|---|
+| spending limit at the $0 default, private repo, free 2000 minutes spent | **yes** |
+| a failed account payment | **no** |
+
+Only the Billing & plans page separates them. The record asserted the first as
+if it were established. It was not; it is one of two, and the difference is the
+difference between waiting six days and waiting forever.
+
+**There is a third path and the owner already offered it, early in this
+session:** making the repository public restores unlimited Actions minutes
+regardless of which cause it is, because public repositories are not billed. The
+cost is that the corpus, the campaign data and every document become public. That
+is the owner's call and it is now written down where the decision lives.
+
+### T-004's two documentation checks, done - and both came back negative
+
+`## Now` named them and they are answered. Neither the way I expected.
+
+**1. `lpMaximumApplicationAddress + 1` is not documented either way.**
+`SYSTEM_INFO` says only "A pointer to the highest memory address accessible to
+applications and DLLs". The memory-limits page gives x64 user space as "128 TB"
+and no hexadecimal at all. The `+ 1` rested on reading "highest accessible" as
+inclusive, which is reasonable and is not a citation.
+
+So it became an experiment - and the first experiment was wrong. A one-page
+reservation at the top page came back `ERROR_INVALID_ADDRESS` and the probe
+concluded "exclusive", flipping `max_user_address` by a page. That inference does
+not hold: **Windows keeps a no-access guard region at the very top of user
+space**, so a refusal there is equally consistent with "in bounds and guarded".
+Two explanations, one picked.
+
+`VirtualQuery` separates them, because it reports on an address without touching
+it and fails only when the address is outside the process's space. Measured:
+
+```
+VirtualQuery(0x7ffffffef000) -> succeeded, MEM_FREE over 4096 bytes
+  => the address is part of the process's space => the field is INCLUSIVE
+reservation at the same page -> ERROR_INVALID_ADDRESS
+  => the guard region, recorded as corroboration and explicitly NOT what decided it
+```
+
+`+ 1` was right. It is now right *for a measured reason*, and the `Fact`'s source
+string had to be corrected too - it credited the reservation, which is the one
+thing that did not establish it and which failed.
+
+**2. 64 KiB allocation granularity is not documented as a value at all.** Neither
+`SYSTEM_INFO` nor `VirtualAlloc` states it, or says it is
+architecture-dependent; both say "use `GetSystemInfo`". So 64 KiB is what
+implementations return, not a guarantee: `allocation_granularity` must stay
+`measured_capability`, and a host reporting something else is a **finding**, not
+a probe bug. That is what the check was for.
+
+What *is* documented is the asymmetry itself, which is the RSC-0044 mechanism in
+Microsoft's own words: *"If the memory is being reserved, the specified address
+is rounded down to the nearest multiple of the allocation granularity. If the
+memory is already reserved and is being committed, the address is rounded down
+to the next page boundary."* That is a `specified_guarantee` the entry did not
+have before.
+
+**Next.** `T-004`'s two hand-checks are closed; what remains needs a runner, and
+that needs the billing question answered - which of the two causes, and whether
+the repository goes public.
+
+---
+
 ## 2026-07-26 — an accepted cost, recorded as a cost
 
 **Changed.** `T-004` promoted into `docs/TODO.md`'s `## Now` by the owner's
@@ -230,8 +343,8 @@ What can be established from inside, and what cannot:
 |---|---|
 | the ref channel works | 60 refs exist from previous macOS runs (24 measurement, 30 status, 6 ci-logs) |
 | Actions ran successfully as recently as | `2026-07-25T01:06:39Z` (`cca8a6c`), ~21h 30m before this attempt. Source: the committer date of the CI-authored commit a `refs/status/*` ref points at - git-protocol information, which is why this row sits above the ones that cannot be established |
-| whether the Actions quota is currently exhausted | **cannot be determined from here** - it is an API fact |
-| whether the run is queued, failed at startup, or never triggered | **cannot be determined from here** |
+| whether the Actions quota is currently exhausted | **could not be determined from here.** Determined externally on 2026-07-26 - see the entry above |
+| whether the run is queued, failed at startup, or never triggered | **could not be determined from here.** Determined externally: it triggered, and the job never started |
 
 The quota was exhausted on **2026-07-25** and resets on 1 August. That is the
 leading explanation and it is a hypothesis, not a finding - exactly the

@@ -6,13 +6,27 @@
 // model differs from the other two in kind rather than in detail. Three
 // differences drive everything below.
 //
-// 1. ALLOCATION GRANULARITY IS NOT THE PAGE SIZE. `dwAllocationGranularity` is
-//    64 KiB and `dwPageSize` is 4 KiB. A reservation is rounded to the former,
-//    a commit to the latter, and the gap is stranded - which is corpus entry
-//    RSC-0044, where a 4 KiB-page allocator lost up to 60 KiB per allocation
-//    until a 32-bit browser ran out of address space. On Linux and macOS the
-//    two numbers are equal and the distinction is invisible. Here it is the
-//    whole point, and it is why the profile carries both.
+// 1. ALLOCATION GRANULARITY IS NOT THE PAGE SIZE. The asymmetry itself IS
+//    documented, and it is the RSC-0044 mechanism in Microsoft's own words:
+//
+//      "If the memory is being reserved, the specified address is rounded down
+//       to the nearest multiple of the allocation granularity. If the memory is
+//       already reserved and is being committed, the address is rounded down to
+//       the next page boundary."          - VirtualAlloc, learn.microsoft.com
+//
+//    So a reservation is rounded to one unit and a commit to another, and the
+//    gap between them is stranded - which is how a 4 KiB-page allocator lost up
+//    to 60 KiB per allocation until a 32-bit browser ran out of address space.
+//    On Linux and macOS the two numbers are equal and the distinction is
+//    invisible. Here it is the whole point, which is why the profile carries
+//    both.
+//
+//    WHAT IS *NOT* DOCUMENTED IS THE VALUE. Neither the `SYSTEM_INFO` page nor
+//    the `VirtualAlloc` page states 64 KiB, or says the number is
+//    architecture-dependent; both say only "use GetSystemInfo". 64 KiB is what
+//    implementations return, not a guarantee. So `allocation_granularity` is
+//    `measured_capability` and never `specified_guarantee`, and a host reporting
+//    something else is a FINDING rather than a bug in this probe.
 //
 // 2. RESERVE AND COMMIT ARE SEPARATE OPERATIONS THE PROGRAM PERFORMS. Not a
 //    lazy-commit heuristic the kernel applies behind an ordinary mapping.
@@ -218,6 +232,89 @@ vm::TranslationMode detect_translation(const SYSTEM_INFO& native,
     }
     return host == process_arch ? vm::TranslationMode::None
                                 : vm::TranslationMode::Wow64;
+}
+
+// -------------------------------------------------------------------------
+// Is `lpMaximumApplicationAddress` inclusive?
+//
+// It matters by a page in every direction, and the documentation does not say.
+// `SYSTEM_INFO` describes the field as "A pointer to the highest memory address
+// accessible to applications and DLLs" - which reads inclusive in ordinary
+// English and is nowhere stated to be. The memory-limits page gives the x64
+// user-mode bound as "128 TB" and no hexadecimal at all.
+//
+// The model's `max_user_address` is an EXCLUSIVE bound, so the conversion needs
+// an answer, and `+ 1` was written from that reading. A reading is not a
+// measurement. `docs/domains/shadps4-case-study.md` already has a section on
+// exactly this hazard - shadPS4's maxima are inclusive, RuntimeSkeptic's ranges
+// are half-open, and getting it backwards silently moves every boundary.
+//
+// So ask the kernel. One page at the reported maximum, page-aligned down: if it
+// can be reserved, that address is usable and the field is inclusive. The result
+// is recorded either way, and when the experiment cannot be run the fact is left
+// derived-by-reading rather than presented as measured.
+// -------------------------------------------------------------------------
+enum class MaxAddressKind { Inclusive, Exclusive, Undetermined };
+
+MaxAddressKind probe_max_address_inclusivity(std::uint64_t reported_max,
+                                             std::uint64_t page_size,
+                                             std::vector<std::string>& warnings) {
+    if (reported_max < page_size) return MaxAddressKind::Undetermined;
+    const std::uint64_t page = reported_max & ~(page_size - 1);
+
+    // VirtualQuery, not VirtualAlloc, and the first version of this used the
+    // wrong one.
+    //
+    // A reservation attempt at the top page came back ERROR_INVALID_ADDRESS and
+    // was read as "the field is exclusive". That inference does not hold:
+    // Windows keeps a no-access guard region at the very top of user space, so
+    // a refusal there is equally consistent with "in bounds and guarded". The
+    // experiment had two explanations and picked one.
+    //
+    // VirtualQuery separates them. It reports on an address without touching
+    // it, and it fails - returns 0 - only when the address is OUTSIDE the
+    // process's virtual address space. So:
+    //
+    //   query succeeds  ->  the address exists for this process, whatever its
+    //                       state; the field names a usable address and is
+    //                       therefore INCLUSIVE
+    //   query fails     ->  the address is not part of the address space; the
+    //                       field is already an EXCLUSIVE bound
+    //
+    // A reservation is then attempted only as corroboration, and its failure is
+    // reported rather than interpreted.
+    MEMORY_BASIC_INFORMATION info{};
+    const SIZE_T queried = ::VirtualQuery(reinterpret_cast<LPCVOID>(page), &info,
+                                          sizeof(info));
+    if (queried == 0) {
+        warnings.push_back(
+            "VirtualQuery(" + json::to_hex(page) + ") failed with " +
+            last_error_name(::GetLastError()) +
+            "; the page containing lpMaximumApplicationAddress is not part of "
+            "this process's address space, so the field is an exclusive bound");
+        return MaxAddressKind::Exclusive;
+    }
+
+    const char* state = info.State == MEM_FREE ? "MEM_FREE"
+                      : info.State == MEM_RESERVE ? "MEM_RESERVE"
+                      : info.State == MEM_COMMIT ? "MEM_COMMIT" : "unknown";
+    Reservation at_max(reinterpret_cast<void*>(page),
+                       static_cast<SIZE_T>(page_size),
+                       MEM_RESERVE, PAGE_NOACCESS);
+    const std::string corroboration =
+        at_max.ok() && at_max.base() == page
+            ? "and a one-page reservation there succeeded"
+            : "and a one-page reservation there failed with " +
+                  last_error_name(at_max.error()) +
+                  " - consistent with the system's top-of-space guard region, "
+                  "which is why the reservation is not what decides this";
+    warnings.push_back(
+        "lpMaximumApplicationAddress is INCLUSIVE: VirtualQuery(" +
+        json::to_hex(page) + ") succeeded reporting " + state + " over " +
+        std::to_string(static_cast<unsigned long long>(info.RegionSize)) +
+        " bytes, so the address is part of this process's space, " +
+        corroboration);
+    return MaxAddressKind::Inclusive;
 }
 
 // -------------------------------------------------------------------------
@@ -506,12 +603,46 @@ Result probe_virtual_memory(const Options& options) {
         Address(min_address), measured,
         std::string(kSourceProbe) + ": GetSystemInfo().lpMinimumApplicationAddress");
     if (max_address > min_address) {
-        // The Win32 value is the last usable address; the model's bound is
-        // exclusive, so add one page. Half-open everywhere, no exceptions.
-        profile.vm.max_user_address = Fact<Address>::known(
-            Address(max_address + 1), measured,
-            std::string(kSourceProbe) +
-                ": GetSystemInfo().lpMaximumApplicationAddress + 1 (exclusive)");
+        // The model's bound is exclusive; Win32's field is documented only as
+        // "the highest memory address accessible", with no statement either
+        // way. So the conversion is MEASURED rather than read off the doc.
+        const MaxAddressKind kind =
+            probe_max_address_inclusivity(max_address, page_size, warnings);
+        switch (kind) {
+            case MaxAddressKind::Inclusive:
+                profile.vm.max_user_address = Fact<Address>::known(
+                    Address(max_address + 1), measured,
+                    std::string(kSourceProbe) +
+                        ": lpMaximumApplicationAddress + 1; VirtualQuery at "
+                        "the reported maximum succeeded, so that address is "
+                        "part of the process's address space and the field is "
+                        "inclusive. See probe_run.warnings for what the "
+                        "reservation attempt did and why it is not what "
+                        "decided this");
+                break;
+            case MaxAddressKind::Exclusive:
+                profile.vm.max_user_address = Fact<Address>::known(
+                    Address(max_address), measured,
+                    std::string(kSourceProbe) +
+                        ": lpMaximumApplicationAddress used unchanged; "
+                        "VirtualQuery at the reported maximum FAILED, so that "
+                        "address is not part of the process's address space "
+                        "and the field is already an exclusive bound");
+                break;
+            case MaxAddressKind::Undetermined:
+                // Deliberately unknown. A one-page difference at the top of the
+                // address space decides RS-VM-0003 for anything near it, and
+                // guessing is what this project exists not to do.
+                profile.notes.push_back(
+                    "max_user_address was left UNKNOWN: "
+                    "lpMaximumApplicationAddress reported " +
+                    json::to_hex(max_address) +
+                    " but whether it is inclusive could not be established by "
+                    "experiment, and the Win32 documentation does not say. "
+                    "Recording either value would be a guess about a boundary "
+                    "that decides RS-VM-0003.");
+                break;
+        }
     }
 
     const std::uint64_t probe_length =
