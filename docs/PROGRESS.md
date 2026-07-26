@@ -955,6 +955,33 @@ a map entry is. Once that is accepted, the boundary has to be written down once 
 every producer has to consult it — which is now the case, in
 `no_access_here_is_ours()`.
 
+### The same rule, applied in the other direction
+
+`cf7b761`: `unavailable_ranges` dropped out of the disagreement entirely — the arena
+contributes zero limitations and zero structural refusals, and the commpage, the
+carveout and the 32 above-the-space entries are all stable. One line left:
+
+```
+available_ranges: 22 vs 20 entries
+```
+
+The **ladder**, one more time, and in the mirror image of every fix so far.
+Recording *nothing* for a landmark occupied by one of our own mappings is still
+layout-dependent: a landmark that happened to be free produced an available entry,
+and the same landmark with our mapping on it produced none. **The presence of a fact
+depended on our morning even though its content did not.**
+
+An entry of ours that grants access proves the kernel hands that address out and
+proves nothing about the host — the argument `EEXIST` gets on Linux and
+`no_access_here_is_ours()` gets above. Another program can map there. So it belongs in
+`available_ranges` whether we were sitting on it or not, and the recorded set stops
+depending on where we were.
+
+| | |
+|---|---|
+| **+** | five applications of one rule, and this is the first that *adds* a fact rather than suppressing one. The rule was never "record less"; it is "the recorded set must not depend on the probe's own layout" |
+| **−** | it took five rounds to see that, because each round asked "should this be a limitation?" and the actual question was "does this entry's existence move?" |
+
 **Also next.** Windows still has no arena at all, and `RS-VM-0027` will fire on every
 Windows and macOS profile until those probes measure `max_single_reservation` — which
 is the honest reading of a profile that has not measured it.

@@ -952,10 +952,36 @@ ScanOutcome scan_address_space(std::size_t page_size, std::uint64_t probe_length
             // A real mapping of ours: a property of one process layout, not of
             // the host, so it must not become a limitation other programs are
             // judged against.
+            //
+            // AND IT MUST BE RECORDED AS AVAILABLE, which is the same rule applied
+            // in the other direction and the last thing that moved between runs.
+            //
+            // Recording nothing was still layout-dependent: a landmark that happened
+            // to be free produced an available entry, and the same landmark with one
+            // of our own mappings on it produced none. `available_ranges: 22 vs 20`,
+            // two runs of one binary - the presence of a FACT depended on our
+            // morning even though its content did not.
+            //
+            // The argument is the one EEXIST gets on Linux and
+            // `no_access_here_is_ours()` gets above: an entry of ours that grants
+            // access proves the kernel hands this address out, and proves nothing
+            // about the host. Another program can map here. So the entry belongs in
+            // `available_ranges` whether we happened to be sitting on it or not, and
+            // the recorded set stops depending on where we were.
+            ClassifiedRange ours;
+            ours.range = *range;
+            ours.evidence = EvidenceClass::MeasuredCapability;
+            ours.note =
+                "a mapping of the probe process already held this exact range, "
+                "which proves the kernel hands this address out and says nothing "
+                "about the host - recorded as available for the same reason EEXIST "
+                "is on Linux. Whether it was held or free depends on the probe's "
+                "own layout and is deliberately not recorded";
+            outcome.available.push_back(ours);
             outcome.occupied_notes.push_back(
                 "range " + range->to_string() + " is a real mapping in the "
                 "probe process (" + describe_region_text(region) +
-                "); NOT recorded as a host limitation");
+                "); recorded as AVAILABLE, never as a host limitation");
             continue;
         }
 
