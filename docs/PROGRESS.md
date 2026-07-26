@@ -100,9 +100,44 @@ because this project writes every change into this file with its reasoning and a
 unlogged commit from elsewhere would break that. Correct, and the reason it is
 worth naming: the discipline held under the temptation to just fix it.
 
-**Next.** The measurement leg. The queued rerun on `c13285c` will fail the same
-way and carries no new information; the next useful run is the one after this
-commit.
+### Two more findings, one structural and one about my own method
+
+**Nothing built this project with MSVC on a push to main.** `ci.yml`'s
+`build-and-test` matrix is Linux only; the macOS and Windows entries live in
+`expensive-platforms`, gated `if: github.event_name != 'push'`. This repository
+is worked by direct pushes to main, not pull requests, so in practice **Windows
+coverage was the weekly cron**. `src/vm/impact.cpp` carried the missing
+`<iterator>` from `87ffb6f` to `3c49935` - green on gcc, clang, mingw and both
+macOS runners the entire time, broken on the one toolchain nobody was running.
+
+The gate existed to save billable minutes, and that cost is now gone: public
+repositories are not billed, demonstrated rather than assumed. So the gate is
+removed and both platforms build on every push again.
+
+**And the systematic sweep was not systematic.** The previous entry claims that
+"every quota, billing and minutes claim in the repository" was grepped and
+checked, and that "there were two". There were **three**. The third is in
+`ci.yml` and it survived because the sweep was a line-based grep and the claim
+spans a line break:
+
+```
+  # billable minutes per push. Twenty pushes in one night exhausted a 2,000
+  # minute monthly quota, and the first symptom was ...
+```
+
+`grep -E "2,?000 minute|monthly quota"` matches neither line. Re-run as a
+multiline scan it appears immediately. **A systematic check that is not
+systematic is the exact shape this project keeps finding in itself**, and this
+one was committed in the same breath as a paragraph congratulating itself for
+being systematic.
+
+All three are now corrected, and the wrong sentence is left above its correction
+in each file.
+
+**Next.** The measurement leg, still the one untested piece. This commit touches
+`ci.yml`, so it triggers the Windows build - but not `windows-probe.yml`, whose
+path filter covers the probe and the workflow only. That is correct by design and
+it means the measurement leg needs either a probe change or a dispatch.
 
 ---
 

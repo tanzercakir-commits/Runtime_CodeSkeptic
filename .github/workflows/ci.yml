@@ -15,10 +15,27 @@ jobs:
   # macOS and Windows moved to `expensive-platforms` below, because this matrix
   # was the single largest thing in the repository and nobody had added up what
   # it cost. Every push to main started THREE macOS jobs - one here plus the two
-  # in macos-probe.yml - and macOS bills at 10x, Windows at 2x. Roughly 75
-  # billable minutes per push. Twenty pushes in one night exhausted a 2,000
-  # minute monthly quota, and the first symptom was every run in the repository
-  # failing at startup in under fifteen seconds with no billable time recorded.
+  # in macos-probe.yml - and macOS bills at 10x, Windows at 2x: roughly 75
+  # billable minutes per push, on a 3,000 minute monthly allowance.
+  #
+  # THE CAUSAL CLAIM THIS COMMENT USED TO MAKE WAS WRONG, and it is the third
+  # copy of the same wrong claim in this repository. It said twenty pushes in one
+  # night "exhausted a 2,000 minute monthly quota". The allowance is 3,000, and
+  # the billing page for the month it happened reads:
+  #
+  #     CodeSkeptic          $32.52   82%
+  #     Runtime_CodeSkeptic   $4.28   10.8%   <- this repository
+  #     organon-mueller       $2.68
+  #
+  # This repository paid a tenth. The waste argument stands - 75 billable minutes
+  # a push for a commit that edited a test comment is indefensible whoever is
+  # paying - but "we ran out" was never ours to say.
+  #
+  # Worth recording HOW this copy survived: after the first two were corrected,
+  # the sweep that claimed to have found "every quota claim in the repository"
+  # was a line-based grep, and this claim spans a line break ("a 2,000" / "minute
+  # monthly quota"). A systematic check that is not systematic is the shape of
+  # error this project keeps finding in itself.
   #
   # The macOS entry here was pure duplication on top of that: macos-probe.yml
   # already builds and tests on macOS twice, natively and under Rosetta.
@@ -106,9 +123,26 @@ jobs:
   # for up to a week. That is acceptable while nothing in the project is
   # Windows-specific - the probe is `vm_probe_unimplemented.cpp` there - and it
   # stops being acceptable the moment a Windows probe exists. Revisit then.
+  # WINDOWS AND macOS ON EVERY PUSH AGAIN, and the reason is measured.
+  #
+  # This job was gated off pushes to save billable minutes. That cost no longer
+  # exists: the repository went public on 2026-07-26 and public repositories are
+  # not billed for Actions - demonstrated rather than assumed, because a $10
+  # repository-scoped Windows budget failed to lift the block over nine minutes
+  # and two dispatches, and going public lifted it instantly.
+  #
+  # The gate had a price that was invisible until it was paid. Nothing built this
+  # project with MSVC on a push to main: `build-and-test` above is Linux only,
+  # and this job ran on pull requests and the weekly cron. This repository is
+  # worked by direct pushes to main, so in practice Windows coverage was weekly.
+  # `src/vm/impact.cpp` used `std::back_inserter` without `<iterator>` from
+  # 87ffb6f until 3c49935 - green on gcc, clang, mingw and both macOS runners the
+  # whole time, and broken on the only toolchain nobody was running.
+  #
+  # `tools/guards/check_includes.py` now catches that particular class without a
+  # runner at all. This restores the coverage that would have caught it anyway.
   expensive-platforms:
     name: ${{ matrix.name }}
-    if: github.event_name != 'push'
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
