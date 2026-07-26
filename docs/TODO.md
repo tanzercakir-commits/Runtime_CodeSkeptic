@@ -136,13 +136,48 @@ executable low (around `0x1_0000_0000`), the shared cache elsewhere, and
 the trap T-013 already avoided and the macOS equivalent (`mach_vm_region`) is the
 same trap wearing a different name — it reports **this** process's slide.
 
-**First step:** decide what the macOS region is *derived from* before writing any
-scan. Candidates, in the order they should be ruled out: (1) `vm_page_size` plus
-the documented `MACH_VM_MIN_ADDRESS`/`MACH_VM_MAX_ADDRESS` pair, (2) the
-already-measured `min_map_address` and `max_user_address` facts the macOS probe
-computes, (3) `SHARED_REGION_BASE_*` from `<mach/shared_region.h>`, which IS a
-documented per-architecture constant. Whichever is chosen, the reason it is not
-this process's own layout goes in the code, next to the arena.
+**First step: done, and the runner answered it.** `90dc74b` shipped the
+self-diagnosing failure and macOS printed the two addresses on the next push:
+
+```
+code page      : 0x1023a4000        max_user_address: 0x7ffffe000000
+  nearest below: [0x100000000, 0x100004000)   gap 0x23a0000    (16 KiB wide)
+  nearest above: [0x200000000, 0x200004000)   gap 0xfdc5c000
+heap page      : 0x7be800000
+  nearest below: [0x400000000, 0x400400000)   gap 0x3be400000
+  nearest above: [0x7bf400000, 0xabe000000)   gap 0xc00000     KERN_NO_SPACE
+containing     : (none) - a scan-window gap, not a query bug, for both
+established    : 19 available, 49 unavailable, and NO arena
+```
+
+Which settles the derivation question without needing `mach_vm_region`:
+
+1. **The executable arena anchors on `0x1_0000_0000`.** The code page is
+   `0x1023a4000` — 37 MiB above 4 GiB. That is the documented `__PAGEZERO` size
+   and default `__TEXT` base for a 64-bit Mach-O on both x86_64 and arm64, plus
+   an ASLR slide. It is a per-architecture constant, not this process's layout,
+   which is the property Linux's `ELF_ET_DYN_BASE` has and `/proc/self/maps`
+   does not.
+2. **The heap arena is bounded from above by something already measured.** The
+   heap page is `0x7be800000`, 12 MiB below a `KERN_NO_SPACE` region starting at
+   `0x7bf400000` that the probe *already found*. So the second arena does not
+   need a new constant — it needs the existing ladder's lowest high-address
+   refusal as its ceiling, the same way Linux's mmap arena uses
+   `max_user_address`.
+3. **The problem is not too few landmarks, it is landmark width.** The ladder
+   does have entries at `0x100000000`, `0x200000000` and `0x400000000`. They are
+   16 KiB and 4 MiB wide *points*. What is missing is the merged-run technique
+   `scan_one_arena()` already implements: sample on a stride and collapse
+   contiguous non-structural runs into one range.
+
+**Still to decide, and it is the whole risk:** the stride. Linux uses 64 GiB
+across a 128 TiB space. macOS's interesting region is the first ~48 GiB, so the
+stride has to shrink by orders of magnitude, and a stride that is too fine turns
+a probe into a scan of the whole low address space. Pick it from the two measured
+gaps above (37 MiB and 12 MiB), not from the Linux number.
+
+Whichever is chosen, the reason it is not this process's own layout goes in the
+code, next to the arena.
 
 **Second, and separately:** `linux---gcc` failed this same test on `650d510`
 with C++ identical to the `52f541e` that passed it, and it passes 200/200 here.

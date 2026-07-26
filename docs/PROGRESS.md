@@ -239,10 +239,38 @@ The third is the interesting one: the other two are shell trivia, but that one i
 this project's own thesis turned on its author — reasoning about code while
 measuring a binary that predates it.
 
-**Next.** T-014, and its first step is a decision rather than code: what the
-macOS region is *derived from*, given that `mach_vm_region` is the same
-this-process's-slide trap T-013 already refused on Linux. The `linux---gcc`
-flake stays unfixed on purpose until the new diagnostic has printed once.
+### It printed, on the next push, and it answered the open question
+
+`90dc74b`: `linux---gcc` back to **success** — consistent with nondeterminism and
+inconsistent with anything in the code, since nothing in `src/` changed. macOS
+failed again and this time said why:
+
+```
+code page      : 0x1023a4000        max_user_address: 0x7ffffe000000
+  nearest below: [0x100000000, 0x100004000)   gap 0x23a0000    (16 KiB wide)
+  nearest above: [0x200000000, 0x200004000)   gap 0xfdc5c000
+heap page      : 0x7be800000
+  nearest above: [0x7bf400000, 0xabe000000)   gap 0xc00000     KERN_NO_SPACE
+containing     : (none) - a scan-window gap, not a query bug
+established    : 19 available, 49 unavailable, and NO arena
+```
+
+Three things that were hypotheses an hour ago are now measured, from a platform
+this session has no access to:
+
+| | |
+|---|---|
+| **+** | the code page is 37 MiB above `0x1_0000_0000` — the documented Mach-O `__PAGEZERO`/`__TEXT` base, a per-architecture constant. So macOS's arena anchor exists and is not `mach_vm_region` |
+| **+** | the heap page is 12 MiB below a `KERN_NO_SPACE` region **the probe already found**. The second arena needs no new constant, only a ceiling it already has |
+| **+** | the ladder *does* have entries at `0x1_0000_0000`, `0x2_0000_0000`, `0x4_0000_0000`. They are 16 KiB and 4 MiB wide points. The defect is width, not landmark count — `scan_one_arena()`'s merged-run technique is the missing part, not more landmarks |
+
+The real remaining risk is now named in T-014: Linux strides 64 GiB across 128
+TiB, macOS's interesting region is the first ~48 GiB, and the stride has to come
+from those two measured gaps rather than from the Linux number.
+
+**Next.** T-014 with its first step closed. The `linux---gcc` flake stays
+unfixed on purpose — it has now passed twice and failed once on identical code,
+and one reading is not a diagnosis.
 
 ---
 
