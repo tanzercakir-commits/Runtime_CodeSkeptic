@@ -1,0 +1,34 @@
+Test project /Users/runner/work/Runtime_CodeSkeptic/Runtime_CodeSkeptic/build
+    Start 12: test_probe
+1/1 Test #12: test_probe .......................***Failed    0.02 sec
+== probe conformance (14 cases)
+  ok   probe_produces_a_schema_valid_profile_on_every_platform
+  ok   probe_never_attaches_a_value_to_unknown_evidence
+  ok   unimplemented_platforms_report_synthetic_origin
+  ok   repeated_calls_in_one_process_produce_the_same_profile_id
+  ok   profile_id_survives_a_write_read_round_trip
+  ok   range_order_does_not_affect_identity
+  ok   canonical_serialization_is_byte_stable
+  ok   measured_page_size_is_a_power_of_two
+  ok   measured_bounds_are_ordered
+  ok   no_recorded_range_carries_unknown_evidence
+  ok   available_and_unavailable_ranges_do_not_overlap
+  ok   disabling_the_scan_drops_the_sweep_but_keeps_measured_bounds
+  FAIL the_scan_covers_where_this_process_is_actually_mapped
+    /Users/runner/work/Runtime_CodeSkeptic/Runtime_CodeSkeptic/tests/conformance/test_probe.cpp:262
+    the profile establishes nothing about an address this process is executing from or allocating in; the scan is looking in the wrong part of the address space
+  FAIL the_scan_covers_where_this_process_is_actually_mapped
+    /Users/runner/work/Runtime_CodeSkeptic/Runtime_CodeSkeptic/tests/conformance/test_probe.cpp:262
+    the profile establishes nothing about an address this process is executing from or allocating in; the scan is looking in the wrong part of the address space
+  ok   probe_leaves_the_process_address_space_usable
+
+2 failure(s) in probe conformance
+
+
+0% tests passed, 1 tests failed out of 1
+
+Total Test time (real) =   0.02 sec
+
+The following tests FAILED:
+	 12 - test_probe (Failed)
+Errors while running CTest
