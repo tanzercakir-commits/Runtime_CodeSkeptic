@@ -28,6 +28,12 @@ target_compile_definitions(test_bundle PRIVATE RS_REPO_ROOT="${CMAKE_SOURCE_DIR}
 
 rs_add_test(test_mcp           SOURCES unit/test_mcp.cpp           LIBRARIES rs_server)
 
+# The arena walk is the macOS scan-window logic with the Mach calls injected, so
+# it runs HERE - on every platform - against layouts a runner measured. It is
+# deliberately not in the conformance section below: it asserts nothing about the
+# host it runs on, which is the entire point of it existing.
+rs_add_test(test_arena_walk    SOURCES unit/test_arena_walk.cpp    LIBRARIES rs_probe)
+
 # -- conformance ------------------------------------------------------------
 # The probe conformance suite measures the real host, so it is only meaningful
 # where a probe is implemented. On other platforms it asserts the honest

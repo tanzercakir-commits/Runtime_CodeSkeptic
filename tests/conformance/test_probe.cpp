@@ -134,10 +134,11 @@ std::string coverage_diagnosis(const EnvironmentProfile& profile,
         }
     }
     if (!any) {
-        out << "\n      arena: NO arena was scanned on this platform. "
-               "scan_allocation_arenas() exists in vm_probe_linux.cpp only; "
-               "macOS and Windows still sample the landmark ladder, which is "
-               "the coverage gap T-013 fixed for Linux and nowhere else.";
+        out << "\n      arena: NO arena was scanned on this platform. Linux "
+               "(vm_probe_linux.cpp) and macOS (vm_probe_macos.cpp, via "
+               "probe/arena_walk.hpp) each establish one; Windows still samples "
+               "the landmark ladder alone, which is the coverage gap T-013 fixed "
+               "for Linux and T-014 for macOS.";
     }
     return out.str();
 }

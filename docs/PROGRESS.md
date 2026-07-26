@@ -268,9 +268,55 @@ The real remaining risk is now named in T-014: Linux strides 64 GiB across 128
 TiB, macOS's interesting region is the first ~48 GiB, and the stride has to come
 from those two measured gaps rather than from the Linux number.
 
-**Next.** T-014 with its first step closed. The `linux---gcc` flake stays
-unfixed on purpose — it has now passed twice and failed once on identical code,
-and one reading is not a diagnosis.
+### T-014 written, and a test found the bug a runner would have charged for
+
+**Changed.** `include/runtimeskeptic/probe/arena_walk.hpp` and
+`src/probe/arena_walk.cpp` are new — the arena walk with the platform calls
+injected. `src/probe/vm_probe_macos.cpp` wires `try_place`/`describe_region` into
+it. `tests/unit/test_arena_walk.cpp` is new, 9 cases. ctest 13 to **14**.
+
+| | |
+|---|---|
+| **+** | the first version used a **32 MiB stride** and was wrong. The run closed correctly at the last window it had placed, and the heap page from the CI failure sat in the 16 MiB tail before the refused band |
+| **+** | found in one run by a throwaway program that stubbed the Mach calls — no runner, no push, no wait |
+| **+** | so the walk moved out of the macOS-only file into a platform-neutral one, and the throwaway became `test_arena_walk.cpp`. It runs on Linux, macOS and Windows and asserts nothing about the host it runs on |
+| **+** | made to fail on demand: a 32 MiB window breaks 6 of the 9 cases |
+| **−** | the obvious fix was an 8 MiB stride, which works **for that runner's morning**. That is the shape of mistake this project exists to object to, and it was the tempting one |
+| **−** | still unverified by anything real: apple-clang compiles it, `try_place`'s mapping on a live task, the cost of 12,294 `mach_vm_allocate` calls, and `check_reproducible.sh` across two processes |
+
+**Why there is no stride.** A sampled arena asserts the space between its
+samples. Linux tests 4 MiB of every 64 GiB — 0.006% — and documents the
+interpolation. Contiguous windows assert only what was placed, which removes the
+over-broad-AVAILABLE risk entirely rather than shrinking it. Affordable here and
+nowhere else for one reason: this arena spans 60 GiB (15,360 windows), the Linux
+one spans 128 TiB (33 million).
+
+**Where the bounds come from.** `0x1_0000_0000`, the `__PAGEZERO` size and
+therefore the default `__TEXT` base of a 64-bit Mach-O on both architectures, up
+to `0x10_0000_0000`, the Rosetta GPU-carveout start already named in the ladder.
+Two constants. `mach_vm_region` was the obvious alternative and is the same trap
+T-013 refused on Linux wearing a Mach name — it reports *this* task's slide, so an
+arena derived from it hashes this morning's layout into an id meant to name the
+host.
+
+**Two things the simulation caught that were not the headline bug.** The refusal
+count read `1 structurally refused` for twelve GiB of refused space, because
+skipping ahead through an already-described entry silently changed what the number
+counted — `skipped` is now reported separately. And 3067 windows inside one entry
+each built an identical note string to have 3066 discarded.
+
+**What this is really about.** `check_includes.py` removes the need for a Windows
+runner to find a missing `<iterator>`; `check_shell_portability.py` removes the
+need for a macOS runner to find `declare -A`. This does the same thing for probe
+logic, which is the largest remaining place where the answer was "push and wait".
+The arena is still macOS-specific in what it *means*; it is no longer
+macOS-specific in what can be *checked*.
+
+**Next.** Push and read `refs/status/*`. If macOS goes green, T-014's remaining
+work is `check_reproducible.sh` across two processes and the runtime cost — both
+readable from the same channel. Windows still has no arena; same gap, third
+platform. The `linux---gcc` flake stays unfixed on purpose: two passes and one
+failure on identical code is an observation, not a diagnosis.
 
 ---
 

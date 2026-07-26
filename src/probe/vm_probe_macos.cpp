@@ -49,6 +49,7 @@
 #include <unistd.h>
 
 #include "runtimeskeptic/core/sha256.hpp"
+#include "runtimeskeptic/probe/arena_walk.hpp"
 
 // MAP_NORESERVE is advisory where it exists and absent from some macOS SDKs.
 // Defining it to zero keeps the call identical in meaning: the flag only ever
@@ -610,6 +611,126 @@ struct ScanOutcome {
     std::vector<std::string> occupied_notes;
 };
 
+// -------------------------------------------------------------------------
+// The allocation arena: where a macOS program's own code and heap actually are.
+//
+// T-013 fixed this for Linux and only for Linux. The conformance case
+// `the_scan_covers_where_this_process_is_actually_mapped` asserts coverage on
+// EVERY platform, so it had been failing here since the day it was added -
+// invisible because ci.yml ran macOS only in `expensive-platforms`, gated off
+// pushes.
+//
+// The runner said exactly where, once the failure was made to carry evidence:
+//
+//   code page 0x1023a4000   nearest established below [0x100000000, 0x100004000)
+//                           - 16 KiB wide, 37 MiB away
+//   heap page 0x7be800000   nearest established above [0x7bf400000, 0xabe000000)
+//                           - refused, 12 MiB away
+//   containing: (none) for both. A scan-window gap, not a query bug.
+//
+// So the ladder DOES sample 0x1_0000_0000, 0x2_0000_0000, 0x4_0000_0000. The
+// defect is not too few landmarks - it is that a landmark is a 4 MiB POINT, and
+// what a program needs answered is the space between them.
+//
+// WHERE THE BOUNDS COME FROM, and why not from this process.
+//
+//   bottom  0x1_0000_0000  the __PAGEZERO size, and therefore the default
+//                          __TEXT base, of a 64-bit Mach-O on x86_64 and
+//                          arm64 alike. A per-architecture constant, the same
+//                          in every task - which is the property Linux's
+//                          ELF_ET_DYN_BASE has and /proc/self/maps does not.
+//   top     0x10_0000_0000 the start of the band shadPS4 documents as
+//                          GPU-reserved under Rosetta 2, already a named
+//                          constant in the ladder above.
+//
+// `mach_vm_region` was the obvious-looking alternative and it is the same trap
+// T-013 refused on Linux wearing a Mach name: it reports THIS task's slide, so
+// an arena derived from it would hash this morning's layout into an id that is
+// supposed to name the host.
+//
+// The walk itself is in `probe/arena_walk.hpp`, platform-neutral and driven by
+// the two callbacks below, so that `tests/unit/test_arena_walk.cpp` can check it
+// on a machine with no Mach headers. That is not tidiness: the first version of
+// this arena was wrong, and the check that found it was a throwaway program that
+// stubbed these two calls.
+constexpr std::uint64_t kMachOTextBase = 0x100000000ull;
+constexpr std::uint64_t kArenaTop = 0x1000000000ull;
+// A floor, so a caller passing a small max_test_mapping_bytes cannot turn a
+// 60 GiB walk into four million windows.
+constexpr std::uint64_t kMinArenaWindow = 4ull * 1024 * 1024;
+
+// One arena, not two, and that is a deliberate stopping point rather than an
+// oversight. Linux needs two because a PIE's text and the kernel's mmap base sit
+// four TiB apart. On macOS both measured addresses - code at 4.03 GiB, heap at
+// 31 GiB - fall inside a single band between two constants, so a second arena
+// would be a guess. If a runner puts either page outside this one, the failure
+// now prints where, and THAT measurement can size the next arena.
+void scan_allocation_arenas(std::uint64_t page_size, std::uint64_t probe_length,
+                            std::uint64_t min_address, ScanOutcome& outcome) {
+    // max() rather than the constant alone: `min_address` is measured, and on
+    // x86_64 macOS it IS 0x1_0000_0000 because __PAGEZERO is four GiB. Where the
+    // two disagree the measurement wins, and the existing filter that keeps our
+    // own low mappings out of the facts is not quietly bypassed.
+    const std::uint64_t bottom =
+        min_address > kMachOTextBase ? min_address : kMachOTextBase;
+    const std::uint64_t window =
+        probe_length > kMinArenaWindow ? probe_length : kMinArenaWindow;
+
+    ArenaProbe hooks;
+    // OccupiedByUs maps to HeldByProbe, which the walk treats as usable - for
+    // the same reason EEXIST does on Linux: it proves the kernel hands this
+    // space out and proves nothing about the host. try_place() already separates
+    // that from a real refusal, through four wrong iterations documented above,
+    // and nothing here second-guesses it.
+    hooks.place = [](std::uint64_t base, std::uint64_t size) {
+        switch (try_place(base, static_cast<std::size_t>(size))) {
+            case Placement::Placed:       return ArenaPlacement::Placed;
+            case Placement::OccupiedByUs: return ArenaPlacement::HeldByProbe;
+            case Placement::Refused:      break;
+        }
+        return ArenaPlacement::Refused;
+    };
+    hooks.describe = [](std::uint64_t base) {
+        const RegionInfo region = describe_region(base);
+        ArenaEntry entry;
+        // `covers` alone is not enough, and that distinction cost four wrong
+        // guesses in try_place(): macOS puts the commpage and the GPU carveout
+        // in EVERY task's map, so a covering entry says nothing about who may
+        // use it. Only an entry that grants no access, or a system reservation,
+        // is address space the host will not give up - and only such an entry
+        // may have its extent recorded as a limitation.
+        const bool denies_everything =
+            region.covers &&
+            (region.reserved || region.protection == VM_PROT_NONE);
+        entry.covers = denies_everything;
+        entry.start = region.start;
+        entry.size = region.size;
+        entry.text = describe_region_text(region);
+        return entry;
+    };
+
+    const ArenaWalk walk = walk_arena(
+        "allocation arena between the Mach-O __TEXT base and the Rosetta GPU "
+        "carveout, where a program's own code and heap are placed",
+        bottom, kArenaTop, page_size, window, hooks);
+
+    for (const auto& r : walk.available) outcome.available.push_back(r);
+    for (const auto& r : walk.unavailable) outcome.unavailable.push_back(r);
+
+    // The placed/held split is this task's own layout, so it goes to the notes -
+    // outside the facts subtree and outside profile_id - rather than into any
+    // recorded fact.
+    outcome.occupied_notes.push_back(
+        "allocation arena [" + json::to_hex(bottom) + ", " +
+        json::to_hex(kArenaTop) + ") walked in contiguous windows of " +
+        json::to_hex(window) + " bytes: " + std::to_string(walk.placed) +
+        " placed, " + std::to_string(walk.held_by_probe) +
+        " already held by the probe process, " + std::to_string(walk.refused) +
+        " structurally refused, and " + std::to_string(walk.skipped) +
+        " not probed because they lie inside an entry the platform had already "
+        "described as granting no access. The first two are treated identically "
+        "on purpose; only the third and fourth are host limitations");
+}
 
 ScanOutcome scan_address_space(std::size_t page_size, std::uint64_t probe_length,
                                std::uint64_t min_address) {
@@ -768,6 +889,11 @@ ScanOutcome scan_address_space(std::size_t page_size, std::uint64_t probe_length
         }
         outcome.unavailable.push_back(cr);
     }
+    // After the landmark ladder, not instead of it. The ladder's single points
+    // inside the commpage and the GPU carveout are the measurements the whole
+    // macOS story in this project rests on; the arena answers the space between
+    // them, which is where programs actually are.
+    scan_allocation_arenas(page_size, probe_length, min_address, outcome);
     collapse_contained_ranges(outcome.unavailable);
     return outcome;
 }

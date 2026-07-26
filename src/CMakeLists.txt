@@ -42,7 +42,12 @@ add_library(RuntimeSkeptic::reports ALIAS rs_reports)
 # other is guarded out by the preprocessor so both files stay syntax-checked
 # on every platform.
 # ---------------------------------------------------------------------------
+# arena_walk.cpp is deliberately NOT guarded by a platform macro: it is the
+# arena logic with the platform calls injected, so it compiles and is tested
+# everywhere. The first version of that logic lived inside the macOS probe,
+# where the only way to check it was a runner - and it was wrong.
 add_library(rs_probe STATIC
+    probe/arena_walk.cpp
     probe/vm_probe_linux.cpp
     probe/vm_probe_macos.cpp
     probe/vm_probe_windows.cpp

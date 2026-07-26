@@ -170,14 +170,34 @@ Which settles the derivation question without needing `mach_vm_region`:
    `scan_one_arena()` already implements: sample on a stride and collapse
    contiguous non-structural runs into one range.
 
-**Still to decide, and it is the whole risk:** the stride. Linux uses 64 GiB
-across a 128 TiB space. macOS's interesting region is the first ~48 GiB, so the
-stride has to shrink by orders of magnitude, and a stride that is too fine turns
-a probe into a scan of the whole low address space. Pick it from the two measured
-gaps above (37 MiB and 12 MiB), not from the Linux number.
+**The stride question is settled, and the answer is that there is no stride.**
+A 32 MiB stride was written first and rejected in one run by a test, not by a
+runner: the walk correctly closed at the last window it had placed, and the heap
+page sat in the 16 MiB tail before the refused band. Shrinking to 8 MiB would
+have worked by fitting a number to one runner's morning. Contiguous windows have
+no tail by construction and assert only what was placed — affordable here and not
+on Linux purely because this arena spans 60 GiB rather than 128 TiB.
 
-Whichever is chosen, the reason it is not this process's own layout goes in the
-code, next to the arena.
+**Written, and verified as far as it can be from here.**
+
+| | |
+|---|---|
+| `include/runtimeskeptic/probe/arena_walk.hpp`, `src/probe/arena_walk.cpp` | the walk, with the Mach calls injected — compiled and tested on **every** platform |
+| `src/probe/vm_probe_macos.cpp` | ~50 lines wiring `try_place` and `describe_region` into it |
+| `tests/unit/test_arena_walk.cpp` | 9 cases against the layout `refs/ci-logs/90dc74b/macos---apple-clang` reported. Made to fail on demand: a 32 MiB window breaks 6 of them |
+
+Local: 14/14 ctest, 13/13 guards, `-Werror -Wconversion -Wsign-conversion`.
+
+**What is still NOT verified, and only the runner can do it:** that this compiles
+under apple-clang, that `try_place`'s Placement really maps onto what the walk
+expects on a live task, that 12,294 windows of `mach_vm_allocate` cost
+milliseconds rather than seconds, and that
+`tools/campaign/check_reproducible.sh` still agrees across two processes — the
+arena's bounds are constants, so it should, but "should" is the word this project
+does not accept.
+
+**Also still open:** Windows has no arena at all. Same gap, third platform,
+untracked until T-004's measurement makes it visible.
 
 **Second, and separately:** `linux---gcc` failed this same test on `650d510`
 with C++ identical to the `52f541e` that passed it, and it passes 200/200 here.
