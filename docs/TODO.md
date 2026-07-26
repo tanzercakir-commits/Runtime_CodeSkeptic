@@ -43,8 +43,23 @@ completes without leaving a trace in the log is work that will be redone.
 
 ## Now
 
-*(`Now` is empty. The next item is `T-004`, the Windows probe — promote it
-deliberately rather than by drift.)*
+<!-- pending-promotion: T-004 -->
+
+*(`Now` is empty, and `T-004` under `## Next` carries a `[now]` marker. That is
+a contradiction, recorded as an open decision rather than resolved as a side
+effect: this file warns against promotion "by drift", and moving the item to
+settle a consistency check would be exactly that.*
+
+*The decision is the owner's, and it is a real one. In favour: the Windows
+measurement is the only thing the project is blocked on, so nothing else can
+honestly be "now". Against: it is blocked on an Actions quota rather than on
+work, and an item nobody can advance sitting in `Now` makes the section mean
+something weaker.*
+
+*Resolve it by moving `T-004` here, or by changing its marker to `[next]` and
+leaving `Now` genuinely empty until the quota resets.
+`tools/guards/check_todo.py` check 6 accepts either, and accepts this marker in
+the meantime — but not silence.)*
 
 ---
 

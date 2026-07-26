@@ -39,15 +39,28 @@ name: Windows measurement
 # The path filter is not a way around the button. It is a better trigger than
 # either, for a reason the macOS workflow's comment gets slightly wrong: the
 # HOST does not change between two commits, but the PROBE does, and a probe
-# change is exactly when a fresh measurement is worth 2x. Listing the two files
-# that can alter what gets measured makes the workflow fire when the answer
-# could have changed and stay silent when it could not.
+# change is exactly when a fresh measurement is worth 2x.
 #
-# It also unblocks the first run. This project's development sandbox reaches
-# GitHub over the git protocol only - the REST API answers
-# "GitHub access to this repository is not enabled for this session" - so
-# `workflow_dispatch` is a button nobody in the loop can press. A push to these
-# paths is the one trigger both the sandbox and a human can reach.
+# THREE paths, and the third is not padding:
+#
+#   vm_probe_windows.cpp   changes WHAT gets measured
+#   vm_probe.hpp           changes WHAT gets measured
+#   windows-probe.yml      changes HOW it gets measured - the build flags, the
+#                          test step, the "Refuse a profile that is not from
+#                          real Windows" check. A change there also invalidates
+#                          the last measurement, so it also deserves a fresh one.
+#
+# And the third path is what makes the mechanism work at all. This project's
+# development sandbox reaches GitHub over the git protocol only - the REST API
+# answers "GitHub access to this repository is not enabled for this session" -
+# so `workflow_dispatch` is a button nobody in the loop can press. Because this
+# file is in its own filter, editing it triggers the run: the workflow can start
+# itself. Removing this path would leave the schedule and a button that the one
+# party able to commit cannot reach.
+#
+# That is how the first run was started. Commit 8ddfd4a touched this file and
+# nothing else that mattered, and its message says so: "This commit touches one
+# of those paths, so it is also the first run."
 on:
   schedule:
     - cron: '41 4 * * 1'

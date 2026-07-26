@@ -34,6 +34,22 @@ FIVE CHECKS.
 5. FINISHED WORK LEAVES A TRACE. An item marked `[done]` in TODO.md must be
    mentioned in docs/PROGRESS.md, so that what was learned survives the item
    being crossed off. Work that completes silently gets redone.
+
+6. THE MARKER AND THE SECTION MUST AGREE. An item carrying `[now]` has to sit
+   under `## Now`. This was missing and the compass contradicted itself in three
+   places at once: `T-004` carried `[now]`, sat under `## Next`, and `## Now`
+   said "(`Now` is empty)". Checks 3 and 4 read markers, a human reads sections,
+   and the two had drifted apart - so `docs/PROGRESS.md` came to assert
+   "T-004 stays in Now" about an item that was in neither state. An external
+   reviewer found it; nothing here could have.
+
+   ONE ESCAPE VALVE, and it exists because of how this was found. Promoting an
+   item is a decision, and `docs/TODO.md` warns in its own text against
+   promotion "by drift". A guard that forced the move would make the decision as
+   a side effect of a consistency fix - the exact thing the file forbids. So a
+   disagreement is permitted when the `## Now` section carries
+   `<!-- pending-promotion: T-nnn -->`, which turns a silent contradiction into
+   a written, visible, dated open decision.
 """
 import re
 import sys
@@ -45,6 +61,11 @@ PLAN = ROOT / "docs" / "PLAN.md"
 PROGRESS = ROOT / "docs" / "PROGRESS.md"
 
 ITEM = re.compile(r"^###\s+(T-\d{3})\s+—\s+(.+?)\s+`\[([a-z]+)\]`\s*$")
+PENDING = re.compile(r"<!--\s*pending-promotion:\s*(T-\d{3})\s*-->")
+
+# marker -> the section heading it must sit under.
+SECTION_FOR = {"now": "Now", "next": "Next", "later": "Later",
+               "blocked": "Blocked", "done": "Done"}
 TAG = re.compile(r"\((T-\d{3}|untracked)\)")
 MARKER = re.compile(r"`\[([a-z/]+)\]`")
 STATES = {"now", "next", "later", "blocked", "done"}
@@ -52,41 +73,49 @@ MAX_NOW = 3
 
 
 def parse_todo():
-    """id -> {title, state, body}, plus the untracked-reasons section."""
+    """id -> {title, state, section, body}, the untracked section, and the
+    set of promotions explicitly recorded as pending."""
     items, order = {}, []
     current, body = None, []
-    untracked_section = []
-    in_untracked = False
+    untracked_section, now_section = [], []
+    in_untracked = in_now = False
+    section = None
 
     for line in TODO.read_text().splitlines():
         if line.startswith("## "):
+            section = line[3:].strip()
             in_untracked = "not tracked" in line.lower()
+            in_now = section == "Now"
         if in_untracked:
             untracked_section.append(line)
+        if in_now:
+            now_section.append(line)
 
         m = ITEM.match(line)
         if m:
             if current:
                 items[current]["body"] = "\n".join(body)
             ident, title, state = m.groups()
-            items[ident] = {"title": title, "state": state, "body": ""}
+            items[ident] = {"title": title, "state": state, "body": "",
+                            "section": section}
             order.append(ident)
             current, body = ident, []
         elif current:
             body.append(line)
     if current:
         items[current]["body"] = "\n".join(body)
-    return items, order, "\n".join(untracked_section)
+    pending = set(PENDING.findall("\n".join(now_section)))
+    return items, order, "\n".join(untracked_section), pending
 
 
 def main() -> int:
-    problems = []
+    problems, notes = [], []
 
     if not TODO.exists():
         print("docs/TODO.md is missing; it is the compass", file=sys.stderr)
         return 1
 
-    items, order, untracked = parse_todo()
+    items, order, untracked, pending = parse_todo()
 
     if not items:
         problems.append("docs/TODO.md has no `### T-nnn — title `[state]`` "
@@ -109,6 +138,23 @@ def main() -> int:
                 f"{ident} ({v['title']}) has no **Done when:** - name "
                 f"something that RUNS and what it must print. An item that "
                 f"cannot be finished is a mood.")
+        # Check 6: the marker and the section it sits under must agree.
+        want = SECTION_FOR.get(v["state"])
+        if want is not None and v.get("section") != want:
+            if ident in pending:
+                notes.append(
+                    f"{ident} is `[{v['state']}]` under `## {v.get('section')}` "
+                    f"with promotion recorded as pending - an open decision, "
+                    f"not a contradiction")
+            else:
+                problems.append(
+                    f"{ident} carries `[{v['state']}]` but sits under "
+                    f"`## {v.get('section')}`; it belongs under `## {want}`. "
+                    f"Markers are what the guards read and sections are what a "
+                    f"human reads - when they disagree the compass points two "
+                    f"ways. If the promotion is a decision waiting to be taken, "
+                    f"put `<!-- pending-promotion: {ident} -->` in the `## Now` "
+                    f"section and say so out loud.")
         if v["state"] == "blocked" and "**Blocker:**" not in v["body"]:
             problems.append(
                 f"{ident} is `[blocked]` with no **Blocker:** named. A "
@@ -169,6 +215,8 @@ def main() -> int:
         by_state[v["state"]] = by_state.get(v["state"], 0) + 1
     print("todo: " + "  ".join(f"{k}={v}" for k, v in sorted(by_state.items()))
           + f"  ({len(items)} items, {len(plan_tagged)} plan tag(s))")
+    for n in notes:
+        print(f"  open decision: {n}")
 
     if problems:
         print(f"\n{len(problems)} disagreement(s) between the compass and the "

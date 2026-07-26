@@ -127,7 +127,7 @@ Four contracts × two profiles. Command form:
 ./build/bin/rs-check contracts/<file>.json --profile <profile>.json --quiet
 ```
 
-Profiles: `profiles/generated/linux-x86_64.json` (`origin: measured`, `profile_id sha256:a9dca1fe…`, kernel 6.18.5) and `profiles/fixtures/macos-arm64-rosetta-x86_64.shadps4-derived.fixture.json` (`origin: hand_authored_fixture`, `profile_id sha256:bf00edab…`).
+Profiles: the generated Linux profile under `profiles/generated/` (`origin: measured`, `profile_id sha256:a9dca1fe…`, kernel 6.18.5 — untracked by `.gitignore`, regenerate with `rs-env-probe vm`) and `profiles/fixtures/macos-arm64-rosetta-x86_64.shadps4-derived.fixture.json` (`origin: hand_authored_fixture`, `profile_id sha256:bf00edab…`).
 
 | # | Contract | Profile | Verdict | Exit | Finding | Confidence |
 | --- | --- | --- | --- | --- | --- | --- |

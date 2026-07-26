@@ -84,7 +84,7 @@ The same pattern appears again on Windows, and there it is at least version-awar
 
 ## The measured contrast
 
-`rs-env-probe` measured this CI host (`profiles/generated/linux-x86_64.json`, kernel 6.18.5):
+`rs-env-probe` measured this CI host (written to `profiles/generated/`, which `.gitignore` excludes because probe output is not a fixture; regenerate with `rs-env-probe vm`, kernel 6.18.5):
 
 ```json
 "max_user_address": {

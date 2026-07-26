@@ -16,6 +16,86 @@ re-litigated; a mistake recorded here does not need to be re-made.
 
 ---
 
+## 2026-07-25 — an external review, and a guard that was green for the wrong reason
+
+**Changed.** `tools/guards/check_docs.py` resolves cited paths against
+`git ls-files` instead of the working tree; `tools/guards/check_todo.py` gained
+check 6 (marker versus section) with a `pending-promotion` valve; two documents
+stopped citing a gitignored artifact; `windows-probe.yml`'s trigger comment
+counts to three; the entry above was corrected in four places. Selftest 36 to
+**41 cases**.
+
+**The owner ran an independent review of `6439aee` on a machine with more
+access. 8 of 8 claims held.** What it found is worth more than the eight.
+
+### The one that matters: a guard passing on untracked local state
+
+`check_docs.py` resolved cited paths against the **filesystem**. Two documents
+cite `profiles/generated/linux-x86_64.json`, and `.gitignore` excludes
+`profiles/generated/*.json` by design - it is probe output, not a fixture. The
+file existed here because the probe had run here.
+
+So `run_all.sh` printed **"all guards passed" a dozen times this session over a
+repository that fails the same guard in every fresh clone.** Confirmed by
+cloning into `/tmp` and running it: two failures, immediately.
+
+That is worse than the failure mode the guard's own docstring warns about. A
+noisy guard gets switched off; a guard that is quiet *because of local state*
+reports green while the thing it protects is already false for everybody else -
+and it reports green to the one person who cannot notice.
+
+Fixed at the root: `git ls-files` decides, and the message distinguishes "not in
+the repository" from "exists in THIS tree but is untracked, so it is absent for
+every other reader". A selftest case builds a real repository with a real
+`.gitignore` and requires the failure.
+
+### The compass contradicted itself in three places
+
+`T-004` carried `[now]`, sat under `## Next`, and `## Now` said "(`Now` is
+empty)". Checks 3 and 4 read markers; a human reads sections; nothing compared
+them. That is how the entry above came to assert **"`T-004` stays in `Now`"**
+about an item that was in neither state.
+
+Check 6 now requires them to agree - and the resolution is deliberately *not*
+automatic. `docs/TODO.md` warns in its own text against promotion "by drift",
+and a guard that forced the move would take the decision as a side effect of a
+consistency fix. So a disagreement is permitted when `## Now` carries
+`<!-- pending-promotion: T-nnn -->`: the contradiction becomes a written, visible
+open decision with the argument on both sides, instead of silence.
+
+### Two corrections to the entry above, both mine
+
+- **A timestamp 17 minutes stale.** `2026-07-25T00:49:40Z` is a real CI commit
+  but not the newest; `cca8a6c` at `01:06:39Z` is. Cause: I took the *last* line
+  of `git ls-remote` output as the newest ref. `ls-remote` sorts by refname.
+- **The quota date, wrong by a day.** `2026-07-24` should have been
+  `2026-07-25`, and the wrong date came from the environment header - the same
+  source this log already records as having produced three dates for one day.
+  Two workflow comments said 25; this line said 24, four lines below a row
+  asserting a successful run on the 25th.
+
+`check_dates.py` cannot catch the second and should not be stretched to try: a
+*wrong past date in prose* is not mechanically distinguishable from a right one.
+The honest record is that this class is caught by a reader.
+
+### And one the review corrected in me rather than in the code
+
+I had been about to reconcile "two files" against a three-path filter by
+trimming the list. The owner's objection: **removing `windows-probe.yml` from
+its own filter destroys the mechanism.** That path is the reason `8ddfd4a` could
+start the run at all - a workflow that edits itself can trigger itself, which is
+the only route available to a party that cannot press the button. The comment
+now names three, separates *what* is measured from *how*, and says why the third
+is load-bearing.
+
+**Next.** Two decisions belong to the owner and neither should be taken here:
+resolve the `T-004` promotion, and - if dispatch capability is wanted - request
+it, because Anthropic's own 403 names the remedy: `add_repo` with
+`access:"push"`. The previous entry diagnosed that block precisely and then
+failed to ask for the one thing that would lift it.
+
+---
+
 ## 2026-07-25 — the dispatch that could not be dispatched
 
 **Changed.** `.github/workflows/windows-probe.yml` gained a path-filtered
@@ -73,20 +153,44 @@ What can be established from inside, and what cannot:
 
 | | |
 |---|---|
-| the ref channel works | 60 refs exist from previous macOS runs |
-| Actions ran successfully as recently as | `2026-07-25T00:49:40Z`, ~21 hours before this attempt |
+| the ref channel works | 60 refs exist from previous macOS runs (24 measurement, 30 status, 6 ci-logs) |
+| Actions ran successfully as recently as | `2026-07-25T01:06:39Z` (`cca8a6c`), ~21h 30m before this attempt. Source: the committer date of the CI-authored commit a `refs/status/*` ref points at - git-protocol information, which is why this row sits above the ones that cannot be established |
 | whether the Actions quota is currently exhausted | **cannot be determined from here** - it is an API fact |
 | whether the run is queued, failed at startup, or never triggered | **cannot be determined from here** |
 
-The quota was exhausted on 2026-07-24 and resets on 1 August. That is the
+The quota was exhausted on **2026-07-25** and resets on 1 August. That is the
 leading explanation and it is a hypothesis, not a finding - exactly the
 distinction this project keeps making, applied to itself.
 
+It is surrounded by evidence rather than asserted: the last CI-authored commit
+is `cca8a6c` at `01:06:39Z`, and `87d9c13` at `12:42:26Z` **the same day** is
+the commit that took macOS off per-push *because of* the quota. Nothing
+CI-authored exists after `01:06:39Z`, which is what "every run failed at
+startup" looks like from the git side.
+
+**This paragraph originally said 2026-07-24, and the wrong date came from the
+environment header** - the same source `docs/PROGRESS.md` already records as
+having produced three different dates for one day. Two workflow comments said
+25 and this line said 24, four lines below a row asserting a successful run on
+the 25th, and nothing objected.
+
+`tools/guards/check_dates.py` cannot catch it and should not be stretched to
+try. It checks `## YYYY-MM-DD` headings against `git blame` and refuses any date
+later than the newest commit; a *wrong past date in prose* is not mechanically
+distinguishable from a right one. The honest record is that this class of error
+is caught by a reader, and this one was - by an external one.
+
 **Status unchanged, deliberately.** `docs/PLAN.md` Phase 1 Windows fixtures
-stay `[open]` and "three platform families" stays `[partial]`. `T-004` stays in
-`Now`. Nothing about the probe became more true because a workflow was
-triggered; the deliverable is a measurement from a real Windows host and there
-is not one.
+stay `[open]` and "three platform families" stays `[partial]`. **`T-004` has
+still not been promoted into `Now`** - it sits under `## Next` carrying a
+`[now]` marker, and `## Now` is empty. Nothing about the probe became more true
+because a workflow was triggered; the deliverable is a measurement from a real
+Windows host and there is not one.
+
+This sentence first read "`T-004` stays in `Now`", which was false and
+flattering in the usual direction: it described stability where the truth is
+that the item has not been picked up. The correct sentence is the stronger one -
+it is what the entry set out to demonstrate.
 
 **Next, and it needs the owner.** Open the Actions tab. If the run is sitting
 in a queue it will land on its own and publish to

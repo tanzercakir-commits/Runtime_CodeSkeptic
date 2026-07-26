@@ -45,12 +45,65 @@ THREE CHECKS.
    `<!-- planned -->` for something the ROADMAP specifies and nobody has built.
    Both must be on the same line or the line before, and both say out loud what
    was previously left to the reader to guess.
+
+RESOLVED AGAINST WHAT IS TRACKED, NOT AGAINST THIS WORKING TREE.
+
+Check 3 originally asked the filesystem, and that made it pass for whoever had
+just generated the file and fail for everyone else. An external reviewer found
+it: two documents cite `profiles/generated/linux-x86_64.json`, which
+`.gitignore` excludes by design - it is probe output, not a fixture. It existed
+in the authoring tree because the probe had run there, so `run_all.sh` printed
+"all guards passed" a dozen times over a repository that was broken in every
+fresh clone.
+
+That is a worse failure than crying wolf. A noisy guard gets switched off; a
+guard that is quiet because of untracked local state reports green while the
+thing it protects is already false for everybody else.
+
+So a cited path now has to be *in the repository*: `git ls-files` decides, and
+the filesystem is only consulted when there is no git checkout to ask. A
+generated artifact is not a path a document may cite as if a reader could open
+it - it has to be described as generated, or marked.
 """
 import re
+import subprocess
 import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
+
+
+def tracked_paths():
+    """Everything git knows about, as a set of repo-relative strings plus every
+    directory prefix, so a cited directory resolves too.
+
+    Returns None when this is not a git checkout, and callers fall back to the
+    filesystem. An empty set would silently fail every path claim.
+    """
+    r = subprocess.run(["git", "-C", str(ROOT), "ls-files"],
+                       capture_output=True, text=True)
+    if r.returncode != 0:
+        return None
+    out = set()
+    for line in r.stdout.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        out.add(line)
+        parts = line.split("/")
+        for i in range(1, len(parts)):
+            out.add("/".join(parts[:i]))
+            out.add("/".join(parts[:i]) + "/")
+    return out
+
+
+TRACKED = tracked_paths()
+
+
+def in_repository(rel: str) -> bool:
+    if TRACKED is None:
+        return (ROOT / rel).exists()
+    return rel in TRACKED or rel.rstrip("/") in TRACKED
 
 # Deliberately NARROW. The first version also matched "an empty range is
 # representable" and "that host does not exist on x86-64 Linux" - prose about
@@ -136,9 +189,16 @@ def main() -> int:
                 for p in PATH.findall(line):
                     if "*" in p or "..." in p:
                         continue
-                    if not (ROOT / p).exists():
+                    if not in_repository(p):
+                        why = ("is not in the repository" if TRACKED is not None
+                               else "does not exist")
+                        extra = ""
+                        if TRACKED is not None and (ROOT / p).exists():
+                            extra = (" - it exists in THIS working tree but is "
+                                     "not tracked, so it is absent for every "
+                                     "other reader")
                         problems.append(
-                            f"{rel}:{i+1}: names `{p}`, which does not exist. "
+                            f"{rel}:{i+1}: names `{p}`, which {why}{extra}. "
                             f"Fix the path, or mark the line "
                             f"`<!-- external -->` (another project's tree) or "
                             f"`<!-- planned -->` (specified, unbuilt)")

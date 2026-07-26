@@ -165,6 +165,26 @@ CASES = [
               "Verified by `tests/groundtruth/contracts/gone.json`.\n"},
          expect_fail=True, expect_text="does not exist"),
 
+    # THE ONE AN EXTERNAL REVIEWER FOUND. A cited path that exists on disk but
+    # is not tracked passes for whoever generated it and fails for everyone
+    # else. This needs a real repository, because the check falls back to the
+    # filesystem when there is no git to ask.
+    Case("check_docs.py", "an untracked file on disk does not satisfy a citation",
+         {"profiles/generated/linux-x86_64.json": '{"generated": true}\n'},
+         commits=[("2026-07-25T12:00:00+00:00",
+                   {".gitignore": "profiles/generated/*.json\n",
+                    "docs/x.md": "Measured into "
+                                 "`profiles/generated/linux-x86_64.json`.\n"})],
+         expect_fail=True, expect_text="not tracked"),
+
+    Case("check_docs.py", "the same citation passes once the file is committed",
+         {},
+         commits=[("2026-07-25T12:00:00+00:00",
+                   {"profiles/generated/linux-x86_64.json": '{"a":1}\n',
+                    "docs/x.md": "Measured into "
+                                 "`profiles/generated/linux-x86_64.json`.\n"})],
+         expect_fail=False),
+
     # ---- check_docs: check 1, absence claims must match the filesystem --
     Case("check_docs.py", "\"is empty\" about a directory that is not fails",
          {"docs/x.md": "The suites in `tests/unit` are empty. "
@@ -325,6 +345,28 @@ CASES = [
           "docs/PLAN.md": "# Plan\n\n## Phase 1\n\n- `[done]` nothing\n",
           "docs/PROGRESS.md": "# Progress\n\nT-001 shipped, and here is what "
                               "it taught.\n"},
+         expect_fail=False),
+
+    Case("check_todo.py", "a [now] item under ## Next fails",
+         {"docs/TODO.md": "# TODO\n\n## Now\n\n## Next\n\n"
+                          "### T-001 — mislaid `[now]`\n\n"
+                          "**Done when:** `ctest` passes.\n",
+          "docs/PLAN.md": "# Plan\n\n## Phase 1\n\n- `[done]` nothing\n"},
+         expect_fail=True, expect_text="belongs under `## Now`"),
+
+    Case("check_todo.py", "a recorded pending promotion makes it an open decision",
+         {"docs/TODO.md": "# TODO\n\n## Now\n\n"
+                          "<!-- pending-promotion: T-001 -->\n\n## Next\n\n"
+                          "### T-001 — mislaid `[now]`\n\n"
+                          "**Done when:** `ctest` passes.\n",
+          "docs/PLAN.md": "# Plan\n\n## Phase 1\n\n- `[done]` nothing\n"},
+         expect_fail=False, expect_text="open decision"),
+
+    Case("check_todo.py", "a marker in its right section passes",
+         {"docs/TODO.md": "# TODO\n\n## Now\n\n"
+                          "### T-001 — in place `[now]`\n\n"
+                          "**Done when:** `ctest` passes.\n",
+          "docs/PLAN.md": "# Plan\n\n## Phase 1\n\n- `[done]` nothing\n"},
          expect_fail=False),
 
     Case("check_todo.py", "(untracked) needs a section that justifies it",
