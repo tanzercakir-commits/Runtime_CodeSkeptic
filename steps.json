@@ -1,0 +1,32 @@
+{
+  "build": {
+    "outputs": {},
+    "outcome": "success",
+    "conclusion": "success"
+  },
+  "test": {
+    "outputs": {},
+    "outcome": "success",
+    "conclusion": "success"
+  },
+  "measure": {
+    "outputs": {},
+    "outcome": "success",
+    "conclusion": "success"
+  },
+  "reproducible": {
+    "outputs": {},
+    "outcome": "success",
+    "conclusion": "success"
+  },
+  "report": {
+    "outputs": {},
+    "outcome": "failure",
+    "conclusion": "failure"
+  },
+  "refuse_wine": {
+    "outputs": {},
+    "outcome": "skipped",
+    "conclusion": "skipped"
+  }
+}
