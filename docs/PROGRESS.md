@@ -1136,6 +1136,24 @@ diagnosis instead of a guess. Before it, this workflow could fail and say nothin
 all — and it had, twice, which is the entire history of `windows-x86_64` status refs
 in this repository.
 
+**And the run that would have confirmed the fix never started.** I polled
+`refs/status/5615c67/windows-x86_64/*` for forty minutes and reported "still
+running". It was never started. `windows-probe.yml`'s push filter is
+
+```
+.github/workflows/windows-probe.yml
+src/probe/vm_probe_windows.cpp
+include/runtimeskeptic/probe/vm_probe.hpp
+```
+
+and the fix touched `src/probe/vm_probe_unimplemented.cpp`, which is not in it.
+
+| | |
+|---|---|
+| **−** | mine, and the same error the whole session is about: **an absent signal read as one particular cause.** `git ls-remote` returning nothing is consistent with *running*, *never started*, and *failed before the status step*. I picked one and asserted it |
+| **−** | the trigger list names the implementation but not **the file that can silently replace the implementation** — which is precisely the bug just fixed, hiding its own confirmation |
+| **+** | `vm_probe_unimplemented.cpp`, `CMakeLists.txt` and `src/CMakeLists.txt` are in the filter now. The last two define `RS_PLATFORM_WINDOWS` and nowhere else does |
+
 **Also next.** Windows still has no arena. But that question was never reachable:
 the probe that would need one was not in the binary. The Rosetta lane still needs a dispatch —
 `gh workflow run macos-probe.yml --ref main` — and it now publishes its ground-truth

@@ -77,6 +77,21 @@ on:
       - '.github/workflows/windows-probe.yml'
       - 'src/probe/vm_probe_windows.cpp'
       - 'include/runtimeskeptic/probe/vm_probe.hpp'
+      # THE FILE THAT DECIDES WHETHER THE WINDOWS PROBE IS IN THE BINARY AT ALL.
+      #
+      # It was not in this list, and the omission hid itself. `vm_probe_unimplemented.cpp`
+      # guarded itself with `!LINUX && !MACOS`, which is true on Windows, so both it
+      # and the real probe defined `probe_virtual_memory` and the linker took the
+      # stub - every Windows "measurement" was synthetic. The commit that FIXED that
+      # touched only this file, so it triggered nothing, and the run that would have
+      # confirmed the fix never started.
+      #
+      # A trigger list that names the implementation but not the thing that can
+      # replace the implementation is not a trigger list for the implementation.
+      - 'src/probe/vm_probe_unimplemented.cpp'
+      # Platform detection: RS_PLATFORM_WINDOWS is defined here, and nowhere else.
+      - 'CMakeLists.txt'
+      - 'src/CMakeLists.txt'
 
 permissions:
   contents: write
