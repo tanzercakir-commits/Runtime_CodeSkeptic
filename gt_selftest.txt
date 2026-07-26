@@ -1,0 +1,18 @@
+PREDICTION    OUTCOME     EXPECTED       RESULT
+----------------------------------------------------------------
+SUPPORTED     satisfied   held           ok
+SUPPORTED     refused     CONTRADICTED   ok
+SUPPORTED     relocated   CONTRADICTED   ok
+SUPPORTED     faulted     CONTRADICTED   ok
+SUPPORTED     skipped     skipped        ok
+SUPPORTED     -           CASE BROKEN    ok
+UNSUPPORTED   refused     held           ok
+UNSUPPORTED   relocated   held           ok
+UNSUPPORTED   faulted     held           ok
+UNSUPPORTED   satisfied   CONTRADICTED   ok
+UNSUPPORTED   skipped     skipped        ok
+UNSUPPORTED   -           CASE BROKEN    ok
+UNKNOWN       satisfied   not asserted   ok
+UNKNOWN       refused     not asserted   ok
+
+rows: 14   ok: 14   mismatched: 0

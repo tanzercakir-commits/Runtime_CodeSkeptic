@@ -1,0 +1,52 @@
+Test project /Users/runner/work/Runtime_CodeSkeptic/Runtime_CodeSkeptic/build
+    Start 12: test_probe
+1/1 Test #12: test_probe .......................***Failed    0.02 sec
+== probe conformance (14 cases)
+  ok   probe_produces_a_schema_valid_profile_on_every_platform
+  ok   probe_never_attaches_a_value_to_unknown_evidence
+  ok   unimplemented_platforms_report_synthetic_origin
+  ok   repeated_calls_in_one_process_produce_the_same_profile_id
+  ok   profile_id_survives_a_write_read_round_trip
+  ok   range_order_does_not_affect_identity
+  ok   canonical_serialization_is_byte_stable
+  ok   measured_page_size_is_a_power_of_two
+  ok   measured_bounds_are_ordered
+  ok   no_recorded_range_carries_unknown_evidence
+  ok   available_and_unavailable_ranges_do_not_overlap
+  ok   disabling_the_scan_drops_the_sweep_but_keeps_measured_bounds
+  FAIL the_scan_covers_where_this_process_is_actually_mapped
+    /Users/runner/work/Runtime_CodeSkeptic/Runtime_CodeSkeptic/tests/conformance/test_probe.cpp:373
+    the profile establishes nothing about an address this process is executing from or allocating in; the scan is looking in the wrong part of the address space
+      code page      : 0x1023a4000
+      max_user_address: 0x7ffffe000000
+      nearest below: [0x100000000, 0x100004000)  gap 0x23a0000
+        note: the kernel refused an exact placement here while higher addresses remained placeable, so this is a hole in the address space rather than its end
+      nearest above: [0x200000000, 0x200004000)  gap 0xfdc5c000
+        note: the kernel refused an exact placement here while higher addresses remained placeable, so this is a hole in the address space rather than its end
+      containing   : (none - this is a scan-window gap, not a query bug)
+      established: 19 available, 49 unavailable
+      arena: NO arena was scanned on this platform. scan_allocation_arenas() exists in vm_probe_linux.cpp only; macOS and Windows still sample the landmark ladder, which is the coverage gap T-013 fixed for Linux and nowhere else.
+  FAIL the_scan_covers_where_this_process_is_actually_mapped
+    /Users/runner/work/Runtime_CodeSkeptic/Runtime_CodeSkeptic/tests/conformance/test_probe.cpp:373
+    the profile establishes nothing about an address this process is executing from or allocating in; the scan is looking in the wrong part of the address space
+      heap page      : 0x7be800000
+      max_user_address: 0x7ffffe000000
+      nearest below: [0x400000000, 0x400400000)  gap 0x3be400000
+        note: mach_vm_allocate(VM_FLAGS_FIXED) succeeded at this exact address in the probe process
+      nearest above: [0x7bf400000, 0xabe000000)  gap 0xc00000
+        note: mach_vm_allocate(VM_FLAGS_FIXED) refused with KERN_NO_SPACE; region [0x7bf400000, 0xabe000000) covers it, and is a real mapping (reserved=0), protection ---; pl
+      containing   : (none - this is a scan-window gap, not a query bug)
+      established: 19 available, 49 unavailable
+      arena: NO arena was scanned on this platform. scan_allocation_arenas() exists in vm_probe_linux.cpp only; macOS and Windows still sample the landmark ladder, which is the coverage gap T-013 fixed for Linux and nowhere else.
+  ok   probe_leaves_the_process_address_space_usable
+
+2 failure(s) in probe conformance
+
+
+0% tests passed, 1 tests failed out of 1
+
+Total Test time (real) =   0.04 sec
+
+The following tests FAILED:
+	 12 - test_probe (Failed)
+Errors while running CTest
