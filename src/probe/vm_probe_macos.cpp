@@ -1213,9 +1213,31 @@ Result probe_virtual_memory(const Options& options) {
         // `scan_address_space` records them at their documented addresses across
         // their real extents; a 16 KiB duplicate inside one of them was already
         // being dropped by collapse_contained_ranges.
-        std::size_t holes_recorded = 0, holes_ours = 0;
+        std::size_t holes_recorded = 0, holes_ours = 0, holes_below_min = 0;
         for (std::uint64_t refused : survey.refused) {
             if (refused >= survey.highest_placed) continue;
+            // NOTHING BELOW THE LOWEST PLACEABLE PAGE IS A HOST FACT, and the
+            // profile published by the previous commit is why this is here:
+            //
+            //   U 0x100000 0x104000  "a hole in the address space"
+            //   U 0x200000 0x204000  ... and 0x400000, 0x800000, 0x1000000 ...
+            //
+            // Every one of those is inside this process's own __PAGEZERO, which on
+            // a 64-bit Mach-O is four GiB and whose size is a LINK-TIME CHOICE.
+            // `mach_vm_region` reports no entry covering them - __PAGEZERO is a
+            // hole in the map rather than a no-access entry - so the ownership
+            // check above cannot see them, and they were recorded as structural.
+            //
+            // Twenty lines up, this file already refuses to publish
+            // `min_map_address` as a host fact for exactly this reason: "a property
+            // of how this binary was linked and where the loader put it". Recording
+            // holes below it is the same claim through a different door - the
+            // fourth time today that a fact about the probe reached for a field
+            // meant for the host.
+            if (min_address != 0 && refused < min_address) {
+                ++holes_below_min;
+                continue;
+            }
             const auto hole = AddressRange::from_base_size(
                 refused, static_cast<std::uint64_t>(page_size));
             if (!hole) continue;
@@ -1235,14 +1257,16 @@ Result probe_virtual_memory(const Options& options) {
             profile.vm.unavailable_ranges.push_back(cr);
             ++holes_recorded;
         }
-        if (holes_ours != 0) {
+        if (holes_ours != 0 || holes_below_min != 0) {
             warnings.emplace_back(
                 "survey: " + std::to_string(holes_recorded) +
-                " structural hole(s) recorded, and " + std::to_string(holes_ours) +
-                " refusal(s) NOT recorded because a no-access region of this task "
-                "covers them - those are indistinguishable from the probe's own "
-                "reservations and moved between runs, which is what made "
-                "profile_id irreproducible");
+                " structural hole(s) recorded; " + std::to_string(holes_ours) +
+                " refusal(s) not recorded because a no-access region of this task "
+                "covers them, and " + std::to_string(holes_below_min) +
+                " not recorded because they lie below the lowest page this process "
+                "can place, which is where its own __PAGEZERO and image end - a "
+                "link-time choice, not a platform property. Both classes moved "
+                "between runs, which is what made profile_id irreproducible");
         }
     }
 

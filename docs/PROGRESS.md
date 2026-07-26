@@ -877,6 +877,46 @@ the assumption that makes it wrong.
 | **+** | the expectation is derived from the measured profile now, and the real step text was extracted from the YAML and **run against both host kinds locally** — 4-level expects 1 and gets 1, 5-level expects 0 and gets 0. A heredoc inside a YAML block scalar is worth checking before spending a runner minute on it |
 | **−** | this is the fourth thing in two days that was a claim about hardware written as a constant: the arena ceiling, the 4 PiB verdict, `exact-mapping-above-user-space`, and now the gate. The corpus and the rules were fine; the **constants** were the problem |
 
+### The arena is stable; what moved was __PAGEZERO
+
+`63bacc5`: macOS ctest **passes**, the overlap is gone, and the failure moved to the
+reproducibility gate with a much narrower diagnosis:
+
+```
+available_ranges:    22 vs 22 entries      <- the arena is reproducible now
+unavailable_ranges:  50 vs 66 entries
+```
+
+The profile the diagnostics now publish says what the 50-vs-66 is:
+
+```
+U 0x100000  0x104000   "a hole in the address space"
+U 0x200000  0x204000   ... and 0x400000, 0x800000, 0x1000000 ...
+survey: 13 structural hole(s) recorded, 5 not recorded (no-access region of ours)
+arena:  7385 placed, 113 held, 3 structurally refused, 29 refused-but-covered
+```
+
+Every one of those low entries is inside this process's own **`__PAGEZERO`**, four
+GiB on a 64-bit Mach-O and **a link-time choice**. The ownership check added one
+commit earlier cannot see them: `mach_vm_region` reports no entry covering them,
+because `__PAGEZERO` is a *hole* in the map rather than a no-access entry — so they
+came through as structural.
+
+**And twenty lines above, this same file already refuses to publish
+`min_map_address` as a host fact** for exactly that reason: *"a property of how this
+binary was linked and where the loader put it."* Recording holes below it is the same
+claim through a different door.
+
+| | |
+|---|---|
+| **+** | the arena's own contribution is now reproducible — 22 vs 22, after 35 vs 32 — so the resolution and the bounds were right |
+| **+** | the diagnosis took one look at an artifact, not a hypothesis. The profile in the diagnostics ref has now decided three consecutive questions |
+| **−** | **fourth instance today** of a fact about the probe reaching for a field meant for the host: the arena's floor from `find_min_map_address`, the arena's own no-access refusals, the ladder's widened extents, and now the survey's holes below `__PAGEZERO`. Each was argued for separately and correctly in its own frame, and each got the same thing wrong |
+
+That is the pattern worth carrying out of this session: on macOS there is no way to
+ask whose a map entry is, so every producer that reads a refusal has to be told
+where the boundary is — and the boundary has to be written down **once**.
+
 **Also next.** Windows still has no arena at all, and `RS-VM-0027` will fire on every
 Windows and macOS profile until those probes measure `max_single_reservation` — which
 is the honest reading of a profile that has not measured it.
