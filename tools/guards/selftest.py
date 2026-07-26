@@ -150,6 +150,44 @@ jobs:
           ctest --test-dir build --build-config RelWithDebInfo --rerun-failed --output-on-failure > /tmp/diag/ctest.txt
 """
 
+# `check_windows_compiles.py` needs a real cross-compiler. Where there is none it
+# reports SKIPPED and passes, so the cases below adapt rather than lie about what
+# was checked - a case that "passes" because the guard declined to look is the
+# vacuous pass this whole file exists to prevent.
+SHADOW_IS_CHECKABLE = any(
+    shutil.which(c) for c in ("x86_64-w64-mingw32-g++", "x86_64-w64-mingw32-c++"))
+
+# Just the warning line the guard reads. Not the project's CMakeLists: a fixture
+# that copied it would drift from it.
+CMAKE_WARNINGS = """add_library(rs_warnings INTERFACE)
+target_compile_options(rs_warnings INTERFACE
+    -Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wsign-conversion)
+"""
+
+# The C4456 shape, reduced: an inner declaration hiding an outer one. Clean under
+# -Wall -Wextra, an error under -Wshadow, which is the entire incident.
+WINDOWS_TU_SHADOWED = """#if defined(RS_PLATFORM_WINDOWS)
+int probe() {
+    int walk = 1;
+    {
+        int walk = 2;
+        return walk;
+    }
+}
+#endif
+"""
+
+WINDOWS_TU_OK = """#if defined(RS_PLATFORM_WINDOWS)
+int probe() {
+    int walk = 1;
+    {
+        int arena = 2;
+        return walk + arena;
+    }
+}
+#endif
+"""
+
 CASES = [
     # ---- check_docs: check 3, named paths must exist -------------------
     Case("check_docs.py", "a doc naming a path that is not there fails",
@@ -593,6 +631,33 @@ CASES = [
              "          ctest --test-dir build \\\n"
              "            --build-config RelWithDebInfo --output-on-failure\n"},
          expect_fail=False),
+
+    # ---- check_windows_compiles: the flags must be READ, not restated -----
+    #
+    # These cases pass trivially where no mingw is installed, which is honest:
+    # the guard says SKIPPED and returns 0 there. On CI, where it is installed,
+    # they are the real thing.
+    Case("check_windows_compiles.py", "the real bug: a shadowed local, C4456",
+         {"CMakeLists.txt": CMAKE_WARNINGS,
+          "src/probe/vm_probe_windows.cpp": WINDOWS_TU_SHADOWED},
+         expect_fail=SHADOW_IS_CHECKABLE,
+         expect_text="shadows" if SHADOW_IS_CHECKABLE else "windows cross-compile"),
+
+    Case("check_windows_compiles.py", "the corrected translation unit passes",
+         {"CMakeLists.txt": CMAKE_WARNINGS,
+          "src/probe/vm_probe_windows.cpp": WINDOWS_TU_OK},
+         expect_fail=False),
+
+    # THE POINT OF THE GUARD, not an incidental feature. The push that provoked
+    # it was cross-compiled by hand with a flag list typed from memory; the one
+    # flag left out was the one that mattered. A guard holding its own copy of
+    # the list would fail the same way, one release later.
+    Case("check_windows_compiles.py", "flags it cannot read are not guessed",
+         {"CMakeLists.txt": "add_library(rs_warnings INTERFACE)\n",
+          "src/probe/vm_probe_windows.cpp": WINDOWS_TU_OK},
+         expect_fail=SHADOW_IS_CHECKABLE,
+         expect_text="guesses them" if SHADOW_IS_CHECKABLE
+                     else "windows cross-compile"),
 ]
 
 

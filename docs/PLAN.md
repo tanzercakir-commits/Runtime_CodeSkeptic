@@ -103,14 +103,15 @@ findings from the set itself:
   `profiles/measured/windows-server-2025-x86_64.measured.json`, published by
   `.github/workflows/windows-probe.yml` with the two-process reproducibility step
   green in that run. Allocation granularity 65536 against a 4096 page size, both
-  `measured_capability`. Previously (and for the project's whole life until now)
-  the probe was
-  (`src/probe/vm_probe_windows.cpp`), cross-compiles clean under mingw-w64,
-  and runs correctly under Wine
-  (`profiles/measured/wine-9.0-on-linux-x86_64.measured.json`). **No Windows
-  host has ever run it.** `.github/workflows/windows-probe.yml` is what would
-  close this; until it publishes a measurement the code is a hypothesis about
-  the platform it targets. (T-004)
+  `measured_capability`. The probe (`src/probe/vm_probe_windows.cpp`) also
+  cross-compiles clean under mingw-w64 and runs under Wine
+  (`profiles/measured/wine-9.0-on-linux-x86_64.measured.json`), which is **not**
+  a substitute: for the project's whole life until 2026-07-26 those two were the
+  only evidence there was, and the probe had in fact never executed on any
+  machine at all — the unimplemented stub's `#if` did not exclude Windows, so the
+  linker took the stub and every "Windows measurement" was synthetic while every
+  job stayed green. `tools/guards/check_probe_platforms.py` is the rule that now
+  makes that unrepresentable. (T-004)
 - `[done]` Linux x86-64 fixtures — measured on every run by
   `tools/guards/run_all.sh` and `.github/workflows/ci.yml`
 - `[done]` macOS Apple Silicon fixtures —
@@ -293,7 +294,7 @@ that risk materialising.
   match the filesystem, and a named path must exist. Still `[partial]` because
   only paths and a fixed list of phrases are mechanical; the rest of the prose
   is unchecked and always will be.
-- `[done]` the guards are tested — `tools/guards/selftest.py`, 72 cases, each
+- `[done]` the guards are tested — `tools/guards/selftest.py`, 75 cases, each
   requiring a check to fail against a deliberately wrong throwaway repository
   before it is trusted on this one; first in `tools/guards/run_all.sh`. This
   number read `25` while there were 58, surviving two earlier increases, so

@@ -1337,6 +1337,57 @@ ranges; and the diagnostics channel dropped every Windows failure for the life o
 the repository. Three chances to notice, none taken, because everything about
 Windows here was reachable only from Windows.
 
+### The build log arrived and named it in one line
+
+`7dd19a7` taught the diagnostics channel to carry a build log. The very first one
+it published answered a question three pushes had not:
+
+```
+vm_probe_windows.cpp(946,29): warning C4456: declaration of 'walk' hides
+                              previous local declaration
+      vm_probe_windows.cpp(881,27):
+vm_probe_windows.cpp(946,29): error C2220: the following warning is treated as
+                              an error
+```
+
+The arena's `const ArenaWalk walk` shadowed the `VirtualQuery` walk's
+`const WalkSummary walk` sixty lines above it. `/W4 /WX` made it fatal, `rs_probe`
+did not build, so every target depending on it did not build, so the ctest the
+channel published was a test run of a tree that had never compiled — ten green
+results and eight *Could not find executable* lines, describing nothing.
+
+**And the reason the cross-compile missed it is the interesting part.** The
+project's flags are in `CMakeLists.txt`:
+
+```
+-Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wsign-conversion
+```
+
+The mingw command typed by hand before pushing `b661c94` was
+
+```
+-Wall -Wextra -Wconversion -Wsign-conversion
+```
+
+`-Wshadow` — the only one that mattered — was the one left out. GCC does not
+imply it from `-Wall -Wextra`; MSVC's `/W4` does imply C4456. A hand-typed subset
+of a flag list is a check that passes for the wrong reason, and this project has
+now met that shape under several names.
+
+| | |
+|---|---|
+| **+** | the fix is `tools/guards/check_windows_compiles.py`, which cross-compiles every Windows-only translation unit **with the flags read out of `CMakeLists.txt`** rather than restated by anyone. It reproduces C4456 as `-Werror=shadow`, on Linux, in under a second |
+| **+** | verified by reintroducing the shadow on purpose: the guard names both lines, exactly as MSVC did |
+| **+** | CI installs `g++-mingw-w64-x86-64` in the Linux guards step, so this is really performed somewhere rather than skipped everywhere — the failure mode `fetch-depth: 1` quietly gave `check_dates.py` for its whole life. Without a cross-compiler it says SKIPPED, loudly, and passes |
+| **+** | selftest 72 → **75 cases**, and the third of them is the point rather than a detail: a `CMakeLists.txt` whose flags cannot be read makes the guard FAIL, because a guard that falls back to a guessed flag list is the defect it was written for |
+| **−** | mingw is not MSVC. Green here does not promise green there; red here is red there. What this buys is a 1x Linux second in place of a 2x Windows minute, which is the same trade `check_includes.py` makes |
+| **−** | four pushes to get one compiler error out of a runner: the flag, the build log, the arena, the shadow. Three of those four were the channel failing to report, not the code failing to work |
+
+`docs/PLAN.md`'s Windows bullet was also carrying a half-finished edit — `[done]`
+and *"No Windows host has ever run it"* in one paragraph, with a sentence that
+stopped mid-clause. Rewritten to say what is now true and why Wine is not a
+substitute for it.
+
 ### And this file was lying about its own order
 
 `docs/PROGRESS.md` is the past, and it had two entries in the wrong order: *the

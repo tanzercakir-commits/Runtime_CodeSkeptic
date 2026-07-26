@@ -101,6 +101,15 @@ jobs:
         run: |
           python3 -m pip install --quiet --break-system-packages jsonschema \
             || python3 -m pip install --quiet jsonschema || true
+          # A 1x Linux second standing in for a 2x Windows minute:
+          # check_windows_compiles.py builds the Windows-only translation units
+          # with the project's own flags. Without this it SKIPS - loudly, but it
+          # skips - and a guard that is skipped everywhere is not a guard, which
+          # is what fetch-depth: 1 quietly did to check_dates.py for its whole
+          # life. `|| true` so a mirror outage degrades the check rather than
+          # failing the build for a reason unrelated to the commit.
+          sudo apt-get update -qq && \
+            sudo apt-get install -y -qq g++-mingw-w64-x86-64 || true
           bash tools/guards/run_all.sh
 
       # POSIX-only: the case programs use mmap/mprotect/fork, and the probe is

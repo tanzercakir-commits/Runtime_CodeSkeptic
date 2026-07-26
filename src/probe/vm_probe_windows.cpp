@@ -943,7 +943,7 @@ Result probe_virtual_memory(const Options& options) {
                 return classify_window(base, kArenaWindow, query_region, refusal);
             };
 
-            const ArenaWalk walk = walk_arena(
+            const ArenaWalk arena = walk_arena(
                 "allocation arena in the top TiB of the user address space, "
                 "where high-entropy ASLR places the image, every loaded DLL, "
                 "the thread stacks and the heaps",
@@ -954,10 +954,10 @@ Result probe_virtual_memory(const Options& options) {
                 // which is RSC-0044's subject arriving inside the probe itself.
                 granularity, kArenaWindow, hooks);
 
-            for (const auto& r : walk.available) {
+            for (const auto& r : arena.available) {
                 profile.vm.available_ranges.push_back(r);
             }
-            for (const auto& r : walk.unavailable) {
+            for (const auto& r : arena.unavailable) {
                 profile.vm.unavailable_ranges.push_back(r);
             }
 
@@ -965,17 +965,17 @@ Result probe_virtual_memory(const Options& options) {
                 "allocation arena [" + json::to_hex(arena_bottom) + ", " +
                 json::to_hex(max_address) + ") walked in contiguous windows of " +
                 json::to_hex(kArenaWindow) + " bytes: " +
-                std::to_string(walk.placed) + " placed, " +
-                std::to_string(walk.held_by_probe) +
+                std::to_string(arena.placed) + " placed, " +
+                std::to_string(arena.held_by_probe) +
                 " already held by this process at the window's own base, " +
-                std::to_string(walk.refused) + " structurally refused, " +
-                std::to_string(walk.held_no_access) +
+                std::to_string(arena.refused) + " structurally refused, " +
+                std::to_string(arena.held_no_access) +
                 " refused with a region of this process elsewhere in the window "
                 "(treated as held; this arena's floor is 127 TiB above "
                 "KUSER_SHARED_DATA at 0x7ffe0000, the only system-wide band this "
                 "platform is known to place, so if this number rises while "
                 "unavailable_ranges stays empty that assumption has broken), and " +
-                std::to_string(walk.skipped) +
+                std::to_string(arena.skipped) +
                 " not probed because they lie inside a region already described. "
                 "Only the structurally refused count is a host limitation. This "
                 "split moves with ASLR, which is why it is a note and not a fact");
