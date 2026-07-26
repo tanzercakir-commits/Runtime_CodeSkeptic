@@ -1,0 +1,67 @@
+Internal ctest changing into directory: /home/runner/work/Runtime_CodeSkeptic/Runtime_CodeSkeptic/build
+Test project /home/runner/work/Runtime_CodeSkeptic/Runtime_CodeSkeptic/build
+      Start  1: test_json
+ 1/14 Test  #1: test_json ........................   Passed    0.00 sec
+      Start  2: test_sha256
+ 2/14 Test  #2: test_sha256 ......................   Passed    0.01 sec
+      Start  3: test_evidence
+ 3/14 Test  #3: test_evidence ....................   Passed    0.00 sec
+      Start  4: test_address_range
+ 4/14 Test  #4: test_address_range ...............   Passed    0.00 sec
+      Start  5: test_profile
+ 5/14 Test  #5: test_profile .....................   Passed    0.00 sec
+      Start  6: test_analyzer
+ 6/14 Test  #6: test_analyzer ....................   Passed    0.00 sec
+      Start  7: test_mutation
+ 7/14 Test  #7: test_mutation ....................   Passed    0.00 sec
+      Start  8: test_impact
+ 8/14 Test  #8: test_impact ......................   Passed    0.01 sec
+      Start  9: test_report
+ 9/14 Test  #9: test_report ......................   Passed    0.00 sec
+      Start 10: test_bundle
+10/14 Test #10: test_bundle ......................   Passed    0.00 sec
+      Start 11: test_mcp
+11/14 Test #11: test_mcp .........................   Passed    0.00 sec
+      Start 12: test_arena_walk
+12/14 Test #12: test_arena_walk ..................   Passed    0.00 sec
+      Start 13: test_probe
+13/14 Test #13: test_probe .......................***Failed    1.21 sec
+== probe conformance (14 cases)
+  ok   probe_produces_a_schema_valid_profile_on_every_platform
+  ok   probe_never_attaches_a_value_to_unknown_evidence
+  ok   unimplemented_platforms_report_synthetic_origin
+  ok   repeated_calls_in_one_process_produce_the_same_profile_id
+  ok   profile_id_survives_a_write_read_round_trip
+  ok   range_order_does_not_affect_identity
+  ok   canonical_serialization_is_byte_stable
+  ok   measured_page_size_is_a_power_of_two
+  ok   measured_bounds_are_ordered
+  ok   no_recorded_range_carries_unknown_evidence
+  ok   available_and_unavailable_ranges_do_not_overlap
+  ok   disabling_the_scan_drops_the_sweep_but_keeps_measured_bounds
+  FAIL the_scan_covers_where_this_process_is_actually_mapped
+    /home/runner/work/Runtime_CodeSkeptic/Runtime_CodeSkeptic/tests/conformance/test_probe.cpp:377
+    the profile establishes nothing about an address this process is executing from or allocating in; the scan is looking in the wrong part of the address space
+      heap page      : 0x7ffa6bcff000
+      max_user_address: 0xfffffffffff000
+      nearest below: [0x7c0000000000, 0x7ff000400000)  gap 0xa6b8ff000
+        note: inside the kernel's mmap allocation arena, sampled on a fixed ladder derived from max_user_address; every sample was either granted or already held by the probe
+      nearest above: [0x7fff00000000, 0x7fff00400000)  gap 0x494301000
+        note: mapped successfully at this exact address in the probe process
+      containing   : (none - this is a scan-window gap, not a query bug)
+      established: 76 available, 1 unavailable
+      arena: kernel's mmap allocation arena [0x7c0000000000, 0x800000000000) sampled every 0x1000000000 bytes: 64 granted, 0 already held by the probe process, 0 structurally refused. The first two are treated identically on purpose; only the third is a host limitation
+  ok   probe_leaves_the_process_address_space_usable
+
+1 failure(s) in probe conformance
+
+      Start 14: test_incidents
+14/14 Test #14: test_incidents ...................   Passed    0.00 sec
+
+93% tests passed, 1 tests failed out of 14
+
+Total Test time (real) =   1.31 sec
+
+The following tests FAILED:
+	 13 - test_probe (Failed)
+Errors while running CTest
