@@ -544,6 +544,73 @@ jobs publish `refs/measurements/<sha>/<job>` on success.
 `tee` rather than `>`, with `set -o pipefail`, so the output stays in the job log
 *and* becomes a file, and `tee`'s success cannot mask the harness's exit code.
 
+### The channel's first green run returned the observation it used to discard
+
+`cef515b`: **all six jobs green**, and `refs/measurements/<sha>/*` appeared for
+`linux---gcc`, `linux---clang`, `macos---apple-clang` and `compatibility-gate`.
+(The namespace already existed — `macos-probe.yml` had been publishing
+`native-arm64` and `rosetta-x86_64` all along. Only `ci.yml` lacked it.)
+
+Read back with `git show refs/tmp/m:gt_run.txt`:
+
+```
+file-map-beyond-eof     UNSUPPORTED   faulted     held
+    reading past the end of the mapped file killed the process with
+    signal 10 (Bus error: 10)
+file-map-partial-page   CONDITIONAL   satisfied   not asserted
+    the 16383 bytes between the end of a 1-byte file and the end of its
+    final page read as zero, without faulting
+```
+
+**Native macOS arm64 raises SIGBUS past end of file.** That is the first half of
+the claim `file_map_beyond_eof.c` was written to test — *"native arm64 raises
+SIGBUS, the same machine running x86-64 under Rosetta 2 hands back zeroes"* — and
+the first time any of it has been measured. The prediction held, so the probe's
+`file_map_beyond_eof` fact was already right; this is confirmation, not a
+correction. The Rosetta half is still unmeasured, because the runner is native.
+
+And `file-map-partial-page` confirms the distinction that case's own comment draws
+in the other direction: the final partial page reads as zero without faulting,
+which POSIX *requires* — a different question from the implementation-defined one,
+and the reason the case was rewritten once.
+
+Three channels now, each added after the previous one's blind spot cost something:
+`refs/status/*` (did it pass), `refs/ci-logs/*` (why did it fail),
+`refs/measurements/*` (what did it measure). The third one returned a first-ever
+platform observation on its first run.
+
+### The LA57 gap closed, and the campaign re-measured to say what it cost
+
+**Changed.** `vm_probe_linux.cpp`: `scan_one_arena` probes a window that **ends at**
+the arena's top; the candidate ladder skips a candidate whose window would cross
+`max_user_address`. `campaigns/false-positive/2026-07-linux-x86_64-after-top-window.json`
+is new, and `docs/campaigns/2026-07-false-positive-rate.md` gains §5.
+
+The arenas now reach their declared bounds:
+
+```
+before   0x7c0000000000 .. 0x7ff000400000     0x550000000000 .. 0x58f000400000
+after    0x7c0000000000 .. 0x7ffffffff000     0x550000000000 .. 0x590000000000
+```
+
+This is a probe, not an extrapolation, and that is the distinction the old comment
+drew correctly: closing the run *at* `top` on the strength of a sample that ended
+64 GiB earlier was a real bug once. Placing a window that ENDS at `top` and
+reporting what happened is the opposite — the edge is measured.
+
+| | |
+|---|---|
+| **+** | the option chosen was the expensive, correct one. The tempting alternative was a branch conditional on `ceiling != max_user_address + page`, whose only justification would have been keeping a number already published |
+| **+** | **re-measured, and it changed nothing here**: 1292/639 evaluated, **0 false positives** on both populations, the same single `UNKNOWN`, the same 544 `RS-VM-0005`. The one-observation difference is run-to-run variation in what the programs did |
+| **+** | that null result is the *value* of re-measuring. Reporting it as an improvement would be false — the fix matters on a host class this machine is not |
+| **−** | reaching `max_user_address` immediately contradicted the ladder: it probed `0x7fffffc00000` with a 4 MiB window ending at `0x800000000000`, past the top, got ENOMEM, and had filed `[0x7fffffc00000, 0x800000000000)` as a **host limitation** since the ladder was written. `available_and_unavailable_ranges_do_not_overlap` caught it **locally** this time |
+| **−** | that entry was the only thing in `unavailable_ranges` on this host. The probe had been publishing exactly one Linux limitation and it was an artefact of window placement |
+| **−** | the verdict line read `0 of 1933 … 99.8% answered` — a **hand-computed sum**, stale the moment §5 moved both inputs by one, and `check_campaign.py` structurally cannot see it: it requires every number a data file publishes to appear in the prose, and a total appearing in no data file is outside its reach. Rewritten to quote each population's own figure, which puts the claim back inside the guard rather than correcting the arithmetic |
+
+The ladder fix is one line plus its argument, and it is the same shape as the
+macOS clamp two entries above: a refusal that is explained by *where the window
+was put* is not a fact about the address.
+
 **Also next.** `check_reproducible.sh` on the macOS runner is still outstanding.
 Windows still has no arena at all.
 

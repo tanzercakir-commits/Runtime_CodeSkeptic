@@ -441,9 +441,8 @@ void scan_one_arena(const char* what, std::uint64_t bottom, std::uint64_t top,
         in_run = false;
     };
 
-    for (std::uint64_t base = bottom; base + probe_length <= top;
-         base += kArenaStride) {
-        if (base % page_size != 0) continue;
+    auto visit = [&](std::uint64_t base) {
+        if (base % page_size != 0) return;
         MapAttempt attempt = try_map(
             reinterpret_cast<void*>(base), static_cast<std::size_t>(probe_length),
             PROT_NONE,
@@ -467,7 +466,7 @@ void scan_one_arena(const char* what, std::uint64_t bottom, std::uint64_t top,
                 in_run = true;
             }
             last_sample_end = base + probe_length;
-            continue;
+            return;
         }
 
         close_run(base);
@@ -477,12 +476,49 @@ void scan_one_arena(const char* what, std::uint64_t bottom, std::uint64_t top,
         cr.note = "exact mapping refused with " + errno_name(attempt.error) +
                   " inside the " + what;
         outcome.unavailable.push_back(cr);
+    };
+
+    std::uint64_t highest_visited = 0;
+    bool visited_any = false;
+    for (std::uint64_t base = bottom; base + probe_length <= top;
+         base += kArenaStride) {
+        visit(base);
+        highest_visited = base;
+        visited_any = true;
     }
-    // Close at the last SAMPLE, never at `top`. Closing at top claimed
-    // availability up to max_user_address on the strength of a sample that
-    // ended 64 GiB earlier - and it overlapped the structurally unavailable
-    // band at the very top of the space, so the profile asserted a range was
-    // both available and not.
+
+    // THE TOP WINDOW, PROBED EXPLICITLY.
+    //
+    // The strided walk stops up to one full stride - 64 GiB - short of `top`, and
+    // that stride is the single most important part of this arena: `mmap_base` is
+    // near the TOP of the map window, not in the middle of it.
+    //
+    // On a 4-level host it did not matter, because `mmap_base` randomization put
+    // the heap around 0x7f3… , comfortably inside. An LA57 runner showed the
+    // difference: there `mmap_base` derives from DEFAULT_MAP_WINDOW rather than
+    // TASK_SIZE, so randomization is subtracted from 2^47 and the heap landed at
+    // 0x7ffa6bcff000 - 41.7 GiB above the arena's recorded top of 0x7ff000400000,
+    // inside exactly the stride the walk never reached.
+    //
+    // This is a probe, not an extrapolation, which is the distinction the comment
+    // below draws. Closing the run AT `top` on the strength of a sample that ended
+    // 64 GiB earlier was a real bug once - it claimed availability up to
+    // max_user_address and overlapped the structurally unavailable band at the very
+    // top, so the profile asserted one range both available and not. Placing a
+    // window that ENDS at `top` and reporting what happened is the opposite of
+    // that: the edge is measured.
+    //
+    // It changes the sample set on every host, so it moves `profile_id` and the
+    // false-positive campaign was re-measured in the same commit.
+    if (top >= probe_length) {
+        const std::uint64_t aligned_top =
+            ((top - probe_length) / page_size) * page_size;
+        if (aligned_top >= bottom && (!visited_any || aligned_top > highest_visited)) {
+            visit(aligned_top);
+        }
+    }
+
+    // Close at the last window actually probed, never at `top` on its own.
     close_run(last_sample_end);
 
     // The split between granted and occupied is the probe's own layout, so it
@@ -574,6 +610,26 @@ ScanOutcome scan_address_space(std::size_t page_size, std::uint64_t probe_length
         if (max_user_address != 0 && base >= max_user_address) {
             // Already covered by the max_user_address fact; probing here would
             // only restate it.
+            continue;
+        }
+        // ...and neither may the window's FAR END cross it, which is the half of
+        // that rule that was missing.
+        //
+        // The candidate at 0x7fffffc00000 sits below max_user_address
+        // (0x7ffffffff000), so it survived the check above - and a 4 MiB window
+        // there ends at 0x800000000000, past the top of the space. The kernel
+        // refused it with ENOMEM and the probe recorded
+        // [0x7fffffc00000, 0x800000000000) as a host limitation.
+        //
+        // That refusal is an artefact of where the window was put, not a fact
+        // about the address: once the arena began probing a window that ENDS at
+        // max_user_address, it placed 0x7ffffbfff000 successfully, and the profile
+        // asserted one range both available and unavailable. Caught by
+        // `available_and_unavailable_ranges_do_not_overlap`, locally this time.
+        //
+        // The part genuinely beyond the top is what `max_user_address` already
+        // says, so nothing is lost by declining to restate it.
+        if (max_user_address != 0 && base + probe_length > max_user_address) {
             continue;
         }
         const auto range = AddressRange::from_base_size(base, probe_length);

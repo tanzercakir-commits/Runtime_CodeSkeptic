@@ -1,9 +1,11 @@
 # Campaign — the false-positive rate, measured
 
 **Host:** Linux x86-64, measured by `rs-env-probe` in the same session
-**Data:** `campaigns/false-positive/2026-07-linux-x86_64.json` (T-002, first run)
-and `campaigns/false-positive/2026-07-linux-x86_64-after-T013.json` (after the
-probe fix this campaign motivated)
+**Data:** `campaigns/false-positive/2026-07-linux-x86_64.json` (T-002, first run),
+`campaigns/false-positive/2026-07-linux-x86_64-after-T013.json` (after the probe
+fix this campaign motivated) and
+`campaigns/false-positive/2026-07-linux-x86_64-after-top-window.json` (after the
+LA57 top-window fix — §5, and it changed nothing here)
 **Reproduce:** `tools/campaign/run_false_positive.sh`
 
 > **Read §4 before quoting anything from §1–3.** The first measurement found a
@@ -212,6 +214,58 @@ arena covers. The profile has nothing to say about it and says so. That is the
 correct answer, and it is a better advertisement for the model than the 537
 that resolved.
 
+# 5. After the top-window probe (LA57)
+
+Data: `campaigns/false-positive/2026-07-linux-x86_64-after-top-window.json`
+
+The arenas in §4 stopped up to one 64 GiB stride short of their tops, because
+the run closed at the last window actually probed. On this host that cost
+nothing. On a **5-level-paging** runner it cost everything: `mmap_base` derives
+from `DEFAULT_MAP_WINDOW` rather than `TASK_SIZE` there, so it lands at
+`0x7ffa…` — inside exactly the stride the walk never reached — and the
+conformance case reported zero coverage for the heap. See `docs/PROGRESS.md`;
+it presented as a flaky test for two days.
+
+The arena now probes a window that **ends at** its top, and both arenas reach
+their declared bounds:
+
+```
+0x7c0000000000 .. 0x7ffffffff000   the kernel's mmap arena, to max_user_address
+0x550000000000 .. 0x590000000000   ELF_ET_DYN_BASE, to the arena's own top
+```
+
+That changes the sample set on every host, so `profile_id` moved and this
+measurement exists to say what it did to the answers:
+
+| | after `T-013` | after the top window |
+|---|---|---|
+| shape population, evaluated | 1293 | 1292 |
+| shape population, `SUPPORTED` | 749 | 748 |
+| shape population, `CONDITIONALLY_SUPPORTED` | 544 | 544 |
+| **shape population, false positives** | 0 | **0** |
+| address population, evaluated | 640 | 639 |
+| address population, `SUPPORTED` | 537 | 536 |
+| address population, `UNKNOWN` | 1 — 0.16% | 1 — **0.16%** |
+| **address population, false positives** | 0 | **0** |
+
+**It changed nothing here, and that is the honest result.** The one-observation
+difference in each population is run-to-run variation in what the programs did,
+not a difference in what the analyzer answered: the same 544 `RS-VM-0005`, the
+same single `RS-VM-0017`, the same zero false positives. Reporting this as an
+improvement would be false — the fix matters on a host class this machine is not,
+and the value of re-measuring is precisely that it is *not* an improvement.
+
+One thing did get smaller. The candidate ladder used to probe `0x7fffffc00000`
+with a 4 MiB window, which ends at `0x800000000000` — past `max_user_address`.
+The kernel refused it and the probe filed
+`[0x7fffffc00000, 0x800000000000)` as a host limitation. Once the arena began
+placing a window that ends *at* `max_user_address`, that entry contradicted a
+successful placement, and `available_and_unavailable_ranges_do_not_overlap`
+failed. The refusal was an artefact of where the window was put, and the part
+genuinely beyond the top is what `max_user_address` already states, so the ladder
+now skips a candidate whose window would cross it. `unavailable_ranges` on this
+host is consequently empty — the profile records no limitation it cannot defend.
+
 ## The reproducibility trap, and how it was avoided
 
 `min_map_address` was once the probe's own ASLR slide recorded as a host fact,
@@ -239,8 +293,16 @@ reports identical `profile_id`s.
 ## Verdict on the criterion
 
 `docs/PLAN.md` Phase 3, *expected false-positive rate is low on curated
-examples* — **measured at 0 of 1933 observed requests across both populations,
-with 99.8% of them answered.**
+examples* — **measured at 0 false positives on both populations: 1292 shape
+requirements and 639 address requirements, with exactly one answered `UNKNOWN`.**
+
+*(This line used to read "0 of 1933 … with 99.8% answered", a sum computed by
+hand. §5's re-measurement moved both inputs by one and the sum went stale, and
+`tools/guards/check_campaign.py` could not see it: the guard requires every
+number a data file publishes to appear in the prose, and a total that appears in
+no data file is outside what it can check. Quoting each population's own figure
+instead puts the claim back inside the guard's reach — which is a better fix than
+correcting the arithmetic.)*
 
 Still `[partial]`, and the remaining gaps are named rather than hidden:
 

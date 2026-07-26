@@ -218,18 +218,19 @@ dropped:**
 1. **`check_reproducible.sh` has not run on the macOS runner.** The arena's bounds
    are constants so it should agree across two processes, and "should" is the word
    this project does not accept.
-2. **The Linux arena's last 64 GiB stride is unclaimed**, which an LA57 runner
-   exposes: `mmap_base` derives from `DEFAULT_MAP_WINDOW` there, so it lands at
-   `0x7ffa…`, inside the one stride the arena will not claim. Any fix probes near
-   the top, which is a new sample on **every** host — so `profile_id` moves and the
-   published `campaigns/false-positive/…-after-T013.json` has to be re-measured.
-   A decision, not a detail; the three options and their prices are in
-   `docs/PROGRESS.md`.
-3. **The green run discarded a first-ever measurement.** `file-map-beyond-eof` and
-   `file-map-partial-page` produced output on macOS at last, and `refs/ci-logs/*`
-   publishes `if: failure()` — so the run that produced the observation is the run
-   that threw it away. Publish the ground-truth output unconditionally on the
-   expensive platforms.
+2. **Done.** The Linux arena's last 64 GiB stride was unclaimed, which an LA57
+   runner exposed. The arena now probes a window that *ends at* its top, the
+   candidate ladder no longer probes a window crossing `max_user_address` (that
+   refusal was an artefact and was the only Linux "limitation" the probe
+   published), and the campaign was re-measured:
+   `…-after-top-window.json`, **0 false positives on both populations, and
+   otherwise identical**. The null result is the point — the fix matters on a host
+   class this machine is not. §5 of `docs/campaigns/2026-07-false-positive-rate.md`.
+3. **Done.** `refs/measurements/<sha>/<job>` now publishes on success
+   (`tools/ci/publish_measurement.sh`), and its first green run returned the
+   observation: **native macOS arm64 raises SIGBUS past end of file** (signal 10),
+   prediction held. First time any of that claim has been measured; the Rosetta
+   half is still open, because the runner is native.
 
 **Also still open:** Windows has no arena at all. Same gap, third platform,
 untracked until T-004's measurement makes it visible.
