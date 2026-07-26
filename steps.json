@@ -1,0 +1,17 @@
+{
+  "build": {
+    "outputs": {},
+    "outcome": "success",
+    "conclusion": "success"
+  },
+  "measure": {
+    "outputs": {},
+    "outcome": "success",
+    "conclusion": "success"
+  },
+  "contracts": {
+    "outputs": {},
+    "outcome": "failure",
+    "conclusion": "failure"
+  }
+}
