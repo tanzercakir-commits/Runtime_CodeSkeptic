@@ -48,10 +48,48 @@ answers "did it build on MSVC" from inside. That is the third leg of the
 end-to-end claim — control and status were proven for the *measurement* workflow;
 this extends status to the workflow that can actually fail for a code reason.
 
-**Next.** Unchanged: the measurement leg. `windows-probe.yml`'s path filter covers
-the probe and the workflow only, so a measurement needs a probe change or a
-dispatch — and this commit is neither, deliberately. Manufacturing a probe edit to
-trigger a run is the stowaway pattern this project has already refused once.
+**It worked within 55 seconds and the first thing it said was bad news.**
+
+```
+compatibility-gate/success
+determinism/success
+linux---clang/failure
+linux---gcc/failure
+macos---apple-clang/failure
+windows---msvc/success      <- the <iterator> fix is confirmed on MSVC
+```
+
+Two results at once. The fix works - that is the answer the channel was added to
+get. And **three platforms are failing**, which nothing in this repository could
+see until a minute ago.
+
+The pattern is diagnostic in itself: `windows/msvc` skips the two ground-truth
+steps (`if: runner.os != 'Windows'`), macOS runs them and failed, and linux runs
+them plus the reproducibility check and failed. `compatibility-gate` and
+`determinism` do not run them and passed.
+
+**None of it reproduces here.** A fresh clone of the same commit configures,
+builds, passes 13 suites, all 10 guards, the ground-truth selftest at 14/14 rows,
+and the ground-truth comparison at 14 cases / 12 held / 0 contradicted - each run
+with the exact command `ci.yml` uses. So the cause is on the runner, and a status
+ref cannot carry a cause.
+
+**Which is the other half of a channel I only half copied.** `macos-probe.yml` has
+had a `refs/ci-logs/*` diagnostics step from the start; the status half was taken
+and the log half was not. Added now, to all four jobs, carrying `steps.json`, the
+ctest tail, the full guard output, and both ground-truth runs. Copying half of a
+two-part channel is the kind of omission that looks complete until it is used
+once, and it was used once immediately.
+
+Worth stating plainly: **33.5 hours of CI darkness means every commit in that
+window is unverified on anything but Linux-here.** This is the first daylight, and
+what it shows may be an accumulated failure rather than a fresh one. The next run
+should say which.
+
+**Next.** The reason for the three failures, from `refs/ci-logs/*`. The
+measurement leg is still untested and still needs a probe change or a dispatch -
+this commit is neither, deliberately. Manufacturing a probe edit to force a run is
+the stowaway pattern this project has already refused once.
 
 ---
 

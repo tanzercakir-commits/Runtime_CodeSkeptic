@@ -165,6 +165,49 @@ jobs:
       # actually builds the code did not.
       #
       #   git ls-remote origin "refs/status/<sha>/*"
+      # The other half of the channel, and it should have gone in with the first.
+      #
+      # `refs/status/*` answered "did it pass" within 55 seconds of being added -
+      # and immediately reported linux/gcc, linux/clang and macos/apple-clang
+      # failing on 1b58aed while windows/msvc passed. All three failures
+      # reproduce nowhere locally: a fresh clone of the same commit builds,
+      # passes 13 suites, all 10 guards, the ground-truth selftest and the
+      # ground-truth comparison. So the reason is on the runner, and a status ref
+      # cannot carry a reason.
+      #
+      # `macos-probe.yml` has had this step from the start. Copying only the
+      # status half of a two-part channel is the kind of omission that looks
+      # complete until it is used once.
+      #
+      #   git fetch origin "refs/ci-logs/<sha>/<job>:refs/heads/d" && git show d:steps.json
+      - name: Failure diagnostics -> refs/ci-logs/*
+        if: failure() && github.event_name != 'pull_request'
+        shell: bash
+        env:
+          STEPS_JSON: ${{ toJSON(steps) }}
+        run: |
+          slug="$(printf '%s' "${{ matrix.name }}" | tr -c 'A-Za-z0-9._-' '-')"
+          mkdir -p /tmp/diag
+          echo "$STEPS_JSON" > /tmp/diag/steps.json
+          ctest --test-dir build --rerun-failed --output-on-failure \
+            > /tmp/diag/ctest.txt 2>&1 || true
+          tail -c 30000 /tmp/diag/ctest.txt > /tmp/diag/ctest_tail.txt || true
+          bash tools/guards/run_all.sh > /tmp/diag/guards.txt 2>&1 || true
+          bash tests/groundtruth/selftest.sh > /tmp/diag/gt_selftest.txt 2>&1 || true
+          if [ -f /tmp/gt-host.json ]; then
+            bash tests/groundtruth/run.sh /tmp/gt-host.json \
+              > /tmp/diag/gt_run.txt 2>&1 || true
+          else
+            echo "(no host profile: the probe step did not run)" > /tmp/diag/gt_run.txt
+          fi
+          git config user.name "ci-logs"
+          git config user.email "ci-logs@localhost"
+          git checkout --detach -q
+          cp /tmp/diag/*.txt /tmp/diag/steps.json .
+          git add -f steps.json ctest_tail.txt guards.txt gt_selftest.txt gt_run.txt
+          git commit -qm "${slug} diagnostics @ ${{ github.sha }}"
+          git push --force origin \
+            "HEAD:refs/ci-logs/${{ github.sha }}/${slug}"
       - name: Publish job status to refs/status/*
         if: always() && github.event_name != 'pull_request'
         shell: bash
@@ -226,6 +269,49 @@ jobs:
       # actually builds the code did not.
       #
       #   git ls-remote origin "refs/status/<sha>/*"
+      # The other half of the channel, and it should have gone in with the first.
+      #
+      # `refs/status/*` answered "did it pass" within 55 seconds of being added -
+      # and immediately reported linux/gcc, linux/clang and macos/apple-clang
+      # failing on 1b58aed while windows/msvc passed. All three failures
+      # reproduce nowhere locally: a fresh clone of the same commit builds,
+      # passes 13 suites, all 10 guards, the ground-truth selftest and the
+      # ground-truth comparison. So the reason is on the runner, and a status ref
+      # cannot carry a reason.
+      #
+      # `macos-probe.yml` has had this step from the start. Copying only the
+      # status half of a two-part channel is the kind of omission that looks
+      # complete until it is used once.
+      #
+      #   git fetch origin "refs/ci-logs/<sha>/<job>:refs/heads/d" && git show d:steps.json
+      - name: Failure diagnostics -> refs/ci-logs/*
+        if: failure() && github.event_name != 'pull_request'
+        shell: bash
+        env:
+          STEPS_JSON: ${{ toJSON(steps) }}
+        run: |
+          slug="$(printf '%s' "${{ matrix.name }}" | tr -c 'A-Za-z0-9._-' '-')"
+          mkdir -p /tmp/diag
+          echo "$STEPS_JSON" > /tmp/diag/steps.json
+          ctest --test-dir build --rerun-failed --output-on-failure \
+            > /tmp/diag/ctest.txt 2>&1 || true
+          tail -c 30000 /tmp/diag/ctest.txt > /tmp/diag/ctest_tail.txt || true
+          bash tools/guards/run_all.sh > /tmp/diag/guards.txt 2>&1 || true
+          bash tests/groundtruth/selftest.sh > /tmp/diag/gt_selftest.txt 2>&1 || true
+          if [ -f /tmp/gt-host.json ]; then
+            bash tests/groundtruth/run.sh /tmp/gt-host.json \
+              > /tmp/diag/gt_run.txt 2>&1 || true
+          else
+            echo "(no host profile: the probe step did not run)" > /tmp/diag/gt_run.txt
+          fi
+          git config user.name "ci-logs"
+          git config user.email "ci-logs@localhost"
+          git checkout --detach -q
+          cp /tmp/diag/*.txt /tmp/diag/steps.json .
+          git add -f steps.json ctest_tail.txt guards.txt gt_selftest.txt gt_run.txt
+          git commit -qm "${slug} diagnostics @ ${{ github.sha }}"
+          git push --force origin \
+            "HEAD:refs/ci-logs/${{ github.sha }}/${slug}"
       - name: Publish job status to refs/status/*
         if: always() && github.event_name != 'pull_request'
         shell: bash
@@ -320,6 +406,49 @@ jobs:
       # actually builds the code did not.
       #
       #   git ls-remote origin "refs/status/<sha>/*"
+      # The other half of the channel, and it should have gone in with the first.
+      #
+      # `refs/status/*` answered "did it pass" within 55 seconds of being added -
+      # and immediately reported linux/gcc, linux/clang and macos/apple-clang
+      # failing on 1b58aed while windows/msvc passed. All three failures
+      # reproduce nowhere locally: a fresh clone of the same commit builds,
+      # passes 13 suites, all 10 guards, the ground-truth selftest and the
+      # ground-truth comparison. So the reason is on the runner, and a status ref
+      # cannot carry a reason.
+      #
+      # `macos-probe.yml` has had this step from the start. Copying only the
+      # status half of a two-part channel is the kind of omission that looks
+      # complete until it is used once.
+      #
+      #   git fetch origin "refs/ci-logs/<sha>/<job>:refs/heads/d" && git show d:steps.json
+      - name: Failure diagnostics -> refs/ci-logs/*
+        if: failure() && github.event_name != 'pull_request'
+        shell: bash
+        env:
+          STEPS_JSON: ${{ toJSON(steps) }}
+        run: |
+          slug="$(printf '%s' "compatibility-gate" | tr -c 'A-Za-z0-9._-' '-')"
+          mkdir -p /tmp/diag
+          echo "$STEPS_JSON" > /tmp/diag/steps.json
+          ctest --test-dir build --rerun-failed --output-on-failure \
+            > /tmp/diag/ctest.txt 2>&1 || true
+          tail -c 30000 /tmp/diag/ctest.txt > /tmp/diag/ctest_tail.txt || true
+          bash tools/guards/run_all.sh > /tmp/diag/guards.txt 2>&1 || true
+          bash tests/groundtruth/selftest.sh > /tmp/diag/gt_selftest.txt 2>&1 || true
+          if [ -f /tmp/gt-host.json ]; then
+            bash tests/groundtruth/run.sh /tmp/gt-host.json \
+              > /tmp/diag/gt_run.txt 2>&1 || true
+          else
+            echo "(no host profile: the probe step did not run)" > /tmp/diag/gt_run.txt
+          fi
+          git config user.name "ci-logs"
+          git config user.email "ci-logs@localhost"
+          git checkout --detach -q
+          cp /tmp/diag/*.txt /tmp/diag/steps.json .
+          git add -f steps.json ctest_tail.txt guards.txt gt_selftest.txt gt_run.txt
+          git commit -qm "${slug} diagnostics @ ${{ github.sha }}"
+          git push --force origin \
+            "HEAD:refs/ci-logs/${{ github.sha }}/${slug}"
       - name: Publish job status to refs/status/*
         if: always() && github.event_name != 'pull_request'
         shell: bash
@@ -375,6 +504,49 @@ jobs:
       # actually builds the code did not.
       #
       #   git ls-remote origin "refs/status/<sha>/*"
+      # The other half of the channel, and it should have gone in with the first.
+      #
+      # `refs/status/*` answered "did it pass" within 55 seconds of being added -
+      # and immediately reported linux/gcc, linux/clang and macos/apple-clang
+      # failing on 1b58aed while windows/msvc passed. All three failures
+      # reproduce nowhere locally: a fresh clone of the same commit builds,
+      # passes 13 suites, all 10 guards, the ground-truth selftest and the
+      # ground-truth comparison. So the reason is on the runner, and a status ref
+      # cannot carry a reason.
+      #
+      # `macos-probe.yml` has had this step from the start. Copying only the
+      # status half of a two-part channel is the kind of omission that looks
+      # complete until it is used once.
+      #
+      #   git fetch origin "refs/ci-logs/<sha>/<job>:refs/heads/d" && git show d:steps.json
+      - name: Failure diagnostics -> refs/ci-logs/*
+        if: failure() && github.event_name != 'pull_request'
+        shell: bash
+        env:
+          STEPS_JSON: ${{ toJSON(steps) }}
+        run: |
+          slug="$(printf '%s' "determinism" | tr -c 'A-Za-z0-9._-' '-')"
+          mkdir -p /tmp/diag
+          echo "$STEPS_JSON" > /tmp/diag/steps.json
+          ctest --test-dir build --rerun-failed --output-on-failure \
+            > /tmp/diag/ctest.txt 2>&1 || true
+          tail -c 30000 /tmp/diag/ctest.txt > /tmp/diag/ctest_tail.txt || true
+          bash tools/guards/run_all.sh > /tmp/diag/guards.txt 2>&1 || true
+          bash tests/groundtruth/selftest.sh > /tmp/diag/gt_selftest.txt 2>&1 || true
+          if [ -f /tmp/gt-host.json ]; then
+            bash tests/groundtruth/run.sh /tmp/gt-host.json \
+              > /tmp/diag/gt_run.txt 2>&1 || true
+          else
+            echo "(no host profile: the probe step did not run)" > /tmp/diag/gt_run.txt
+          fi
+          git config user.name "ci-logs"
+          git config user.email "ci-logs@localhost"
+          git checkout --detach -q
+          cp /tmp/diag/*.txt /tmp/diag/steps.json .
+          git add -f steps.json ctest_tail.txt guards.txt gt_selftest.txt gt_run.txt
+          git commit -qm "${slug} diagnostics @ ${{ github.sha }}"
+          git push --force origin \
+            "HEAD:refs/ci-logs/${{ github.sha }}/${slug}"
       - name: Publish job status to refs/status/*
         if: always() && github.event_name != 'pull_request'
         shell: bash
