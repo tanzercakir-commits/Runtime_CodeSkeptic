@@ -1,0 +1,2 @@
+tests/groundtruth/run.sh: failed to build exact_mapping.c:
+tests/groundtruth/run.sh: line 47: cc -arch x86_64: command not found
