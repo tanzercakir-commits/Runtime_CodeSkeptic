@@ -365,6 +365,36 @@ CASES = [
          {"tests/x.sh": "#!/usr/bin/env bash\n# declare -A is what broke on macOS\ntrue\n"},
          expect_fail=False),
 
+    # An empty array's expansion is unbound in bash 3.2 under `set -u`. This is
+    # the third instance of the class and the first one that is not a bash-4
+    # FEATURE, so scanning for features could never have found it.
+    Case("check_shell_portability.py", "an empty array expanded under set -u fails",
+         {"tests/x.sh": '#!/usr/bin/env bash\nset -uo pipefail\nargs=()\n'
+                        'args+=("x")\necho "${args[@]}"\n'},
+         expect_fail=True, expect_text="bash 3.2 semantics"),
+
+    Case("check_shell_portability.py", "the ${arr[@]+...} idiom passes",
+         {"tests/x.sh": '#!/usr/bin/env bash\nset -uo pipefail\nargs=()\n'
+                        'echo ${args[@]+"${args[@]}"}\n'},
+         expect_fail=False),
+
+    Case("check_shell_portability.py", "asking an empty array its length fails too",
+         {"tests/x.sh": '#!/usr/bin/env bash\nset -u\nnames=()\n'
+                        'if [ "${#names[@]}" -gt 0 ]; then echo hi; fi\n'},
+         expect_fail=True, expect_text="bash 3.2 semantics"),
+
+    # The false positive that would make the rule unusable: a literal table
+    # cannot be empty, so its expansion is safe and must not be flagged.
+    Case("check_shell_portability.py", "a non-empty literal array is not flagged",
+         {"tests/x.sh": '#!/usr/bin/env bash\nset -uo pipefail\n'
+                        'ROWS=("a|b" "c|d")\nfor r in "${ROWS[@]}"; do echo "$r"; done\n'},
+         expect_fail=False),
+
+    # Without `set -u` the expansion is merely empty, not an error.
+    Case("check_shell_portability.py", "no set -u means no unbound-variable death",
+         {"tests/x.sh": '#!/usr/bin/env bash\nargs=()\necho "${args[@]}"\n'},
+         expect_fail=False),
+
     # ---- check_shell_vars: the fix was in the file, unused --------------
     Case("check_shell_vars.py", "the historical shape: assigned, never read",
          {"tests/x.sh": '#!/usr/bin/env bash\n'

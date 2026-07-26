@@ -31,9 +31,27 @@ Same shape as the missing `<iterator>` found the same day, and the reason both
 guards exist: green on every platform anyone runs, broken on the one nobody does,
 and a runner minute to discover.
 
-WHAT IS CHECKED. Constructs that bash 3.2 does not have, and a couple of GNU-only
-utility flags that fail on BSD userland. Deliberately a short list of things that
-are unambiguous and load-bearing - not a shell style checker.
+WHAT IS CHECKED. Constructs that bash 3.2 does not have, a couple of GNU-only
+utility flags that fail on BSD userland, and one bash 3.2 SEMANTIC difference in a
+construct that exists in both. Deliberately a short list of things that are
+unambiguous and load-bearing - not a shell style checker.
+
+THE SEMANTIC ONE, added after this guard missed the third instance of its own bug
+class. On 2026-07-26 the macOS runner finally got past `declare -A`, past ctest and
+past the guards, and died in the ground-truth harness:
+
+    tests/groundtruth/run.sh: line 111: args[@]: unbound variable
+
+`"${args[@]}"` where `args=()`. Under `set -u`, bash 3.2 treats an EMPTY array's
+expansion as unbound; bash 4.4 does not. The construct is not a bash-4 feature, so
+scanning for bash-4 features could never find it - and this guard's whole claim is
+to catch this class without a macOS runner. Two cases produced no output, and the
+harness correctly recorded `file-map-beyond-eof` as CASE BROKEN rather than as a
+confirmed refusal.
+
+The portable form is `${arr[@]+"${arr[@]}"}`, and `${#arr[@]}` has the same
+problem. Only arrays that are assigned an EMPTY literal somewhere are flagged, so
+a literal table like `ROWS=("a|b" "c|d")` is left alone.
 """
 import re
 import sys
@@ -86,17 +104,68 @@ GNU_ONLY = [
 COMMENT = re.compile(r"^\s*#")
 
 
+# `set -u` in any form: -u, -eu, -uo pipefail, set -o nounset.
+NOUNSET = re.compile(r"^\s*set\s+(-[a-zA-Z]*u[a-zA-Z]*\b|-o\s+nounset)")
+
+# An array assigned an EMPTY literal. Those are the ones whose expansion can be
+# reached while empty; a non-empty literal table cannot be.
+EMPTY_ARRAY = re.compile(
+    r"^\s*(?:declare\s+-a\s+|local\s+-a\s+|readonly\s+-a\s+)?"
+    r"([A-Za-z_][A-Za-z0-9_]*)=\(\s*\)\s*(?:#.*)?$")
+
+def bare_expansions(line: str):
+    """Array names expanded without the `+` guard, and the form used.
+
+    The guarded idiom is `${arr[@]+"${arr[@]}"}`, which CONTAINS a literal
+    `${arr[@]}` - so matching the bare form and hoping the guarded one looks
+    different does not work. It was tried, and the guard's first run reported all
+    four sites it had just been used to fix.
+
+    Balanced braces are not a regex's business, so the guard is detected by its
+    only distinguishing mark: `${name[@]+` on the same line.
+    """
+    out = []
+    for m in re.finditer(r"\$\{(#?)([A-Za-z_][A-Za-z0-9_]*)\[([@*])\]\}", line):
+        name = m.group(2)
+        if re.search(r"\$\{" + re.escape(name) + r"\[[@*]\]\+", line):
+            continue
+        out.append((name, m.group(0)))
+    return out
+
+
 def scan(path: Path):
     """(line number, construct, advice) for each hit outside comments."""
     hits = []
-    lines = path.read_text(errors="replace").splitlines()
+    text = path.read_text(errors="replace")
+    lines = text.splitlines()
+
+    nounset = any(NOUNSET.match(l) for l in lines if not COMMENT.match(l))
+    starts_empty = {m.group(1)
+                    for l in lines if not COMMENT.match(l)
+                    for m in [EMPTY_ARRAY.match(l)] if m}
+
     for i, line in enumerate(lines, 1):
         if COMMENT.match(line):
             continue
+        matched = False
         for pattern, what, instead in BASH4 + GNU_ONLY:
             if re.search(pattern, line):
                 hits.append((i, what, instead, line.strip()[:70]))
+                matched = True
                 break
+        if matched or not nounset:
+            continue
+        for name, form in bare_expansions(line):
+            if name not in starts_empty:
+                continue
+            hits.append((
+                i,
+                f"{form} on an array that is assigned `{name}=()`, in a script "
+                f"with `set -u` (bash 3.2 semantics)",
+                f"${{{name}[@]+\"${{{name}[@]}}\"}} - and track a count in a "
+                f"plain variable rather than asking for ${{#{name}[@]}}",
+                line.strip()[:70]))
+            break
     return hits
 
 

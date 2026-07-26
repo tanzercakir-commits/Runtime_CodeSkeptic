@@ -286,11 +286,12 @@ that risk materialising.
   match the filesystem, and a named path must exist. Still `[partial]` because
   only paths and a fixed list of phrases are mechanical; the rest of the prose
   is unchecked and always will be.
-- `[done]` the guards are tested — `tools/guards/selftest.py`, 58 cases, each
+- `[done]` the guards are tested — `tools/guards/selftest.py`, 63 cases, each
   requiring a check to fail against a deliberately wrong throwaway repository
   before it is trusted on this one; first in `tools/guards/run_all.sh`. This
   number read `25` while there were 58, surviving two earlier increases, so
-  `selftest.py` now recomputes it from itself and fails on disagreement.
+  `selftest.py` now recomputes it from itself and fails on disagreement — which
+  is how it was correct again at 63.
 - `[done]` dates are taken from git, not from the author —
   `tools/guards/check_dates.py`. The author is a language model that saw three
   different dates for one day in a single session, and a `<!-- checked: -->`

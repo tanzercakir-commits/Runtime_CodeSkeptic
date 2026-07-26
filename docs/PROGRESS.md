@@ -426,10 +426,48 @@ evidence one page away — and it is the second time in three days.
 | **−** | the corpus contained the answer and nothing connected it to the code. A guard could plausibly have: 47, 2^47 and `DEFAULT_MAP_WINDOW` are greppable |
 | **−** | my simulation varied the addresses and not the *alignment*, which is why the overlap bug reached a runner at all |
 
-**Next.** Push and read `refs/status/*`. Remaining on T-014: the cost of 12,294
-`mach_vm_allocate` calls, and `check_reproducible.sh` on the macOS runner — the
-arena's bounds are constants so it should hold, and "should" is the word this
-project does not accept. Windows still has no arena at all.
+### `8c63fd7`: macOS clears ctest and the guards, and bash 3.2 is back
+
+```
+macOS   ctest    14/14 including test_probe          <- first time ever
+        guards   all passed
+        ground truth  14 cases, 10 held, 1 CASE BROKEN
+```
+
+**The arena holds on a real macOS host**, and the cost question is answered
+incidentally: `test_probe` takes **0.15 s** for ~10 full probes, so ~15 ms each
+including a 15,360-window walk. Not the seconds it might have been.
+
+The job still fails, three layers deeper than it did this morning:
+
+```
+tests/groundtruth/run.sh: line 111: args[@]: unbound variable
+file-map-beyond-eof      UNSUPPORTED   no-output   CASE BROKEN
+```
+
+`"${args[@]}"` where `args=()`. Under `set -u`, **bash 3.2 treats an empty array's
+expansion as an unbound variable**; bash 4.4 does not. Third instance of the
+bash-3.2 class — and `check_shell_portability.py`, written for exactly this class,
+could never have caught it, because it scans for bash-4 *features* and this is a
+bash-3.2 *semantic* of a construct both versions have.
+
+| | |
+|---|---|
+| **+** | the harness behaved correctly: no output became `CASE BROKEN`, not a confirmed refusal. That rule was written after a crashing case once read as a confirmed refusal, and it paid again |
+| **+** | the guard now checks the semantic, and only for arrays assigned an empty literal — so `ROWS=("a\|b" "c\|d")` is left alone. Selftest 58 to **63 cases** |
+| **+** | it found **three more** sites: `run.sh:173`, `host_sensitivity.sh:110`, `run_all.sh:85`. All latent — each is currently reached only when the array is non-empty — but one branch away |
+| **−** | my first version of the rule flagged all four sites *after* I had fixed them: `${arr[@]+"${arr[@]}"}` literally contains `${arr[@]}`, and I had claimed the brace after `]` would distinguish them. Balanced braces are not a regex's business; the guard is detected by its `[@]+` mark now |
+| **−** | `${#arr[@]}` has the same problem, so `host_sensitivity.sh` was asking an empty array its length under `set -u`. It uses the counter it already had |
+
+Three instances, three shapes, one platform nobody develops on: a missing
+*feature* (`declare -A`, `mapfile`), a different *semantic* (`${arr[@]}` under
+`set -u`), and a *version* older than every developer machine by eighteen years.
+
+**Next.** `file-map-beyond-eof` and `file-map-partial-page` should now produce
+output on macOS; whether native arm64 raises SIGBUS where Rosetta returns zeroes is
+the question that case exists to answer, and it has never been measured. Remaining
+on T-014: `check_reproducible.sh` on the macOS runner. Windows still has no arena
+at all.
 
 ---
 

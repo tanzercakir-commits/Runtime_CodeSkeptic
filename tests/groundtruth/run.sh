@@ -108,7 +108,12 @@ print('yes' if c.get('verifies_all_postconditions') is True else 'no')
 ")
     if [ "$full" != "yes" ]; then predicted="RECORD-ONLY"; fi
 
-    if ! observed_json=$("$BIN/$program" "$name" "${args[@]}" 2>/dev/null); then
+    # "${args[@]+...}" and not "${args[@]}", because bash 3.2 under `set -u`
+    # treats an EMPTY array's expansion as an unbound variable - and macOS ships
+    # bash 3.2. This died as `run.sh: line 111: args[@]: unbound variable` on the
+    # first macOS run that got this far, and the harness correctly recorded
+    # file-map-beyond-eof as CASE BROKEN rather than as a confirmed refusal.
+    if ! observed_json=$("$BIN/$program" "$name" ${args[@]+"${args[@]}"} 2>/dev/null); then
         observed_json=""
     fi
     outcome=$(printf '%s' "$observed_json" | python3 -c "
@@ -165,7 +170,7 @@ echo "cases: $total   held: $held   contradicted: $contradicted   not asserted: 
 if [ "$contradicted" -gt 0 ]; then
     echo
     echo "CONTRADICTED PREDICTIONS - each is a finding, not a flake:"
-    for f in "${failures[@]}"; do echo "  - $f"; done
+    for f in ${failures[@]+"${failures[@]}"}; do echo "  - $f"; done
     echo
     echo "Either the analyzer is wrong about this platform or the contract"
     echo "misdescribes the program. Decide which by reading the case source; do"

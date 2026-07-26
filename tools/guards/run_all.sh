@@ -82,7 +82,7 @@ if [ "$failed" -eq 0 ]; then
     echo "all guards passed"
     exit 0
 fi
-echo "$failed guard(s) failed: ${broken[*]}" >&2
+echo "$failed guard(s) failed: ${broken[*]+${broken[*]}}" >&2
 echo >&2
 echo "These are project rules, not style. Fix the repository or change the" >&2
 echo "rule deliberately - do not silence the guard." >&2

@@ -102,10 +102,12 @@ echo "contracts: $total   consulted the host: $sensitive   did not: $insensitive
 if [ "$total" -gt 0 ]; then
     echo "platform-sensitive: $(( sensitive * 100 / total ))%   <- this is the number to move"
 fi
-if [ "${#insensitive_names[@]}" -gt 0 ]; then
+# $insensitive, not ${#insensitive_names[@]}: bash 3.2 under `set -u` treats
+# an empty array as unbound, and that includes asking for its length.
+if [ "$insensitive" -gt 0 ]; then
     echo
     echo "Answered without opening the profile:"
-    printf '  %s\n' "${insensitive_names[@]}"
+    printf '  %s\n' ${insensitive_names[@]+"${insensitive_names[@]}"}
     echo
     echo "These are not necessarily wrong. They are the rows where the tool"
     echo "restated its own rule list, and a reviewer could have predicted them"
