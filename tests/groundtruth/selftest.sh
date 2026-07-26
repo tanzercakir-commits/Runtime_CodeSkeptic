@@ -43,7 +43,25 @@ int main(int argc, char** argv) {
 }
 STUB
 
-# A profile with nothing known, so a contract's prediction is easy to pin.
+# A profile with nothing known, so an UNKNOWN prediction is guaranteed rather
+# than hoped for.
+#
+# This variable was assigned and NEVER USED, from the day the file was written.
+# The `unknown` rows were pinned against the MEASURED host instead, on the
+# assumption that a real profile would not know anything about
+# `0x1307200000` - true on Linux, and false on macOS, where the probe MEASURES
+# the Rosetta/GPU carveout [0x1000000000, 0x7000000000) as unavailable and the
+# address falls inside it. So on macOS the contract predicts UNSUPPORTED and the
+# selftest's own precondition check fired:
+#
+#   precondition failed - exact-mapping-in-carveout predicts UNSUPPORTED on this
+#   host, not UNKNOWN ... fix the row, not this check
+#
+# Which is exactly what that check was written to do, and it took the first macOS
+# run in the project's history to fire it. The row is fixed here, the way the
+# unused variable shows it was always meant to be: an UNKNOWN prediction comes
+# from a profile that knows nothing, not from a measured host that happens not to
+# know one address.
 PROFILE="$ROOT/profiles/fixtures/unknown-host.synthetic.json"
 
 # Real host facts, to get SUPPORTED and UNSUPPORTED predictions.
@@ -81,6 +99,14 @@ want_for() {
         *) echo "" ;;
     esac
 }
+
+# Which profile makes a key's prediction true ON EVERY HOST.
+profile_for() {
+    case "$1" in
+        unknown) echo "$PROFILE" ;;    # knows nothing, so UNKNOWN is structural
+        *)       echo "$MEASURED" ;;   # needs real facts to predict at all
+    esac
+}
 WANT_KEYS="supported unsupported unknown"
 
 verdict_of() {
@@ -96,7 +122,7 @@ verdict_of() {
 for key in $WANT_KEYS; do
     pair="$(want_for "$key")"
     name="${pair%%:*}"; expect="${pair##*:}"
-    "$RS_CHECK" "$HERE/contracts/$name.json" --profile "$MEASURED" \
+    "$RS_CHECK" "$HERE/contracts/$name.json" --profile "$(profile_for "$key")" \
         --format json >/dev/null 2>&1
     got=$(verdict_of $?)
     if [ "$got" != "$expect" ]; then
@@ -149,7 +175,7 @@ PY
 
     got=$(GT_MANIFEST="$WORK/manifest.json" GT_CASES="$WORK/cases" \
           GT_BIN="$WORK/bin" GT_CONTRACT_ROOT="$WORK" \
-          bash "$HERE/run.sh" "$MEASURED" 2>/dev/null \
+          bash "$HERE/run.sh" "$(profile_for "$key")" 2>/dev/null \
           | awk '/^selftest /{ $1=""; $2=""; $3=""; sub(/^ +/,""); print }' | head -1)
     got="${got:-<no row>}"
 

@@ -22,6 +22,7 @@ from their own location, so each case copies the guard under test into
 `<tmp>/tools/guards/` and lets it look at `<tmp>` as if it were the repository.
 That is the same code path CI runs, with different contents underneath it.
 """
+import re
 import shutil
 import subprocess
 import sys
@@ -364,6 +365,42 @@ CASES = [
          {"tests/x.sh": "#!/usr/bin/env bash\n# declare -A is what broke on macOS\ntrue\n"},
          expect_fail=False),
 
+    # ---- check_shell_vars: the fix was in the file, unused --------------
+    Case("check_shell_vars.py", "the historical shape: assigned, never read",
+         {"tests/x.sh": '#!/usr/bin/env bash\n'
+                        'PROFILE="$ROOT/profiles/fixtures/unknown-host.json"\n'
+                        'echo done\n'},
+         expect_fail=True, expect_text="`PROFILE` is assigned and never read"),
+
+    Case("check_shell_vars.py", "the same variable, once used, passes",
+         {"tests/x.sh": '#!/usr/bin/env bash\n'
+                        'PROFILE="$ROOT/profiles/fixtures/unknown-host.json"\n'
+                        'echo "$PROFILE"\n'},
+         expect_fail=False),
+
+    # The false positive that would have made this guard unusable: a prefix
+    # assignment sets a CHILD's environment, and there is nothing to read in
+    # this script.
+    Case("check_shell_vars.py", "a FOO=bar prefix assignment is not a variable",
+         {"tests/x.sh": '#!/usr/bin/env bash\n'
+                        'GT_MANIFEST="$WORK/m.json" GT_CASES="$WORK/c" bash run.sh\n'},
+         expect_fail=False),
+
+    Case("check_shell_vars.py", "an exported variable may be read outside",
+         {"tests/x.sh": '#!/usr/bin/env bash\nexport RS_PROFILE=/tmp/p.json\n'},
+         expect_fail=False),
+
+    Case("check_shell_vars.py", "a name mentioned only in a comment is not a use",
+         {"tests/x.sh": '#!/usr/bin/env bash\n'
+                        'PROFILE=/tmp/p.json\n'
+                        '# PROFILE is where the synthetic host lives\n'
+                        'echo done\n'},
+         expect_fail=True, expect_text="never read"),
+
+    Case("check_shell_vars.py", "a for-loop variable is bound, not assigned",
+         {"tests/x.sh": '#!/usr/bin/env bash\nfor key in a b; do echo hi; done\n'},
+         expect_fail=False),
+
     # ---- check_todo: the compass and the map must agree ----------------
     Case("check_todo.py", "an open plan criterion with no owner fails",
          {"docs/TODO.md": TODO_OK,
@@ -444,6 +481,31 @@ CASES = [
 ]
 
 
+def plan_agrees() -> str:
+    """`docs/PLAN.md` states this file's case count. Nothing was checking it.
+
+    It said "25 cases" while there were 58. It had already survived 48 and 52,
+    because a number in prose is a claim and prose is not compiled - the same
+    reason `check_campaign.py` exists for measured numbers. The count is checked
+    here rather than in a separate guard because the only thing that reliably
+    knows it is this file.
+    """
+    plan = ROOT / "docs" / "PLAN.md"
+    if not plan.exists():
+        return ""
+    m = re.search(r"tools/guards/selftest\.py`,\s*(\d+)\s*cases", plan.read_text())
+    if not m:
+        return ("docs/PLAN.md no longer states a case count for "
+                "`tools/guards/selftest.py`; either restore it or drop this "
+                "check deliberately")
+    stated = int(m.group(1))
+    if stated != len(CASES):
+        return (f"docs/PLAN.md says `tools/guards/selftest.py`, {stated} cases; "
+                f"there are {len(CASES)}. A number in prose is a claim like any "
+                f"other.")
+    return ""
+
+
 def main() -> int:
     passed, failures = 0, []
     for case in CASES:
@@ -454,6 +516,11 @@ def main() -> int:
                 print(f"  ok   [{case.guard}] {case.name}")
         else:
             failures.append(f"  FAIL [{case.guard}] {case.name}\n        {why}")
+
+    drift = plan_agrees()
+    if drift:
+        failures.append(f"  FAIL [docs/PLAN.md] states this file's case count\n"
+                        f"        {drift}")
 
     print(f"\nguard selftest: {passed}/{len(CASES)} cases")
     if failures:

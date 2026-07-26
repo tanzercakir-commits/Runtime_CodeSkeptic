@@ -35,10 +35,14 @@
 #   check_shell...   the first real macOS run died on `declare -A`, because macOS
 #                    ships bash 3.2. Same class, other language: green wherever
 #                    anyone runs it, fatal where nobody does
+#   check_shell_vars the SECOND thing the first macOS run found: the selftest's
+#                    `unknown` rows were keyed on the measured host, and the
+#                    profile that would have made them host-independent was
+#                    assigned and never read since the day the file was written
 #
-# `selftest` runs FIRST and is not one of them. All five pass on a repository
-# that has already been fixed - and so would five guards whose patterns never
-# match anything at all. It makes each check fail on purpose, against a
+# `selftest` runs FIRST and is not one of them. Every other guard here passes on
+# a repository that has already been fixed - and so would a guard whose patterns
+# never match anything at all. It makes each check fail on purpose, against a
 # deliberately wrong throwaway tree, before any of them is believed.
 #
 # Runs on every push. A guard that only runs when someone remembers is a
@@ -71,6 +75,7 @@ run "published numbers"     python3 "$HERE/check_campaign.py"
 run "corpus rules"          python3 "$HERE/check_corpus.py"
 run "includes vs MSVC"      python3 "$HERE/check_includes.py"
 run "shell vs bash 3.2"     python3 "$HERE/check_shell_portability.py"
+run "shell dead variables"  python3 "$HERE/check_shell_vars.py"
 
 echo
 if [ "$failed" -eq 0 ]; then

@@ -16,6 +16,133 @@ re-litigated; a mistake recorded here does not need to be re-made.
 
 ---
 
+## 2026-07-26 — the fix was in the file, assigned and never read
+
+**Changed.** `tests/groundtruth/selftest.sh` gets `profile_for()`, so an UNKNOWN
+row is checked against a profile that knows nothing instead of against the
+measured host; `tools/guards/check_shell_vars.py` is new;
+`tools/guards/selftest.py` now recomputes the case count `docs/PLAN.md` states
+about it. Selftest 52 to **58 cases**.
+
+| | |
+|---|---|
+| **+** | macOS's remaining failure was substantive, not portability, and the check that caught it was written for exactly this |
+| **+** | the correct fix had been sitting in the file since the day it was written — `PROFILE`, assigned, referenced zero times |
+| **+** | new guard: 1 true positive on the historical tree, **0 false positives** across 8 scripts |
+| **+** | `docs/PLAN.md` said the guard selftest had `25` cases; it had 58. Now recomputed, so it cannot drift again |
+| **−** | the same dead-variable class exists in Python and is **not** checked — `ROOT` in `selftest.py` was dead too, found by eye, not by a guard |
+| **−** | the guard catches the symptom (a dead name), not the disease (a host-dependent expected value) |
+| **−** | still no measurement from a real Windows host. Three green legs is not the fourth. |
+
+### What macOS was actually complaining about
+
+After `52f541e` the channel reported five green and one red:
+
+```
+compatibility-gate/success   determinism/success
+linux---clang/success        linux---gcc/success
+windows---msvc/success       macos---apple-clang/failure
+```
+
+`refs/ci-logs/<sha>/macos---apple-clang` held the reason:
+
+```
+tests/groundtruth/selftest.sh: precondition failed - exact-mapping-in-carveout
+predicts UNSUPPORTED on this host, not UNKNOWN
+  the selftest's rows are keyed on that; fix the row, not this check
+```
+
+Not bash 3.2 this time. The selftest's two `unknown` rows were checked against
+the **measured** host, on the assumption that no real machine knows anything
+about `0x1307200000`. True on Linux. False on macOS, where the probe **measures**
+the Rosetta/GPU carveout `[0x1000000000, 0x7000000000)` as unavailable and the
+address falls inside it — so the contract predicts UNSUPPORTED, and a row whose
+whole job is to exercise UNKNOWN was exercising nothing.
+
+Reproduced here without a macOS runner, against the committed fixture:
+
+```
+rs-check exact-mapping-in-carveout --profile ...
+  unknown-host.synthetic.json          exit 3   UNKNOWN
+  macos-arm64-rosetta-x86_64.fixture   exit 1   UNSUPPORTED   <- the CI failure
+```
+
+**The precondition check did its job.** Its comment says: *"checked here rather
+than assumed — if a rule change moves one of these the selftest says so instead
+of quietly testing the wrong row."* It fired for a platform difference rather
+than a rule change, which is a use it was not written for and covers anyway.
+
+### The fix was already written down
+
+```sh
+PROFILE="$ROOT/profiles/fixtures/unknown-host.synthetic.json"
+```
+
+Assigned on the day the file was written, above a comment explaining that it
+exists so *"an UNKNOWN prediction is guaranteed rather than hoped for"* — and
+then referenced **zero times**. `grep -c '\$PROFILE'` returned `0`. The author
+wrote the right answer, did not use it, and nothing objected for the file's
+entire life. `profile_for()` now routes `unknown` rows to it and everything else
+to the measured host, which is host-independent by construction rather than by
+luck.
+
+### The guard, and what it does not cover
+
+`check_shell_vars.py` flags a variable assigned as a whole statement and never
+read. Measured both ways before being believed:
+
+| | |
+|---|---|
+| on `52f541e` (before the fix) | **1** finding: `selftest.sh:47: PROFILE` |
+| on this tree | 0 findings, 8 scripts |
+
+Zero false positives against real code is the bar `check_includes.py` set, and
+the reason the rules are narrow: a `FOO=bar cmd` prefix sets a **child's**
+environment and is not a variable of the script; `export` and `local` are skipped
+because something outside may read them; a name appearing only in a comment is
+not a use.
+
+**It catches the symptom, not the disease.** The defect was a test whose expected
+value depended on the host it happened to run on. That is not mechanically
+checkable and this guard should not be read as having checked it. What makes the
+cheap version worth having is that here the symptom sat directly on top of the
+disease, and would have named the exact line three weeks early.
+
+**And the class is wider than the check.** `ROOT` in `tools/guards/selftest.py`
+was assigned and never read — same shape, in the file that tests the guards, in
+Python, where nothing here looks. It is used now (it reads `docs/PLAN.md`), but it
+was found by reading, not by a guard. `pyflakes` would cover it; it is not
+installed and adding a dependency to CI for one finding was not judged worth it
+today. Recorded as a known hole rather than closed.
+
+### A number in prose is a claim like any other
+
+`docs/PLAN.md` stated `tools/guards/selftest.py`, 25 cases. There were 58. It had
+already survived the increases to 48 and to 52 — `check_campaign.py` exists for
+exactly this failure on measured numbers, and nothing was doing it for this one.
+`selftest.py` now parses the number out of `PLAN.md` and fails on disagreement,
+because the only thing that reliably knows the count is the file that holds it.
+
+### Two measurement mistakes made while writing this entry
+
+Both mine, both in verification commands, both worth writing down because the
+project's whole claim is about not trusting an unmeasured number:
+
+- `echo "$(basename $p) -> exit $?"` — the command substitution runs first and
+  resets `$?`. It reported `SUPPORTED` for both profiles, i.e. "there is no
+  macOS failure", which would have been a confident retraction of a real bug.
+- `run_all.sh | tail -20; echo $?` — the pipeline's status is `tail`'s. It
+  reported `exit=0` for a run that failed.
+
+Neither reached a commit. Both are the same error as the one this session fixed:
+reading a value from something that is not the thing you meant to measure.
+
+**Next.** Push and watch `refs/status/<sha>/*` for six green — the first time
+this project will have had that. Then T-004's only remaining piece, which no
+guard can substitute for: a profile measured on a real Windows host.
+
+---
+
 ## 2026-07-26 — the log channel answered in 60 seconds, and there were two bugs
 
 **Changed.** `tests/groundtruth/selftest.sh` and `run.sh` and
