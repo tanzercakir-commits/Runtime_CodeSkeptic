@@ -1,0 +1,25 @@
+MSBuild version 18.7.8+1ac568fee for .NET Framework
+
+  rs_core.vcxproj -> D:\a\Runtime_CodeSkeptic\Runtime_CodeSkeptic\build\lib\RelWithDebInfo\rs_core.lib
+  rs_vm.vcxproj -> D:\a\Runtime_CodeSkeptic\Runtime_CodeSkeptic\build\lib\RelWithDebInfo\rs_vm.lib
+  rs_reports.vcxproj -> D:\a\Runtime_CodeSkeptic\Runtime_CodeSkeptic\build\lib\RelWithDebInfo\rs_reports.lib
+  rs-check.vcxproj -> D:\a\Runtime_CodeSkeptic\Runtime_CodeSkeptic\build\bin\RelWithDebInfo\rs-check.exe
+  rs_probe.vcxproj -> D:\a\Runtime_CodeSkeptic\Runtime_CodeSkeptic\build\lib\RelWithDebInfo\rs_probe.lib
+  rs-env-probe.vcxproj -> D:\a\Runtime_CodeSkeptic\Runtime_CodeSkeptic\build\bin\RelWithDebInfo\rs-env-probe.exe
+  rs_server.vcxproj -> D:\a\Runtime_CodeSkeptic\Runtime_CodeSkeptic\build\lib\RelWithDebInfo\rs_server.lib
+  rs-mcp.vcxproj -> D:\a\Runtime_CodeSkeptic\Runtime_CodeSkeptic\build\bin\RelWithDebInfo\rs-mcp.exe
+  rs-profile.vcxproj -> D:\a\Runtime_CodeSkeptic\Runtime_CodeSkeptic\build\bin\RelWithDebInfo\rs-profile.exe
+  test_address_range.vcxproj -> D:\a\Runtime_CodeSkeptic\Runtime_CodeSkeptic\build\bin\RelWithDebInfo\test_address_range.exe
+  test_analyzer.vcxproj -> D:\a\Runtime_CodeSkeptic\Runtime_CodeSkeptic\build\bin\RelWithDebInfo\test_analyzer.exe
+  test_arena_walk.vcxproj -> D:\a\Runtime_CodeSkeptic\Runtime_CodeSkeptic\build\bin\RelWithDebInfo\test_arena_walk.exe
+  test_bundle.vcxproj -> D:\a\Runtime_CodeSkeptic\Runtime_CodeSkeptic\build\bin\RelWithDebInfo\test_bundle.exe
+  test_evidence.vcxproj -> D:\a\Runtime_CodeSkeptic\Runtime_CodeSkeptic\build\bin\RelWithDebInfo\test_evidence.exe
+  test_impact.vcxproj -> D:\a\Runtime_CodeSkeptic\Runtime_CodeSkeptic\build\bin\RelWithDebInfo\test_impact.exe
+  test_incidents.vcxproj -> D:\a\Runtime_CodeSkeptic\Runtime_CodeSkeptic\build\bin\RelWithDebInfo\test_incidents.exe
+  test_json.vcxproj -> D:\a\Runtime_CodeSkeptic\Runtime_CodeSkeptic\build\bin\RelWithDebInfo\test_json.exe
+  test_mcp.vcxproj -> D:\a\Runtime_CodeSkeptic\Runtime_CodeSkeptic\build\bin\RelWithDebInfo\test_mcp.exe
+  test_mutation.vcxproj -> D:\a\Runtime_CodeSkeptic\Runtime_CodeSkeptic\build\bin\RelWithDebInfo\test_mutation.exe
+  test_probe.vcxproj -> D:\a\Runtime_CodeSkeptic\Runtime_CodeSkeptic\build\bin\RelWithDebInfo\test_probe.exe
+  test_profile.vcxproj -> D:\a\Runtime_CodeSkeptic\Runtime_CodeSkeptic\build\bin\RelWithDebInfo\test_profile.exe
+  test_report.vcxproj -> D:\a\Runtime_CodeSkeptic\Runtime_CodeSkeptic\build\bin\RelWithDebInfo\test_report.exe
+  test_sha256.vcxproj -> D:\a\Runtime_CodeSkeptic\Runtime_CodeSkeptic\build\bin\RelWithDebInfo\test_sha256.exe
