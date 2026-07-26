@@ -16,6 +16,45 @@ re-litigated; a mistake recorded here does not need to be re-made.
 
 ---
 
+## 2026-07-26 — the workflow that builds the code could not report
+
+**Changed.** All four `ci.yml` jobs publish `refs/status/<sha>/<job>/<state>`.
+
+**Why, and it is a cost that had just been paid twice.** `macos-probe.yml` and
+`windows-probe.yml` have had the git-ref channel from the start. `ci.yml` — the
+workflow that actually builds and tests the code — published nothing. So when the
+first real Windows build failed on a missing `<iterator>` and the one-line fix
+went in as `3c49935`, **whether the fix worked was invisible from inside**.
+Confirming it required a person opening a browser, for a result the repository
+could have carried itself.
+
+The measurement plane had a channel and the build plane did not, which is an odd
+place to have drawn the line: a measurement is only interesting if the thing
+being measured compiles.
+
+Two things had to be right and neither was obvious:
+
+- **The token is read-only.** `default_workflow_permissions: read` was set
+  deliberately before the repository went public, so `contents: write` is granted
+  in this workflow and nowhere else, and only for contents.
+- **The step must skip pull requests.** A fork PR receives a read-only
+  `GITHUB_TOKEN` whatever the workflow declares, so an unconditional publish step
+  would show every external contributor a red job for something that cannot
+  succeed and has nothing to do with their change. The repository now accepts
+  external PRs, so this stopped being hypothetical the moment it went public.
+
+**What it makes possible.** `git ls-remote origin "refs/status/<sha>/*"` now
+answers "did it build on MSVC" from inside. That is the third leg of the
+end-to-end claim — control and status were proven for the *measurement* workflow;
+this extends status to the workflow that can actually fail for a code reason.
+
+**Next.** Unchanged: the measurement leg. `windows-probe.yml`'s path filter covers
+the probe and the workflow only, so a measurement needs a probe change or a
+dispatch — and this commit is neither, deliberately. Manufacturing a probe edit to
+trigger a run is the stowaway pattern this project has already refused once.
+
+---
+
 ## 2026-07-26 — Windows ran, and the failure was one missing include
 
 **Changed.** `src/vm/impact.cpp` gains `<iterator>`;

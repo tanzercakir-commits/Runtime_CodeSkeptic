@@ -9,6 +9,17 @@ on:
   schedule:
     - cron: '17 4 * * 1'
 
+# Publishing status as git refs needs write access to refs. The repository's
+# default workflow permission is READ - set deliberately before going public -
+# so it is granted here and nowhere else, and only for contents.
+#
+# A fork pull request gets a read-only GITHUB_TOKEN regardless of this line, which
+# is why the publish step below excludes pull_request events entirely: without
+# that, every external contribution would show a red CI job for a step that
+# cannot succeed and has nothing to do with the contribution.
+permissions:
+  contents: write
+
 jobs:
   # Linux only, and every push. GitHub bills these at 1x.
   #
@@ -141,6 +152,31 @@ jobs:
   #
   # `tools/guards/check_includes.py` now catches that particular class without a
   # runner at all. This restores the coverage that would have caught it anyway.
+
+      # Publish the outcome as a namespaced ref, so it is readable from a
+      # development sandbox that can reach this repository over the git protocol
+      # but not through the Actions API.
+      #
+      # This was missing and it cost. On 2026-07-26 the first real Windows build
+      # failed on a missing <iterator>; the fix went in as 3c49935 and whether it
+      # WORKED was invisible from inside - `ci.yml` published nothing, so
+      # confirming a one-line fix required a person opening a browser. The
+      # measurement workflows had this channel from the start; the workflow that
+      # actually builds the code did not.
+      #
+      #   git ls-remote origin "refs/status/<sha>/*"
+      - name: Publish job status to refs/status/*
+        if: always() && github.event_name != 'pull_request'
+        shell: bash
+        run: |
+          slug="$(printf '%s' "${{ matrix.name }}" | tr -c 'A-Za-z0-9._-' '-')"
+          state="${{ job.status }}"
+          git config user.name "ci-status"
+          git config user.email "ci-status@localhost"
+          git checkout --detach -q
+          git commit -q --allow-empty -m "${slug} ${state} @ ${{ github.sha }}"
+          git push --force origin \
+            "HEAD:refs/status/${{ github.sha }}/${slug}/${state}"
   expensive-platforms:
     name: ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
@@ -177,6 +213,31 @@ jobs:
         run: |
           build/bin/rs-env-probe vm --name gt-host --output /tmp/gt-host.json
           bash tests/groundtruth/run.sh /tmp/gt-host.json
+
+      # Publish the outcome as a namespaced ref, so it is readable from a
+      # development sandbox that can reach this repository over the git protocol
+      # but not through the Actions API.
+      #
+      # This was missing and it cost. On 2026-07-26 the first real Windows build
+      # failed on a missing <iterator>; the fix went in as 3c49935 and whether it
+      # WORKED was invisible from inside - `ci.yml` published nothing, so
+      # confirming a one-line fix required a person opening a browser. The
+      # measurement workflows had this channel from the start; the workflow that
+      # actually builds the code did not.
+      #
+      #   git ls-remote origin "refs/status/<sha>/*"
+      - name: Publish job status to refs/status/*
+        if: always() && github.event_name != 'pull_request'
+        shell: bash
+        run: |
+          slug="$(printf '%s' "${{ matrix.name }}" | tr -c 'A-Za-z0-9._-' '-')"
+          state="${{ job.status }}"
+          git config user.name "ci-status"
+          git config user.email "ci-status@localhost"
+          git checkout --detach -q
+          git commit -q --allow-empty -m "${slug} ${state} @ ${{ github.sha }}"
+          git push --force origin \
+            "HEAD:refs/status/${{ github.sha }}/${slug}/${state}"
 
   compatibility-gate:
     name: compatibility gate (linux)
@@ -247,6 +308,31 @@ jobs:
             host-profile.json
             fixture-report.md
 
+      # Publish the outcome as a namespaced ref, so it is readable from a
+      # development sandbox that can reach this repository over the git protocol
+      # but not through the Actions API.
+      #
+      # This was missing and it cost. On 2026-07-26 the first real Windows build
+      # failed on a missing <iterator>; the fix went in as 3c49935 and whether it
+      # WORKED was invisible from inside - `ci.yml` published nothing, so
+      # confirming a one-line fix required a person opening a browser. The
+      # measurement workflows had this channel from the start; the workflow that
+      # actually builds the code did not.
+      #
+      #   git ls-remote origin "refs/status/<sha>/*"
+      - name: Publish job status to refs/status/*
+        if: always() && github.event_name != 'pull_request'
+        shell: bash
+        run: |
+          slug="$(printf '%s' "compatibility-gate" | tr -c 'A-Za-z0-9._-' '-')"
+          state="${{ job.status }}"
+          git config user.name "ci-status"
+          git config user.email "ci-status@localhost"
+          git checkout --detach -q
+          git commit -q --allow-empty -m "${slug} ${state} @ ${{ github.sha }}"
+          git push --force origin \
+            "HEAD:refs/status/${{ github.sha }}/${slug}/${state}"
+
   determinism:
     name: determinism
     runs-on: ubuntu-latest
@@ -276,3 +362,28 @@ jobs:
           # Re-reading and re-serializing must not change the identity.
           id2=$(build/bin/rs-profile id c1.json)
           [ "$id1" = "$id2" ] || { echo "::error::profile_id changed on re-read"; exit 1; }
+
+      # Publish the outcome as a namespaced ref, so it is readable from a
+      # development sandbox that can reach this repository over the git protocol
+      # but not through the Actions API.
+      #
+      # This was missing and it cost. On 2026-07-26 the first real Windows build
+      # failed on a missing <iterator>; the fix went in as 3c49935 and whether it
+      # WORKED was invisible from inside - `ci.yml` published nothing, so
+      # confirming a one-line fix required a person opening a browser. The
+      # measurement workflows had this channel from the start; the workflow that
+      # actually builds the code did not.
+      #
+      #   git ls-remote origin "refs/status/<sha>/*"
+      - name: Publish job status to refs/status/*
+        if: always() && github.event_name != 'pull_request'
+        shell: bash
+        run: |
+          slug="$(printf '%s' "determinism" | tr -c 'A-Za-z0-9._-' '-')"
+          state="${{ job.status }}"
+          git config user.name "ci-status"
+          git config user.email "ci-status@localhost"
+          git checkout --detach -q
+          git commit -q --allow-empty -m "${slug} ${state} @ ${{ github.sha }}"
+          git push --force origin \
+            "HEAD:refs/status/${{ github.sha }}/${slug}/${state}"
