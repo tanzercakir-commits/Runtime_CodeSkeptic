@@ -169,6 +169,33 @@ RS_TEST(probe_never_attaches_a_value_to_unknown_evidence) {
     RS_CHECK(!has_value_with_unknown_evidence(result.profile.facts_json()));
 }
 
+RS_TEST(a_platform_with_an_implementation_actually_uses_it) {
+    // The inverse of the case below, and the one that was missing.
+    //
+    // On Windows both `vm_probe_windows.cpp` and `vm_probe_unimplemented.cpp`
+    // compiled - the stub's guard excluded Linux and macOS and forgot Windows - so
+    // both defined `probe_virtual_memory`, the linker took the stub, and the probe
+    // reported `implemented = false` on a real Windows runner while every job
+    // stayed green. `ctest` passed 14/14 because nothing asserted the opposite: the
+    // test below returns early when `implemented` is true, and there was no test
+    // that returned early when it was false.
+    //
+    // `tools/guards/check_probe_platforms.py` catches the same thing without a
+    // platform. This catches it ON one, which matters because a guard reads source
+    // and this reads the binary that was actually linked.
+#if defined(RS_PLATFORM_LINUX) || defined(RS_PLATFORM_MACOS) || \
+    defined(RS_PLATFORM_WINDOWS)
+    const probe::Result result = probe::probe_virtual_memory();
+    RS_CHECK_MESSAGE(result.implemented,
+                     "this platform has a probe implementation and the binary is "
+                     "running the unimplemented stub instead - check that exactly "
+                     "one src/probe/vm_probe_*.cpp compiles here");
+    RS_CHECK_MESSAGE(result.profile.origin == ProfileOrigin::Measured,
+                     "the probe reports implemented but produced a profile that is "
+                     "not measured");
+#endif
+}
+
 RS_TEST(unimplemented_platforms_report_synthetic_origin) {
     const probe::Result result = probe::probe_virtual_memory();
     if (result.implemented) return;

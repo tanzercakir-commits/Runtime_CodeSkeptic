@@ -1081,8 +1081,63 @@ the same treatment, and the omission only shows up when it fails.
 | **+** | pushing this touches the workflow's own path, so it self-triggers and the next run answers the question |
 | **−** | only two `windows-x86_64` status refs exist in this repository's whole history, and both are `failure`. The measurement leg of the end-to-end cycle has never once completed |
 
-**Also next.** Windows still has no arena at all — and now there is a channel that
-will say what is stopping the probe before that question is even reachable. The Rosetta lane still needs a dispatch —
+### The Windows probe had never run — including on Windows
+
+The channel answered on its first try, and the answer is the largest finding of the
+session.
+
+```
+build    success        <- on a real windows-latest runner
+test     success        <- 14/14 ctest
+measure  success        <- and it produced a profile
+```
+
+The profile:
+
+```
+profile_name windows-x86_64   origin SYNTHETIC   host_arch unknown
+page_size, allocation_granularity, min_map_address, max_user_address,
+max_single_reservation, exact_mapping, fixed_noreplace_available,
+reserve_commit_model, file_map_beyond_eof   ... every one UNKNOWN
+```
+
+`vm_probe_unimplemented.cpp` guarded itself with
+
+```c
+#if !defined(RS_PLATFORM_LINUX) && !defined(RS_PLATFORM_MACOS)
+```
+
+which is **true on Windows**. `vm_probe_windows.cpp` guards itself with
+`#if defined(RS_PLATFORM_WINDOWS)`. Both compiled, both defined
+`rs::probe::probe_virtual_memory`, the linker took one — and it took the stub.
+Proven rather than argued, with the cross-compiler that was already installed:
+
+```
+x86_64-w64-mingw32-g++ -DRS_PLATFORM_WINDOWS=1 -c vm_probe_windows.cpp       -> 1
+x86_64-w64-mingw32-g++ -DRS_PLATFORM_WINDOWS=1 -c vm_probe_unimplemented.cpp -> 1
+                                        definitions of probe_virtual_memory
+                                    after the fix: 1 and 0
+```
+
+**So the Windows probe has never run, on any machine, including Windows.** Every
+statement in this project of the form "the Windows probe measures X" was a statement
+about a stub that measures nothing — and says so honestly, to a reader who looked.
+
+| | |
+|---|---|
+| **−** | `ci.yml`'s `windows---msvc` job has been **green throughout**. It runs `rs-profile verify host-profile.json`, and a synthetic profile verifies perfectly well. Green meant "the file is well-formed", and was read as "the platform was measured" |
+| **−** | `test_probe` passed 14/14 on Windows because `unimplemented_platforms_report_synthetic_origin` returns early when `implemented` is true — and **nothing returned early when it was false**. The suite had a test for one direction of a two-directional claim |
+| **+** | the step that caught it is `windows-probe.yml`'s *"Refuse a profile that is not from real Windows"*, written for Wine. It turned out to guard something much larger than Wine |
+| **+** | `tools/guards/check_probe_platforms.py` evaluates each probe's `#if` against every `RS_PLATFORM_*` setting CMake can produce and requires exactly one active. **No compiler, no platform** — which is the only version of this fix that removes the dependency instead of moving it. Selftest 63 to **66 cases**; it fails on demand |
+| **+** | and `a_platform_with_an_implementation_actually_uses_it` asserts it *on* the platform, because a guard reads source and a test reads the binary that was actually linked |
+
+The diagnostics step added one commit earlier is what made this a ten-minute
+diagnosis instead of a guess. Before it, this workflow could fail and say nothing at
+all — and it had, twice, which is the entire history of `windows-x86_64` status refs
+in this repository.
+
+**Also next.** Windows still has no arena. But that question was never reachable:
+the probe that would need one was not in the binary. The Rosetta lane still needs a dispatch —
 `gh workflow run macos-probe.yml --ref main` — and it now publishes its ground-truth
 output, so the second half of the `file_map_beyond_eof` claim will be readable from
 the sandbox when it runs.

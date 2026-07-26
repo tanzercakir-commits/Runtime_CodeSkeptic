@@ -35,6 +35,10 @@
 #   check_shell...   the first real macOS run died on `declare -A`, because macOS
 #                    ships bash 3.2. Same class, other language: green wherever
 #                    anyone runs it, fatal where nobody does
+#   check_probe...   the Windows probe had NEVER run, including on Windows: the
+#                    unimplemented stub's guard did not exclude RS_PLATFORM_WINDOWS,
+#                    so both defined probe_virtual_memory and the linker took the
+#                    stub. Green build, 14/14 ctest, and a synthetic profile
 #   check_shell_vars the SECOND thing the first macOS run found: the selftest's
 #                    `unknown` rows were keyed on the measured host, and the
 #                    profile that would have made them host-independent was
@@ -76,6 +80,7 @@ run "corpus rules"          python3 "$HERE/check_corpus.py"
 run "includes vs MSVC"      python3 "$HERE/check_includes.py"
 run "shell vs bash 3.2"     python3 "$HERE/check_shell_portability.py"
 run "shell dead variables"  python3 "$HERE/check_shell_vars.py"
+run "one probe per platform" python3 "$HERE/check_probe_platforms.py"
 
 echo
 if [ "$failed" -eq 0 ]; then

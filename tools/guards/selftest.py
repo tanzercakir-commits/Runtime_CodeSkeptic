@@ -126,6 +126,17 @@ class Case:
             return True, ""
 
 
+# One probe implementation per platform, spelled correctly. The real tree's
+# guards are longer; only the `#if` matters to this check.
+OK_PROBES = {
+    "src/probe/vm_probe_linux.cpp": "#if defined(RS_PLATFORM_LINUX)\n",
+    "src/probe/vm_probe_macos.cpp": "#if defined(RS_PLATFORM_MACOS)\n",
+    "src/probe/vm_probe_windows.cpp": "#if defined(RS_PLATFORM_WINDOWS)\n",
+    "src/probe/vm_probe_unimplemented.cpp":
+        "#if !defined(RS_PLATFORM_LINUX) && !defined(RS_PLATFORM_MACOS) && \\\n"
+        "    !defined(RS_PLATFORM_WINDOWS)\n",
+}
+
 CASES = [
     # ---- check_docs: check 3, named paths must exist -------------------
     Case("check_docs.py", "a doc naming a path that is not there fails",
@@ -394,6 +405,22 @@ CASES = [
     Case("check_shell_portability.py", "no set -u means no unbound-variable death",
          {"tests/x.sh": '#!/usr/bin/env bash\nargs=()\necho "${args[@]}"\n'},
          expect_fail=False),
+
+    # ---- check_probe_platforms: exactly one implementation per platform --
+    Case("check_probe_platforms.py", "the real bug: the stub forgot Windows",
+         {**OK_PROBES,
+          "src/probe/vm_probe_unimplemented.cpp":
+              "#if !defined(RS_PLATFORM_LINUX) && !defined(RS_PLATFORM_MACOS)\n"},
+         expect_fail=True, expect_text="RS_PLATFORM_WINDOWS: 2 implementation"),
+
+    Case("check_probe_platforms.py", "the corrected set passes",
+         OK_PROBES, expect_fail=False),
+
+    Case("check_probe_platforms.py", "a platform with NO implementation fails",
+         {**OK_PROBES,
+          "src/probe/vm_probe_unimplemented.cpp":
+              "#if defined(RS_PLATFORM_LINUX) && !defined(RS_PLATFORM_LINUX)\n"},
+         expect_fail=True, expect_text="NONE"),
 
     # ---- check_shell_vars: the fix was in the file, unused --------------
     Case("check_shell_vars.py", "the historical shape: assigned, never read",
