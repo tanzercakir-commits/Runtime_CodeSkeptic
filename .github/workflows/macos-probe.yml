@@ -55,10 +55,42 @@ name: macOS measurement
 # If a measurement is needed for a specific commit, dispatch it against that
 # ref. The trade is real and worth stating: a probe change can now sit on main
 # for up to a week before any Apple Silicon host has run it.
+#
+# 2026-07-26, AND THE COST ARGUMENT ABOVE IS NOW VOID. The repository is public, so
+# standard GitHub-hosted runners - macOS included - are free for it. The 10x
+# multiplier the paragraphs above reason about no longer applies to this repository
+# at all. The arithmetic was right; the premise expired.
+#
+# The SECOND argument survives and is why this is a path filter rather than a plain
+# push trigger: "the HOST cannot change between two commits. What changes is the
+# probe and the analyzer." A documentation commit still has nothing to measure. So
+# it runs when something that can change a measurement changes - which is exactly
+# what `windows-probe.yml` already does, and what would have caught the Rosetta
+# harness bug on the commit that introduced it rather than months later.
+#
+# `tests/groundtruth/` is in the list because the Rosetta lane runs the ground-truth
+# harness, and the bug that broke that lane was in the harness, not in the probe.
 on:
   schedule:
     - cron: '23 4 * * 1'
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/macos-probe.yml'
+      - 'src/probe/vm_probe_macos.cpp'
+      # The file that can silently replace the probe - see the same list in
+      # windows-probe.yml, where its absence hid a fix from its own confirmation.
+      - 'src/probe/vm_probe_unimplemented.cpp'
+      - 'src/probe/arena_walk.cpp'
+      - 'include/runtimeskeptic/probe/arena_walk.hpp'
+      - 'include/runtimeskeptic/probe/vm_probe.hpp'
+      # Platform detection lives here and nowhere else.
+      - 'CMakeLists.txt'
+      - 'src/CMakeLists.txt'
+      # The Rosetta lane runs this, and this is where it broke.
+      - 'tests/groundtruth/run.sh'
+      - 'tests/groundtruth/selftest.sh'
 
 # Publishing measurements and job status as git refs needs push rights.
 permissions:

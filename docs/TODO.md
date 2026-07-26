@@ -531,13 +531,19 @@ Windows probe establishes no address ranges — no arena, no landmark ladder —
 every address question on Windows answers UNKNOWN. That is T-013 and T-014's work,
 third platform, and it is now reachable for the first time.
 
-**The control-plane half is a named human dependency, not a design.** The run is
-triggered by a push to the workflow's own path, which works. Everything after
-that — is it queued, did it fail at startup, is the Actions quota out — is only
-readable through the GitHub API, which this sandbox cannot reach for this
-repository. The substitute is the owner opening the Actions tab. That is
-recorded as an accepted cost in `docs/PROGRESS.md`, with its price, and it is
-the reason this item can be worked on but not finished from inside.
+**The control-plane half is a named human dependency, not a design** — and the
+measurement half is no longer one.
+
+The run is triggered by a push to the workflow's own path, which works. Everything
+about *scheduling* — is it queued, did it fail at startup, is the quota out — is only
+readable through the GitHub API, which this sandbox cannot reach for this repository,
+and the substitute is a person opening the Actions tab. That cost stands.
+
+**What no longer stands is the same claim about the measurement plane.** The full
+loop has now been run and observed: probe change pushed → run started → measurement
+published to `refs/measurements/<sha>/<lane>` → fetched over the git protocol → read,
+with nobody opening the Actions tab. That was written here as an assumption and is
+now a measurement. `docs/PROGRESS.md` has the account.
 
 ---
 

@@ -173,8 +173,22 @@ json.dump({"schema": "runtime-skeptic.groundtruth-manifest.v1", "cases": [{
     open(sys.argv[1], "w"))
 PY
 
+    # CC DELIBERATELY CARRIES A FLAG, so the multi-word path is exercised on every
+    # POSIX CI run rather than only on the one lane that needs it.
+    #
+    # `run.sh` invoked the compiler as `"$CC"` - quoted, therefore one word - and
+    # `macos-probe.yml`'s Rosetta lane passes `CC="cc -arch x86_64"`. The shell
+    # looked for a command literally named `cc -arch x86_64`:
+    #
+    #     run.sh: line 47: cc -arch x86_64: command not found      (exit 70)
+    #
+    # Latent since the harness was written, and invisible everywhere `CC` is a
+    # single word - which is every path except the only one that can observe a
+    # translated address space. `-O0` here is not about optimisation; it is about
+    # there being a second word at all.
     got=$(GT_MANIFEST="$WORK/manifest.json" GT_CASES="$WORK/cases" \
           GT_BIN="$WORK/bin" GT_CONTRACT_ROOT="$WORK" \
+          CC="${CC:-cc} -O0" \
           bash "$HERE/run.sh" "$(profile_for "$key")" 2>/dev/null \
           | awk '/^selftest /{ $1=""; $2=""; $3=""; sub(/^ +/,""); print }' | head -1)
     got="${got:-<no row>}"

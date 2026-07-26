@@ -36,6 +36,41 @@ fi
 # itself in a more expensive way.
 mkdir -p "$BIN"
 CC="${CC:-cc}"
+# CC MAY CARRY FLAGS, and this harness assumed it could not.
+#
+# `"$CC"` - quoted - is one word to the shell, so `CC="cc -arch x86_64"` became a
+# command named `cc -arch x86_64`:
+#
+#     run.sh: line 47: cc -arch x86_64: command not found      (exit 70)
+#
+# Latent since the harness was written. It works on every path where CC is a single
+# word - `cc` natively, `gcc` and `clang` on Linux - and fires only on the one path
+# that has to carry a flag: the Rosetta 2 lane of macos-probe.yml, which builds the
+# case programs as x86-64 with `CC="cc -arch x86_64"`. That lane is also the only
+# place this project can observe the translated address space, so the harness broke
+# exactly where it was most needed and nowhere else.
+#
+# `CC` carrying flags is the make/autoconf convention, so the harness honours it
+# rather than asking the caller to split them.
+#
+# `read -ra` rather than leaving `$CC` unquoted: an unquoted expansion word-splits
+# AND globs, and a compiler path is not a glob. Splitting explicitly says that
+# splitting is intended, which an unquoted expansion only implies.
+#
+# `${CC_ARGV[@]+...}` rather than `"${CC_ARGV[@]}"`: macOS ships bash 3.2, where an
+# empty array's expansion is an unbound variable under `set -u`. That cost a macOS
+# run of its own, and this is the same file it cost it in.
+read -ra CC_ARGV <<<"$CC"
+if [ "${#CC_ARGV[@]}" -eq 0 ]; then
+    echo "$0: CC is empty" >&2
+    exit 64
+fi
+# Fail here, with the compiler named, rather than inside the build loop where a
+# missing compiler reads like a broken case.
+if ! command -v "${CC_ARGV[0]}" >/dev/null; then
+    echo "$0: no compiler '${CC_ARGV[0]}' on PATH (CC=$CC)" >&2
+    exit 64
+fi
 CONTRACT_ROOT="${GT_CONTRACT_ROOT:-$HERE}"
 # -Werror is load-bearing, not tidiness. The first version of this harness
 # compiled a case with an implicit declaration of strsignal(), the compiler
@@ -44,7 +79,8 @@ CONTRACT_ROOT="${GT_CONTRACT_ROOT:-$HERE}"
 # to observe. The warning was printed and thrown away.
 for src in "$CASES"/*.c; do
     out="$BIN/$(basename "$src" .c)"
-    if ! "$CC" -std=gnu11 -O1 -Wall -Wextra -Werror -o "$out" "$src" \
+    if ! "${CC_ARGV[@]+${CC_ARGV[@]}}" \
+            -std=gnu11 -O1 -Wall -Wextra -Werror -o "$out" "$src" \
             2>"$BIN/build.log"; then
         echo "$0: failed to build $(basename "$src"):" >&2
         cat "$BIN/build.log" >&2

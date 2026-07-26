@@ -1211,6 +1211,71 @@ struck through in place rather than deleted.
 | **−** | `available: 0, unavailable: 0`. **The Windows probe establishes no address ranges at all.** Every address question on Windows answers UNKNOWN — honestly, and uselessly. T-013 did Linux, T-014 did macOS, and nobody has done this one |
 | **−** | the measurement ref arrived wrapped in a **full copy of the repository**, because `windows-probe.yml`'s publish step still used `git add` on the checked-out tree. Now on the shared publisher, and it carries `repro.txt` too |
 
+### The end-to-end cycle is closed, and it is measured rather than argued
+
+The owner dispatched `macos-probe.yml`. Both lanes measured; the Rosetta lane's job
+went red **after** publishing, in `Ground truth vs prediction (x86-64)`.
+
+**The whole loop ran without anyone opening the Actions tab:** probe change pushed →
+run started → measurement published to `refs/measurements/50aefca…/rosetta-x86_64` →
+fetched over the git protocol → read. That is the sentence this log has carried as an
+**accepted cost** since the channel was built:
+
+> *"Kontrol düzlemi için yetmiyor ve yerine geçen şey senin Actions sekmesini
+> açman. Bu bir mimari değil, adı konmuş bir insan bağımlılığı."*
+
+For the **control** plane that remains true — a dispatch is still a person pressing a
+button. For the **measurement** plane it is now a measured finding rather than a
+hopeful one. Ref count 63 → 366.
+
+#### The Rosetta failure: one quoted expansion, latent since the harness was written
+
+```
+tests/groundtruth/run.sh: line 47: cc -arch x86_64: command not found   (exit 70)
+```
+
+`run.sh` invoked the compiler as `"$CC"` — quoted, therefore **one word**. The
+workflow passes `CC="cc -arch x86_64"`, so the shell looked for a command literally
+named `cc -arch x86_64`.
+
+**It works on every path where `CC` is a single word** — `cc` natively, `gcc` and
+`clang` on Linux — and fires only on the one path that must carry a flag. That path
+is the Rosetta 2 lane, which is also the only place this project can observe a
+translated address space. The harness broke exactly where it was most needed and
+nowhere else.
+
+| | |
+|---|---|
+| **+** | `read -ra` rather than leaving `$CC` unquoted: an unquoted expansion word-splits **and globs**, and a compiler path is not a glob. Splitting explicitly says splitting is intended, which an unquoted expansion only implies |
+| **+** | `${CC_ARGV[@]+…}` rather than `"${CC_ARGV[@]}"` — bash 3.2 calls an empty array's expansion unbound under `set -u`, and that already cost a macOS run **in this same file** |
+| **+** | a missing compiler now fails at startup with the compiler named, instead of inside the build loop where it reads like a broken case |
+| **+** | `selftest.sh` passes `CC="${CC:-cc} -O0"`, so the multi-word path runs on **every POSIX CI run** rather than only on the lane that needs it. Verified: with the old `run.sh`, the selftest goes 14/14 → 0/14 |
+| **−** | `CC` carrying flags is the make/autoconf convention and this harness assumed it could not. The assumption was invisible for as long as nobody needed a flag |
+
+#### The Windows profile, verified externally
+
+The owner fetched it over the git protocol and checked both hand-verification items
+against the measurement:
+
+| | |
+|---|---|
+| **+** | `dwAllocationGranularity` **measured**, evidence `measured_capability`, and 65536 ≠ 4096 — so `RSC-0044`'s premise, and the whole granularity-versus-page-size distinction, is confirmed on that runner |
+| **+** | `max_user_address = 0x7fffffff0000` is exactly `lpMaximumApplicationAddress` (`0x7FFFFFFEFFFF`) **+ 1**. The `+1` reading T-004 settled by `VirtualQuery` rather than by reservation holds against the real value |
+| **+** | the only remaining `unknown` is `jit_entitlement_required`, a field with no meaning on Windows — correct behaviour, not a gap |
+
+#### And the macOS trigger's rationale expired
+
+That workflow left per-push on a cost argument: three macOS jobs per push at 10x.
+**The repository is public, so standard runners including macOS are free for it.**
+The arithmetic was right; the premise expired.
+
+The *second* argument survives — *"the host cannot change between two commits"* — and
+it is an argument for a **path filter**, not for no trigger. So `macos-probe.yml` now
+runs on pushes that touch the probe, the arena, platform detection, or the
+ground-truth harness. `tests/groundtruth/run.sh` is in that list because the bug that
+broke the Rosetta lane was in the harness, not the probe — and a filter written for
+probes only would have missed it again.
+
 **Also next.** Windows has no arena. That question was never reachable before now:
 the probe that would need one was not in the binary. The Rosetta lane still needs a dispatch —
 `gh workflow run macos-probe.yml --ref main` — and it now publishes its ground-truth
