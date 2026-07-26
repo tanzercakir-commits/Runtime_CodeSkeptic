@@ -1388,6 +1388,62 @@ and *"No Windows host has ever run it"* in one paragraph, with a sentence that
 stopped mid-clause. Rewritten to say what is now true and why Wine is not a
 substitute for it.
 
+### The arena worked, and the same push proved one was not enough
+
+`82ec86d`'s Windows job built and the arena ran. The note it published:
+
+```
+allocation arena [0x7f0000000000, 0x7ffffffeffff) in windows of 0x4000000 bytes:
+  16312 placed
+      1 already held by this process at the window's own base
+      0 structurally refused          <- the design assumption, measured
+      6 refused with a region of this process elsewhere in the window
+     64 not probed (inside a region already described)
+```
+
+**Zero structural refusals.** That is the assumption the whole thing rests on —
+that no system-wide band lies inside the arena — confirmed by measurement rather
+than by recollection about Windows ASLR.
+
+And the same run failed the coverage test:
+
+```
+heap page      : 0x2f78000e000                      <- 2.97 TiB
+nearest above  : [0x7f0000000000, 0x7ffffc000000)   <- gap 0x7c087fff2000
+```
+
+The occupancy note said the process was 99.8% in the top TiB; the coverage test
+found its heap at 2.97 TiB. Both are true, because **they are different
+processes**: `rs-env-probe` had its heap in the 1 TiB bucket, `test_probe` had its
+at 2.97 TiB. On Windows the image and every DLL go to the top TiB while an NT heap
+goes low, and where exactly is redrawn per process.
+
+That is the *Linux* shape — a PIE's text four TiB from the kernel's mmap base —
+not the macOS one, and it takes the Linux answer: a second arena,
+`[1 TiB, 127 TiB)`.
+
+| | |
+|---|---|
+| **+** | designing from one measurement got the top arena exactly right on the first try, including the band assumption. Designing from one measurement also got the *number of arenas* wrong, because one process's heap is not the platform's heap policy |
+| **+** | the low arena is **contiguous**, not sampled: 126 TiB in 64 GiB windows is 2016 placements. Linux samples at this stride and therefore asserts the space between its samples — Windows does not have to, because `max_single_reservation` measured 64 TiB and `MEM_RESERVE \| PAGE_NOACCESS` never charges the commit limit, so a 64 GiB window costs what a 64 MiB one costs |
+| **+** | `[min_map_address, 1 TiB)` is left out **on purpose**: KUSER_SHARED_DATA at `0x7ffe0000` lives there, and it is the one band whose presence would break the treat-a-covered-refusal-as-held rule. Stated gap, not oversight |
+| **−** | the low arena records a refusal at the resolution of one 64 GiB window, which over-claims for a smaller hole — and over-claiming `unavailable` makes the analyzer answer UNSUPPORTED for addresses that are fine. `refused` has measured 0 so far and is the number that says otherwise. Narrowing is the fix when it fires, not before |
+
+**Third time for one diagnostic.** `coverage_diagnosis()` printed *"NO arena was
+scanned on this platform"* in the very failure whose `nearest above` was the
+arena's own range. It reads `run.warnings`; the Windows arena's note went to
+`profile.notes`. It had already been wrong twice — once reading the wrong
+container, once matching prose (`"sampled every"`) that another file then
+reworded. Both fixed now: the probes agree on `run.warnings`, *and* the diagnostic
+reads both, because a diagnostic that is wrong is worse than one that is missing —
+it gets believed.
+
+**The test model was wrong before the product was.** `windows_probe()`'s describe
+hook scanned a hardcoded 64 MiB while the new walk used 64 GiB, so it missed a
+blocker 256 MiB into a window. That surfaced as a red test locally rather than as
+an irreproducible profile on a runner, which is the entire argument for
+`probe/windows_regions.hpp` existing.
+
 ### And this file was lying about its own order
 
 `docs/PROGRESS.md` is the past, and it had two entries in the wrong order: *the

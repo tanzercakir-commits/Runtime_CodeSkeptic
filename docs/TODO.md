@@ -440,9 +440,22 @@ a8bc15f: the runner's own occupancy, 1 TiB buckets over 128 TiB
   0x7f0000000000 =    4340531200      99.8%: image, DLLs, stacks, heaps
   largest free run 139217018867712    126.6 TiB, contiguous
 
-arena = [arena_floor_for(max_user_address, 1 TiB), max_user_address)
-      = [0x7f0000000000, 0x7fffffff0000)      1 TiB in 64 MiB windows = 16,384
+top arena = [arena_floor_for(max_user_address, 1 TiB), max_user_address)
+          = [0x7f0000000000, 0x7fffffff0000)   1 TiB in 64 MiB windows = 16,384
+low arena = [1 TiB, 0x7f0000000000)          126 TiB in 64 GiB windows =  2,016
 ```
+
+**Two, not one, and the runner is why.** The top arena ran on `82ec86d` and
+worked — 16312 placed, **0 structurally refused**, which confirms by measurement
+that no system band lies inside it. The same run failed coverage anyway:
+`test_probe`'s heap page was `0x2f78000e000` (2.97 TiB) while `rs-env-probe`'s was
+in the 1 TiB bucket. Same host, same push, different processes. On Windows the
+image and every DLL go to the top TiB while an NT heap goes low, so it is the
+Linux shape (two arenas) and not the macOS one (one).
+
+`[min_map_address, 1 TiB)` is left to the landmark ladder on purpose:
+KUSER_SHARED_DATA at `0x7ffe0000` is there, and it is the one band whose presence
+inside an arena would break `arena_walk`'s treat-a-covered-refusal-as-held rule.
 
 `arena_floor_for()` is in `probe/arena_walk.hpp`, not in the Windows probe, for
 the reason `arena_ceiling_for()` is: a derivation that only a Windows runner can
@@ -459,11 +472,12 @@ including the reproducibility one, 6 times over.
 | `arena_floor_for()` in `probe/arena_walk.{hpp,cpp}` | the arena's floor from a system constant, never from our layout |
 | `tests/unit/test_arena_walk.cpp` | 20 cases; 6 of them Windows, against the layout `a8bc15f` measured |
 
-**Not yet measured on a runner.** Everything above is checked off-Windows; the
-walk itself has never executed on Windows. The number to read is `placed` /
-`held_by_probe` / `refused` / `held_no_access` in the arena note, and the one
-that matters is `refused`: if it is not 0, either a system band lies in the top
-TiB or the walk is filing our own layout as a limitation.
+**The top arena is measured; the low one is not yet.** `refused` is the number to
+read in each note. It was 0 for the top arena, which is what the design needs. If
+the low arena's is not 0, either a system band lies between 1 and 127 TiB or the
+walk is filing our own layout as a limitation — and because that arena records at
+the resolution of one 64 GiB window, a non-zero `refused` also means it is
+over-claiming and wants narrowing.
 
 **Second, and separately:** `linux---gcc` failed this same test on `650d510`
 with C++ identical to the `52f541e` that passed it, and it passes 200/200 here.

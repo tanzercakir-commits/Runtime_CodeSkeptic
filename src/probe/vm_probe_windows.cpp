@@ -662,6 +662,50 @@ WalkSummary walk_address_space(std::uint64_t min_address,
 constexpr std::uint64_t kArenaSpan = kWinTiB;
 constexpr std::uint64_t kArenaWindow = 64ull << 20;
 
+// TWO ARENAS, NOT ONE, AND THE RUNNER IS WHY.
+//
+// The version above shipped with one arena because the occupancy note said 99.8%
+// of the process was in the top TiB. It ran, and it worked - 16312 placed, 1 held
+// at the base, 6 held elsewhere in the window, **0 structurally refused** - and
+// the same push failed the coverage test anyway:
+//
+//   heap page      : 0x2f78000e000                      <- 2.97 TiB
+//   nearest above  : [0x7f0000000000, 0x7ffffc000000)   <- gap 0x7c087fff2000
+//
+// The occupancy note and the coverage test disagree because they are DIFFERENT
+// PROCESSES: `rs-env-probe` had its heap in the 1 TiB bucket, `test_probe` had
+// its at 2.97 TiB. So on Windows the image and every DLL go to the top TiB while
+// an NT heap goes low, and where exactly is redrawn per process. That is the
+// Linux shape - a PIE's text four TiB from the kernel's mmap base - not the macOS
+// one, and it takes the Linux answer: a second arena.
+//
+// WHY IT STARTS AT 1 TiB AND NOT AT `lpMinimumApplicationAddress`. Bucket 0 holds
+// KUSER_SHARED_DATA at `0x7ffe0000`, mapped into every x64 process - a genuine
+// system-wide band. `arena_walk.hpp` treats a covered refusal as held, which is
+// sound only while no such band lies inside the arena, so bucket 0 is excluded by
+// construction and the ladder probes those addresses individually instead. That
+// leaves `[min_map_address, 1 TiB)` uncovered, and it is a stated gap rather than
+// an oversight.
+//
+// WHY 64 GiB WINDOWS AND NOT SAMPLING. 126 TiB in 64 MiB windows is two million
+// placements. Linux samples its arenas at a 64 GiB stride and therefore ASSERTS
+// THE SPACE BETWEEN SAMPLES, which `probe/arena_walk.hpp` argues against and
+// Linux accepts because it has no choice. Windows has a choice:
+// `max_single_reservation` measured 70368744177664 (64 TiB) on this host and
+// `MEM_RESERVE | PAGE_NOACCESS` never charges the commit limit, so a 64 GiB
+// window costs what a 64 MiB one costs. 2016 CONTIGUOUS windows assert only what
+// was placed.
+//
+// THE COST, STATED: resolution. A structural hole smaller than 64 GiB makes the
+// whole window unavailable, which over-claims - and over-claiming `unavailable`
+// makes the analyzer answer UNSUPPORTED for addresses that are fine. The top
+// arena measured ZERO structural refusals, so this has never yet happened, and
+// `refused` in the note is the number that says it has. Re-walking a refused
+// window at a finer size is the fix when it fires; building it now would be
+// fitting code to a case no measurement has produced.
+constexpr std::uint64_t kLowArenaBottom = kWinTiB;
+constexpr std::uint64_t kLowArenaWindow = 64ull << 30;
+
 std::string region_state_name(DWORD state) {
     switch (state) {
         case MEM_FREE:    return "MEM_FREE";
@@ -892,13 +936,18 @@ Result probe_virtual_memory(const Options& options) {
             "profile that hashed it would differ between two runs on one "
             "machine.");
 
-        // THE ARENA. Everything above this point in the scan established no
-        // address range at all; `available_ranges` and `unavailable_ranges` were
-        // both empty on a real Windows runner, so RS-VM-0001/0002/0003 - this
-        // project's flagship rules - answered UNKNOWN for every address on the
-        // platform. This is what changes that.
-        const std::uint64_t arena_bottom = arena_floor_for(max_address, kArenaSpan);
-        if (arena_bottom > 0 && arena_bottom + kArenaWindow <= max_address) {
+        // THE ARENAS, and there are two because the runner said so. Everything
+        // above this point in the scan established no address range at all:
+        // `available_ranges` and `unavailable_ranges` were both empty on a real
+        // Windows runner, so RS-VM-0001/0002/0003 - this project's flagship
+        // rules - answered UNKNOWN for every address on the platform.
+        const std::uint64_t top_bottom = arena_floor_for(max_address, kArenaSpan);
+
+        auto scan_one_arena = [&](const char* what, std::uint64_t bottom,
+                                  std::uint64_t top, std::uint64_t window,
+                                  const char* band_note) {
+            if (bottom == 0 || bottom >= top || top - bottom < window) return;
+
             // `place` and `describe` are two halves of one question and the
             // second needs what the first learned, so the error travels in a
             // local rather than through GetLastError() - which the VirtualQuery
@@ -913,10 +962,11 @@ Result probe_virtual_memory(const Options& options) {
                     MEM_RESERVE, PAGE_NOACCESS);
                 if (got != nullptr) {
                     // MEM_RESERVE only: this bounds the RESERVATION and never
-                    // charges the commit limit, so a 1 TiB walk cannot push the
-                    // runner into paging. Released at once - the arena must
-                    // leave the address space as it found it, which
-                    // `probe_leaves_the_process_address_space_usable` checks.
+                    // charges the commit limit, which is what makes a 64 GiB
+                    // window cost the same as a 64 MiB one. Released at once -
+                    // the arena must leave the address space as it found it,
+                    // which `probe_leaves_the_process_address_space_usable`
+                    // checks.
                     ::VirtualFree(got, 0, MEM_RELEASE);
                     return ArenaPlacement::Placed;
                 }
@@ -939,20 +989,17 @@ Result probe_virtual_memory(const Options& options) {
                 }
                 return ArenaPlacement::Refused;
             };
-            hooks.describe = [&refusal](std::uint64_t base) -> ArenaEntry {
-                return classify_window(base, kArenaWindow, query_region, refusal);
+            hooks.describe = [&refusal, window](std::uint64_t base) -> ArenaEntry {
+                return classify_window(base, window, query_region, refusal);
             };
 
             const ArenaWalk arena = walk_arena(
-                "allocation arena in the top TiB of the user address space, "
-                "where high-entropy ASLR places the image, every loaded DLL, "
-                "the thread stacks and the heaps",
-                arena_bottom, max_address,
+                what, bottom, top,
                 // The alignment quantum for a BASE ADDRESS here is
                 // dwAllocationGranularity, not dwPageSize. Passing the page
                 // size would let the walk try bases VirtualAlloc rounds down,
                 // which is RSC-0044's subject arriving inside the probe itself.
-                granularity, kArenaWindow, hooks);
+                granularity, window, hooks);
 
             for (const auto& r : arena.available) {
                 profile.vm.available_ranges.push_back(r);
@@ -961,25 +1008,56 @@ Result probe_virtual_memory(const Options& options) {
                 profile.vm.unavailable_ranges.push_back(r);
             }
 
-            profile.notes.push_back(
-                "allocation arena [" + json::to_hex(arena_bottom) + ", " +
-                json::to_hex(max_address) + ") walked in contiguous windows of " +
-                json::to_hex(kArenaWindow) + " bytes: " +
+            // INTO `warnings`, WHERE THE OTHER TWO PLATFORMS PUT IT. The first
+            // version of this pushed to `profile.notes`, and the coverage test's
+            // diagnosis - which reads `run.warnings` - printed "NO arena was
+            // scanned on this platform" in the same failure whose `nearest
+            // above` was the arena's own range. One kind of thing, one place.
+            warnings.push_back(
+                std::string("allocation arena [") + json::to_hex(bottom) + ", " +
+                json::to_hex(top) + ") walked in contiguous windows of " +
+                json::to_hex(window) + " bytes: " +
                 std::to_string(arena.placed) + " placed, " +
                 std::to_string(arena.held_by_probe) +
                 " already held by this process at the window's own base, " +
                 std::to_string(arena.refused) + " structurally refused, " +
                 std::to_string(arena.held_no_access) +
                 " refused with a region of this process elsewhere in the window "
-                "(treated as held; this arena's floor is 127 TiB above "
-                "KUSER_SHARED_DATA at 0x7ffe0000, the only system-wide band this "
-                "platform is known to place, so if this number rises while "
-                "unavailable_ranges stays empty that assumption has broken), and " +
+                "(treated as held; " + band_note +
+                ", so if this number rises while unavailable_ranges stays empty "
+                "that assumption has broken), and " +
                 std::to_string(arena.skipped) +
                 " not probed because they lie inside a region already described. "
-                "Only the structurally refused count is a host limitation. This "
-                "split moves with ASLR, which is why it is a note and not a fact");
-        } else {
+                "Only the structurally refused count is a host limitation, and a "
+                "refusal is recorded at the resolution of one window - which "
+                "over-claims for a hole smaller than that, and has measured zero "
+                "so far. This split moves with ASLR, which is why it is a warning "
+                "and not a fact");
+        };
+
+        // Where the image and every DLL are.
+        scan_one_arena(
+            "allocation arena in the top TiB of the user address space, where "
+            "high-entropy ASLR places the image, every loaded DLL and the thread "
+            "stacks",
+            top_bottom, max_address, kArenaWindow,
+            "this arena's floor is 127 TiB above KUSER_SHARED_DATA at "
+            "0x7ffe0000, the only system-wide band this platform is known to "
+            "place");
+
+        // Where an NT heap goes, which is nowhere near the image. `test_probe`
+        // allocated at 0x2f78000e000 - 2.97 TiB - while `rs-env-probe` in the
+        // same push had its heap in the 1 TiB bucket.
+        scan_one_arena(
+            "allocation arena between 1 TiB and the top-TiB arena, where an NT "
+            "heap and an unhinted VirtualAlloc are placed",
+            kLowArenaBottom, top_bottom, kLowArenaWindow,
+            "this arena starts at 1 TiB, above KUSER_SHARED_DATA at 0x7ffe0000, "
+            "so the only system-wide band this platform is known to place is "
+            "outside it and [min_map_address, 1 TiB) is deliberately left to the "
+            "landmark ladder");
+
+        if (top_bottom == 0) {
             warnings.push_back(
                 "no allocation arena was walked: max_user_address " +
                 json::to_hex(max_address) +

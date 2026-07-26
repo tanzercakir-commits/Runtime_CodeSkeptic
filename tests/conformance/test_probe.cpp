@@ -135,19 +135,31 @@ std::string coverage_diagnosis(const EnvironmentProfile& profile,
     // platform" for a push where the arena had demonstrably run and added three
     // ranges. A diagnostic that keys on prose owned by another file will keep
     // doing this; "arena" is in the name of the thing, not in its description.
+    // AND NOW A THIRD TIME, for a third reason: it read `run.warnings` only,
+    // while the Windows arena's note went to `profile.notes`. On 2026-07-26 the
+    // Windows runner printed "NO arena was scanned on this platform" in the same
+    // failure whose `nearest above` was `[0x7f0000000000, 0x7ffffc000000)` -
+    // sixteen thousand placements the diagnostic denied had happened.
+    //
+    // The probes have been made to agree (all three now use `run.warnings`), but
+    // reading both is the version of this that does not need them to. A
+    // diagnostic that is wrong is worse than one that is missing, because it is
+    // believed.
     bool any = false;
-    for (const auto& note : profile.run.warnings) {
-        if (note.find("arena") != std::string::npos) {
-            out << "\n      arena: " << note;
-            any = true;
+    for (const auto* bucket : {&profile.run.warnings, &profile.notes}) {
+        for (const auto& note : *bucket) {
+            if (note.find("arena") != std::string::npos) {
+                out << "\n      arena: " << note;
+                any = true;
+            }
         }
     }
     if (!any) {
         out << "\n      arena: NO arena was scanned on this platform. Linux "
-               "(vm_probe_linux.cpp) and macOS (vm_probe_macos.cpp, via "
-               "probe/arena_walk.hpp) each establish one; Windows still samples "
-               "the landmark ladder alone, which is the coverage gap T-013 fixed "
-               "for Linux and T-014 for macOS.";
+               "(vm_probe_linux.cpp), macOS (vm_probe_macos.cpp) and Windows "
+               "(vm_probe_windows.cpp) each establish one via "
+               "probe/arena_walk.hpp, so this means the scan did not reach that "
+               "code at all - not that this platform has no arena to scan.";
     }
     return out.str();
 }

@@ -28,6 +28,7 @@
 // testing finds it - only asking twice does.
 #include "runtimeskeptic/probe/arena_walk.hpp"
 #include "runtimeskeptic/probe/windows_regions.hpp"
+#include "runtimeskeptic/core/json.hpp"
 
 #include <algorithm>
 #include <cstdint>
@@ -162,7 +163,12 @@ RegionQuery query_over(const Occupied& occupied, std::uint64_t space_end) {
 // Only the VirtualAlloc outcome is modelled here; `region_at_is_occupied` and
 // `classify_window` are called for real. A test that mirrors an implementation
 // proves the mirror.
-ArenaProbe windows_probe(Occupied occupied, Occupied structural = {}) {
+// `window` is a parameter and not the constant it started as: the low arena
+// walks in 64 GiB windows, and a describe hook that scanned a hardcoded 64 MiB
+// would miss a blocker 256 MiB into the window - which is exactly what the
+// first version of the 64 GiB case caught, in the test rather than on a runner.
+ArenaProbe windows_probe(Occupied occupied, Occupied structural = {},
+                         std::uint64_t window = kWinWindow) {
     ArenaProbe p;
     const RegionQuery query = query_over(occupied, kWinMax);
     p.place = [occupied, structural, query](std::uint64_t base,
@@ -180,8 +186,8 @@ ArenaProbe windows_probe(Occupied occupied, Occupied structural = {}) {
         if (region_at_is_occupied(base, query)) return ArenaPlacement::HeldByProbe;
         return ArenaPlacement::Refused;
     };
-    p.describe = [query](std::uint64_t base) {
-        return classify_window(base, kWinWindow, query, "ERROR_INVALID_ADDRESS");
+    p.describe = [query, window](std::uint64_t base) {
+        return classify_window(base, window, query, "ERROR_INVALID_ADDRESS");
     };
     return p;
 }
@@ -604,6 +610,60 @@ RS_TEST(kuser_shared_data_is_below_the_windows_arena_by_measurement) {
     RS_CHECK_MESSAGE(kKuserSharedData < arena_floor_for(kWinMax, kWinTiB),
                      "KUSER_SHARED_DATA is inside the arena, so a system band "
                      "would be silently swallowed as one of ours");
+}
+
+RS_TEST(the_two_windows_arenas_tile_without_a_gap_or_an_overlap) {
+    // The top arena went out alone because the occupancy note said 99.8% of the
+    // process was in the top TiB. It was right about the image and wrong about
+    // the heap: `test_probe` on the runner allocated at 0x2f78000e000 - 2.97 TiB -
+    // and the coverage test failed with `gap 0x7c087fff2000` against an arena
+    // that had otherwise worked perfectly (16312 placed, 0 refused).
+    constexpr std::uint64_t kLowBottom = kWinTiB;
+    const std::uint64_t boundary = arena_floor_for(kWinMax, kWinTiB);
+
+    // Tiling: the low arena ends exactly where the top one begins.
+    RS_CHECK(kLowBottom < boundary);
+    RS_CHECK(boundary < kWinMax);
+
+    // The two addresses the runner actually reported, each in the right arena.
+    constexpr std::uint64_t kMeasuredHeapPage = 0x2f78000e000ull;
+    RS_CHECK_MESSAGE(kMeasuredHeapPage >= kLowBottom &&
+                         kMeasuredHeapPage < boundary,
+                     "the heap page the Windows runner reported is not in the "
+                     "low arena: " + json::to_hex(kMeasuredHeapPage));
+    // And the top arena still holds the image region it was built for.
+    RS_CHECK(0x7ff9fa967000ull >= boundary && 0x7ff9fa967000ull < kWinMax);
+
+    // KUSER_SHARED_DATA stays outside BOTH, which is what makes
+    // treat-a-covered-refusal-as-held sound in either of them.
+    RS_CHECK_MESSAGE(0x7ffe0000ull < kLowBottom,
+                     "KUSER_SHARED_DATA is inside the low arena, so a "
+                     "system-wide band would be swallowed as one of ours");
+}
+
+RS_TEST(a_sixty_four_gib_window_walk_still_merges_to_one_range) {
+    // The low arena spans 126 TiB, so its window is 64 GiB rather than 64 MiB:
+    // 2016 contiguous placements instead of two million. Contiguous matters -
+    // Linux samples at this stride and therefore asserts the space between its
+    // samples, which is what `walk_arena`'s header argues against.
+    constexpr std::uint64_t kBig = 64ull << 30;
+    constexpr std::uint64_t kBottom = kWinTiB;
+    constexpr std::uint64_t kTop = kBottom + 64 * kBig;   // 4 TiB of arena
+
+    const ArenaWalk walk = walk_arena(
+        "test arena", kBottom, kTop, kWinGranularity, kBig,
+        windows_probe({{kBottom + 3 * kBig + 0x10000000ull,
+                        kBottom + 3 * kBig + 0x10800000ull},   // a heap, mid-window
+                       {kBottom + 40 * kBig, kBottom + 40 * kBig + 0x40000ull}},
+                      {}, kBig));
+
+    RS_CHECK_MESSAGE(walk.available.size() == 1,
+                     "expected one merged range across the 64 GiB windows, got " +
+                         show(bounds(walk.available)));
+    RS_CHECK(walk.unavailable.empty());
+    RS_CHECK(walk.available.front().range.start == kBottom);
+    RS_CHECK(walk.available.front().range.end == kTop);
+    RS_CHECK(walk.placed + walk.held_by_probe + walk.held_no_access == 64);
 }
 
 RS_TEST(an_arena_floor_on_an_exact_multiple_is_not_an_empty_arena) {
