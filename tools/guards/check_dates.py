@@ -54,11 +54,22 @@ HEADING = re.compile(r"^##\s+(\d{4}-\d{2}-\d{2})\b")
 CHECKED = re.compile(r"<!--\s*checked:\s*(\d{4}-\d{2}-\d{2})\s*-->")
 ANY_DATE = re.compile(r"\b(20\d{2}-\d{2}-\d{2})\b")
 
-# A heading may sit one day either side of its commit: the entry is often
-# written just before midnight UTC and committed just after, and the reverse
-# happens when a commit is amended the next morning. Two days apart is not a
-# timezone, it is a wrong date.
+# A heading may sit one day either side of its commit ONLY when the commit is
+# actually near midnight. The entry is often written just before midnight UTC
+# and committed just after, and that case is real - but a flat +/-1 day made the
+# guard useless for the case it exists for.
+#
+# It happened, hours after an external reviewer flagged the same class. A
+# session ran past midnight; `438c13d` was committed at 2026-07-26T10:43Z with a
+# heading reading `## 2026-07-25`, eleven and a half hours wrong. The guard
+# passed, because 1 <= 1. The author's notion of "today" had gone stale in the
+# middle of the work and the one check written to catch that shrugged.
+#
+# So the day of grace is conditional on the clock: within this many minutes of
+# midnight, a one-day disagreement is a timezone artifact. Outside it, a
+# one-day disagreement is a wrong date.
 HEADING_TOLERANCE_DAYS = 1
+MIDNIGHT_GRACE_MINUTES = 180
 
 STALE_DAYS = 90
 
@@ -87,8 +98,12 @@ def newest_commit_date():
     return datetime.fromisoformat(r.stdout.strip()).date()
 
 
-def blame_dates(rel_path):
-    """line number (1-based) -> date the line was last touched."""
+def blame_datetimes(rel_path):
+    """line number (1-based) -> UTC datetime the line was last touched.
+
+    The time, not just the date: whether a one-day disagreement is forgivable
+    depends on how close the commit was to midnight.
+    """
     r = git("blame", "--line-porcelain", "--", rel_path)
     if r.returncode != 0:
         return {}
@@ -102,8 +117,7 @@ def blame_dates(rel_path):
             pending = int(line.split()[1])
         elif line.startswith("\t") and line_no:
             if pending is not None:
-                out[line_no] = datetime.fromtimestamp(
-                    pending, tz=timezone.utc).date()
+                out[line_no] = datetime.fromtimestamp(pending, tz=timezone.utc)
             line_no = 0
     return out
 
@@ -128,22 +142,36 @@ def main() -> int:
 
     # --- check 1: PROGRESS.md headings match when they were written --------
     if PROGRESS.exists():
-        blame = blame_dates("docs/PROGRESS.md")
+        blame = blame_datetimes("docs/PROGRESS.md")
         for i, line in enumerate(PROGRESS.read_text().splitlines(), 1):
             m = HEADING.match(line)
             if not m:
                 continue
             claimed = date.fromisoformat(m.group(1))
-            actual = blame.get(i)
-            if actual is None:          # written now, not yet committed
-                actual = datetime.now(timezone.utc).date()
+            when = blame.get(i)
+            if when is None:            # written now, not yet committed
+                when = datetime.now(timezone.utc)
+            actual = when.date()
             delta = abs((claimed - actual).days)
-            if delta > HEADING_TOLERANCE_DAYS:
+            if delta == 0:
+                continue
+
+            # How far from midnight was the commit?
+            minutes = when.hour * 60 + when.minute
+            from_midnight = min(minutes, 24 * 60 - minutes)
+            forgivable = (delta <= HEADING_TOLERANCE_DAYS and
+                          from_midnight <= MIDNIGHT_GRACE_MINUTES)
+            if not forgivable:
+                detail = (f"{delta} day(s) apart" if delta > 1 else
+                          f"one day apart, and the commit was "
+                          f"{from_midnight // 60}h{from_midnight % 60:02d}m from "
+                          f"midnight - too far for a timezone artifact")
                 problems.append(
                     f"docs/PROGRESS.md:{i}: entry is dated {claimed}, but git "
-                    f"says the line was written {actual} ({delta} days apart). "
-                    f"The log records when work happened; it is not a place to "
-                    f"put the date somebody thought it was.")
+                    f"says the line was written "
+                    f"{when.strftime('%Y-%m-%d %H:%MZ')} ({detail}). The log "
+                    f"records when work happened; it is not a place to put the "
+                    f"date somebody thought it was.")
 
     # --- checks 2 and 3: no future dates, and stale markers are named ------
     for path in sorted(ROOT.rglob("*.md")):

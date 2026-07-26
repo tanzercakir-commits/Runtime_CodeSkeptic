@@ -16,7 +16,7 @@ re-litigated; a mistake recorded here does not need to be re-made.
 
 ---
 
-## 2026-07-25 — an external review, and a guard that was green for the wrong reason
+## 2026-07-26 — an external review, and a guard that was green for the wrong reason
 
 **Changed.** `tools/guards/check_docs.py` resolves cited paths against
 `git ls-files` instead of the working tree; `tools/guards/check_todo.py` gained
@@ -87,6 +87,27 @@ start the run at all - a workflow that edits itself can trigger itself, which is
 the only route available to a party that cannot press the button. The comment
 now names three, separates *what* is measured from *how*, and says why the third
 is load-bearing.
+
+### And then it happened a fourth time, to the guard written for it
+
+This entry was first headed `## 2026-07-25`. It was committed at
+`2026-07-26T10:43Z`. The session had run past midnight and the author's notion
+of "today" went stale in the middle of the work - **hours after the review
+flagged that exact class**.
+
+`check_dates.py` passed it. `HEADING_TOLERANCE_DAYS = 1` exists for the real
+case where an entry is written just before midnight UTC and committed just
+after, and a flat one-day allowance swallowed a disagreement of eleven and a
+half hours. The one check written to catch a stale sense of today shrugged at
+the clearest instance of it yet.
+
+Now the day of grace is conditional on the clock: within three hours of
+midnight, one day apart is a timezone artifact; outside it, one day apart is a
+wrong date. The message says which, with the distance from midnight. Heading
+corrected, and a selftest case pins both sides.
+
+Fourth date incident in this project, and the only one caught by a guard rather
+than by a person - after the guard was tightened by the person's finding.
 
 **Next.** Two decisions belong to the owner and neither should be taken here:
 resolve the `T-004` promotion, and - if dispatch capability is wanted - request

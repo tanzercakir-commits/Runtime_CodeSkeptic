@@ -290,12 +290,21 @@ CASES = [
                     "docs/x.md": "Still true. <!-- checked: 2024-01-01 -->\n"})],
          expect_fail=False, expect_text="stale:"),
 
-    Case("check_dates.py", "one day either side of the commit is tolerated",
+    Case("check_dates.py", "one day either side is tolerated NEAR MIDNIGHT",
          {},
          commits=[("2026-07-25T00:30:00+00:00",
                    {"docs/PROGRESS.md": "# Progress log\n\n"
                                         "## 2026-07-24 — written before midnight\n\nbody\n"})],
          expect_fail=False),
+
+    # The flat +/-1 day allowance swallowed a heading eleven and a half hours
+    # wrong, in this project, hours after a reviewer flagged the class.
+    Case("check_dates.py", "one day apart in the middle of the day fails",
+         {},
+         commits=[("2026-07-26T10:43:00+00:00",
+                   {"docs/PROGRESS.md": "# Progress log\n\n"
+                                        "## 2026-07-25 — stale sense of today\n\nbody\n"})],
+         expect_fail=True, expect_text="too far for a timezone artifact"),
 
     # ---- check_todo: the compass and the map must agree ----------------
     Case("check_todo.py", "an open plan criterion with no owner fails",
