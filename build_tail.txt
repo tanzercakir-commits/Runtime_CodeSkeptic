@@ -1,0 +1,26 @@
+MSBuild version 18.7.8+1ac568fee for .NET Framework
+
+  rs_core.vcxproj -> D:\a\Runtime_CodeSkeptic\Runtime_CodeSkeptic\build\lib\RelWithDebInfo\rs_core.lib
+  rs_vm.vcxproj -> D:\a\Runtime_CodeSkeptic\Runtime_CodeSkeptic\build\lib\RelWithDebInfo\rs_vm.lib
+  rs_reports.vcxproj -> D:\a\Runtime_CodeSkeptic\Runtime_CodeSkeptic\build\lib\RelWithDebInfo\rs_reports.lib
+  rs-check.vcxproj -> D:\a\Runtime_CodeSkeptic\Runtime_CodeSkeptic\build\bin\RelWithDebInfo\rs-check.exe
+  vm_probe_windows.cpp
+D:\a\Runtime_CodeSkeptic\Runtime_CodeSkeptic\src\probe\vm_probe_windows.cpp(946,29): error C2220: the following warning is treated as an error [D:\a\Runtime_CodeSkeptic\Runtime_CodeSkeptic\build\src\rs_probe.vcxproj]
+D:\a\Runtime_CodeSkeptic\Runtime_CodeSkeptic\src\probe\vm_probe_windows.cpp(946,29): warning C4456: declaration of 'walk' hides previous local declaration [D:\a\Runtime_CodeSkeptic\Runtime_CodeSkeptic\build\src\rs_probe.vcxproj]
+      D:\a\Runtime_CodeSkeptic\Runtime_CodeSkeptic\src\probe\vm_probe_windows.cpp(881,27):
+      see declaration of 'walk'
+  
+  vm_probe_unimplemented.cpp
+  Generating Code...
+  rs-profile.vcxproj -> D:\a\Runtime_CodeSkeptic\Runtime_CodeSkeptic\build\bin\RelWithDebInfo\rs-profile.exe
+  test_address_range.vcxproj -> D:\a\Runtime_CodeSkeptic\Runtime_CodeSkeptic\build\bin\RelWithDebInfo\test_address_range.exe
+  test_analyzer.vcxproj -> D:\a\Runtime_CodeSkeptic\Runtime_CodeSkeptic\build\bin\RelWithDebInfo\test_analyzer.exe
+  test_bundle.vcxproj -> D:\a\Runtime_CodeSkeptic\Runtime_CodeSkeptic\build\bin\RelWithDebInfo\test_bundle.exe
+  test_evidence.vcxproj -> D:\a\Runtime_CodeSkeptic\Runtime_CodeSkeptic\build\bin\RelWithDebInfo\test_evidence.exe
+  test_impact.vcxproj -> D:\a\Runtime_CodeSkeptic\Runtime_CodeSkeptic\build\bin\RelWithDebInfo\test_impact.exe
+  test_incidents.vcxproj -> D:\a\Runtime_CodeSkeptic\Runtime_CodeSkeptic\build\bin\RelWithDebInfo\test_incidents.exe
+  test_json.vcxproj -> D:\a\Runtime_CodeSkeptic\Runtime_CodeSkeptic\build\bin\RelWithDebInfo\test_json.exe
+  test_mutation.vcxproj -> D:\a\Runtime_CodeSkeptic\Runtime_CodeSkeptic\build\bin\RelWithDebInfo\test_mutation.exe
+  test_profile.vcxproj -> D:\a\Runtime_CodeSkeptic\Runtime_CodeSkeptic\build\bin\RelWithDebInfo\test_profile.exe
+  test_report.vcxproj -> D:\a\Runtime_CodeSkeptic\Runtime_CodeSkeptic\build\bin\RelWithDebInfo\test_report.exe
+  test_sha256.vcxproj -> D:\a\Runtime_CodeSkeptic\Runtime_CodeSkeptic\build\bin\RelWithDebInfo\test_sha256.exe
