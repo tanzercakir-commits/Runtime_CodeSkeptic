@@ -503,9 +503,27 @@ jobs:
             fi
           }
 
-          # Address above the user address space: proven impossible anywhere on
-          # x86-64 Linux with 4-level paging.
-          check contracts/emulator-highmem-guest-mapping.json 1 "high-memory guest mapping is UNSUPPORTED"
+          # DERIVED FROM THE MEASURED PROFILE, not hard-coded - and the comment
+          # this replaces said why without noticing: "proven impossible anywhere on
+          # x86-64 Linux with 4-LEVEL PAGING". The contract asks for
+          # 0x800000000000, which is above max_user_address on a 4-level host and
+          # comfortably inside it on a 5-level one. GitHub's Linux fleet has both,
+          # so a fixed expectation here is a claim about which machine the job
+          # landed on. It failed the first time a 5-level runner got this far:
+          # expected exit 1, got 0, and the analyzer was right both times.
+          want_highmem=$(python3 - <<'PY'
+          import json
+          vm = json.load(open("host-profile.json"))["virtual_memory"]
+          top = vm.get("max_user_address", {}).get("value")
+          # 1 = UNSUPPORTED when the address is out of bounds, 0 = SUPPORTED when
+          # this host is wide enough to contain it. Unknown bound -> keep the
+          # stricter expectation rather than accepting either answer.
+          print(0 if top is not None and int(str(top), 16) > 0x800000000000 else 1)
+          PY
+          )
+          echo "measured max_user_address implies exit $want_highmem for a mapping at 0x800000000000"
+          check contracts/emulator-highmem-guest-mapping.json "$want_highmem" \
+            "high-memory guest mapping matches the measured address-space width"
 
           # A JIT demanding simultaneous write+execute: allowed on stock Linux,
           # so this must NOT be reported as a contradiction here.

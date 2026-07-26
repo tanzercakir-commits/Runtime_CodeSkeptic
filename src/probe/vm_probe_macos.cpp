@@ -674,6 +674,35 @@ constexpr std::uint64_t kArenaTop = 0xfc0000000ull;   // commpage start
 // 60 GiB walk into four million windows.
 constexpr std::uint64_t kMinArenaWindow = 4ull * 1024 * 1024;
 
+// WHERE A NO-ACCESS REGION IS ASSUMED TO BE OURS. One rule, in one place, because
+// three separate producers reached for it and the first two disagreed.
+//
+// macOS gives no way to ask whose a map entry is. The commpage and the GPU carveout
+// are no-access entries and REAL host limitations; a process's own malloc guards,
+// dyld reservations and thread stack guards are no-access entries and are not.
+// `try_place()` collapses both into `Refused`, and every consumer inherits the
+// ambiguity:
+//
+//   the arena walk          filed ~80 of its own guard pages as limitations, and
+//                           profile_id moved between two runs (83 vs 74 entries)
+//   the max-address survey  recorded a 16 KiB "hole in the address space" at
+//                           0x200000000 that the arena then placed a window across
+//   the landmark ladder     widened a 12 GiB no-access region at 0x59e000000 to its
+//                           full extent and called it a host limitation
+//
+// The bounds of the arena ARE the rule: inside them a no-access entry is ours,
+// because both documented bands lie outside them (which is why the arena's top came
+// down to the commpage start). Outside them it is the host's, and the ladder probes
+// those addresses on purpose.
+//
+// Residual risk, stated once here rather than in three places: an undocumented
+// platform band inside these bounds would be treated as ours by every producer. The
+// `held_no_access` count in the arena's note is the signal - it rises while
+// `unavailable_ranges` stays empty.
+bool no_access_here_is_ours(std::uint64_t address) {
+    return address >= kMachOTextBase && address < kArenaTop;
+}
+
 // One arena, not two, and that is a deliberate stopping point rather than an
 // oversight. Linux needs two because a PIE's text and the kernel's mmap base sit
 // four TiB apart. On macOS both measured addresses - code at 4.03 GiB, heap at
@@ -876,8 +905,16 @@ ScanOutcome scan_address_space(std::size_t page_size, std::uint64_t probe_length
         const bool is_our_pagezero =
             region.covers && region.start == 0 &&
             region.protection == VM_PROT_NONE;
+        // `!no_access_here_is_ours(base)` is the shared rule declared above, and
+        // without it this branch widened a 12 GiB no-access region at 0x59e000000
+        // to its full extent and published it as a host limitation - while the
+        // arena, obeying the same rule, reported the same span available. Third
+        // producer, same ambiguity. The reasoning that built this branch was sound
+        // for the carveout, which is 384 GiB at a documented address and OUTSIDE
+        // these bounds; it does not carry to an entry the process made itself.
         const bool entry_denies_everything =
             region.covers && !is_our_pagezero &&
+            !no_access_here_is_ours(base) &&
             (region.reserved || region.protection == VM_PROT_NONE);
         if (is_our_pagezero) {
             outcome.occupied_notes.push_back(

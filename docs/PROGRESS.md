@@ -824,9 +824,62 @@ That null result is the point. It took a **host** the project had never run on, 
 program — the third time in one week, after `<iterator>` on MSVC and `declare -A` on
 bash 3.2. It is an argument for the measurement channel, not for a bigger corpus.
 
-**Also next.** Windows still has no arena at all, and `RS-VM-0027` will fire on
-every Windows and macOS profile until those probes measure the new fact — which is
-the honest reading of a profile that has not.
+### One rule, three producers, and a gate expectation that was a claim about hardware
+
+`f78149d` moved both failures one layer on, and both answers came from artifacts the
+channel had only just started publishing.
+
+#### macOS: the third producer of the same ambiguity
+
+```
+available   [0x16c000000, 0xfc0000000)     the arena
+unavailable [0x59e000000, 0x89ec00000)     probed at 0x7ffc00000, KERN_NO_SPACE,
+                                           "region covers it, protection ---",
+                                           widened to the entry's full extent
+```
+
+The survey holes are gone; this is the **landmark ladder**, widening a 12 GiB
+no-access region at 22.5 GiB to its full extent and publishing it as a host
+limitation. Third producer, same ambiguity, inherited through `try_place()` — and
+the ladder's own long argument for that branch was reasoned out for the **carveout**,
+which is 384 GiB at a documented address.
+
+So the rule is now named once, `no_access_here_is_ours()`, and all three obey it:
+**inside the arena's bounds a no-access entry is ours; outside them it is the
+host's.** That is what the arena's bounds are *for*, and it is why the top came down
+to the commpage start — both documented bands lie outside. Checked:
+
+```
+probed 0x7ffc00000   region [0x59e000000, 0x89ec00000)  -> ours, not recorded
+probed 0x1000000000  region [0x1000000000, 0x7000000000) -> host, recorded  (carveout)
+probed 0xfc0000000   region [0xfc0000000, 0x1000000000)  -> host, recorded  (commpage)
+```
+
+The two bands the ladder exists to measure still record. The residual risk is stated
+once, in one place, instead of three times or nowhere.
+
+#### The gate expectation was a claim about which machine the job landed on
+
+```
+::error:: high-memory guest mapping is UNSUPPORTED: expected exit 1, got 0
+```
+
+`contracts/emulator-highmem-guest-mapping.json` asks for `0x800000000000` = 2^47.
+Above `max_user_address` on a 4-level host, comfortably inside it on a 5-level one.
+**And the workflow comment said so already:** *"proven impossible anywhere on x86-64
+Linux with 4-level paging."* The expectation was hard-coded next to a comment naming
+the assumption that makes it wrong.
+
+| | |
+|---|---|
+| **+** | reproduced **exactly** from `profile.json` in the diagnostics ref — the artifact added two commits earlier for precisely this. `max_user_address: 0xfffffffffff000`, `max_single_reservation: 70368744177664`, measured on the runner |
+| **+** | provably not caused by `RS-VM-0026`: the contract's size is 64 KiB, below every band the new rule touches, and the verdict comes from `RS-VM-0003` against the address bound |
+| **+** | the expectation is derived from the measured profile now, and the real step text was extracted from the YAML and **run against both host kinds locally** — 4-level expects 1 and gets 1, 5-level expects 0 and gets 0. A heredoc inside a YAML block scalar is worth checking before spending a runner minute on it |
+| **−** | this is the fourth thing in two days that was a claim about hardware written as a constant: the arena ceiling, the 4 PiB verdict, `exact-mapping-above-user-space`, and now the gate. The corpus and the rules were fine; the **constants** were the problem |
+
+**Also next.** Windows still has no arena at all, and `RS-VM-0027` will fire on every
+Windows and macOS profile until those probes measure `max_single_reservation` — which
+is the honest reading of a profile that has not measured it.
 
 ---
 
