@@ -1,0 +1,1 @@
+tests/groundtruth/selftest.sh: no rs-check at /d/a/Runtime_CodeSkeptic/Runtime_CodeSkeptic/build/bin/rs-check; build first
