@@ -212,8 +212,13 @@ findings from the set itself:
 - `[partial]` 5. reserve/commit mismatch — `RS-VM-0012` exists but no
   execution has ever confirmed it; the claim is about behaviour under memory
   pressure, which the harness cannot provoke safely (T-012)
-- `[open]` 6. **valid host operation rejected by caller assumption** — no
-  contract in the repository demonstrates this direction (T-006)
+- `[done]` 6. **valid host operation rejected by caller assumption** —
+  `RS-VM-0013`, confirmed by execution:
+  `tests/groundtruth/cases/pointer_truncation.c` does `mmap(NULL)`, proves the
+  returned mapping is valid and writable, and shows the address does not survive
+  32-bit storage. The one ground-truth case here that needs the host to
+  **succeed**; its outcome is the new `lost`, held against the analyzer's
+  `UNSUPPORTED`. The other six all need the host to refuse or relocate.
 - `[done]` 7. invalid fallback reported as success — `RS-VM-0014`
 
 ---

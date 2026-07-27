@@ -16,6 +16,53 @@ re-litigated; a mistake recorded here does not need to be re-made.
 
 ---
 
+## 2026-07-27 — the seventh demonstration: the host succeeds and the caller loses
+
+**Changed.** `tests/groundtruth/cases/pointer_truncation.c` and
+`contracts/pointer-truncation-32bit.json` are new; `gt_common.h` gains a sixth
+outcome, `lost`; `selftest.sh` pins its two pairings. `RS-VM-0013` is now executed
+against a real kernel. Demo 6 in `docs/PLAN.md` goes `[open]` → `[done]`; T-006
+closes.
+
+| | |
+|---|---|
+| **+** | the one MVP demonstration that was missing, and the one that made the tool one-directional. Six of seven need the host to refuse or relocate; this one needs it to **succeed** |
+| **+** | `RS-VM-0013` had a rule and unit tests and had never met a kernel. Now `checked on: host` — execution coverage 8 → 9 of 23 |
+| **+** | the case does not manufacture a crash: it proves the mapping is valid (a sentinel round-trips through the full 64-bit pointer) and then shows the address does not survive a 32-bit slot. No signal, no host refusal — a correct result the caller discards |
+| **−** | it needed a new outcome. `faulted` would have conflated a caller truncation with a host access refusal (file-map-beyond-eof's SIGBUS), blurring the exact line demo 6 exists to draw |
+
+### Why `lost`, and why it changed almost nothing
+
+The existing five outcomes are all host-side: `satisfied` (the host did it),
+`refused` (the host said no), `relocated` (the host chose elsewhere), `faulted`
+(the host faulted the access), `skipped` (couldn't test). None expresses "the host
+succeeded and the caller's own assumption discards the result", which is
+definitionally demo 6.
+
+`lost` names it. And because `run.sh` already routes any UNSUPPORTED-prediction
+outcome that is not `satisfied`/`skipped`/`no-output` to **held** through an else
+branch, the pairing needed no change — the harness was already shaped to treat an
+observed program failure as confirmation. `selftest.sh` now pins
+`unsupported|lost|held` and `supported|lost|CONTRADICTED` so that behaviour cannot
+drift into something the else branch happens to do by accident.
+
+```
+pointer-truncation-32bit   UNSUPPORTED   lost   held
+  mmap(NULL) returned a valid, writable mapping at 0x7f...; stored in 32 bits it
+  becomes 0x...., a different address the program can no longer reach
+```
+
+The real shape is LuaJIT without GC64 storing mcode pointers in 32-bit slots
+(RSC-0018) and MAP_32BIT-style assumptions (RSC-0020). The contract's
+`pointer_storage_width_bits: 32` is the program's; `mmap(NULL)` on every 64-bit
+host this project runs returns an address above 2³², so the slot cannot hold it.
+
+**Next.** T-015's LA57 half (hardware luck), T-005's rule-coverage accounting,
+T-007's evidence bundle, and the false-positive campaign still on one host and one
+OS.
+
+---
+
 ## 2026-07-27 — the note that promised not to record what it was recording
 
 **Changed.** `ladder_record()` is new in `probe/arena_walk.{hpp,cpp}` and both

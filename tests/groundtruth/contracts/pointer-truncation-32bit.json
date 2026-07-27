@@ -1,0 +1,39 @@
+{
+  "schema": "runtime-skeptic.application-requirements.v1",
+  "name": "Returned address stored in a 32-bit slot",
+  "component": "ground-truth pairing for RS-VM-0013",
+  "operation": "virtual_memory_map",
+  "request": {
+    "size": 65536,
+    "exact_address_required": false,
+    "validates_returned_address": false,
+    "protection": {
+      "read": true,
+      "write": true,
+      "execute": false
+    },
+    "file_backed": false
+  },
+  "assumptions": {
+    "pointer_storage_width_bits": 32,
+    "retries_on_failure": false
+  },
+  "required_postconditions": [
+    "the address the host returns round-trips through 32-bit storage"
+  ],
+  "permitted_fallbacks": [],
+  "failure_sink": {
+    "kind": "unchecked",
+    "location": {
+      "file": "tests/groundtruth/cases/pointer_truncation.c",
+      "line": 1,
+      "symbol": "attempt"
+    },
+    "description": "the case reports `lost`: mmap returned a valid, writable mapping whose address does not fit a 32-bit slot, so the program's stored pointer refers to unrelated memory"
+  },
+  "assumption_evidence": "specified_guarantee",
+  "extraction_limitations": [
+    "Single-claim contract written to pair with a ground-truth case. It asserts exactly one thing so that a whole-contract verdict can be compared against a single observation without ambiguity."
+  ],
+  "x_groundtruth": "RS-VM-0013, and the seventh MVP demonstration: valid host operation rejected by caller assumption. mmap(NULL) always succeeds and always returns a valid mapping - the host does nothing wrong. The 32-bit pointer_storage_width is the program's, and on every 64-bit host the returned address is above 2^32, so a 32-bit slot cannot hold it. The real shape is LuaJIT without GC64 (RSC-0018) and MAP_32BIT-style assumptions (RSC-0020). Distinct from every other case here, which needs the host to refuse or relocate; this one needs the host to succeed."
+}

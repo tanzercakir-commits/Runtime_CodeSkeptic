@@ -143,6 +143,16 @@
       ],
       "verifies_all_postconditions": true,
       "why": "RS-VM-0008, the assumption itself rather than a specific hint. Kept separate so neither rule loses its only execution when the other contract is edited - which is exactly what happened when an address was added to the hinted contract and RS-VM-0008 silently fell out of coverage."
+    },
+    {
+      "case": "pointer-truncation-32bit",
+      "contract": "contracts/pointer-truncation-32bit.json",
+      "program": "pointer_truncation",
+      "args": [
+        "65536"
+      ],
+      "why": "RS-VM-0013, the seventh MVP demonstration: valid host operation rejected by caller assumption. mmap(NULL) succeeds and returns a valid mapping; the 32-bit pointer_storage_width is the program's, and every 64-bit host returns an address above 2^32. The one case here that needs the host to SUCCEED, not refuse. LuaJIT nogc64 (RSC-0018), MAP_32BIT assumptions (RSC-0020).",
+      "verifies_all_postconditions": true
     }
   ]
 }

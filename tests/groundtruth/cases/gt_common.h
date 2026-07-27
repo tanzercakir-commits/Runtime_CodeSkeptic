@@ -29,12 +29,24 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
-/* The five outcomes the runner understands. */
+/* The outcomes the runner understands.
+ *
+ * The first five are host-side: what the kernel did with the request. `lost` is
+ * the sixth and it is different in kind - the kernel SUCCEEDED and returned a
+ * valid result, and the failure is entirely in the caller's handling of it. It
+ * exists for the seventh MVP demonstration, "valid host operation rejected by
+ * caller assumption", which none of the host-side outcomes can express: the
+ * program did not fault (that is `faulted`, a host access refusal) and the kernel
+ * did not relocate (that is `relocated`, a host placement choice) - the returned
+ * address simply does not fit the storage the program keeps it in. Paired against
+ * an UNSUPPORTED prediction it is held, through the runner's else branch, like
+ * any other observed failure of the program. */
 #define GT_SATISFIED "satisfied"
 #define GT_REFUSED   "refused"
 #define GT_RELOCATED "relocated"
 #define GT_FAULTED   "faulted"
 #define GT_SKIPPED   "skipped"
+#define GT_LOST      "lost"
 
 __attribute__((unused))
 static void gt_json_escape(const char* s, char* out, size_t cap) {

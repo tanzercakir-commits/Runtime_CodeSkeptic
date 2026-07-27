@@ -148,22 +148,6 @@ already made once, when the coverage tool reported 100% by grepping prose.
 
 ---
 
-### T-006 — A contract for "valid host operation rejected by caller assumption" `[next]`
-
-**Serves:** the symmetry of the whole argument
-**Plan:** `docs/PLAN.md` Phase 3, MVP demonstration 6
-**Done when:** a contract and a ground-truth case exist where the **host is
-fine** and the program's own assumption is what fails, and the harness confirms
-it.
-
-Six of the seven MVP demonstrations point the same way: the host refuses
-something the program needs. This one points the other way, and its absence is
-why the tool can still be read as "a list of things platforms will not do".
-`RS-VM-0014` (permitted fallback contradicts a required postcondition) is the
-closest existing rule and the natural place to start.
-
----
-
 ### T-007 — The §17 evidence bundle `[next]`
 
 **Serves:** S6, S8 — anything where a verdict has to survive leaving the machine
@@ -270,6 +254,45 @@ Each needs a reason, so this cannot quietly become a way to empty the list.
 ---
 
 ## Done
+
+### T-006 — A contract for "valid host operation rejected by caller assumption" `[done]`
+
+**Serves:** the symmetry of the whole argument
+**Plan:** `docs/PLAN.md` Phase 3, MVP demonstration 6
+**Done when:** a contract and a ground-truth case exist where the host is fine and
+the program's own assumption is what fails, and the harness confirms it.
+
+**Closed.** `RS-VM-0013` (returned address does not fit the caller's pointer
+storage) had a rule and unit tests but had never met a real kernel. It does now:
+
+```
+pointer-truncation-32bit   UNSUPPORTED   lost   held
+  the host returned a valid, writable mapping at 0x7f...; stored in 32 bits it
+  becomes 0x...., a different address the program can no longer reach
+```
+
+`tests/groundtruth/cases/pointer_truncation.c` does the most ordinary thing there
+is — `mmap(NULL, 65536, RW)` — proves the mapping is valid by round-tripping a
+sentinel through the full pointer, then shows the address does not survive a
+32-bit slot. The kernel does nothing wrong; the 32-bit `pointer_storage_width` is
+the program's, and it is the whole failure. That is the direction the other six
+demonstrations do not have, and the reason the tool could still be read as "a list
+of things platforms will not do".
+
+It needed a **sixth ground-truth outcome**, `lost`, because the existing five are
+all host-side: the program did not `fault` (a host access refusal) and the kernel
+did not `relocate` (a host placement choice). `lost` names the category demo 6
+exists for — a correct host result the caller's own assumption discards — and it
+is `held` against `UNSUPPORTED` through the runner's else branch, so `run.sh`
+needed no pairing change; `selftest.sh` pins `unsupported\|lost\|held` and
+`supported\|lost\|CONTRADICTED` so it cannot silently drift. Real shape:
+LuaJIT without GC64 (RSC-0018), MAP_32BIT assumptions (RSC-0020).
+
+Rule coverage by execution rose 8 → **9 of 23** (`RS-VM-0013` now `checked on:
+host` in `tools/campaign/groundtruth_coverage.py`).
+
+---
+
 
 ### T-016 — macOS reported its own layout as the top of the address space `[done]`
 
