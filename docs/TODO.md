@@ -47,50 +47,54 @@ completes without leaving a trace in the log is work that will be redone.
 
 **Serves:** every verdict the analyzer emits about a macOS address
 **Plan:** `docs/PLAN.md` Phase 1 — the probe's measured bounds
-**Done when:** `exact-mapping-above-user-space` is `held` on both macOS lanes
-(`native-arm64` and `rosetta-x86_64`), and the profile's `max_user_address`
-warning shows nothing of this task's own covering the ceiling.
+**Done when:** `exact-mapping-above-user-space` is `held` on **both** macOS lanes
+and `the_scan_covers_where_this_process_is_actually_mapped` passes on both.
 
-**Found by removing a constant.** `2d058f7` made that case derive its address from
-the measured `max_user_address` instead of naming `0x800000000000`. Both macOS
-lanes then said:
+**The ceiling half is done and measured.** `d6abf18`:
 
 ```
-exact-mapping-above-user-space   UNSUPPORTED  satisfied  CONTRADICTED
-  mmap(0x600000000000, 131072, MAP_FIXED) placed the mapping exactly there
-  and it accepted reads and writes
+native-arm64    max_user_address  0x600000000000 -> 0x7ffffe000000    lane GREEN
+rosetta-x86_64  max_user_address                 -> 0x7ff800000000
 ```
 
-`max_user_address` was `0x600000000000`, and a mapping went in **at** it and was
-written to. So the reported ceiling is not the top of the address space. Every
-analyzer verdict above it was a false `UNSUPPORTED` — the direction that tells a
-caller their working program will not work.
+Both bisections and the survey now go through `address_is_usable()`: a mapping of
+OUR OWN at an address is the strongest possible evidence the address exists, and
+treating it as a refusal put the ceiling **35 TiB low** on native. Everything in
+that band had been answering a confident false `UNSUPPORTED`.
+`mach_vm_region` at the new ceiling reports nothing covering it, which is
+explanation (a) confirmed and (b) excluded.
 
-**Two explanations fit, and only a runner separates them:**
+**What it exposed, and this is the remaining half.** With an honest ceiling,
+`rosetta-x86_64` now fails coverage instead:
 
 ```
-(a) our own mappings sat there and the bisection read that as the host
-    refusing            -> fixed by address_is_usable(); ceiling should move up
-(b) mach_vm_allocate(VM_FLAGS_FIXED) is refused where mmap(MAP_FIXED) is not
-    -> the two calls answer different questions and the probe measures the
-       wrong one; the fix is elsewhere
+heap page      : 0x7f9ab0028000                      <- 140 TiB
+arena          : [0x100000000, 0xfc0000000)          <- 60 GiB, and 15042 windows
+                                                        placed, 0 refused: correct,
+                                                        and in the wrong place
+nearest below  : [0x400000000000, 0x400000400000)    gap 0x3f9aafc28000
+nearest above  : [0x7fffffc00000, 0x800000000000)    KERN_INVALID_ADDRESS
 ```
 
-`mach_vm_region` at the ceiling tells them apart in one line, and the profile now
-prints it.
+A **translated** x86-64 process puts its heap at `0x7f…`, like Linux, not at
+`0x7be800000` like the native lane the arena was designed from. So macOS needs a
+second arena near the top of the space, and this is now the third platform to say
+so:
 
-**(a) is the strong prior**, because the same file had the rule written down and
-inverted: `find_min_map_address` carried the comment *"Only a REFUSAL moves the
-floor up. 'Occupied by us' says nothing about what the kernel would permit another
-process"* directly above an `else` branch that moved the floor up on exactly that.
-Both bisections and the survey now go through `address_is_usable()`, which is the
-same rule as EEXIST on Linux, `no_access_here_is_ours()`, `ladder_record()` and
-the arena's held windows — the fourth, fifth and sixth site of one idea.
+```
+Linux    two arenas   mmap base (top of space) + ET_DYN base
+Windows  two arenas   top TiB (image, DLLs) + 1..127 TiB (NT heap)
+macOS    ONE arena    [__TEXT base, commpage) — right for native, 140 TiB short
+                      for Rosetta
+```
 
-**First step:** read `refs/ci-logs/<sha>/native-arm64:groundtruth.txt` and the
-`max_user_address resolved to` warning in the published profile. If the ceiling
-moved and the case is `held`, this closes. If it did not, the warning says what
-covers the address and (b) is the answer.
+**First step:** `[ceiling − 4 TiB, ceiling)` from the measured
+`max_user_address`, in 64 GiB contiguous windows — 64 placements, the Windows
+sizing rather than Linux's sampling, because `arena_walk` asserts only what it
+places. The ours-rule inside `describe` must become the arena's own bounds rather
+than the file-scope `no_access_here_is_ours()`, which is what
+`probe/arena_walk.hpp` already says it should be: *"The bounds of the arena ARE
+the rule."* For the low arena that is a byte-identical no-op.
 
 ---
 

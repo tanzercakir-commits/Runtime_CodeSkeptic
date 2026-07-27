@@ -246,11 +246,63 @@ separate them:**
 this push cannot be compiled here and the outcome is genuinely unknown — a macOS
 runner adjudicates.
 
-**Next.** T-016 first: read `groundtruth.txt` and the ceiling warning on the next
-macOS run. Then T-015's LA57 half (hardware luck), T-005's rule coverage, T-006's
-missing seventh demonstration — the only one of the seven that points at the
-*caller* rather than the host — and the false-positive campaign still resting on
-one host and one OS.
+### The runner adjudicated: (a), and the ceiling was 35 TiB low
+
+`d6abf18`. `native-arm64` went **green**, and the published profile says why:
+
+```
+max_user_address: 0x600000000000  ->  0x7ffffe000000
+warning: max_user_address resolved to 0x7ffffe000000 from a highest placed probe
+         point of 0x400000000000; mach_vm_region at the ceiling says:
+         mach_vm_region found no region at or above this address
+```
+
+Explanation (a) confirmed and (b) excluded in one line, by the evidence the same
+push was made to carry. The reported ceiling had been **35 TiB below** the real
+one, and every analyzer verdict in that band was a confident false `UNSUPPORTED`.
+
+### And it exposed the next one, which is the same shape a third time
+
+With an honest ceiling, `rosetta-x86_64` fails coverage instead:
+
+```
+heap page : 0x7f9ab0028000                     <- 140 TiB
+arena     : [0x100000000, 0xfc0000000)         <- 60 GiB. 15042 placed, 0 refused:
+                                                  working perfectly, 140 TiB away
+```
+
+A **translated** x86-64 process puts its heap at `0x7f…`, like Linux — not at
+`0x7be800000` like the native lane the arena was designed from. So:
+
+```
+Linux    two arenas   mmap base (top of space) + ET_DYN base
+Windows  two arenas   top TiB (image, DLLs) + 1..127 TiB (NT heap)
+macOS    ONE arena    [__TEXT base, commpage) — right for native, short for Rosetta
+```
+
+Three platforms, three times the same discovery: **one arena is never enough,
+because a program's code and its heap do not live together.** macOS was the only
+one where a single arena ever looked sufficient, and that was because the lane
+that would have disproved it could not see its own ceiling.
+
+| | |
+|---|---|
+| **+** | every one of today's four findings came from removing a constant or a wrong branch, not from adding a feature. The tool found them by being made honest |
+| **+** | the evidence-carrying pattern paid again: one push, two hypotheses, one line of output, no guessing |
+| **−** | `max_user_address` was `measured_capability` on macOS — which licenses a `PROVEN` verdict — while being a fact about one process's free space, for as long as the probe has existed |
+| **−** | CI ends the day 7 of 8 green, with `rosetta-x86_64` red on a gap that is now precisely specified rather than mysterious |
+
+**Next.** T-016's remaining half: `[ceiling − 4 TiB, ceiling)` in 64 GiB
+contiguous windows — the Windows sizing, not Linux's sampling — with the
+ours-rule inside `describe` becoming the arena's own bounds instead of the
+file-scope `no_access_here_is_ours()`. `probe/arena_walk.hpp` already says that is
+what it should be: *"The bounds of the arena ARE the rule."* For the existing low
+arena it is a byte-identical no-op.
+
+Then T-015's LA57 half (hardware luck), T-005's rule coverage, T-006's missing
+seventh demonstration — the only one of the seven that points at the *caller*
+rather than the host — and the false-positive campaign still resting on one host
+and one OS.
 
 ---
 
