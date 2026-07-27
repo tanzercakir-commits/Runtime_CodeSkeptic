@@ -1,0 +1,42 @@
+host: macos/x86_64+rosetta2
+profile: macos-rosetta-x86_64.json
+
+CASE                               PREDICTED     REALITY     PAIRING
+------------------------------------------------------------------------------------------------------------
+exact-mapping-in-carveout          UNSUPPORTED   refused     held
+    mmap(0x1307200000, 131072, MAP_FIXED) failed: errno=12 ENOMEM (Cannot allocate memory)
+exact-mapping-at-a-free-address    SUPPORTED     satisfied   held
+    mmap(0x7000000000, 131072, MAP_FIXED) placed the mapping exactly there and it accepted reads and writes
+rwx-anonymous-2mib                 SUPPORTED     satisfied   held
+    2097152 bytes mapped PROT_READ|PROT_WRITE|PROT_EXEC, written through, and executed without flipping protection
+page-size-at-most-4kib             SUPPORTED     satisfied   held
+    sysconf(_SC_PAGESIZE) is 4096 and the build assumes 4096; os_page <= PAGE, so the shipping check passes
+page-size-at-most-64kib            SUPPORTED     satisfied   held
+    sysconf(_SC_PAGESIZE) is 4096 and the build assumes 65536; os_page <= PAGE, so the shipping check passes
+file-map-beyond-eof                CONDITIONAL   satisfied   not asserted
+    reading the first byte of a page entirely past end of file returned 0x00 without faulting
+file-map-partial-page              SUPPORTED     satisfied   held
+    the 4095 bytes between the end of a 1-byte file and the end of its final page read as zero, without faulting
+write-then-execute-2mib            SUPPORTED     satisfied   held
+    2097152 bytes mapped RW, written, flipped to RX with mprotect, and executed - W and X were never live together
+hinted-mapping-requires-identity   UNSUPPORTED   relocated   held
+    the hint 0x109500000 was occupied, so the kernel placed the mapping at 0x109520000 instead and reported SUCCESS - a program requiring guest/host identity has already lost here, and no error code told it
+oversized-reservation-4pib         UNSUPPORTED   refused     held
+    mmap of 4503599627370496 bytes (4096.0 TiB) was refused: errno=12 ENOMEM (Cannot allocate memory)
+reserve-then-commit-1gib           SUPPORTED     satisfied   held
+    1073741824 bytes reserved PROT_NONE, then one 4096-byte page inside it committed with mprotect and written
+exact-mapping-below-minimum        UNSUPPORTED   refused     held
+    mmap(0x800, 131072, MAP_FIXED) failed: errno=22 EINVAL (Invalid argument)
+exact-mapping-above-user-space     UNSUPPORTED   satisfied   CONTRADICTED
+    mmap(0x600000000000, 131072, MAP_FIXED) placed the mapping exactly there and it accepted reads and writes
+identity-without-translation       CONDITIONAL   relocated   not asserted
+    the hint 0x10b200000 was occupied, so the kernel placed the mapping at 0x10b220000 instead and reported SUCCESS - a program requiring guest/host identity has already lost here, and no error code told it
+
+cases: 14   held: 11   contradicted: 1   not asserted: 2
+
+CONTRADICTED PREDICTIONS - each is a finding, not a flake:
+  - exact-mapping-above-user-space: predicted UNSUPPORTED, but the operation succeeded - mmap(0x600000000000, 131072, MAP_FIXED) placed the mapping exactly there and it accepted reads and writes
+
+Either the analyzer is wrong about this platform or the contract
+misdescribes the program. Decide which by reading the case source; do
+not adjust the expectation to match the output.
