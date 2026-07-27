@@ -1,0 +1,14 @@
+{
+  "rosetta": {
+    "outputs": {
+      "available": "true"
+    },
+    "outcome": "success",
+    "conclusion": "success"
+  },
+  "measure": {
+    "outputs": {},
+    "outcome": "success",
+    "conclusion": "success"
+  }
+}
