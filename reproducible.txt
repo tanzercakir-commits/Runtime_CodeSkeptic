@@ -1,0 +1,19 @@
+5 runs, and run 3 is the one that disagrees with run 1:
+1 sha256:2a9fab9cd132d9bb3d132872fe4226f0d4e03d39b4b11e07b753802d92836888
+2 sha256:2a9fab9cd132d9bb3d132872fe4226f0d4e03d39b4b11e07b753802d92836888
+3 sha256:51552b1b5b77588df0648fa18c8bfae6e35daff5fc831b92348f0eb72fb44552
+4 sha256:2a9fab9cd132d9bb3d132872fe4226f0d4e03d39b4b11e07b753802d92836888
+5 sha256:2a9fab9cd132d9bb3d132872fe4226f0d4e03d39b4b11e07b753802d92836888
+NOT REPRODUCIBLE: two runs of the probe on this host disagree
+  run 1  sha256:2a9fab9cd132d9bb3d132872fe4226f0d4e03d39b4b11e07b753802d92836888
+  run 2  sha256:51552b1b5b77588df0648fa18c8bfae6e35daff5fc831b92348f0eb72fb44552
+
+Facts that differ:
+  available_ranges: 25 vs 24 entries
+    only in run 1: [0x200000000, 0x200400000)
+  unavailable_ranges: 34 vs 35 entries
+    only in run 2: [0x200000000, 0x200400000)
+
+A fact that changes while the host does not is a fact about the PROBE.
+Record it as a probe_run warning, not as a host capability - a measured
+capability permits a PROVEN verdict, and this one cannot support it.
