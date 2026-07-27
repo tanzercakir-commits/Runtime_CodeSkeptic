@@ -365,7 +365,42 @@ function above it and not the one below.
 | **−** | the same class of error, twice, four days apart, on one platform: commpage floor read as the top, then Rosetta-band floor read as the top |
 | **−** | `min_map_address` keeps the old predicate deliberately — "is it free" is the right question for a floor — so the two are now named for what they answer instead of sharing one |
 
-**Next.** A macOS runner adjudicates T-016's second half. Then T-015's LA57 half
+### Eight green, and both lanes agree on one ceiling
+
+`9311e1c`. Every job, including Rosetta:
+
+```
+                    before          after
+native-arm64    0x600000000000  ->  0x7ffffe000000     was 35 TiB low
+rosetta-x86_64  0x7ff800000000  ->  0x7ffffe000000     was 34 GiB low
+
+both:  mach_vm_region finds NO region at or above it  -> the genuine top
+high arena [0x7bfffe000000, 0x7ffffe000000)   64 / 62 placed, 0 refused
+```
+
+**Identical on both lanes**, which is what a kernel constant should be and what
+the old value never was — it moved with the process's own layout in one lane and
+with a translation band in the other.
+
+**T-016 took three distinct defects, each found by the one before it:**
+
+```
+1  the ceiling read our own mappings as the host refusing        35 TiB low
+      -> fixed, and it exposed:
+2  one arena, covering only where a NATIVE process lives         heap 140 TiB away
+      -> fixed, and it exposed:
+3  the ceiling search read a system reservation's floor
+   as the top of the world                                       34 GiB low
+```
+
+None of the three was visible until the one before it was gone, and none would
+have been visible at all while `exact-mapping-above-user-space` named its address
+as `0x800000000000`. **The whole chain was unlocked by deleting a constant.**
+
+**Next.** T-015's LA57 half (hardware luck), T-005's rule coverage, T-006's
+missing seventh demonstration — the only one of the seven that points at the
+*caller* rather than the host — and the false-positive campaign still resting on
+one host and one OS. Then T-015's LA57 half
 (hardware luck), T-005's rule coverage, T-006's missing seventh demonstration —
 the only one of the seven that points at the *caller* rather than the host — and
 the false-positive campaign still resting on one host and one OS.

@@ -43,72 +43,6 @@ completes without leaving a trace in the log is work that will be redone.
 
 ## Now
 
-### T-016 — macOS reported its own layout as the top of the address space `[now]`
-
-**Serves:** every verdict the analyzer emits about a macOS address
-**Plan:** `docs/PLAN.md` Phase 1 — the probe's measured bounds
-**Done when:** `exact-mapping-above-user-space` is `held` on **both** macOS lanes
-and `the_scan_covers_where_this_process_is_actually_mapped` passes on both.
-
-**The ceiling half is done and measured.** `d6abf18`:
-
-```
-native-arm64    max_user_address  0x600000000000 -> 0x7ffffe000000    lane GREEN
-rosetta-x86_64  max_user_address                 -> 0x7ff800000000
-```
-
-Both bisections and the survey now go through `address_is_usable()`: a mapping of
-OUR OWN at an address is the strongest possible evidence the address exists, and
-treating it as a refusal put the ceiling **35 TiB low** on native. Everything in
-that band had been answering a confident false `UNSUPPORTED`.
-`mach_vm_region` at the new ceiling reports nothing covering it, which is
-explanation (a) confirmed and (b) excluded.
-
-**What it exposed, and this is the remaining half.** With an honest ceiling,
-`rosetta-x86_64` now fails coverage instead:
-
-```
-heap page      : 0x7f9ab0028000                      <- 140 TiB
-arena          : [0x100000000, 0xfc0000000)          <- 60 GiB, and 15042 windows
-                                                        placed, 0 refused: correct,
-                                                        and in the wrong place
-nearest below  : [0x400000000000, 0x400000400000)    gap 0x3f9aafc28000
-nearest above  : [0x7fffffc00000, 0x800000000000)    KERN_INVALID_ADDRESS
-```
-
-A **translated** x86-64 process puts its heap at `0x7f…`, like Linux, not at
-`0x7be800000` like the native lane the arena was designed from. So macOS needs a
-second arena near the top of the space, and this is now the third platform to say
-so:
-
-```
-Linux    two arenas   mmap base (top of space) + ET_DYN base
-Windows  two arenas   top TiB (image, DLLs) + 1..127 TiB (NT heap)
-macOS    ONE arena    [__TEXT base, commpage) — right for native, 140 TiB short
-                      for Rosetta
-```
-
-**Both halves are now written; the second is unverified.** `scan_one_macos_arena()`
-takes its bounds as parameters and the ours-rule inside `describe` is
-`base >= bottom && base < top` — the arena's own bounds, which is what
-`probe/arena_walk.hpp` already said it should be: *"The bounds of the arena ARE
-the rule."* For the low arena that predicate evaluates exactly what
-`no_access_here_is_ours()` does, so it is a byte-identical no-op there.
-
-The high arena is `[high_arena_floor(max_user_address, 4 TiB, commpage),
-max_user_address)` in 64 GiB contiguous windows — 64 placements, the Windows
-sizing rather than Linux's sampling, because `arena_walk` asserts only what it
-places. `high_arena_floor()` lives in `probe/arena_walk.hpp` and returns **0**
-twice on purpose: when the ceiling was never measured, and when the arena would
-reach back into the low one. Both are refusals to guess, and both are tested.
-
-**Still to be adjudicated by a runner**, because macOS cannot be compiled here.
-The changed region parses clean against stubs under
-`-Wall -Wextra -Wshadow -Wconversion -Werror` — which caught a missing lambda
-capture and proves well-formedness, **not** that the Mach calls are right.
-
----
-
 ### T-015 — Fitting in the address space is not enough to reserve it `[now]`
 
 **Serves:** the credibility of every `SUPPORTED` the analyzer emits
@@ -336,6 +270,86 @@ Each needs a reason, so this cannot quietly become a way to empty the list.
 ---
 
 ## Done
+
+### T-016 — macOS reported its own layout as the top of the address space `[done]`
+
+**Serves:** every verdict the analyzer emits about a macOS address
+**Plan:** `docs/PLAN.md` Phase 1 — the probe's measured bounds
+**Done when:** `exact-mapping-above-user-space` is `held` on **both** macOS lanes
+and `the_scan_covers_where_this_process_is_actually_mapped` passes on both.
+
+**The ceiling half is done and measured.** `d6abf18`:
+
+```
+native-arm64    max_user_address  0x600000000000 -> 0x7ffffe000000    lane GREEN
+rosetta-x86_64  max_user_address                 -> 0x7ff800000000
+```
+
+Both bisections and the survey now go through `address_is_usable()`: a mapping of
+OUR OWN at an address is the strongest possible evidence the address exists, and
+treating it as a refusal put the ceiling **35 TiB low** on native. Everything in
+that band had been answering a confident false `UNSUPPORTED`.
+`mach_vm_region` at the new ceiling reports nothing covering it, which is
+explanation (a) confirmed and (b) excluded.
+
+**What it exposed, and this is the remaining half.** With an honest ceiling,
+`rosetta-x86_64` now fails coverage instead:
+
+```
+heap page      : 0x7f9ab0028000                      <- 140 TiB
+arena          : [0x100000000, 0xfc0000000)          <- 60 GiB, and 15042 windows
+                                                        placed, 0 refused: correct,
+                                                        and in the wrong place
+nearest below  : [0x400000000000, 0x400000400000)    gap 0x3f9aafc28000
+nearest above  : [0x7fffffc00000, 0x800000000000)    KERN_INVALID_ADDRESS
+```
+
+A **translated** x86-64 process puts its heap at `0x7f…`, like Linux, not at
+`0x7be800000` like the native lane the arena was designed from. So macOS needs a
+second arena near the top of the space, and this is now the third platform to say
+so:
+
+```
+Linux    two arenas   mmap base (top of space) + ET_DYN base
+Windows  two arenas   top TiB (image, DLLs) + 1..127 TiB (NT heap)
+macOS    ONE arena    [__TEXT base, commpage) — right for native, 140 TiB short
+                      for Rosetta
+```
+
+**Both halves are now written; the second is unverified.** `scan_one_macos_arena()`
+takes its bounds as parameters and the ours-rule inside `describe` is
+`base >= bottom && base < top` — the arena's own bounds, which is what
+`probe/arena_walk.hpp` already said it should be: *"The bounds of the arena ARE
+the rule."* For the low arena that predicate evaluates exactly what
+`no_access_here_is_ours()` does, so it is a byte-identical no-op there.
+
+The high arena is `[high_arena_floor(max_user_address, 4 TiB, commpage),
+max_user_address)` in 64 GiB contiguous windows — 64 placements, the Windows
+sizing rather than Linux's sampling, because `arena_walk` asserts only what it
+places. `high_arena_floor()` lives in `probe/arena_walk.hpp` and returns **0**
+twice on purpose: when the ceiling was never measured, and when the arena would
+reach back into the low one. Both are refusals to guess, and both are tested.
+
+**Closed on `9311e1c`: eight green, and both lanes agree on one ceiling.**
+
+```
+                    before          after
+native-arm64    0x600000000000  ->  0x7ffffe000000    35 TiB low
+rosetta-x86_64  0x7ff800000000  ->  0x7ffffe000000    34 GiB low
+                                    ^ and mach_vm_region finds NO region at or
+                                      above it, on both - the genuine top
+
+high arena  [0x7bfffe000000, 0x7ffffe000000)   64 placed / 62 placed, 0 refused
+```
+
+Identical on both lanes, which is what a kernel constant should be and what the
+old value never was. It took **three** distinct defects, each found by the one
+before it: the ceiling read our own layout as a refusal; the arena covered only
+where a native process lives; and the ceiling search read a system reservation's
+floor as the top of the world.
+
+---
+
 
 Items land here with the commit that finished them, and they are not deleted:
 a compass with no wake behind it cannot show whether the heading has been
