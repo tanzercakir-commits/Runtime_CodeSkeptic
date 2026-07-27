@@ -203,6 +203,49 @@ std::uint64_t find_max_single_reservation() {
     return largest;
 }
 
+// THE SAME MEASUREMENT, ASKED SOMEWHERE ELSE, and the reason is that the one
+// above is labelled as more than it measures.
+//
+// `nullptr` is not a neutral place to ask on x86-64 Linux. `find_start_end()` in
+// arch/x86/kernel/sys_x86_64.c widens the search to the full address space only
+// when `addr > DEFAULT_MAP_WINDOW`, and
+// Documentation/arch/x86/x86_64/5level-paging.rst says so outright:
+//
+//   "the kernel will not allocate memory above 47-bit by default ... an
+//    application has to specify mmap hint address above 47-bit to opt in"
+//
+// So on a 5-level-paging host the hintless probe stops at 128 TiB while a caller
+// passing a high hint can be granted far more, and `max_single_reservation`
+// quietly means "the largest grant inside the default window" - while its own
+// comment claims "the largest the kernel actually grants".
+//
+// This asks the second question. On a 4-level host `DEFAULT_MAP_WINDOW` IS the
+// top of the space, so the hint is above everything, mmap ignores it as advisory,
+// and the two numbers agree. THAT AGREEMENT IS THE EVIDENCE - every ordinary
+// runner publishes a matching pair, and the first LA57 host to come along
+// publishes the difference with nobody present to ask.
+//
+// The hint is advisory (no MAP_FIXED), so this can never fail because of where it
+// asked: a kernel that dislikes the address relocates and the measurement still
+// happens.
+constexpr std::uint64_t kAboveDefaultMapWindow = std::uint64_t{1} << 47;
+
+std::uint64_t find_max_single_reservation_hinted() {
+    std::uint64_t largest = 0;
+    for (unsigned bit = 20; bit < 63; ++bit) {   // from 1 MiB, as above
+        const std::uint64_t size = std::uint64_t{1} << bit;
+        MapAttempt attempt =
+            try_map(reinterpret_cast<void*>(kAboveDefaultMapWindow),
+                    static_cast<std::size_t>(size), PROT_NONE,
+                    MAP_PRIVATE | MAP_ANONYMOUS | MAP_NORESERVE);
+        if (attempt.ok()) {
+            largest = size;
+            unmap(attempt, static_cast<std::size_t>(size));
+        }
+    }
+    return largest;
+}
+
 std::uint64_t find_max_user_address(std::size_t page_size) {
     // Lower bound: an address we know works. Upper bound: one we know fails.
     // Do NOT stop at the first failure. Linux user space happens to be one
@@ -928,6 +971,48 @@ Result probe_virtual_memory(const Options& options) {
             "no power-of-two reservation from 1 MiB upward was granted, so "
             "max_single_reservation was left unknown rather than recorded as "
             "zero");
+    }
+
+    // And the same question asked above DEFAULT_MAP_WINDOW. See the comment on
+    // find_max_single_reservation_hinted(): the field above is probed hintlessly
+    // and Linux does not open 5-level paging to a hintless mmap, so on an LA57
+    // host these two differ and the hintless one is the narrower claim.
+    if (const std::uint64_t hinted = find_max_single_reservation_hinted();
+        hinted != 0) {
+        profile.vm.max_single_reservation_hinted = Fact<std::uint64_t>::known(
+            hinted, EvidenceClass::MeasuredCapability,
+            std::string(kSourceProbe) +
+                ": largest power-of-two PROT_NONE MAP_NORESERVE reservation the "
+                "kernel granted for a request hinted at " +
+                json::to_hex(kAboveDefaultMapWindow) +
+                ", above DEFAULT_MAP_WINDOW");
+
+        // THE COMPARISON IS THE WHOLE POINT, so it is stated rather than left
+        // for a reader to compute. On a 4-level host these agree and the pair is
+        // evidence that the hintless number means what it says; where they
+        // differ, the hintless one is a fact about the DEFAULT WINDOW and not
+        // about the kernel's willingness, and every verdict resting on it
+        // inherits that.
+        if (profile.vm.max_single_reservation.is_known()) {
+            const std::uint64_t plain = profile.vm.max_single_reservation.value();
+            if (hinted != plain) {
+                warnings.emplace_back(
+                    "a hint above DEFAULT_MAP_WINDOW changes what this host will "
+                    "reserve: " + json::to_hex(plain) + " hintless vs " +
+                    json::to_hex(hinted) + " hinted. max_single_reservation is "
+                    "therefore the largest grant INSIDE THE DEFAULT MMAP WINDOW "
+                    "on this host, not the largest the kernel will give - which "
+                    "is what a 5-level-paging kernel does, and RS-VM-0026's "
+                    "verdicts rest on the hintless figure unless the request "
+                    "names a high address");
+            } else {
+                warnings.emplace_back(
+                    "a hint above DEFAULT_MAP_WINDOW does not change what this "
+                    "host will reserve (" + json::to_hex(plain) +
+                    " either way), so max_single_reservation means what it says "
+                    "here. On a host with 5-level paging it would not");
+            }
+        }
     }
 
     // -- hint relocation ---------------------------------------------------

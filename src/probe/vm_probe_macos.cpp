@@ -381,6 +381,34 @@ std::uint64_t find_max_single_reservation() {
     return largest;
 }
 
+// The same measurement asked high in the space. See the long note on the Linux
+// probe's `find_max_single_reservation_hinted()`: `nullptr` is not a neutral
+// place to ask on Linux, where `find_start_end()` opens the full address space
+// only for a hint above `DEFAULT_MAP_WINDOW`.
+//
+// macOS documents no such window, so these two are EXPECTED to agree here - and
+// measuring rather than assuming that is the entire reason this exists on this
+// platform. A number that is expected to match and is never checked is an
+// assumption wearing a fact's clothes, and this project has published several.
+constexpr std::uint64_t kHighHint = std::uint64_t{1} << 47;
+
+std::uint64_t find_max_single_reservation_hinted() {
+    std::uint64_t largest = 0;
+    for (unsigned bit = 20; bit < 63; ++bit) {   // from 1 MiB, as above
+        const std::uint64_t size = std::uint64_t{1} << bit;
+        // Advisory: no MAP_FIXED, so a kernel that dislikes the address
+        // relocates and the measurement still happens.
+        MapAttempt attempt = try_map(reinterpret_cast<void*>(kHighHint),
+                                     static_cast<std::size_t>(size), PROT_NONE,
+                                     MAP_PRIVATE | MAP_ANON | MAP_NORESERVE);
+        if (attempt.ok()) {
+            largest = size;
+            unmap(attempt, static_cast<std::size_t>(size));
+        }
+    }
+    return largest;
+}
+
 // USABLE BY ANYONE, which is not the same question as "free right now".
 //
 // `Placed` proves the kernel hands this address out. So does `OccupiedByUs`: a
@@ -1483,6 +1511,32 @@ Result probe_virtual_memory(const Options& options) {
                 "no power-of-two reservation from 1 MiB upward was granted, so "
                 "max_single_reservation was left unknown rather than recorded as "
                 "zero");
+        }
+
+        // And the same question asked high in the space, which macOS is expected
+        // to answer identically because it documents no DEFAULT_MAP_WINDOW.
+        // Measured rather than assumed - see the probe's own comment.
+        if (const std::uint64_t hinted = find_max_single_reservation_hinted();
+            hinted != 0) {
+            profile.vm.max_single_reservation_hinted =
+                Fact<std::uint64_t>::known(
+                    hinted, EvidenceClass::MeasuredCapability,
+                    std::string(kSourceProbe) +
+                        ": largest power-of-two PROT_NONE MAP_NORESERVE "
+                        "reservation granted for a request hinted at " +
+                        json::to_hex(kHighHint));
+            if (profile.vm.max_single_reservation.is_known() &&
+                profile.vm.max_single_reservation.value() != hinted) {
+                warnings.emplace_back(
+                    "a hint high in the address space changes what this host "
+                    "will reserve: " +
+                    json::to_hex(profile.vm.max_single_reservation.value()) +
+                    " hintless vs " + json::to_hex(hinted) +
+                    " hinted. macOS documents no window that would explain "
+                    "that, so it is a finding rather than a known platform "
+                    "behaviour, and max_single_reservation is the narrower of "
+                    "the two claims");
+            }
         }
         // Structural refusals BELOW the highest placeable address are holes,
         // not the ceiling. Recording them is the whole point on this platform -

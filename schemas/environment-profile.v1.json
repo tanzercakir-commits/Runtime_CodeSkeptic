@@ -404,6 +404,27 @@
           "items": {
             "type": "string"
           }
+        },
+        "max_single_reservation_hinted": {
+          "type": "object",
+          "description": "The largest single reservation granted when the request carries a hint ABOVE the platform's default mmap search window, as a power of two. The field above is probed with a NULL hint, and Linux does not open 5-level paging to a hintless mmap - find_start_end() widens the search only when addr > DEFAULT_MAP_WINDOW - so on an LA57 host the two differ and the hintless one means 'the largest grant inside the default window'. On a 4-level host they agree, and that agreement is the evidence. Unknown where the platform has no advisory hint (Windows: a VirtualAlloc base is a requirement, not a hint).",
+          "required": [
+            "value",
+            "evidence"
+          ],
+          "properties": {
+            "value": {},
+            "evidence": {
+              "$ref": "#/$defs/evidenceClass"
+            },
+            "source": {
+              "type": "string"
+            },
+            "note": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
         }
       },
       "additionalProperties": true

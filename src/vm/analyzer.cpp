@@ -376,6 +376,22 @@ void Analysis::rule_size_feasibility() {
 //                          dressed as either answer.
 //   size <= granted        the host granted at least this much. Nothing to say.
 //
+// WHICH `granted`, AND WHY THE HINTLESS ONE IS THE DEFAULT.
+//
+// The profile carries two: `max_single_reservation`, probed with a NULL hint, and
+// `max_single_reservation_hinted`, probed above the platform's default mmap search
+// window. On x86-64 Linux they differ on a 5-level-paging host, because
+// `find_start_end()` opens the full address space only for a hint above
+// `DEFAULT_MAP_WINDOW` - so the hintless figure means "the largest grant inside
+// the default window", which is exactly what an UNHINTED CALLER GETS.
+//
+// This rule therefore compares against the hintless figure unless the requirement
+// names an address above the hintless probe's own reach, which is the only way a
+// caller reaches the wider window. A program that asks for 4 PiB with
+// `addr = NULL` is bounded by the default window whatever the hardware can do,
+// and answering it from the hinted number would be reporting a capability the
+// caller cannot access.
+//
 // The fact absent is a different case, and the threshold below is the only
 // constant in this rule that is not measured from the host - so it is measured
 // from the corpus instead. Across 1292 requirements observed from 13 real programs
@@ -419,11 +435,29 @@ void Analysis::rule_reservation_grantable(std::uint64_t usable) {
         return;
     }
 
-    const std::uint64_t granted = profile_.vm.max_single_reservation.value();
+    std::uint64_t granted = profile_.vm.max_single_reservation.value();
+    const auto& granted_fact = profile_.vm.max_single_reservation;
+    bool used_hinted = false;
+    // A caller that names a high address reaches the wider window; one that does
+    // not is bounded by the default one whatever the hardware could give.
+    if (req_.request.address &&
+        profile_.vm.max_single_reservation_hinted.is_known() &&
+        *req_.request.address > granted &&
+        profile_.vm.max_single_reservation_hinted.value() > granted) {
+        granted = profile_.vm.max_single_reservation_hinted.value();
+        used_hinted = true;
+    }
+    const std::string granted_source =
+        used_hinted ? " (measured with a hint above the default mmap window, "
+                      "which this request reaches by naming a high address)"
+                    : "";
     if (size <= granted) {
         satisfied("a reservation of " + dec(size) + " bytes",
-                  "this host granted a reservation of " + dec(granted) + " bytes",
-                  profile_.vm.max_single_reservation.evidence());
+                  "this host granted a reservation of " + dec(granted) +
+                      " bytes" + granted_source,
+                  used_hinted
+                      ? profile_.vm.max_single_reservation_hinted.evidence()
+                      : granted_fact.evidence());
         return;
     }
 
@@ -439,7 +473,8 @@ void Analysis::rule_reservation_grantable(std::uint64_t usable) {
                  json::to_hex(size) + ")";
     f.host_capability =
         "the largest reservation this host granted was " + dec(granted) +
-        " bytes, while " + dec(usable) + " bytes of address space exist";
+        " bytes" + granted_source + ", while " + dec(usable) +
+        " bytes of address space exist";
     if (above_a_known_failure) {
         f.modeled_fallback =
             "the reservation is refused; a request of " + dec(2 * granted) +
@@ -459,8 +494,11 @@ void Analysis::rule_reservation_grantable(std::uint64_t usable) {
     }
     add_application_claim(f, "program reserves " + dec(size) + " bytes in one call");
     f.evidence.add(Layer::OperatingSystem,
-                   profile_.vm.max_single_reservation.evidence(),
-                   "largest reservation granted is " + dec(granted) + " bytes",
+                   used_hinted
+                       ? profile_.vm.max_single_reservation_hinted.evidence()
+                       : granted_fact.evidence(),
+                   "largest reservation granted is " + dec(granted) + " bytes" +
+                       granted_source,
                    profile_.profile_name);
     f.evidence.add(Layer::Analyzer, EvidenceClass::SpecifiedGuarantee,
                    dec(size) + " > " + dec(granted), "analyzer: size arithmetic");

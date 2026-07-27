@@ -43,54 +43,6 @@ completes without leaving a trace in the log is work that will be redone.
 
 ## Now
 
-### T-017 — `max_single_reservation` is measured hintless and labelled as if it were not `[now]`
-
-**Serves:** the honesty of `RS-VM-0026`, which is now the rule T-015 rests on
-**Plan:** `docs/PLAN.md` Phase 1 — the probe's measured facts
-**Done when:** the profile carries the largest reservation granted **with** a hint
-above `DEFAULT_MAP_WINDOW` as well as without one, both `measured_capability`, and
-`RS-VM-0026` states which of the two it compared against and why.
-
-**Found by reading, not by a runner, and it is true today on every host.**
-
-```
-vm_probe_linux.cpp:196      try_map(nullptr, size, PROT_NONE, ... MAP_NORESERVE)
-oversized_reservation.c:35  mmap(NULL,    length, PROT_NONE, ... MAP_NORESERVE)
-```
-
-Both hintless. Linux does not open 5-level paging to a hintless `mmap`:
-`find_start_end()` in `arch/x86/kernel/sys_x86_64.c` widens the search only when
-`addr > DEFAULT_MAP_WINDOW` (2^47 − PAGE_SIZE), and
-`Documentation/arch/x86/x86_64/5level-paging.rst` says so explicitly, for backward
-compatibility. So with `addr = NULL` the search ends at 128 TiB **even on an LA57
-host**.
-
-Two consequences:
-
-1. **The fact is mislabelled.** The comment claims *"the largest reservation the
-   kernel actually grants"*. What is measured is *the largest granted inside the
-   default mmap window*. On a 4-level host those coincide, which is why nothing
-   saw it; on LA57 they diverge, and a caller passing a high hint can get more.
-2. **The 4 PiB refusal may hold for the wrong reason there too.** If the case is
-   hintless, an LA57 kernel refuses 4 PiB because it does not fit the 128 TiB
-   default window — not because of overcommit. T-015's old story said the bounds
-   reason *evaporates* on a 5-level host; it does not, it **moves** from
-   `max_user_address` to `DEFAULT_MAP_WINDOW`, and the analyzer models neither.
-
-The verdict still comes out right (granted stays ~2^46, so `2^52 > 2 x granted`
-fires) — by way of a fact that is mislabelled on that host. Right answer, wrong
-label, which is the shape this project exists to hunt.
-
-**First step:** measure both. A second probe pass with a hint above
-`DEFAULT_MAP_WINDOW`, published as its own fact. On any 4-level host the two must
-agree, and that agreement is itself the evidence; on an LA57 host they diverge and
-**whichever runner lands there publishes the answer without anyone being present
-to ask**. Then decide what `RS-VM-0026` compares against: hintless is what an
-unhinted caller gets, and the requirement model already knows whether the request
-names a high address.
-
----
-
 ## Next
 
 ---
@@ -217,6 +169,83 @@ Each needs a reason, so this cannot quietly become a way to empty the list.
 ---
 
 ## Done
+
+### T-017 — `max_single_reservation` is measured hintless and labelled as if it were not `[done]`
+
+**Serves:** the honesty of `RS-VM-0026`, which is now the rule T-015 rests on
+**Plan:** `docs/PLAN.md` Phase 1 — the probe's measured facts
+**Done when:** the profile carries the largest reservation granted **with** a hint
+above `DEFAULT_MAP_WINDOW` as well as without one, both `measured_capability`, and
+`RS-VM-0026` states which of the two it compared against and why.
+
+**Found by reading, not by a runner, and it is true today on every host.**
+
+```
+vm_probe_linux.cpp:196      try_map(nullptr, size, PROT_NONE, ... MAP_NORESERVE)
+oversized_reservation.c:35  mmap(NULL,    length, PROT_NONE, ... MAP_NORESERVE)
+```
+
+Both hintless. Linux does not open 5-level paging to a hintless `mmap`:
+`find_start_end()` in `arch/x86/kernel/sys_x86_64.c` widens the search only when
+`addr > DEFAULT_MAP_WINDOW` (2^47 − PAGE_SIZE), and
+`Documentation/arch/x86/x86_64/5level-paging.rst` says so explicitly, for backward
+compatibility. So with `addr = NULL` the search ends at 128 TiB **even on an LA57
+host**.
+
+Two consequences:
+
+1. **The fact is mislabelled.** The comment claims *"the largest reservation the
+   kernel actually grants"*. What is measured is *the largest granted inside the
+   default mmap window*. On a 4-level host those coincide, which is why nothing
+   saw it; on LA57 they diverge, and a caller passing a high hint can get more.
+2. **The 4 PiB refusal may hold for the wrong reason there too.** If the case is
+   hintless, an LA57 kernel refuses 4 PiB because it does not fit the 128 TiB
+   default window — not because of overcommit. T-015's old story said the bounds
+   reason *evaporates* on a 5-level host; it does not, it **moves** from
+   `max_user_address` to `DEFAULT_MAP_WINDOW`, and the analyzer models neither.
+
+The verdict still comes out right (granted stays ~2^46, so `2^52 > 2 x granted`
+fires) — by way of a fact that is mislabelled on that host. Right answer, wrong
+label, which is the shape this project exists to hunt.
+
+**Closed. Both are measured now, and the pair is published.**
+
+```
+this 4-level host:  hintless 0x400000000000   hinted 0x400000000000   AGREE
+warning: "a hint above DEFAULT_MAP_WINDOW does not change what this host will
+  reserve (0x400000000000 either way), so max_single_reservation means what it
+  says here. On a host with 5-level paging it would not"
+```
+
+`max_single_reservation_hinted` is a first-class fact in the schema and the model.
+Linux probes above `DEFAULT_MAP_WINDOW`; macOS probes high in the space, where the
+platform documents no such window and the two are *expected* to agree — measured
+rather than assumed, because a number expected to match and never checked is an
+assumption in a fact's clothes. **Windows is unknown on purpose**, with the reason
+in the profile: a `VirtualAlloc` base is a requirement, not an advisory hint, so
+there is no second question to ask and inventing one would be a false analogy.
+
+The probe emits the comparison either way — agreement as evidence, divergence as
+a finding — so the first LA57 runner to come along publishes the answer with
+nobody present to ask. That was the point of measuring both rather than
+relabelling one.
+
+`RS-VM-0026` now **says which figure it used**. It compares against the hintless
+one by default, because that is what an unhinted caller actually gets: a program
+asking for 4 PiB with `addr = NULL` is bounded by the default window whatever the
+hardware could give, and answering from the hinted number would report a
+capability the caller cannot reach. It uses the hinted figure only when the
+requirement names an address above the hintless probe's own reach, and then says
+so in `host_capability` and in the evidence chain.
+
+**What stays open, and it is not this item.** `oversized_reservation.c` is still
+hintless, so on an LA57 host the 4 PiB refusal would still be a default-window
+refusal rather than an accounting one. That is a property of the *case*, not of
+the fact, and the fact now makes it visible: the profile will say the two numbers
+diverge on such a host, and the case can then be paired against the right one.
+
+---
+
 
 ### T-015 — Fitting in the address space is not enough to reserve it `[done]`
 

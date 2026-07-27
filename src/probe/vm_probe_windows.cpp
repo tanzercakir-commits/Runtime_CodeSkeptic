@@ -862,6 +862,27 @@ Result probe_virtual_memory(const Options& options) {
             "zero");
     }
 
+    // `max_single_reservation_hinted` IS LEFT UNKNOWN HERE, ON PURPOSE.
+    //
+    // On Linux and macOS the second measurement asks the same question with an
+    // advisory hint, because `nullptr` is not a neutral place to ask: Linux opens
+    // the full address space only for a hint above DEFAULT_MAP_WINDOW, so the
+    // hintless figure is the narrower claim on an LA57 host.
+    //
+    // Windows has no such question to ask. A base address passed to
+    // `VirtualAlloc` is a REQUIREMENT, not a hint - the call fails when the range
+    // is not free rather than relocating, which is the third of the three
+    // differences this file opens with. There is no "ask elsewhere and see if you
+    // get more"; there is only "ask exactly there and be refused". Measuring
+    // something and calling it the analogue would be a false analogy dressed as a
+    // fact, so the field stays unknown and this says why.
+    warnings.emplace_back(
+        "max_single_reservation_hinted is not measured on this platform and is "
+        "left unknown: a VirtualAlloc base address is a requirement, not an "
+        "advisory hint, so there is no second question to ask. On Linux that "
+        "second number is what separates 'the largest the kernel grants' from "
+        "'the largest inside the default mmap window'");
+
     const std::uint64_t probe_length =
         std::max<std::uint64_t>(granularity,
                                 std::min<std::uint64_t>(

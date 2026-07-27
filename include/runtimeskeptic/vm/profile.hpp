@@ -125,6 +125,28 @@ struct VirtualMemoryModel {
     // about swap.
     Fact<std::uint64_t> max_single_reservation;
 
+    // THE SAME MEASUREMENT, ASKED SOMEWHERE ELSE - and the reason it exists is
+    // that the one above is labelled as more than it measures.
+    //
+    // `max_single_reservation` is probed with a NULL hint. Linux does not open
+    // 5-level paging to a hintless mmap: `find_start_end()` widens the search
+    // only when `addr > DEFAULT_MAP_WINDOW` (2^47 - PAGE_SIZE), which
+    // `Documentation/arch/x86/x86_64/5level-paging.rst` states outright, for
+    // backward compatibility. So on an LA57 host the hintless probe stops at 128
+    // TiB while a caller passing a high hint can be granted far more, and the
+    // field above quietly means "the largest grant inside the default window".
+    //
+    // On a 4-level host the two coincide, which is why nothing ever saw it. THAT
+    // AGREEMENT IS THE POINT: every ordinary runner publishes two numbers that
+    // match, and the first host where they differ publishes the difference
+    // without anyone being present to ask. The alternative was waiting for LA57
+    // hardware and reading it by hand.
+    //
+    // Unknown where the platform has no advisory hint to give - Windows'
+    // `VirtualAlloc` base address is a requirement, not a hint, so there is no
+    // second question to ask there and inventing one would be a false analogy.
+    Fact<std::uint64_t> max_single_reservation_hinted;
+
     // Can this host create an ordinary anonymous mapping at all, with the
     // operating system choosing the address?
     //

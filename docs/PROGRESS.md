@@ -92,9 +92,31 @@ Which means T-015's own story was subtly wrong: the bounds reason does not
 out right there, by way of a fact that is mislabelled on that host. Right answer,
 wrong label. Filed as **T-017**.
 
-**Next.** T-017: measure the hinted case too, so the two numbers agree on every
-4-level host (agreement being the evidence) and diverge on LA57 — where whichever
-runner lands there publishes the answer with nobody present to ask.
+### T-017 closed in the same session: both numbers, and the rule names which
+
+`max_single_reservation_hinted` is a fact now, not a footnote.
+
+```
+this 4-level host:  hintless 0x400000000000   hinted 0x400000000000   AGREE
+warning: "a hint above DEFAULT_MAP_WINDOW does not change what this host will
+  reserve (0x400000000000 either way) ... On a host with 5-level paging it
+  would not"
+```
+
+The probe emits the comparison either way — **agreement as evidence, divergence
+as a finding** — so the first LA57 runner to land publishes the answer with nobody
+present to ask. That is the whole reason for measuring both rather than
+relabelling one.
+
+| | |
+|---|---|
+| **+** | Linux probes above `DEFAULT_MAP_WINDOW`; macOS probes high in the space, where the platform documents no such window and the two are *expected* to agree — measured rather than assumed, because a number expected to match and never checked is an assumption in a fact's clothes |
+| **+** | **Windows is unknown on purpose**, with the reason carried in the profile: a `VirtualAlloc` base is a requirement, not an advisory hint. There is no second question to ask there, and inventing one would be a false analogy dressed as a fact |
+| **+** | `RS-VM-0026` now says which figure it used. Hintless by default — a program asking with `addr = NULL` is bounded by the default window whatever the hardware could give, and answering from the hinted number would report a capability the caller cannot reach. Hinted only when the requirement names an address above the hintless probe's reach, and then it says so in `host_capability` and in the evidence chain |
+| **−** | `oversized_reservation.c` is still hintless, so on an LA57 host the 4 PiB refusal would still be a default-window refusal rather than an accounting one. That is a property of the case, not of the fact — and the fact now makes it visible instead of invisible |
+
+**Next.** T-005's rule-coverage accounting, T-007's evidence bundle, and the
+false-positive campaign still resting on one host and one OS.
 
 ---
 
