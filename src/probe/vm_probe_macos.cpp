@@ -413,6 +413,37 @@ bool address_is_usable(std::uint64_t address, std::size_t page_size) {
     return p == Placement::Placed || p == Placement::OccupiedByUs;
 }
 
+// EXISTS, which is a different question from usable, and the ceiling asks this one.
+//
+// "The address space is a SET, not an interval" is written forty lines below, and
+// it is why `survey_address_space` walks powers of two instead of stopping at the
+// first failure. `refine_max_user_address` then bisected between two of those
+// powers - and a bisection between a usable point and an unusable one IS the
+// interval assumption, reintroduced one function later.
+//
+// IT COST THE SAME MISTAKE TWICE, four days apart, with two different bands. The
+// first macOS run reported the bottom of the COMMPAGE as the top of the address
+// space. On `7720b4b` the Rosetta lane reported the bottom of a Rosetta band:
+//
+//   max_user_address 0x7ff800000000, and mach_vm_region at the ceiling says:
+//   region [0x7ff800000000, 0x7ff84d600000) covers it, and is a system
+//   RESERVATION (vm_region reserved=1), protection r--
+//
+// while the native lane, with no such band, reached 0x7ffffe000000 - some 34 GiB
+// higher. The ground-truth case then placed and WROTE a mapping at exactly the
+// reported ceiling, because `mmap(MAP_FIXED)` is destructive (RSC-0051) and will
+// replace even a system reservation inside your own task.
+//
+// A REGION THAT COVERS AN ADDRESS IS PROOF THE ADDRESS IS INSIDE THE SPACE. It is
+// mapped; the kernel is describing it. Whether it is FREE is a different question
+// and not the one `max_user_address` answers. Only a refusal with nothing covering
+// it - the native lane's "mach_vm_region found no region at or above this address"
+// - means the search has left the address space.
+bool address_exists_in_this_task(std::uint64_t address, std::size_t page_size) {
+    if (address_is_usable(address, page_size)) return true;
+    return describe_region(address).covers;
+}
+
 std::uint64_t find_min_map_address(std::size_t page_size) {
     std::uint64_t first_ok = 0;
     for (unsigned bit = 12; bit < 48; ++bit) {
@@ -488,14 +519,17 @@ std::uint64_t refine_max_user_address(std::uint64_t highest_placed,
     if (highest_placed > (UINT64_MAX / 2)) return highest_placed + page_size;
     std::uint64_t low = highest_placed;
     std::uint64_t high = highest_placed * 2;
-    if (address_is_usable(high, page_size)) {
+    if (address_exists_in_this_task(high, page_size)) {
         return 0;  // contradicts the survey; refuse to guess
     }
     while (high - low > page_size) {
         const std::uint64_t mid =
             low + ((high - low) / 2 / page_size) * page_size;
         if (mid == low) break;
-        if (address_is_usable(mid, page_size)) {
+        // EXISTS, not usable: a system reservation is inside the address space
+        // and stopping under it reports a band's floor as the top of the world,
+        // which this probe has now done twice with two different bands.
+        if (address_exists_in_this_task(mid, page_size)) {
             low = mid;
         } else {
             high = mid;

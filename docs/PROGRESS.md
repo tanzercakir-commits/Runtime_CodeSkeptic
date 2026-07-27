@@ -327,6 +327,44 @@ lesson of the 35 TiB error, the second keeps
 | **−** | macOS still cannot be compiled here. The changed region was parsed against stubs under `-Wall -Wextra -Wshadow -Wconversion -Werror`, which **caught a missing lambda capture** — `describe` referenced `bottom` and `top` with an empty capture list — and proves well-formedness, not that the Mach calls are right |
 | **−** | that stub parse is a throwaway, not a guard. Making it durable would mean maintaining stub Mach headers, and a stub that drifts from the SDK is a check that passes for the wrong reason — the thing this session refused to build once already today |
 
+### The same mistake twice, four days apart, with two different bands
+
+`7720b4b`: the high arena worked — `62 placed, 0 structurally refused` over
+`[0x7bf800000000, 0x7ff800000000)`, and the coverage test passed. And
+`exact-mapping-above-user-space` was still CONTRADICTED on Rosetta, so the
+evidence the earlier push was made to carry earned its place again:
+
+```
+max_user_address 0x7ff800000000, and mach_vm_region at the ceiling says:
+  region [0x7ff800000000, 0x7ff84d600000) covers it, and is a system
+  RESERVATION (vm_region reserved=1), protection r--
+```
+
+A **Rosetta band**, 1.2 GiB wide, and the ceiling search stopped at its floor.
+The native lane, which has no such band, reached `0x7ffffe000000` — 34 GiB
+higher. `mmap(MAP_FIXED)` then placed and wrote a mapping at exactly the reported
+ceiling, because MAP_FIXED is destructive (RSC-0051) and will replace even a
+system reservation inside your own task.
+
+**This file already knew.** Forty lines below the bug:
+
+> The address space is a SET, not an interval. […] the search halted at the
+> bottom of the first one — reporting the commpage boundary at `0xFC0000000` as
+> "the end of the user address space"
+
+That is why `survey_address_space` walks powers of two instead of stopping at the
+first failure. `refine_max_user_address` then **bisects between two of those
+powers** — and a bisection between a usable point and an unusable one *is* the
+interval assumption, reintroduced one function later. The comment guarded the
+function above it and not the one below.
+
+| | |
+|---|---|
+| **+** | the fix separates two questions that were being conflated: `address_is_usable()` (is it free) and `address_exists_in_this_task()` (is it inside the space). The ceiling asks the second — a region covering an address is proof the address exists, whatever its protection |
+| **+** | only a refusal with **nothing** covering it means the search has left the space, which is exactly what the native lane printed at its true ceiling |
+| **−** | the same class of error, twice, four days apart, on one platform: commpage floor read as the top, then Rosetta-band floor read as the top |
+| **−** | `min_map_address` keeps the old predicate deliberately — "is it free" is the right question for a floor — so the two are now named for what they answer instead of sharing one |
+
 **Next.** A macOS runner adjudicates T-016's second half. Then T-015's LA57 half
 (hardware luck), T-005's rule coverage, T-006's missing seventh demonstration —
 the only one of the seven that points at the *caller* rather than the host — and
