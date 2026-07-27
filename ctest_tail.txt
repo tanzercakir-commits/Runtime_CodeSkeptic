@@ -1,0 +1,41 @@
+Test project /Users/runner/work/Runtime_CodeSkeptic/Runtime_CodeSkeptic/build-x64
+    Start 13: test_probe
+1/1 Test #13: test_probe .......................***Failed    4.77 sec
+== probe conformance (15 cases)
+  ok   probe_produces_a_schema_valid_profile_on_every_platform
+  ok   probe_never_attaches_a_value_to_unknown_evidence
+  ok   a_platform_with_an_implementation_actually_uses_it
+  ok   unimplemented_platforms_report_synthetic_origin
+  ok   repeated_calls_in_one_process_produce_the_same_profile_id
+  ok   profile_id_survives_a_write_read_round_trip
+  ok   range_order_does_not_affect_identity
+  ok   canonical_serialization_is_byte_stable
+  ok   measured_page_size_is_a_power_of_two
+  ok   measured_bounds_are_ordered
+  ok   no_recorded_range_carries_unknown_evidence
+  ok   available_and_unavailable_ranges_do_not_overlap
+  ok   disabling_the_scan_drops_the_sweep_but_keeps_measured_bounds
+  FAIL the_scan_covers_where_this_process_is_actually_mapped
+    /Users/runner/work/Runtime_CodeSkeptic/Runtime_CodeSkeptic/tests/conformance/test_probe.cpp:458
+    the profile establishes nothing about an address this process is executing from or allocating in; the scan is looking in the wrong part of the address space
+      heap page      : 0x7f9ab0028000
+      max_user_address: 0x7ff800000000
+      nearest below: [0x400000000000, 0x400000400000)  gap 0x3f9aafc28000
+        note: mach_vm_allocate(VM_FLAGS_FIXED) establishes that the kernel grants this exact address to this process: it either placed a mapping here or reported the address 
+      nearest above: [0x7fffffc00000, 0x800000000000)  gap 0x654fbd8000
+        note: exact placement refused: KERN_INVALID_ADDRESS; mach_vm_region found no region at or above this address
+      containing   : (none - this is a scan-window gap, not a query bug)
+      established: 24 available, 34 unavailable
+      arena: allocation arena [0x100000000, 0xfc0000000) walked in contiguous windows of 0x400000 bytes: 15042 placed, 50 already held by the probe process, 0 structurally refused, 5 refused but covered by a no-access region of this task (treated as held, because nothing here distinguishes one of our own guard reservations from a platform band - and this arena stops below the commpage so that no platform band is inside it; if this number rises while unavailable_ranges stays empty, that assumption has broken), and 7 not probed because they lie inside an entry already described. Only the structurally refused count is a host limitation
+  ok   probe_leaves_the_process_address_space_usable
+
+1 failure(s) in probe conformance
+
+
+0% tests passed, 1 tests failed out of 1
+
+Total Test time (real) =   4.77 sec
+
+The following tests FAILED:
+	 13 - test_probe (Failed)
+Errors while running CTest
