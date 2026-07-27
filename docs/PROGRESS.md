@@ -189,10 +189,68 @@ variable in bash 3.2, which is what macOS ships.
 on the push that introduced it. That is a macOS runner round trip that did not
 happen, on a defect that would have been invisible on every Linux lane.
 
-**Next.** Nothing is chasing a defect any more. What remains: T-015's LA57 half
-(hardware luck), T-005's rule coverage, T-006's missing seventh demonstration —
-the only one of the seven that points at the *caller* rather than the host — and
-the false-positive campaign still resting on one host and one OS.
+### Removing the constant found a real defect within the hour
+
+`2d058f7` went out and both macOS lanes came back red — **not** because the
+derivation broke, but because it worked:
+
+```
+exact-mapping-above-user-space   UNSUPPORTED  satisfied  CONTRADICTED
+  mmap(0x600000000000, 131072, MAP_FIXED) placed the mapping exactly there
+  and it accepted reads and writes
+```
+
+`max_user_address` on macOS arm64 was reported as `0x600000000000`, and a mapping
+went in **at** that address and was written to. The reported ceiling is not the
+top of the address space. Every analyzer verdict above it was a false
+`UNSUPPORTED` — the direction that tells a caller their working program will not
+work — and while the case named `0x800000000000` as a constant, nothing could
+see it.
+
+| | |
+|---|---|
+| **+** | the harness said the right thing without being asked: *"Either the analyzer is wrong about this platform or the contract misdescribes the program. Decide which by reading the case source; do not adjust the expectation to match the output."* |
+| **+** | a red lane here is the tool working. The constant had been hiding this since the case was written |
+| **−** | `max_user_address` is a `measured_capability` on macOS, which permits a `PROVEN` verdict, and it was a fact about one process's free space |
+
+**The strong prior, and why.** The same file had the rule written down and
+inverted. `find_min_map_address` carries:
+
+> Only a REFUSAL moves the floor up. "Occupied by us" says nothing about what the
+> kernel would permit another process.
+
+directly above an `else` branch that moved the floor up on exactly that. The
+ceiling bisection had the same inversion with no comment at all, and the survey
+discarded `OccupiedByUs` as saying nothing about the host — true of a
+*limitation*, false of a *ceiling*: a mapping of ours at an address is the
+strongest possible evidence that the address exists.
+
+All three now go through `address_is_usable()`, which is the EEXIST argument,
+`no_access_here_is_ours()`, `ladder_record()` and the arena's held windows. One
+idea, and this makes six sites. Counting them is the point: a rule that has to be
+rediscovered six times is a rule that belongs in a function, not in a comment.
+
+**Two explanations still fit and the profile now carries the evidence to
+separate them:**
+
+```
+(a) our own mappings sat there, read as the host refusing
+      -> fixed here; the ceiling should move up
+(b) mach_vm_allocate(VM_FLAGS_FIXED) is refused where mmap(MAP_FIXED) is not
+      -> the two calls answer different questions and the probe measures the
+         wrong one; the fix is elsewhere
+```
+
+`mach_vm_region` at the ceiling separates them in one line, and
+`max_user_address resolved to ...` now prints it. Filed as **T-016**, because
+this push cannot be compiled here and the outcome is genuinely unknown — a macOS
+runner adjudicates.
+
+**Next.** T-016 first: read `groundtruth.txt` and the ceiling warning on the next
+macOS run. Then T-015's LA57 half (hardware luck), T-005's rule coverage, T-006's
+missing seventh demonstration — the only one of the seven that points at the
+*caller* rather than the host — and the false-positive campaign still resting on
+one host and one OS.
 
 ---
 

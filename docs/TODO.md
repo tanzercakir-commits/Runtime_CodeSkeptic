@@ -43,6 +43,57 @@ completes without leaving a trace in the log is work that will be redone.
 
 ## Now
 
+### T-016 — macOS reported its own layout as the top of the address space `[now]`
+
+**Serves:** every verdict the analyzer emits about a macOS address
+**Plan:** `docs/PLAN.md` Phase 1 — the probe's measured bounds
+**Done when:** `exact-mapping-above-user-space` is `held` on both macOS lanes
+(`native-arm64` and `rosetta-x86_64`), and the profile's `max_user_address`
+warning shows nothing of this task's own covering the ceiling.
+
+**Found by removing a constant.** `2d058f7` made that case derive its address from
+the measured `max_user_address` instead of naming `0x800000000000`. Both macOS
+lanes then said:
+
+```
+exact-mapping-above-user-space   UNSUPPORTED  satisfied  CONTRADICTED
+  mmap(0x600000000000, 131072, MAP_FIXED) placed the mapping exactly there
+  and it accepted reads and writes
+```
+
+`max_user_address` was `0x600000000000`, and a mapping went in **at** it and was
+written to. So the reported ceiling is not the top of the address space. Every
+analyzer verdict above it was a false `UNSUPPORTED` — the direction that tells a
+caller their working program will not work.
+
+**Two explanations fit, and only a runner separates them:**
+
+```
+(a) our own mappings sat there and the bisection read that as the host
+    refusing            -> fixed by address_is_usable(); ceiling should move up
+(b) mach_vm_allocate(VM_FLAGS_FIXED) is refused where mmap(MAP_FIXED) is not
+    -> the two calls answer different questions and the probe measures the
+       wrong one; the fix is elsewhere
+```
+
+`mach_vm_region` at the ceiling tells them apart in one line, and the profile now
+prints it.
+
+**(a) is the strong prior**, because the same file had the rule written down and
+inverted: `find_min_map_address` carried the comment *"Only a REFUSAL moves the
+floor up. 'Occupied by us' says nothing about what the kernel would permit another
+process"* directly above an `else` branch that moved the floor up on exactly that.
+Both bisections and the survey now go through `address_is_usable()`, which is the
+same rule as EEXIST on Linux, `no_access_here_is_ours()`, `ladder_record()` and
+the arena's held windows — the fourth, fifth and sixth site of one idea.
+
+**First step:** read `refs/ci-logs/<sha>/native-arm64:groundtruth.txt` and the
+`max_user_address resolved to` warning in the published profile. If the ceiling
+moved and the case is `held`, this closes. If it did not, the warning says what
+covers the address and (b) is the answer.
+
+---
+
 ### T-015 — Fitting in the address space is not enough to reserve it `[now]`
 
 **Serves:** the credibility of every `SUPPORTED` the analyzer emits

@@ -381,6 +381,38 @@ std::uint64_t find_max_single_reservation() {
     return largest;
 }
 
+// USABLE BY ANYONE, which is not the same question as "free right now".
+//
+// `Placed` proves the kernel hands this address out. So does `OccupiedByUs`: a
+// mapping of OUR OWN at an address is proof the kernel granted that address to a
+// process. Only a refusal is a statement about the host. This is the EEXIST
+// argument, `no_access_here_is_ours()`, `ladder_record()` and the arena's held
+// windows - the same rule, and this is the fourth and fifth site of it.
+//
+// BOTH BISECTIONS BELOW HAD IT BACKWARDS, and one of them said so in a comment
+// while doing the opposite: `find_min_map_address` reads "Only a REFUSAL moves
+// the floor up. 'Occupied by us' says nothing about what the kernel would permit
+// another process" directly above an `else` branch that moved the floor up on
+// exactly that.
+//
+// What it cost was measured, on `2d058f7`, by the ground-truth case that had just
+// stopped naming its ceiling as a constant:
+//
+//   exact-mapping-above-user-space   UNSUPPORTED  satisfied  CONTRADICTED
+//     mmap(0x600000000000, 131072, MAP_FIXED) placed the mapping exactly there
+//     and it accepted reads and writes
+//
+// `max_user_address` was reported as `0x600000000000` on macOS arm64 and a
+// mapping went in AT that address and was written to. So the ceiling was not the
+// top of the address space; it was the top of the space that happened to be free
+// in one process on one morning - and every analyzer verdict above it was a
+// false UNSUPPORTED, in the direction that tells a caller their working program
+// will not work.
+bool address_is_usable(std::uint64_t address, std::size_t page_size) {
+    const Placement p = try_place_nearby(address, page_size, page_size);
+    return p == Placement::Placed || p == Placement::OccupiedByUs;
+}
+
 std::uint64_t find_min_map_address(std::size_t page_size) {
     std::uint64_t first_ok = 0;
     for (unsigned bit = 12; bit < 48; ++bit) {
@@ -400,8 +432,10 @@ std::uint64_t find_min_map_address(std::size_t page_size) {
             low + ((high - low) / 2 / page_size) * page_size;
         if (mid == low) break;
         // Only a REFUSAL moves the floor up. "Occupied by us" says nothing
-        // about what the kernel would permit another process.
-        if (try_place_nearby(mid, page_size, page_size) == Placement::Placed) {
+        // about what the kernel would permit another process - and until
+        // `address_is_usable()` existed, this line said that and did the
+        // opposite.
+        if (address_is_usable(mid, page_size)) {
             high = mid;
         } else {
             low = mid;
@@ -430,13 +464,17 @@ SpaceSurvey survey_address_space(std::size_t page_size) {
         const std::uint64_t candidate = std::uint64_t{1} << bit;
         switch (try_place_nearby(candidate, page_size, page_size)) {
             case Placement::Placed:
+            case Placement::OccupiedByUs:
+                // Both prove the kernel hands this address out. The second used
+                // to fall through to "says nothing about the host", which is
+                // true of a LIMITATION and false of a CEILING: a mapping of ours
+                // at an address is the strongest possible evidence that the
+                // address exists.
                 survey.highest_placed = candidate;
                 break;
             case Placement::Refused:
                 survey.refused.push_back(candidate);
                 break;
-            case Placement::OccupiedByUs:
-                break;  // says nothing about the host
         }
     }
     return survey;
@@ -450,14 +488,14 @@ std::uint64_t refine_max_user_address(std::uint64_t highest_placed,
     if (highest_placed > (UINT64_MAX / 2)) return highest_placed + page_size;
     std::uint64_t low = highest_placed;
     std::uint64_t high = highest_placed * 2;
-    if (try_place_nearby(high, page_size, page_size) == Placement::Placed) {
+    if (address_is_usable(high, page_size)) {
         return 0;  // contradicts the survey; refuse to guess
     }
     while (high - low > page_size) {
         const std::uint64_t mid =
             low + ((high - low) / 2 / page_size) * page_size;
         if (mid == low) break;
-        if (try_place_nearby(mid, page_size, page_size) == Placement::Placed) {
+        if (address_is_usable(mid, page_size)) {
             low = mid;
         } else {
             high = mid;
@@ -1282,6 +1320,34 @@ Result probe_virtual_memory(const Options& options) {
                 "the top of the address space could not be pinned down "
                 "consistently; max_user_address was left unknown rather than "
                 "guessed");
+        }
+
+        // THE CEILING, CARRYING ITS OWN EVIDENCE, because two explanations fit
+        // the failure that provoked this and only a runner can separate them.
+        //
+        // On `2d058f7` the ground-truth case placed and wrote a mapping at
+        // exactly the reported `max_user_address` (0x600000000000), so the value
+        // was not the top of anything. Either (a) our own mappings sat there and
+        // the bisection read that as the host refusing - now fixed by
+        // `address_is_usable()` - or (b) `mach_vm_allocate(VM_FLAGS_FIXED)` is
+        // refused there for a reason `mmap(MAP_FIXED)` is not, in which case the
+        // two calls answer different questions and the probe is measuring the
+        // wrong one.
+        //
+        // `mach_vm_region` at the ceiling tells them apart in one line: a region
+        // of this task covering it is (a); nothing covering it is (b). Printing
+        // it costs one call and saves the round trip that would otherwise be
+        // spent guessing - the sequence that has worked every time this week.
+        if (max_address != 0) {
+            const RegionInfo at_ceiling = describe_region(max_address);
+            warnings.emplace_back(
+                "max_user_address resolved to " + json::to_hex(max_address) +
+                " from a highest placed probe point of " +
+                json::to_hex(survey.highest_placed) + "; mach_vm_region at the "
+                "ceiling says: " + describe_region_text(at_ceiling) +
+                ". A region of this task covering that address would mean the "
+                "ceiling is our own layout rather than the host's, which is the "
+                "defect this line exists to expose");
         }
 
         if (const std::uint64_t biggest = find_max_single_reservation();
