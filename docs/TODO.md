@@ -88,13 +88,24 @@ macOS    ONE arena    [__TEXT base, commpage) — right for native, 140 TiB shor
                       for Rosetta
 ```
 
-**First step:** `[ceiling − 4 TiB, ceiling)` from the measured
-`max_user_address`, in 64 GiB contiguous windows — 64 placements, the Windows
+**Both halves are now written; the second is unverified.** `scan_one_macos_arena()`
+takes its bounds as parameters and the ours-rule inside `describe` is
+`base >= bottom && base < top` — the arena's own bounds, which is what
+`probe/arena_walk.hpp` already said it should be: *"The bounds of the arena ARE
+the rule."* For the low arena that predicate evaluates exactly what
+`no_access_here_is_ours()` does, so it is a byte-identical no-op there.
+
+The high arena is `[high_arena_floor(max_user_address, 4 TiB, commpage),
+max_user_address)` in 64 GiB contiguous windows — 64 placements, the Windows
 sizing rather than Linux's sampling, because `arena_walk` asserts only what it
-places. The ours-rule inside `describe` must become the arena's own bounds rather
-than the file-scope `no_access_here_is_ours()`, which is what
-`probe/arena_walk.hpp` already says it should be: *"The bounds of the arena ARE
-the rule."* For the low arena that is a byte-identical no-op.
+places. `high_arena_floor()` lives in `probe/arena_walk.hpp` and returns **0**
+twice on purpose: when the ceiling was never measured, and when the arena would
+reach back into the low one. Both are refusals to guess, and both are tested.
+
+**Still to be adjudicated by a runner**, because macOS cannot be compiled here.
+The changed region parses clean against stubs under
+`-Wall -Wextra -Wshadow -Wconversion -Werror` — which caught a missing lambda
+capture and proves well-formedness, **not** that the Mach calls are right.
 
 ---
 

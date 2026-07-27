@@ -37,6 +37,16 @@ std::uint64_t arena_floor_for(std::uint64_t max_user_address,
     return ((max_user_address - 1) / span) * span;
 }
 
+std::uint64_t high_arena_floor(std::uint64_t max_user_address,
+                               std::uint64_t span,
+                               std::uint64_t must_stay_above) {
+    if (max_user_address == 0 || span == 0) return 0;
+    if (max_user_address <= span) return 0;
+    const std::uint64_t floor = max_user_address - span;
+    if (floor <= must_stay_above) return 0;
+    return floor;
+}
+
 LadderRecord ladder_record(ArenaPlacement placement,
                            const std::string& placement_call,
                            const std::string& refusal_text) {

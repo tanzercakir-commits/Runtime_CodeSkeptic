@@ -179,6 +179,34 @@ std::uint64_t arena_ceiling_for(std::uint64_t max_user_address,
 std::uint64_t arena_floor_for(std::uint64_t max_user_address,
                               std::uint64_t span);
 
+// The floor of a SECOND arena sitting `span` below a measured ceiling, or 0 when
+// there is no room for one.
+//
+// Three platforms now need two arenas, because a program's code and its heap do
+// not live together:
+//
+//   Linux    mmap base (top of space)  +  ET_DYN base
+//   Windows  top TiB (image, DLLs)     +  1..127 TiB (NT heap)
+//   macOS    [__TEXT base, commpage)   +  [ceiling - 4 TiB, ceiling)
+//
+// macOS was the last to find out, and only because its ceiling was wrong: with
+// `max_user_address` reported 35 TiB low, the Rosetta lane could not see that its
+// heap sat at `0x7f9ab0028000`, 140 TiB above the only arena there was.
+//
+// TWO WAYS THIS RETURNS 0, and both are refusals to guess rather than edge cases:
+//
+//   max_user_address == 0     the probe could not pin the ceiling down. An arena
+//                             placed from a guessed ceiling is the defect that
+//                             produced the 35 TiB error in the first place.
+//   overlap                   the floor would fall at or below `must_stay_above`,
+//                             the top of an arena already walked. Two overlapping
+//                             arenas record one address twice, and
+//                             `available_and_unavailable_ranges_do_not_overlap`
+//                             is a conformance test rather than a hope.
+std::uint64_t high_arena_floor(std::uint64_t max_user_address,
+                               std::uint64_t span,
+                               std::uint64_t must_stay_above);
+
 // ---------------------------------------------------------------------------
 // THE LANDMARK LADDER'S ONE DECISION, in one place, because both ladders got it
 // wrong and both arenas got it right.

@@ -750,6 +750,37 @@ constexpr std::uint64_t kArenaTop = 0xfc0000000ull;   // commpage start
 // 60 GiB walk into four million windows.
 constexpr std::uint64_t kMinArenaWindow = 4ull * 1024 * 1024;
 
+// THE SECOND ARENA, and macOS is the third platform to need one.
+//
+// The arena above was designed from the NATIVE lane, where the runner reported
+// code at 4.03 GiB and heap at 31 GiB - both inside [__TEXT base, commpage). One
+// arena looked sufficient, and `d6abf18` showed why: the lane that would have
+// disproved it could not see its own ceiling.
+//
+// With an honest `max_user_address`, `rosetta-x86_64` said:
+//
+//   heap page : 0x7f9ab0028000                  <- 140 TiB
+//   arena     : [0x100000000, 0xfc0000000)      <- 15042 placed, 0 refused:
+//                                                  working perfectly, 140 TiB away
+//
+// A TRANSLATED x86-64 process puts its heap at 0x7f..., like Linux, not at
+// 0x7be800000 like the native one. Three platforms, three times the same
+// discovery: one arena is never enough, because a program's code and its heap do
+// not live together.
+//
+//   Linux    mmap base (top of space)  +  ET_DYN base
+//   Windows  top TiB (image, DLLs)     +  1..127 TiB (NT heap)
+//   macOS    [__TEXT base, commpage)   +  [ceiling - 4 TiB, ceiling)
+//
+// FOUR TiB, and 64 GiB WINDOWS. The span matches Linux's mmap arena, which exists
+// for the same reason on the same shape of layout. The window is the Windows
+// sizing rather than Linux's sampling: 4 TiB in 64 GiB windows is 64 CONTIGUOUS
+// placements, and a contiguous walk asserts only what it placed, while a sampled
+// one asserts the space between its samples - which `probe/arena_walk.hpp` argues
+// against and Linux accepts only because 128 TiB leaves it no choice.
+constexpr std::uint64_t kHighArenaSpan = 4ull << 40;
+constexpr std::uint64_t kHighArenaWindow = 64ull << 30;
+
 // WHERE A NO-ACCESS REGION IS ASSUMED TO BE OURS. One rule, in one place, because
 // three separate producers reached for it and the first two disagreed.
 //
@@ -817,11 +848,22 @@ bool no_access_here_is_ours(std::uint64_t address) {
 // recorded ranges are therefore identical in every process. That is the property
 // that makes deferring unnecessary, and it is measurable:
 // tools/campaign/check_reproducible.sh across two processes.
-void scan_allocation_arenas(std::uint64_t page_size, std::uint64_t probe_length,
-                            ScanOutcome& outcome) {
-    const std::uint64_t bottom = kMachOTextBase;
-    const std::uint64_t window =
-        probe_length > kMinArenaWindow ? probe_length : kMinArenaWindow;
+// ONE ARENA'S WALK, with its own bounds as its own rule.
+//
+// `probe/arena_walk.hpp` states the principle and the file-scope
+// `no_access_here_is_ours()` was an instance of it hard-coded to one arena's
+// bounds: "The bounds of the arena ARE the rule: inside them a no-access entry is
+// ours, because both documented bands lie outside them." A second arena needs the
+// same sentence with different numbers, so the numbers become parameters. For the
+// original arena `[kMachOTextBase, kArenaTop)` this is byte-identical - the
+// predicate below evaluates exactly what `no_access_here_is_ours()` does, and
+// that function stays for the ladder and the survey, which have no arena bounds
+// to speak of.
+void scan_one_macos_arena(const char* what, std::uint64_t bottom,
+                          std::uint64_t top, std::uint64_t page_size,
+                          std::uint64_t window, const char* band_note,
+                          ScanOutcome& outcome) {
+    if (bottom == 0 || bottom >= top || top - bottom < window) return;
 
     ArenaProbe hooks;
     // OccupiedByUs maps to HeldByProbe, which the walk treats as usable - for
@@ -837,7 +879,9 @@ void scan_allocation_arenas(std::uint64_t page_size, std::uint64_t probe_length,
         }
         return ArenaPlacement::Refused;
     };
-    hooks.describe = [](std::uint64_t base) {
+    // Captures the arena's bounds, because the ours-rule below is now THIS
+    // arena's bounds rather than a file-scope constant pair.
+    hooks.describe = [bottom, top](std::uint64_t base) {
         const RegionInfo region = describe_region(base);
         ArenaEntry entry;
         // `covers` alone is not enough, and that distinction cost four wrong
@@ -871,17 +915,19 @@ void scan_allocation_arenas(std::uint64_t page_size, std::uint64_t probe_length,
         // no visible cause at all, which is the same claim with less evidence behind
         // it, not more. Everything unplaceable inside the arena is counted in the
         // note and recorded as nothing.
-        entry.covers = denies_everything || no_access_here_is_ours(base);
+        // The arena's own bounds, not the file-scope constant pair. Same
+        // claim, parameterised: inside THIS arena a refusal is not attributable
+        // to the host, which is sound exactly while no platform band lies inside
+        // it - the caller's responsibility, and why the low arena still stops at
+        // the commpage and the high one starts 4 TiB below a measured ceiling.
+        entry.covers = denies_everything || (base >= bottom && base < top);
         entry.start = region.start;
         entry.size = region.size;
         entry.text = describe_region_text(region);
         return entry;
     };
 
-    const ArenaWalk walk = walk_arena(
-        "allocation arena between the Mach-O __TEXT base and the Rosetta GPU "
-        "carveout, where a program's own code and heap are placed",
-        bottom, kArenaTop, page_size, window, hooks);
+    const ArenaWalk walk = walk_arena(what, bottom, top, page_size, window, hooks);
 
     for (const auto& r : walk.available) outcome.available.push_back(r);
     for (const auto& r : walk.unavailable) outcome.unavailable.push_back(r);
@@ -891,23 +937,63 @@ void scan_allocation_arenas(std::uint64_t page_size, std::uint64_t probe_length,
     // recorded fact.
     outcome.occupied_notes.push_back(
         "allocation arena [" + json::to_hex(bottom) + ", " +
-        json::to_hex(kArenaTop) + ") walked in contiguous windows of " +
+        json::to_hex(top) + ") walked in contiguous windows of " +
         json::to_hex(window) + " bytes: " + std::to_string(walk.placed) +
         " placed, " + std::to_string(walk.held_by_probe) +
         " already held by the probe process, " + std::to_string(walk.refused) +
         " structurally refused, " + std::to_string(walk.held_no_access) +
         " refused but covered by a no-access region of this task (treated as held, "
         "because nothing here distinguishes one of our own guard reservations from "
-        "a platform band - and this arena stops below the commpage so that no "
-        "platform band is inside it; if this number rises while unavailable_ranges "
-        "stays empty, that assumption has broken), and " +
+        "a platform band - " + band_note +
+        "; if this number rises while unavailable_ranges stays empty, that "
+        "assumption has broken), and " +
         std::to_string(walk.skipped) +
         " not probed because they lie inside an entry already described. Only the "
         "structurally refused count is a host limitation");
 }
 
+// BOTH ARENAS. `max_user_address` is measured before this runs and is 0 when the
+// probe could not pin it down, in which case the high arena is skipped rather
+// than placed from a guess - the whole point of `d6abf18` was that a ceiling
+// nobody measured is not a ceiling.
+void scan_allocation_arenas(std::uint64_t page_size, std::uint64_t probe_length,
+                            std::uint64_t max_user_address,
+                            ScanOutcome& outcome) {
+    const std::uint64_t window =
+        probe_length > kMinArenaWindow ? probe_length : kMinArenaWindow;
+
+    scan_one_macos_arena(
+        "allocation arena between the Mach-O __TEXT base and the Rosetta GPU "
+        "carveout, where a NATIVE program's own code and heap are placed",
+        kMachOTextBase, kArenaTop, page_size, window,
+        "this arena stops below the commpage so that no platform band is inside "
+        "it", outcome);
+
+    // See `high_arena_floor()` in probe/arena_walk.hpp - there rather than here
+    // for the reason `arena_ceiling_for()` is: arithmetic that decides where a
+    // probe looks, on a platform no machine in this project can compile, is
+    // arithmetic no test can reach. It returns 0 both when the ceiling was never
+    // pinned down and when the arena would overlap the one below it.
+    {
+        const std::uint64_t high_bottom =
+            high_arena_floor(max_user_address, kHighArenaSpan, kArenaTop);
+        if (high_bottom != 0) {
+            scan_one_macos_arena(
+                "allocation arena in the top 4 TiB of the user address space, "
+                "where a TRANSLATED x86-64 process places its heap - measured at "
+                "0x7f9ab0028000 on the Rosetta lane, 140 TiB above the native "
+                "arena",
+                high_bottom, max_user_address, page_size, kHighArenaWindow,
+                "this arena's floor is derived from the measured max_user_address "
+                "and lies far above the commpage and the GPU carveout, the only "
+                "platform bands this project has documented", outcome);
+        }
+    }
+}
+
 ScanOutcome scan_address_space(std::size_t page_size, std::uint64_t probe_length,
-                               std::uint64_t min_address) {
+                               std::uint64_t min_address,
+                               std::uint64_t max_user_address) {
     ScanOutcome outcome;
 
     std::vector<std::uint64_t> candidates;
@@ -1111,7 +1197,8 @@ ScanOutcome scan_address_space(std::size_t page_size, std::uint64_t probe_length
     // inside the commpage and the GPU carveout are the measurements the whole
     // macOS story in this project rests on; the arena answers the space between
     // them, which is where programs actually are.
-    scan_allocation_arenas(page_size, probe_length, outcome);
+    scan_allocation_arenas(page_size, probe_length, max_user_address,
+                           outcome);
     collapse_contained_ranges(outcome.unavailable);
     return outcome;
 }
@@ -1563,7 +1650,8 @@ Result probe_virtual_memory(const Options& options) {
                 ? static_cast<std::uint64_t>(page_size)
                 : options.max_test_mapping_bytes;
         ScanOutcome scan =
-            scan_address_space(page_size, probe_length, min_address);
+            scan_address_space(page_size, probe_length, min_address,
+                               max_address);
         profile.vm.available_ranges = std::move(scan.available);
         for (auto& r : scan.unavailable) {
             profile.vm.unavailable_ranges.push_back(std::move(r));

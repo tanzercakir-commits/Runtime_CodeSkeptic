@@ -292,17 +292,45 @@ that would have disproved it could not see its own ceiling.
 | **−** | `max_user_address` was `measured_capability` on macOS — which licenses a `PROVEN` verdict — while being a fact about one process's free space, for as long as the probe has existed |
 | **−** | CI ends the day 7 of 8 green, with `rosetta-x86_64` red on a gap that is now precisely specified rather than mysterious |
 
-**Next.** T-016's remaining half: `[ceiling − 4 TiB, ceiling)` in 64 GiB
-contiguous windows — the Windows sizing, not Linux's sampling — with the
-ours-rule inside `describe` becoming the arena's own bounds instead of the
-file-scope `no_access_here_is_ours()`. `probe/arena_walk.hpp` already says that is
-what it should be: *"The bounds of the arena ARE the rule."* For the existing low
-arena it is a byte-identical no-op.
+### macOS gets its second arena, and a rule stops being a constant
 
-Then T-015's LA57 half (hardware luck), T-005's rule coverage, T-006's missing
-seventh demonstration — the only one of the seven that points at the *caller*
-rather than the host — and the false-positive campaign still resting on one host
-and one OS.
+`scan_one_macos_arena()` takes its bounds as parameters, and the ours-rule inside
+`describe` became `base >= bottom && base < top`. That is not a refactor — it is
+`probe/arena_walk.hpp`'s own sentence finally being true:
+
+> The bounds of the arena ARE the rule: inside them a no-access entry is ours,
+> because both documented bands lie outside them.
+
+`no_access_here_is_ours()` was that sentence hard-coded to one arena's numbers.
+For the low arena the new predicate evaluates identically, so it is a
+byte-identical no-op there; it stays as a function for the ladder and the survey,
+which have no arena bounds to speak of.
+
+```
+low   [0x100000000, 0xfc0000000)                      4 MiB windows   ~15,000
+high  [high_arena_floor(ceiling, 4 TiB, commpage), ceiling)
+                                                     64 GiB windows       64
+```
+
+`high_arena_floor()` is in `probe/arena_walk.hpp` for the reason
+`arena_ceiling_for()` is: arithmetic that decides where a probe *looks*, on a
+platform no machine here can compile, is arithmetic no test can reach. It returns
+**0 twice on purpose** — when the ceiling was never measured, and when the arena
+would reach back into the low one. Both are refusals to guess; the first is the
+lesson of the 35 TiB error, the second keeps
+`available_and_unavailable_ranges_do_not_overlap` from becoming a hope.
+
+| | |
+|---|---|
+| **+** | the tests carry the runner's own numbers: `0x7ffffe000000` and `0x7ff800000000` as ceilings, and `0x7f9ab0028000` as the heap page the high arena must cover. `test_arena_walk` 25 → **27 cases** |
+| **+** | 64 GiB contiguous windows rather than Linux's 64 GiB *stride*: a contiguous walk asserts only what it placed, and Linux samples only because 128 TiB leaves it no choice |
+| **−** | macOS still cannot be compiled here. The changed region was parsed against stubs under `-Wall -Wextra -Wshadow -Wconversion -Werror`, which **caught a missing lambda capture** — `describe` referenced `bottom` and `top` with an empty capture list — and proves well-formedness, not that the Mach calls are right |
+| **−** | that stub parse is a throwaway, not a guard. Making it durable would mean maintaining stub Mach headers, and a stub that drifts from the SDK is a check that passes for the wrong reason — the thing this session refused to build once already today |
+
+**Next.** A macOS runner adjudicates T-016's second half. Then T-015's LA57 half
+(hardware luck), T-005's rule coverage, T-006's missing seventh demonstration —
+the only one of the seven that points at the *caller* rather than the host — and
+the false-positive campaign still resting on one host and one OS.
 
 ---
 

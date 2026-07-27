@@ -667,6 +667,52 @@ RS_TEST(a_sixty_four_gib_window_walk_still_merges_to_one_range) {
 }
 
 // ---------------------------------------------------------------------------
+// The second arena, on the third platform to need one.
+// ---------------------------------------------------------------------------
+RS_TEST(the_macos_high_arena_sits_below_the_measured_ceiling_and_above_the_low_one) {
+    // The numbers a runner printed on `d6abf18`, after the ceiling was fixed.
+    constexpr std::uint64_t kNativeCeiling = 0x7ffffe000000ull;
+    constexpr std::uint64_t kRosettaCeiling = 0x7ff800000000ull;
+    constexpr std::uint64_t kSpan = 4ull << 40;          // 4 TiB
+    constexpr std::uint64_t kCommpage = 0xfc0000000ull;  // the low arena's top
+
+    const std::uint64_t native = high_arena_floor(kNativeCeiling, kSpan, kCommpage);
+    const std::uint64_t rosetta = high_arena_floor(kRosettaCeiling, kSpan, kCommpage);
+    RS_CHECK(native == kNativeCeiling - kSpan);
+    RS_CHECK(rosetta == kRosettaCeiling - kSpan);
+    RS_CHECK_MESSAGE(native > kCommpage && rosetta > kCommpage,
+                     "the high arena reaches back into the low one, so an address "
+                     "would be recorded twice");
+
+    // AND IT MUST COVER THE HEAP THAT EXPOSED ALL OF THIS. The Rosetta lane's
+    // heap page was 0x7f9ab0028000, 140 TiB above the native arena, and the
+    // coverage test failed on exactly that address.
+    constexpr std::uint64_t kRosettaHeapPage = 0x7f9ab0028000ull;
+    RS_CHECK_MESSAGE(kRosettaHeapPage >= rosetta && kRosettaHeapPage < kRosettaCeiling,
+                     "the high arena does not cover the translated heap page it "
+                     "was built for: " + json::to_hex(kRosettaHeapPage) +
+                         " against [" + json::to_hex(rosetta) + ", " +
+                         json::to_hex(kRosettaCeiling) + ")");
+}
+
+RS_TEST(a_ceiling_nobody_measured_places_no_arena) {
+    constexpr std::uint64_t kSpan = 4ull << 40;
+    constexpr std::uint64_t kCommpage = 0xfc0000000ull;
+    // 0 means the probe could not pin the ceiling down. Placing an arena from a
+    // guessed ceiling is the defect that put macOS 35 TiB out in the first place.
+    RS_CHECK(high_arena_floor(0, kSpan, kCommpage) == 0);
+    // A ceiling at or below the span leaves nothing to walk.
+    RS_CHECK(high_arena_floor(kSpan, kSpan, kCommpage) == 0);
+    RS_CHECK(high_arena_floor(kSpan / 2, kSpan, kCommpage) == 0);
+    // And the overlap refusal: a ceiling low enough that the high arena would
+    // reach back into the low one yields no arena rather than a double record.
+    RS_CHECK(high_arena_floor(kSpan + kCommpage, kSpan, kCommpage) == 0);
+    RS_CHECK(high_arena_floor(kSpan + kCommpage + 1, kSpan, kCommpage) ==
+             kCommpage + 1);
+    RS_CHECK(high_arena_floor(0x7ffffe000000ull, 0, kCommpage) == 0);
+}
+
+// ---------------------------------------------------------------------------
 // The ladder's one decision. Both ladders broke the arenas' rule, differently.
 // ---------------------------------------------------------------------------
 RS_TEST(a_placed_landmark_and_a_held_one_record_the_identical_entry) {
