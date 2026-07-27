@@ -1178,6 +1178,50 @@ ScanOutcome scan_address_space(std::size_t page_size, std::uint64_t probe_length
                 "the platform and was NOT recorded as a host limitation");
             continue;
         }
+        // INSIDE THE ARENA, NO LADDER REFUSAL IS ATTRIBUTABLE EITHER - and this
+        // is the fourth time one rule has had to be carried from the arena to
+        // the ladder.
+        //
+        // The arena already says this about itself, forty lines away: "refusals
+        // where mach_vm_region reported NOTHING covering the window - and that
+        // combination is self-contradictory unless the task map changed between
+        // the allocate and the query, which it does constantly, because this
+        // probe allocates and releases thousands of windows while walking. So
+        // they are races." The arena treats everything unplaceable inside its
+        // bounds as held. The LADDER, sampling the same band, did not.
+        //
+        // The Rosetta lane caught it on `97f40a6`, in run 3 of 5:
+        //
+        //   available_ranges:   25 vs 24   only in run 1: [0x200000000, 0x200400000)
+        //   unavailable_ranges: 34 vs 35   only in run 2: [0x200000000, 0x200400000)
+        //
+        // One landmark, 8 GiB, INSIDE [kMachOTextBase, kArenaTop) - the band the
+        // arena walks contiguously and establishes as available - flipping to a
+        // host limitation on one run in five. The arena is the authority inside
+        // its own bounds; a single sample must not contradict a contiguous walk
+        // because a query lost a race with our own allocator.
+        //
+        // Outside the arena the ladder keeps its teeth: the commpage and the GPU
+        // carveout are exactly what it exists to probe, and `no_access_here_is_
+        // ours()` is false there.
+        if (no_access_here_is_ours(base)) {
+            ClassifiedRange ours;
+            ours.range = *range;
+            ours.evidence = EvidenceClass::MeasuredCapability;
+            ours.note = ladder_record(ArenaPlacement::HeldByProbe,
+                                      kMachPlacementCall, "").note;
+            outcome.available.push_back(ours);
+            outcome.occupied_notes.push_back(
+                "landmark " + range->to_string() + " could not be placed (" +
+                kern_error_name(result) + "), but it lies inside the allocation "
+                "arena, which walks this band contiguously and establishes it. "
+                "Recorded as available for the same reason the arena treats its "
+                "own unplaceable windows as held: inside these bounds nothing "
+                "distinguishes one of our own reservations, or a race with our "
+                "own allocator, from a host limitation");
+            continue;
+        }
+
         if (result == KERN_NO_SPACE && region.covers &&
             !entry_denies_everything) {
             // A real mapping of ours: a property of one process layout, not of

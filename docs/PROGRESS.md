@@ -115,6 +115,43 @@ relabelling one.
 | **+** | `RS-VM-0026` now says which figure it used. Hintless by default — a program asking with `addr = NULL` is bounded by the default window whatever the hardware could give, and answering from the hinted number would report a capability the caller cannot reach. Hinted only when the requirement names an address above the hintless probe's reach, and then it says so in `host_capability` and in the evidence chain |
 | **−** | `oversized_reservation.c` is still hintless, so on an LA57 host the 4 PiB refusal would still be a default-window refusal rather than an accounting one. That is a property of the case, not of the fact — and the fact now makes it visible instead of invisible |
 
+### And the five-run check earned its keep the same afternoon
+
+`97f40a6` came back with `rosetta-x86_64` red, and both of this morning's
+diagnostics changes paid off at once — the fifth run caught it, and the
+full-content diff named it:
+
+```
+5 runs, and run 3 is the one that disagrees with run 1:
+  available_ranges:   25 vs 24   only in run 1: [0x200000000, 0x200400000)
+  unavailable_ranges: 34 vs 35   only in run 2: [0x200000000, 0x200400000)
+```
+
+**One landmark, at 8 GiB, flipping between available and a host limitation on one
+run in five.** Under the old two-run check this would have shown up on roughly
+20% of pushes and read as flake; under the old count-only diff it would have said
+`25 vs 24` and stopped.
+
+`0x200000000` is **inside** `[kMachOTextBase, kArenaTop)` — the band the arena
+walks contiguously and establishes as available. The arena already says why this
+happens, forty lines from the bug:
+
+> refusals where `mach_vm_region` reported NOTHING covering the window — and that
+> combination is self-contradictory unless the task map changed between the
+> allocate and the query, which it does constantly, because this probe allocates
+> and releases thousands of windows while walking. So they are races.
+
+The arena treats everything unplaceable inside its bounds as held. The **ladder**,
+sampling the same band, did not — so a single sample could contradict a contiguous
+walk because a query lost a race with our own allocator.
+
+| | |
+|---|---|
+| **+** | **fourth time** one rule has had to be carried from the arena to the ladder — EEXIST, the note text, the ceiling, and now race-refusals. The arena is the authority inside its own bounds and the ladder now defers there |
+| **+** | outside the arena the ladder keeps its teeth: the commpage and the GPU carveout are exactly what it exists to probe, and `no_access_here_is_ours()` is false there |
+| **+** | this is what the morning's two changes were for. Neither was speculative, and both were exercised by a real failure within hours |
+| **−** | unverified until a Rosetta runner says so — macOS still cannot be compiled here, only parsed against stubs |
+
 **Next.** T-005's rule-coverage accounting, T-007's evidence bundle, and the
 false-positive campaign still resting on one host and one OS.
 
