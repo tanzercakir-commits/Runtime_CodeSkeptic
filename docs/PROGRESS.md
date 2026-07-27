@@ -16,6 +16,122 @@ re-litigated; a mistake recorded here does not need to be re-made.
 
 ---
 
+## 2026-07-27 — the note that promised not to record what it was recording
+
+**Changed.** `ladder_record()` is new in `probe/arena_walk.{hpp,cpp}` and both
+landmark ladders now go through it; `tools/campaign/check_reproducible.sh` runs
+the probe **five** times instead of two. `test_arena_walk` 22 → **25 cases**.
+
+| | |
+|---|---|
+| **+** | the macOS reproducibility failure is diagnosed and fixed — a real defect in the project's flagship guarantee, found by reading rather than by another runner round trip |
+| **+** | the same rule was broken on Linux too, in a different way, and had never gone red. Fixed in the same commit |
+| **−** | `docs/PLAN.md` said `[done]` for *"repeated runs on the same stable host produce equivalent canonical profiles"* while a CI job failed exactly that on roughly every second push, for two days. The document was the last place anyone would have looked |
+| **−** | the macOS fix cannot be compiled here. There is no Darwin cross-compiler and a stubbed Mach header would be a check that passes for the wrong reason — this morning's own lesson. One runner round trip, stated rather than hidden |
+
+### What it actually was
+
+`available_ranges: 22 vs 22 entries`, identical bounds, and `profile_id` moved
+anyway. The reason is that a `note` is inside the hashed facts subtree — measured,
+not assumed:
+
+```
+base profile          sha256:0d84a2af4cd4f6c4a378a1d1415e7f34f8ca6bfe7ad27309f51e34e0996ff5e8
+one note reworded     sha256:0db71a969d45c0953216e619540a4c76c25ce2a35d047459fc4f891aa16c78d4
+```
+
+The macOS ladder had two branches for one landmark. Placed at the exact address:
+
+> `mach_vm_allocate(VM_FLAGS_FIXED) succeeded at this exact address in the probe
+> process`
+
+Already held by one of our own mappings — recorded as **available**, correctly,
+for the reason EEXIST gets on Linux:
+
+> `a mapping of the probe process already held this exact range … Whether it was
+> held or free depends on the probe's own layout and is deliberately not recorded`
+
+**The sentence that ends "deliberately not recorded" was the record.** Choosing it
+rather than the other one is precisely the held/free bit, written into a hashed
+field. So `profile_id` alternated between exactly two values — `621881a4…` and
+`5f5f73a7…` — as ASLR decided whether one of our mappings landed on a landmark.
+Bistable, not drifting, which is why it read as flake.
+
+### And Linux had the same defect through the other door
+
+The Linux ladder recorded an available entry when the landmark was free and
+**nothing at all** on EEXIST. Same rule broken — the *presence* of the fact moving
+with our slide instead of its *content*.
+
+This is not a new discovery. macOS had already fixed it (`available_ranges: 22 vs
+20`), its comment cites *"the argument EEXIST gets on Linux"*, and Linux's own
+**arena**, forty lines above the ladder, applies the rule correctly. The ladder
+never got it. It has never gone red — on this host no landmark collides with our
+own mappings, so the fix changes the recorded set by **nothing**: 57 available, 0
+unavailable, before and after.
+
+```
+arena   Linux ✓   macOS ✓   Windows ✓      the rule, learned twice
+ladder  Linux ✗   macOS ✗   Windows n/a    the rule, never carried across
+```
+
+So the decision moved to `ladder_record()`, where `Placed` and `HeldByProbe` are
+**the same `return`** rather than two branches that agree today, and where
+`test_arena_walk.cpp` drives it on every platform. The load-bearing case asserts
+byte equality of the note, not merely that both are available — equal outcomes was
+never the property that was missing.
+
+### Asking twice is the smallest version of asking once
+
+Two runs catch a defect that makes every run differ. They catch a **bistable** one
+only when the coin lands differently — half the time, which is exactly the rate CI
+showed. `check_reproducible.sh` now runs five times (`RUNS=` to override) and
+misses a 50/50 defect with probability 2⁻⁴ ≈ 6%, for four extra probe executions
+of a few hundred milliseconds. It names which run disagreed and prints every id:
+
+```
+5 runs, and run 3 is the one that disagrees with run 1:
+1 sha256:0d84a2af…   2 sha256:0d84a2af…   3 sha256:75838f9a…
+4 sha256:0d84a2af…   5 sha256:0d84a2af…
+```
+
+Verified against a stand-in probe that is deliberately bistable, and the exit code
+checked directly rather than through a pipeline — this project has been bitten by
+`| tail` swallowing a status before.
+
+### A guard fired on a correct tree, which is the one thing they may not do
+
+Demoting the reproducibility criterion made `check_plan.py` fail — on the
+*sentence explaining the demotion*, because it matched `` `[done]` `` anywhere on
+any line and demanded evidence for a prose mention of the marker.
+
+Three of the four instances in the tree **predated** this commit
+(`docs/PLAN.md:307`, `docs/scenarios/assessment.md:92` and `:123`), so the totals
+this guard has been printing were wrong by five, and nobody noticed because the
+extra rows happened to be `[partial]` and `[open]`, which carry no evidence
+requirement. A `[done]` in prose was all it took to expose it.
+
+A status marker **introduces** an entry:
+
+```
+- `[done]` ...        a bulleted entry, at any indent
+`[open]` ...          a paragraph entry at column 0 (assessment.md's shape)
+  `[partial]` ...     INDENTED, no bullet: a wrapped continuation line
+```
+
+The second correction is the subtler one. The continuation loop keyed on the same
+wrong pattern, so an entry stopped at the first line mentioning a marker — and
+evidence sitting after it was invisible. Writing the regex as
+`^\s*(?:[-*]\s+)?` swallows continuations; `^(?:\s*[-*]\s+)?` requires a bullet
+whenever there is indentation, which is the rule both documents actually follow.
+Selftest 75 → **78 cases**, one of them the false positive itself.
+
+**Next.** Watch `refs/status/<sha>/macos---apple-clang` across several pushes: one
+green run no longer means much, since the old defect was green half the time.
+`docs/PLAN.md`'s reproducibility criterion is `[partial]` until then.
+
+---
+
 ## 2026-07-26 — six green did not happen, and the reason is worth more than six green
 
 **Changed.** `tests/conformance/test_probe.cpp` — the coverage test's failure

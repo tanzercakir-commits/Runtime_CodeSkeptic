@@ -666,6 +666,61 @@ RS_TEST(a_sixty_four_gib_window_walk_still_merges_to_one_range) {
     RS_CHECK(walk.placed + walk.held_by_probe + walk.held_no_access == 64);
 }
 
+// ---------------------------------------------------------------------------
+// The ladder's one decision. Both ladders broke the arenas' rule, differently.
+// ---------------------------------------------------------------------------
+RS_TEST(a_placed_landmark_and_a_held_one_record_the_identical_entry) {
+    // THE LOAD-BEARING CASE, and it is byte equality rather than "both
+    // available" on purpose. macOS recorded both as available and still moved
+    // `profile_id` between two runs of one binary for two days, because the two
+    // branches wrote different `note` text and the note is hashed. Equal
+    // outcomes were never the property that was missing.
+    const LadderRecord placed =
+        ladder_record(ArenaPlacement::Placed, "mmap(MAP_FIXED_NOREPLACE)", "");
+    const LadderRecord held = ladder_record(ArenaPlacement::HeldByProbe,
+                                            "mmap(MAP_FIXED_NOREPLACE)", "");
+
+    RS_CHECK(placed.outcome == LadderOutcome::Available);
+    RS_CHECK(held.outcome == LadderOutcome::Available);
+    RS_CHECK_MESSAGE(placed.note == held.note,
+                     "the note differs between a landmark we placed and one we "
+                     "already held, so profile_id moves with our ASLR slide:\n"
+                     "  placed: " + placed.note + "\n  held:   " + held.note);
+}
+
+RS_TEST(the_refusal_text_reaches_the_recorded_note_and_only_then) {
+    const LadderRecord refused =
+        ladder_record(ArenaPlacement::Refused, "mmap(MAP_FIXED_NOREPLACE)",
+                      "ENOMEM");
+    RS_CHECK(refused.outcome == LadderOutcome::Unavailable);
+    RS_CHECK(refused.note.find("ENOMEM") != std::string::npos);
+
+    // A refusal reason must not leak into an available entry. `errno` after a
+    // SUCCESSFUL call is whatever the last failure left there, and a note
+    // carrying it would move with the libc call history rather than the host.
+    const LadderRecord placed = ladder_record(
+        ArenaPlacement::Placed, "mmap(MAP_FIXED_NOREPLACE)", "ENOMEM");
+    RS_CHECK_MESSAGE(placed.note.find("ENOMEM") == std::string::npos,
+                     "a refusal reason reached an available entry: " +
+                         placed.note);
+}
+
+RS_TEST(the_platforms_differ_in_wording_and_not_in_what_is_recorded) {
+    // Both probes call this, and they must disagree about nothing except the
+    // name of the call they made.
+    const LadderRecord linux_held = ladder_record(
+        ArenaPlacement::HeldByProbe, "mmap(MAP_FIXED_NOREPLACE)", "");
+    const LadderRecord macos_held = ladder_record(
+        ArenaPlacement::HeldByProbe, "mach_vm_allocate(VM_FLAGS_FIXED)", "");
+
+    RS_CHECK(linux_held.outcome == macos_held.outcome);
+    RS_CHECK(linux_held.note != macos_held.note);   // the call name, and nothing else
+    const std::string tail = "does not name the host";
+    RS_CHECK(linux_held.note.size() > tail.size());
+    RS_CHECK(linux_held.note.substr(linux_held.note.size() - tail.size()) == tail);
+    RS_CHECK(macos_held.note.substr(macos_held.note.size() - tail.size()) == tail);
+}
+
 RS_TEST(an_arena_floor_on_an_exact_multiple_is_not_an_empty_arena) {
     // `(max / span) * span` returns the ceiling itself here, and the arena would
     // be empty: a probe that establishes nothing, silently, which is the exact

@@ -179,6 +179,54 @@ std::uint64_t arena_ceiling_for(std::uint64_t max_user_address,
 std::uint64_t arena_floor_for(std::uint64_t max_user_address,
                               std::uint64_t span);
 
+// ---------------------------------------------------------------------------
+// THE LANDMARK LADDER'S ONE DECISION, in one place, because both ladders got it
+// wrong and both arenas got it right.
+//
+// The arenas learned this rule twice and it is written across three files: the
+// recorded set must not depend on the probe's own layout. Neither LADDER ever
+// got the same fix, and each broke it in a different way:
+//
+//   macOS   a landmark our own mapping happened to sit on produced an available
+//           entry with a DIFFERENT `note` from the same landmark when free. The
+//           bounds matched, the count matched, and `profile_id` still moved -
+//           because the note is inside the hashed facts subtree. Two runs of one
+//           binary on one machine alternated between exactly two ids across
+//           every push for two days, and `available_ranges: 22 vs 22 entries`
+//           was the whole diagnosis anyone got. The held-path note ENDS with the
+//           words "Whether it was held or free ... is deliberately not recorded"
+//           while being the record of exactly that.
+//
+//   Linux   the same landmark produced an available entry when free and NOTHING
+//           when EEXIST, so the presence of the fact moved with our ASLR slide.
+//           This is the identical defect macOS had already fixed - its comment
+//           even cites "the argument EEXIST gets on Linux" - and Linux's own
+//           ARENA applies the rule correctly forty lines away. It has never gone
+//           red, which is not the same as being right.
+//
+// So the decision moves here, where `tests/unit/test_arena_walk.cpp` can drive
+// it on every platform this project builds on, and where PLACED AND HELD ARE
+// LITERALLY THE SAME RETURN VALUE rather than two branches that agree today.
+// ---------------------------------------------------------------------------
+enum class LadderOutcome { Available, Unavailable };
+
+struct LadderRecord {
+    LadderOutcome outcome = LadderOutcome::Available;
+    std::string note;
+};
+
+// `placement_call` names the call in the platform's own words - "mmap(MAP_FIXED_
+// NOREPLACE)" or "mach_vm_allocate(VM_FLAGS_FIXED)" - so the note stays readable
+// without the outcome depending on the platform. `refusal_text` is used only for
+// `Refused`.
+//
+// `Placed` and `HeldByProbe` return an IDENTICAL record. That is the whole
+// function: both prove the kernel hands this exact address out to this process,
+// and neither says anything about the host that the other does not.
+LadderRecord ladder_record(ArenaPlacement placement,
+                           const std::string& placement_call,
+                           const std::string& refusal_text);
+
 }  // namespace rs::probe
 
 #endif  // RUNTIMESKEPTIC_PROBE_ARENA_WALK_HPP

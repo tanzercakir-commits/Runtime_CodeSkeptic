@@ -37,6 +37,30 @@ std::uint64_t arena_floor_for(std::uint64_t max_user_address,
     return ((max_user_address - 1) / span) * span;
 }
 
+LadderRecord ladder_record(ArenaPlacement placement,
+                           const std::string& placement_call,
+                           const std::string& refusal_text) {
+    LadderRecord out;
+    if (placement == ArenaPlacement::Refused) {
+        out.outcome = LadderOutcome::Unavailable;
+        out.note = "exact placement refused: " + refusal_text;
+        return out;
+    }
+    // ONE STRING FOR BOTH, and it is the point of this function rather than a
+    // tidying of it. `Placed` and `HeldByProbe` fall through to the same return,
+    // so a future edit cannot make them diverge without deleting this comment.
+    out.outcome = LadderOutcome::Available;
+    out.note = placement_call +
+               " establishes that the kernel grants this exact address to this "
+               "process: it either placed a mapping here or reported the address "
+               "already held by a mapping of this process. WHICH OF THE TWO is a "
+               "property of the probe's own ASLR slide and is deliberately not "
+               "recorded - not in the count, not in the bounds, and not in this "
+               "sentence, because the note is inside the hashed facts subtree and "
+               "a profile_id that names our morning does not name the host";
+    return out;
+}
+
 ArenaWalk walk_arena(const std::string& what, std::uint64_t bottom,
                      std::uint64_t top, std::uint64_t page_size,
                      std::uint64_t window_size, const ArenaProbe& probe) {

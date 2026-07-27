@@ -680,29 +680,40 @@ ScanOutcome scan_address_space(std::size_t page_size, std::uint64_t probe_length
             PROT_NONE,
             MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED_NOREPLACE | MAP_NORESERVE);
 
+        // THE LADDER'S DECISION IS NOT MADE HERE. See `ladder_record()` in
+        // probe/arena_walk.hpp: a landmark we placed and a landmark we already
+        // held record the IDENTICAL entry, because both prove the kernel hands
+        // this exact address out and neither says anything about the host.
+        //
+        // What this code used to do was record the free case and record NOTHING
+        // for EEXIST, so the presence of the fact moved with our own ASLR slide.
+        // That is the defect the macOS probe had already fixed - its comment
+        // cites "the argument EEXIST gets on Linux" - and that this file's own
+        // ARENA applies correctly forty lines above. It never went red, which is
+        // not the same as being right.
+        ArenaPlacement placement = ArenaPlacement::Refused;
         if (attempt.ok()) {
-            if (reinterpret_cast<std::uint64_t>(attempt.address) == base) {
-                ClassifiedRange cr;
-                cr.range = *range;
-                cr.evidence = EvidenceClass::MeasuredCapability;
-                cr.note = "mapped successfully at this exact address in the "
-                          "probe process";
-                outcome.available.push_back(cr);
-            }
+            placement = reinterpret_cast<std::uint64_t>(attempt.address) == base
+                            ? ArenaPlacement::Placed
+                            : ArenaPlacement::Refused;
             unmap(attempt, static_cast<std::size_t>(probe_length));
-            continue;
+            // A relocation is not a refusal of THIS address and not a grant of
+            // it either: the kernel answered a different question. Recording
+            // nothing here does not depend on our layout, so the rule above is
+            // untouched.
+            if (placement == ArenaPlacement::Refused) continue;
+        } else if (attempt.error == EEXIST) {
+            placement = ArenaPlacement::HeldByProbe;
         }
 
-        if (attempt.error == EEXIST) {
-            // Occupied by this process's own image, libraries or heap. That is
-            // a fact about one process layout, NOT about the host, so it must
-            // not become an "unavailable range" that other programs would be
-            // judged against.
-            outcome.occupied_notes.push_back(
-                "range " + range->to_string() +
-                " was occupied in the probe process (EEXIST); this is a "
-                "property of the probe's own layout and was NOT recorded as a "
-                "host limitation");
+        if (placement != ArenaPlacement::Refused) {
+            const LadderRecord rec = ladder_record(
+                placement, "mmap(MAP_FIXED_NOREPLACE)", "");
+            ClassifiedRange cr;
+            cr.range = *range;
+            cr.evidence = EvidenceClass::MeasuredCapability;
+            cr.note = rec.note;
+            outcome.available.push_back(cr);
             continue;
         }
 
@@ -719,10 +730,13 @@ ScanOutcome scan_address_space(std::size_t page_size, std::uint64_t probe_length
         // /proc/self/maps has nothing to say about how far it reaches. There
         // is no measurement to widen to, and inventing one from the sample is
         // the mistake this comment exists to prevent.
+        const LadderRecord rec = ladder_record(
+            ArenaPlacement::Refused, "mmap(MAP_FIXED_NOREPLACE)",
+            errno_name(attempt.error));
         ClassifiedRange cr;
         cr.range = *range;
         cr.evidence = EvidenceClass::MeasuredCapability;
-        cr.note = "exact mapping refused with " + errno_name(attempt.error);
+        cr.note = rec.note;
         outcome.unavailable.push_back(cr);
     }
 

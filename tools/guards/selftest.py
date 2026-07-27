@@ -322,6 +322,32 @@ CASES = [
               "# Scenarios\n\n## S1\n\n`[done]` it works, honest\n"},
          expect_fail=True, expect_text="scenarios/assessment.md"),
 
+    # THE GUARD FIRING ON A CORRECT TREE, which is the failure this whole
+    # directory exists to prevent, committed by a guard rather than caught by
+    # one. These documents describe their own markers, and every prose mention
+    # was being counted as a criterion and made to carry evidence. Four real
+    # instances, three of which predated the commit that noticed.
+    Case("check_plan.py", "a marker mentioned mid-sentence is prose, not a claim",
+         {"docs/PLAN.md": "# Plan and status\n\n## Phase 1\n\n"
+                          "- `[open]` the probe\n\n"
+                          "This line read `[done]` yesterday and was wrong.\n"},
+         expect_fail=False),
+
+    # ...and the rule it must not weaken.
+    Case("check_plan.py", "a leading [done] with no evidence still fails",
+         {"docs/PLAN.md": "# Plan and status\n\n## Phase 1\n\n"
+                          "- `[done]` the probe works\n"},
+         expect_fail=True, expect_text="no evidence"),
+
+    # The continuation loop keyed on the same wrong pattern, so evidence sitting
+    # after a prose mention was invisible and the entry looked unsupported.
+    Case("check_plan.py", "evidence after a prose mention is still found",
+         {"docs/PLAN.md": "# Plan and status\n\n## Phase 1\n\n"
+                          "- `[done]` the probe works, and although this was\n"
+                          "  `[partial]` last week it is now measured by\n"
+                          "  `tools/guards/check_plan.py`\n"},
+         expect_fail=False),
+
     # ---- check_dates: git decides, not the author ----------------------
     Case("check_dates.py", "a progress entry dated before it was written fails",
          {},

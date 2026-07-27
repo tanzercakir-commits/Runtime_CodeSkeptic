@@ -33,6 +33,17 @@ ROOT = Path(__file__).resolve().parents[2]
 REQUIRED = ("docs/PLAN.md",)
 IF_PRESENT = ("docs/scenarios/assessment.md",)
 VALID = {"done", "partial", "open", "blocked", "n/a"}
+# A marker in LEADING position: optionally a list bullet, then the marker.
+# `docs/PLAN.md` writes entries as `- `[done]` ...`; `docs/scenarios/
+# assessment.md` writes them as paragraphs opening with the marker. Both are
+# matched; a marker in the middle of a sentence is prose about the markers.
+# Note the group placement: `(?:\s*[-*]\s+)?` requires a BULLET whenever
+# there is indentation, so an indented marker with no bullet is a wrapped
+# continuation line and not a new entry. Written the other way round
+# (`^\s*(?:[-*]\s+)?`) it swallowed continuations, and an entry whose
+# evidence sat after one looked unsupported.
+LEADING_MARKER = re.compile(r"^(?:\s*[-*]\s+)?`\[([a-z/]+)\]`")
+
 PATH = re.compile(r"`((?:src|tests|tools|include|docs|schemas|profiles|contracts|corpus|\.github)/[A-Za-z0-9_./+-]+)`")
 
 
@@ -65,11 +76,27 @@ def check(rel: str, problems: list, counts: dict, required: bool) -> bool:
         entry = line
         j = i
         while (j < len(lines) and lines[j].strip()
-               and not re.search(r"`\[[a-z/]+\]`", lines[j])):
+               and not LEADING_MARKER.search(lines[j])):
             entry += " " + lines[j].strip()
             j += 1
 
-        for marker in re.findall(r"`\[([a-z/]+)\]`", line):
+        # A STATUS MARKER INTRODUCES AN ENTRY. It is not any occurrence of the
+        # token anywhere on any line, which is what this used to match.
+        #
+        # These documents describe their own markers - `docs/PLAN.md`'s legend
+        # explains them and its prose argues about them ("Still `[partial]`
+        # because ...", "this line read `[done]` on 2026-07-26 while ..."), and
+        # `docs/scenarios/assessment.md` does the same twice. Every one of those
+        # was being counted as a criterion, so the totals this guard prints were
+        # wrong by four, and a sentence that merely MENTIONED `[done]` was
+        # required to carry evidence - which made the guard fire on a correct
+        # tree. That is the failure this directory exists to prevent, committed
+        # by a guard rather than caught by one.
+        #
+        # It also truncated entries: the continuation loop above stopped at any
+        # line containing a marker, so evidence sitting after a prose mention was
+        # invisible. Both now key on the leading position.
+        for marker in LEADING_MARKER.findall(line):
             if marker not in VALID:
                 problems.append(f"{rel}:{i}: unknown status marker `[{marker}]`")
                 continue

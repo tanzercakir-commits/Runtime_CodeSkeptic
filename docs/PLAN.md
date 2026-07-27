@@ -123,9 +123,17 @@ findings from the set itself:
 
 ### Exit criteria
 
-- `[done]` **repeated runs on the same stable host produce equivalent
+- `[partial]` **repeated runs on the same stable host produce equivalent
   canonical profiles** — `tools/campaign/check_reproducible.sh`, which runs the
-  probe as TWO PROCESSES. The in-process test was green while this was false.
+  probe as **five separate processes**. The in-process test was green while this
+  was false. **The gap:** this line read `[done]` on 2026-07-26 while the macOS
+  job failed exactly this criterion on roughly every second push — a landmark our
+  own mapping sat on was recorded with a different `note` from the same landmark
+  when free, and the note is inside the hashed subtree, so `profile_id` alternated
+  between two values. Fixed by `ladder_record()` on 2026-07-27 and **not yet
+  confirmed on a macOS runner**; one green run would not confirm it either, since
+  the old defect was green half the time. Promote after several consecutive green
+  `refs/status/<sha>/macos---apple-clang`.
 - `[done]` failures preserve native error information — `errno` and
   `kern_return_t` names are carried into range notes by
   `src/probe/vm_probe_linux.cpp` and `src/probe/vm_probe_macos.cpp`
@@ -299,7 +307,7 @@ that risk materialising.
   match the filesystem, and a named path must exist. Still `[partial]` because
   only paths and a fixed list of phrases are mechanical; the rest of the prose
   is unchecked and always will be.
-- `[done]` the guards are tested — `tools/guards/selftest.py`, 75 cases, each
+- `[done]` the guards are tested — `tools/guards/selftest.py`, 78 cases, each
   requiring a check to fail against a deliberately wrong throwaway repository
   before it is trusted on this one; first in `tools/guards/run_all.sh`. This
   number read `25` while there were 58, surviving two earlier increases, so

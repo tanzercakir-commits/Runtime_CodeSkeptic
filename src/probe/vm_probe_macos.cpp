@@ -703,6 +703,9 @@ struct ScanOutcome {
 // on a machine with no Mach headers. That is not tidiness: the first version of
 // this arena was wrong, and the check that found it was a throwaway program that
 // stubbed these two calls.
+constexpr const char* kMachPlacementCall =
+    "mach_vm_allocate(VM_FLAGS_FIXED)";
+
 constexpr std::uint64_t kMachOTextBase = 0x100000000ull;
 constexpr std::uint64_t kArenaTop = 0xfc0000000ull;   // commpage start
 // A floor, so a caller passing a small max_test_mapping_bytes cannot turn a
@@ -933,11 +936,18 @@ ScanOutcome scan_address_space(std::size_t page_size, std::uint64_t probe_length
         kern_return_t result = KERN_SUCCESS;
         if (mach_allocate_fixed(base, static_cast<std::size_t>(probe_length),
                                 result)) {
+            // See `ladder_record()` in probe/arena_walk.hpp. This note and the
+            // held-path note below are the SAME STRING from the SAME CALL, and
+            // that is the entire fix: they used to be two texts, chosen by
+            // whether ASLR had put one of our mappings on the landmark, and the
+            // note is inside the hashed facts subtree - so `profile_id`
+            // alternated between exactly two values across every push for two
+            // days while the bounds and the count both matched.
             ClassifiedRange cr;
             cr.range = *range;
             cr.evidence = EvidenceClass::MeasuredCapability;
-            cr.note = "mach_vm_allocate(VM_FLAGS_FIXED) succeeded at this exact "
-                      "address in the probe process";
+            cr.note = ladder_record(ArenaPlacement::Placed,
+                                    kMachPlacementCall, "").note;
             outcome.available.push_back(cr);
             mach_release(base, static_cast<std::size_t>(probe_length));
             continue;
@@ -1003,15 +1013,16 @@ ScanOutcome scan_address_space(std::size_t page_size, std::uint64_t probe_length
             // about the host. Another program can map here. So the entry belongs in
             // `available_ranges` whether we happened to be sitting on it or not, and
             // the recorded set stops depending on where we were.
+            // THE SENTENCE THAT USED TO BE HERE ENDED "Whether it was held or
+            // free depends on the probe's own layout and is deliberately not
+            // recorded" - and choosing it instead of the placed-path sentence
+            // WAS that record. Self-refuting, hashed, and red on roughly every
+            // second push for two days. One call, one string, both paths.
             ClassifiedRange ours;
             ours.range = *range;
             ours.evidence = EvidenceClass::MeasuredCapability;
-            ours.note =
-                "a mapping of the probe process already held this exact range, "
-                "which proves the kernel hands this address out and says nothing "
-                "about the host - recorded as available for the same reason EEXIST "
-                "is on Linux. Whether it was held or free depends on the probe's "
-                "own layout and is deliberately not recorded";
+            ours.note = ladder_record(ArenaPlacement::HeldByProbe,
+                                      kMachPlacementCall, "").note;
             outcome.available.push_back(ours);
             outcome.occupied_notes.push_back(
                 "range " + range->to_string() + " is a real mapping in the "
@@ -1025,8 +1036,10 @@ ScanOutcome scan_address_space(std::size_t page_size, std::uint64_t probe_length
         ClassifiedRange cr;
         cr.range = *range;
         cr.evidence = EvidenceClass::MeasuredCapability;
-        cr.note = "mach_vm_allocate(VM_FLAGS_FIXED) refused with " +
-                  kern_error_name(result) + "; " + describe_region_text(region);
+        cr.note = ladder_record(ArenaPlacement::Refused, kMachPlacementCall,
+                                kern_error_name(result) + "; " +
+                                    describe_region_text(region))
+                      .note;
 
         // Record how far the refusal actually reaches.
         //

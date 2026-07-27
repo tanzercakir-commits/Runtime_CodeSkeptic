@@ -35,22 +35,71 @@ for f in "$PROBE" "$PROFILE_TOOL"; do
     [ -x "$f" ] || { echo "$0: $f not found; build first" >&2; exit 64; }
 done
 
+# HOW MANY RUNS, AND WHY IT IS NOT TWO.
+#
+# Two runs catch a defect that makes every run differ. They catch a BISTABLE one
+# - a probe that alternates between exactly two outputs depending on an ASLR coin
+# flip - only when the flip lands differently, which is half the time.
+#
+# That is not hypothetical. macOS alternated between exactly two profile_ids
+# (621881a4... / 5f5f73a7...) across every push for two days, because a landmark
+# our own mapping happened to sit on was recorded with a different `note` from the
+# same landmark when free, and the note is inside the hashed facts subtree. CI was
+# red on roughly every second push and green on the others, which reads as flake
+# and is not.
+#
+# Five runs miss a 50/50 defect with probability 2^-4 = 6%, for four extra probe
+# executions of a few hundred milliseconds each. The whole argument of this script
+# is that asking once is not asking; asking twice is the smallest version of the
+# same mistake.
+RUNS="${RUNS:-5}"
+if [ "$RUNS" -lt 2 ]; then
+    echo "$0: RUNS must be at least 2 (asking once is not asking)" >&2
+    exit 64
+fi
+
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
 
-"$PROBE" vm --name reproducibility-a --output "$work/a.json" >/dev/null 2>&1 || {
-    echo "$0: first probe run failed" >&2; exit 70; }
-"$PROBE" vm --name reproducibility-b --output "$work/b.json" >/dev/null 2>&1 || {
-    echo "$0: second probe run failed" >&2; exit 70; }
+# bash 3.2: no `mapfile`, and an empty array's expansion is unbound under `set -u`
+# (tools/guards/check_shell_portability.py knows both). Seeded, never empty.
+ids="" ; first=""
+n=1
+while [ "$n" -le "$RUNS" ]; do
+    out="$work/run-$n.json"
+    "$PROBE" vm --name "reproducibility-$n" --output "$out" >/dev/null 2>&1 || {
+        echo "$0: probe run $n of $RUNS failed" >&2; exit 70; }
+    id=$("$PROFILE_TOOL" id "$out")
+    ids="$ids$n $id
+"
+    [ -z "$first" ] && first="$id"
+    n=$((n + 1))
+done
 
-id_a=$("$PROFILE_TOOL" id "$work/a.json")
-id_b=$("$PROFILE_TOOL" id "$work/b.json")
+# The FIRST run that disagrees with run 1, so the diff below compares a real pair
+# rather than two arbitrary ones.
+odd=""
+n=2
+while [ "$n" -le "$RUNS" ]; do
+    if [ "$("$PROFILE_TOOL" id "$work/run-$n.json")" != "$first" ]; then
+        odd="$n"
+        break
+    fi
+    n=$((n + 1))
+done
 
-if [ "$id_a" = "$id_b" ]; then
-    echo "reproducible: two separate probe processes agree"
-    echo "  profile_id $id_a"
+if [ -z "$odd" ]; then
+    echo "reproducible: $RUNS separate probe processes agree"
+    echo "  profile_id $first"
     exit 0
 fi
+
+cp "$work/run-1.json" "$work/a.json"
+cp "$work/run-$odd.json" "$work/b.json"
+id_a="$first"
+id_b=$("$PROFILE_TOOL" id "$work/b.json")
+echo "$RUNS runs, and run $odd is the one that disagrees with run 1:" >&2
+printf '%s' "$ids" >&2
 
 echo "NOT REPRODUCIBLE: two runs of the probe on this host disagree" >&2
 echo "  run 1  $id_a" >&2
