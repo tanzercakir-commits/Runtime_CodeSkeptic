@@ -144,6 +144,28 @@ jobs:
           bash tests/groundtruth/run.sh /tmp/meas/gt-host.json 2>&1 \
             | tee /tmp/meas/gt_run.txt
 
+      # A SECOND HOST, MADE RATHER THAN WAITED FOR.
+      #
+      # T-015's fix - "fitting in the address space is not sufficient" - could
+      # only be disproved on a host where the two reasons disagree, and the item
+      # said that meant a 5-level-paging machine nobody can request. RLIMIT_AS
+      # opens the same gap on any Linux host: `max_user_address` does not move
+      # (the ceiling probe maps ONE PAGE, which never reaches the limit) while
+      # `max_single_reservation` drops from 2^46 to 2^31. A 1 TiB request then
+      # fits the address space and exceeds 2 x granted, so RS-VM-0026 decides
+      # alone and the kernel refuses.
+      #
+      # The script REFUSES TO RUN if that divergence did not open, rather than
+      # reporting green for a fix nothing tested.
+      - name: Ground truth on a constrained host (RLIMIT_AS)
+        id: gt_constrained
+        if: runner.os == 'Linux'
+        run: |
+          set -o pipefail
+          mkdir -p /tmp/meas
+          bash tools/campaign/constrained_lane.sh 2>&1 \
+            | tee /tmp/meas/gt_constrained.txt
+
       # The probe is only implemented for Linux. On other platforms this step
       # proves the honest fallback: a schema-valid profile in which every fact
       # is unknown, and a non-zero warning list saying so.

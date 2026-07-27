@@ -43,88 +43,51 @@ completes without leaving a trace in the log is work that will be redone.
 
 ## Now
 
-### T-015 — Fitting in the address space is not enough to reserve it `[now]`
+### T-017 — `max_single_reservation` is measured hintless and labelled as if it were not `[now]`
 
-**Serves:** the credibility of every `SUPPORTED` the analyzer emits
-**Plan:** `docs/PLAN.md` cross-cutting — rule coverage, and Gate B's false-positive
-claim
-**Done when:** `oversized-reservation-4pib` is `held` on **both** a 4-level and a
-5-level Linux host, and the rule that changed says why in
-`docs/findings/registry.md`.
+**Serves:** the honesty of `RS-VM-0026`, which is now the rule T-015 rests on
+**Plan:** `docs/PLAN.md` Phase 1 — the probe's measured facts
+**Done when:** the profile carries the largest reservation granted **with** a hint
+above `DEFAULT_MAP_WINDOW` as well as without one, both `measured_capability`, and
+`RS-VM-0026` states which of the two it compared against and why.
 
-**Found by a 5-level-paging CI runner, and every host before it hid the defect.**
-
-```
-oversized-reservation-4pib    SUPPORTED   refused   CONTRADICTED
-    mmap of 4503599627370496 bytes (4096.0 TiB) was refused: ENOMEM
-```
-
-On a 4-level host 4 PiB does not fit below `max_user_address`, so the analyzer
-answers UNSUPPORTED, the kernel refuses, and the prediction holds — **for the wrong
-reason**. On an LA57 host `max_user_address` is 2^56, 4 PiB fits, the analyzer
-answers SUPPORTED, and the kernel refuses anyway.
-
-So the rule behind that verdict treats *fits within the address space* as
-sufficient for a reservation to succeed. It is not: `ENOMEM` here is overcommit and
-VA accounting, not bounds. This is a **false positive** in the dangerous
-direction — the analyzer told a caller a 4 PiB reservation would work.
-
-**Not to be fixed by adjusting the expectation.** The harness said so itself, and
-the contract describes what the program does.
-
-**Answered, and the condition is a measured fact rather than a sentence.**
-`VirtualMemoryModel::max_single_reservation` is the largest **power-of-two**
-reservation the host actually granted — a power of two because the exact figure
-moves between two runs as the process's own mappings shift, and a fact that moves
-is a fact about the probe. `RS-VM-0026` gives three honest bands:
+**Found by reading, not by a runner, and it is true today on every host.**
 
 ```
-size > 2 x granted        the next power of two was measured to FAIL and this is
-                          larger still           -> UNSUPPORTED, PROVEN
-granted < size <= 2x      between the largest success and the smallest failure;
-                          nothing measured it    -> CONDITIONAL, HYPOTHESIS
-size <= granted           the host granted at least this much -> nothing to say
+vm_probe_linux.cpp:196      try_map(nullptr, size, PROT_NONE, ... MAP_NORESERVE)
+oversized_reservation.c:35  mmap(NULL,    length, PROT_NONE, ... MAP_NORESERVE)
 ```
 
-`RS-VM-0027` covers the fact being absent, above 4 GiB — the next power of two
-above the largest request this project has ever observed a real program make
-(1.96 GiB across 1292 observations, p99 32 MiB). Below that, silence, or every
-ordinary mapping on every fixture would carry the finding.
+Both hintless. Linux does not open 5-level paging to a hintless `mmap`:
+`find_start_end()` in `arch/x86/kernel/sys_x86_64.c` widens the search only when
+`addr > DEFAULT_MAP_WINDOW` (2^47 − PAGE_SIZE), and
+`Documentation/arch/x86/x86_64/5level-paging.rst` says so explicitly, for backward
+compatibility. So with `addr = NULL` the search ends at 128 TiB **even on an LA57
+host**.
 
-**Still open on this item:**
+Two consequences:
 
-1. **Done.** All three probes measure it. macOS reports 70368744177664 and the
-   first real Windows profile reports the same 64 TiB, both `measured_capability`.
-   The macOS helper was compiled and run **on Linux** under the full CI warning set,
-   and the Windows one cross-compiles clean under mingw-w64, so neither was written
-   blind. `RS-VM-0027` now fires only on a profile that genuinely has not been
-   measured.
-2. **`oversized-reservation-4pib` is `held` on a 4-level host and unverified on a
-   5-level one**, because CI lands on LA57 hardware only sometimes. The
-   `Done when` above asks for both, and the second cannot be arranged on demand.
-   The unit tests pin the logic against a synthetic 56-bit profile in the meantime.
-3. **Done.** `exact-mapping-above-user-space` no longer names its ceiling as a
-   constant. `tests/groundtruth/derive_contract.py` rewrites the request address
-   and the postcondition that names it from the profile's measured
-   `max_user_address`, and `tests/groundtruth/manifest.json` asks for it with
-   `derive_address_from`. Nothing else in the contract moves, so the derived
-   document is the committed one with a single measured number substituted and is
-   still schema-valid.
+1. **The fact is mislabelled.** The comment claims *"the largest reservation the
+   kernel actually grants"*. What is measured is *the largest granted inside the
+   default mmap window*. On a 4-level host those coincide, which is why nothing
+   saw it; on LA57 they diverge, and a caller passing a high hint can get more.
+2. **The 4 PiB refusal may hold for the wrong reason there too.** If the case is
+   hintless, an LA57 kernel refuses 4 PiB because it does not fit the 128 TiB
+   default window — not because of overcommit. T-015's old story said the bounds
+   reason *evaporates* on a 5-level host; it does not, it **moves** from
+   `max_user_address` to `DEFAULT_MAP_WINDOW`, and the analyzer models neither.
 
-   ```
-   5-level host (LA57)      fffffffffff000     <- the constant was 63 PiB below this
-   the measured host        7ffffffff000
-   an unmeasured profile    <none>             <- the constant stands
-   ```
+The verdict still comes out right (granted stays ~2^46, so `2^52 > 2 x granted`
+fires) — by way of a fact that is mislabelled on that host. Right answer, wrong
+label, which is the shape this project exists to hunt.
 
-   The third row is the one that keeps a synthetic profile from quietly becoming
-   a measurement. All three run in `tests/groundtruth/selftest.sh` on every push,
-   on whatever host is there — an LA57 machine is not needed to check the LA57
-   case, which is the same move `arena_ceiling_for()` made for the same hardware.
-   Made to fail on demand: restoring the constant breaks two of the three rows.
-
-
----
+**First step:** measure both. A second probe pass with a hint above
+`DEFAULT_MAP_WINDOW`, published as its own fact. On any 4-level host the two must
+agree, and that agreement is itself the evidence; on an LA57 host they diverge and
+**whichever runner lands there publishes the answer without anyone being present
+to ask**. Then decide what `RS-VM-0026` compares against: hintless is what an
+unhinted caller gets, and the requirement model already knows whether the request
+names a high address.
 
 ---
 
@@ -254,6 +217,137 @@ Each needs a reason, so this cannot quietly become a way to empty the list.
 ---
 
 ## Done
+
+### T-015 — Fitting in the address space is not enough to reserve it `[done]`
+
+**Serves:** the credibility of every `SUPPORTED` the analyzer emits
+**Plan:** `docs/PLAN.md` cross-cutting — rule coverage, and Gate B's false-positive
+claim
+**Done when:** the fix is `held` against a real kernel **on a host where the two
+reasons diverge** — where the request fits the address space and still exceeds
+what the host grants — and the rule that changed says why in
+`docs/findings/registry.md`.
+
+**The `Done when` used to name a 5-level-paging host.** That was a mistake in the
+item, not a limitation of the world: it assumed the only way to open the gap is to
+RAISE the ceiling. Lowering what the host grants opens exactly the same gap, and
+`RLIMIT_AS` does it on any Linux host, deterministically and for free.
+
+**Found by a 5-level-paging CI runner, and every host before it hid the defect.**
+
+```
+oversized-reservation-4pib    SUPPORTED   refused   CONTRADICTED
+    mmap of 4503599627370496 bytes (4096.0 TiB) was refused: ENOMEM
+```
+
+On a 4-level host 4 PiB does not fit below `max_user_address`, so the analyzer
+answers UNSUPPORTED, the kernel refuses, and the prediction holds — **for the wrong
+reason**. On an LA57 host `max_user_address` is 2^56, 4 PiB fits, the analyzer
+answers SUPPORTED, and the kernel refuses anyway.
+
+So the rule behind that verdict treats *fits within the address space* as
+sufficient for a reservation to succeed. It is not: `ENOMEM` here is overcommit and
+VA accounting, not bounds. This is a **false positive** in the dangerous
+direction — the analyzer told a caller a 4 PiB reservation would work.
+
+**Not to be fixed by adjusting the expectation.** The harness said so itself, and
+the contract describes what the program does.
+
+**Answered, and the condition is a measured fact rather than a sentence.**
+`VirtualMemoryModel::max_single_reservation` is the largest **power-of-two**
+reservation the host actually granted — a power of two because the exact figure
+moves between two runs as the process's own mappings shift, and a fact that moves
+is a fact about the probe. `RS-VM-0026` gives three honest bands:
+
+```
+size > 2 x granted        the next power of two was measured to FAIL and this is
+                          larger still           -> UNSUPPORTED, PROVEN
+granted < size <= 2x      between the largest success and the smallest failure;
+                          nothing measured it    -> CONDITIONAL, HYPOTHESIS
+size <= granted           the host granted at least this much -> nothing to say
+```
+
+`RS-VM-0027` covers the fact being absent, above 4 GiB — the next power of two
+above the largest request this project has ever observed a real program make
+(1.96 GiB across 1292 observations, p99 32 MiB). Below that, silence, or every
+ordinary mapping on every fixture would carry the finding.
+
+**Still open on this item:**
+
+1. **Done.** All three probes measure it. macOS reports 70368744177664 and the
+   first real Windows profile reports the same 64 TiB, both `measured_capability`.
+   The macOS helper was compiled and run **on Linux** under the full CI warning set,
+   and the Windows one cross-compiles clean under mingw-w64, so neither was written
+   blind. `RS-VM-0027` now fires only on a profile that genuinely has not been
+   measured.
+2. **Done, and without waiting for hardware.** The divergence was reachable all
+   along by lowering the grant instead of raising the ceiling. Under `RLIMIT_AS`
+   the two measurements move apart because they use different calls:
+   `find_max_single_reservation()` maps gigabytes with `mmap`, which the kernel
+   charges against the limit in `may_expand_vm()` (and `MAP_NORESERVE` is not an
+   exemption), while `find_max_user_address()` probes ONE PAGE with
+   `MAP_FIXED_NOREPLACE`, which never reaches it. Measured:
+
+   ```
+   ulimit -v            max_user_address        max_single_reservation
+   unlimited            0x7ffffffff000 (2^47)   2^46
+   4194304  (4 GiB)     0x7ffffffff000 (2^47)   2^31
+   1048576  (1 GiB)     0x7ffffffff000 (2^47)   2^29
+   ```
+
+   `reservation-above-granted-1tib` asks for 2^40 — which fits below 2^47 on both
+   hosts, so `RS-VM-0021`'s reason is silent in both and cannot be what decides:
+
+   ```
+                    analyzer                       kernel      pairing
+   unconstrained    SUPPORTED                      satisfied   held
+   constrained      UNSUPPORTED / PROVEN (0026)    refused     held
+   ```
+
+   One contract, two hosts, opposite verdicts, both held. The analyzer says it
+   itself: *"the largest reservation this host granted was 2147483648 bytes,
+   while 140737488347136 bytes of address space exist."*
+
+   `tools/campaign/constrained_lane.sh` runs the probe AND the cases under the
+   limit, and **refuses to run** unless the divergence actually opened — the
+   ceiling unmoved, the grant lowered, the request inside the space and above
+   `2 x granted`. A lane that quietly stopped discriminating would report green
+   for a fix nothing tested. Made to fail on demand: at `ulimit -v 900000000` the
+   request lands in the CONDITIONAL band and the lane exits 1.
+
+   It also reaches two bands the LA57 round never touches — `size <= granted`
+   (SUPPORTED, and granted) and the CONDITIONAL band between — because the limit
+   is a dial and the hardware was not.
+
+   **Honest about the mechanism:** this `ENOMEM` is `RLIMIT_AS`, not overcommit or
+   VA accounting. `RS-VM-0026` does not ask why; it compares a request against a
+   measured grant. The claim under test — *fitting is not sufficient* — is
+   identical.
+3. **Done.** `exact-mapping-above-user-space` no longer names its ceiling as a
+   constant. `tests/groundtruth/derive_contract.py` rewrites the request address
+   and the postcondition that names it from the profile's measured
+   `max_user_address`, and `tests/groundtruth/manifest.json` asks for it with
+   `derive_address_from`. Nothing else in the contract moves, so the derived
+   document is the committed one with a single measured number substituted and is
+   still schema-valid.
+
+   ```
+   5-level host (LA57)      fffffffffff000     <- the constant was 63 PiB below this
+   the measured host        7ffffffff000
+   an unmeasured profile    <none>             <- the constant stands
+   ```
+
+   The third row is the one that keeps a synthetic profile from quietly becoming
+   a measurement. All three run in `tests/groundtruth/selftest.sh` on every push,
+   on whatever host is there — an LA57 machine is not needed to check the LA57
+   case, which is the same move `arena_ceiling_for()` made for the same hardware.
+   Made to fail on demand: restoring the constant breaks two of the three rows.
+
+
+---
+
+---
+
 
 ### T-006 — A contract for "valid host operation rejected by caller assumption" `[done]`
 

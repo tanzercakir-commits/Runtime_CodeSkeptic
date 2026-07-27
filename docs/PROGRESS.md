@@ -16,6 +16,88 @@ re-litigated; a mistake recorded here does not need to be re-made.
 
 ---
 
+## 2026-07-27 — a second host, made rather than waited for
+
+**Changed.** `tools/campaign/constrained_lane.sh` is new and wired into the Linux
+job; `contracts/reservation-above-granted-1tib.json` is the contract that
+discriminates. T-015 closes. T-017 is filed for what checking it turned up.
+
+| | |
+|---|---|
+| **+** | T-015 needed a host where "fits the address space" and "the host will grant it" disagree, and the item said that meant 5-level-paging hardware nobody can request. It was reachable all along by lowering the grant instead of raising the ceiling |
+| **+** | one contract, two hosts, opposite verdicts, both held — the divergence, on any Linux runner, deterministically, for free |
+| **+** | it reaches two bands the LA57 round never touches, because a limit is a dial and hardware is not |
+| **−** | the `Done when` had encoded an assumption as a requirement for two days, and nobody read it as an assumption. "Needs an LA57 host" was never true; "needs a host where the two reasons diverge" was |
+| **−** | checking the mechanism turned up a second defect that is true **today, on every host**, and is not fixed here (T-017) |
+
+### Lowering the grant opens the same gap as raising the ceiling
+
+The two measurements move apart under `RLIMIT_AS` because they use different
+calls. `find_max_single_reservation()` maps gigabytes with `mmap`, which the
+kernel charges against the limit in `may_expand_vm()` — and `MAP_NORESERVE` is not
+an exemption. `find_max_user_address()` probes **one page** with
+`MAP_FIXED_NOREPLACE`, which never reaches it:
+
+```
+ulimit -v            max_user_address        max_single_reservation
+unlimited            0x7ffffffff000 (2^47)   2^46
+4194304  (4 GiB)     0x7ffffffff000 (2^47)   2^31
+1048576  (1 GiB)     0x7ffffffff000 (2^47)   2^29
+```
+
+`reservation-above-granted-1tib` asks for 2^40 — below 2^47 on both hosts, so
+`RS-VM-0021`'s fits-the-address-space reason is silent in both and cannot be what
+decides:
+
+```
+                 analyzer                       kernel      pairing
+unconstrained    SUPPORTED                      satisfied   held
+constrained      UNSUPPORTED / PROVEN (0026)    refused     held
+```
+
+The analyzer states the divergence itself: *"the largest reservation this host
+granted was 2147483648 bytes, while 140737488347136 bytes of address space
+exist."*
+
+The lane runs the probe **and** the cases under the limit, and refuses to run
+unless the divergence actually opened — ceiling unmoved, grant lowered, request
+inside the space and above `2 x granted`. A lane that quietly stopped
+discriminating would report green for a fix nothing tested. Made to fail on
+demand: at `ulimit -v 900000000` the request lands in the CONDITIONAL band and the
+lane exits 1.
+
+**Honest about the mechanism:** this `ENOMEM` is `RLIMIT_AS`, not overcommit or VA
+accounting. `RS-VM-0026` does not ask why — it compares a request against a
+measured grant — so the claim under test, *fitting is not sufficient*, is
+identical.
+
+### And checking it found something worse
+
+Both the probe and the case ask hintlessly:
+
+```
+vm_probe_linux.cpp:196      try_map(nullptr, size, ...)
+oversized_reservation.c:35  mmap(NULL,    length, ...)
+```
+
+Linux does not open 5-level paging to a hintless `mmap` — `find_start_end()`
+widens the search only when `addr > DEFAULT_MAP_WINDOW`. So `max_single_reservation`
+measures *the largest grant inside the default 128 TiB window*, while its comment
+claims *"the largest reservation the kernel actually grants"*. On a 4-level host
+those coincide; on LA57 they diverge.
+
+Which means T-015's own story was subtly wrong: the bounds reason does not
+*evaporate* on a 5-level host, it **moves** from `max_user_address` to
+`DEFAULT_MAP_WINDOW` — and the analyzer models neither. The verdict still comes
+out right there, by way of a fact that is mislabelled on that host. Right answer,
+wrong label. Filed as **T-017**.
+
+**Next.** T-017: measure the hinted case too, so the two numbers agree on every
+4-level host (agreement being the evidence) and diverge on LA57 — where whichever
+runner lands there publishes the answer with nobody present to ask.
+
+---
+
 ## 2026-07-27 — the seventh demonstration: the host succeeds and the caller loses
 
 **Changed.** `tests/groundtruth/cases/pointer_truncation.c` and

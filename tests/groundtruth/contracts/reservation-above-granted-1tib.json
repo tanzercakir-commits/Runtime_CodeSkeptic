@@ -1,0 +1,37 @@
+{
+  "schema": "runtime-skeptic.application-requirements.v1",
+  "name": "Reservation of 1 TiB, which fits the address space on every host here",
+  "component": "ground-truth pairing for RS-VM-0026, where fitting is not sufficient",
+  "operation": "virtual_memory_map",
+  "request": {
+    "size": 1099511627776,
+    "exact_address_required": false,
+    "protection": {
+      "read": false,
+      "write": false,
+      "execute": false
+    },
+    "file_backed": false
+  },
+  "assumptions": {
+    "retries_on_failure": false
+  },
+  "required_postconditions": [
+    "a reservation of 1099511627776 bytes is granted"
+  ],
+  "permitted_fallbacks": [],
+  "failure_sink": {
+    "kind": "fatal_assert",
+    "location": {
+      "file": "tests/groundtruth/cases/oversized_reservation.c",
+      "line": 1,
+      "symbol": "attempt"
+    },
+    "description": "the case reports `refused` with the errno the kernel gave, and the runner fails the pairing against a SUPPORTED prediction"
+  },
+  "assumption_evidence": "specified_guarantee",
+  "extraction_limitations": [
+    "Single-claim contract written to pair with a ground-truth case. It asserts exactly one thing so that a whole-contract verdict can be compared against a single observation without ambiguity."
+  ],
+  "x_groundtruth": "THE SAME CONTRACT ON TWO HOSTS, and that is the point. 1 TiB is 2^40: far below max_user_address on every host this project measures, so RS-VM-0021's fits-in-the-address-space reason is silent in both lanes and cannot be what decides the verdict. What decides it is the measured max_single_reservation. Unconstrained, the host grants ~2^46 and the answer is SUPPORTED and the kernel agrees. Under RLIMIT_AS the host grants 2^31 and the answer is UNSUPPORTED/PROVEN through RS-VM-0026 alone, and the kernel refuses with ENOMEM. Both pairings hold, for opposite reasons, from one contract. That is the divergence T-015 needed and it required no particular hardware."
+}
