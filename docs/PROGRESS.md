@@ -153,10 +153,46 @@ arithmetic on the line rather than the word "verified". What fifteen runs do
 **not** exclude is a rarer instability — no run count does, it only makes one less
 likely — which is why `RUNS` is a variable.
 
-**Next.** Nothing is chasing this any more. The open items are T-015's two halves
-(one needs LA57 hardware luck, one does not), T-005's rule coverage, T-006's
-missing seventh demonstration, and the false-positive campaign still resting on
-one host and one OS.
+### T-015's third item: a contract may not name a ceiling as a constant
+
+The compass named the one piece of T-015 that does not need hardware luck, so it
+is done. `exact-mapping-above-user-space` asked for `0x800000000000` and **its own
+name asserts that this is above the top of user space** — true on a 4-level
+x86-64 host, false by 63 PiB on a 5-level one, where the constant sits in
+ordinary mappable space. Its sibling `oversized-reservation-4pib` was
+CONTRADICTED on exactly such a runner for exactly this reason.
+
+`tests/groundtruth/derive_contract.py` rewrites the request address, and the
+postcondition that names it, from the profile's measured `max_user_address`.
+Nothing else moves, so the derived document is the committed one with one
+measured number substituted — still schema-valid, and carrying an `x_derivation`
+note saying what was replaced and why.
+
+```
+DERIVATION                         ADDRESS          RESULT
+5-level host (LA57)                fffffffffff000   ok
+the measured host                  7ffffffff000     ok
+an unmeasured profile              <none>           ok   <- the constant stands
+```
+
+| | |
+|---|---|
+| **+** | the LA57 case is checked **on whatever host is running**, every push. An LA57 machine is not needed to check the LA57 case — the same move `arena_ceiling_for()` made, for the same hardware and the same reason |
+| **+** | the third row is load-bearing: a profile that measured nothing derives nothing, so a synthetic host cannot quietly become a measurement. That is the defect `profile_for()` was added for, one file over |
+| **+** | made to fail on demand — restoring the constant breaks two of the three rows, and the exit code was checked **directly** rather than through a pipe, because `\| tail` has swallowed a status in this repository before |
+| **−** | T-015's remaining half still needs an LA57 runner and cannot be arranged. `oversized-reservation-4pib` is `held` on a 4-level host and unverified on a 5-level one |
+
+**And the shell guard earned its place again.** The first version of the wiring
+asked `${#args[@]}` on an array that may be empty, under `set -u` — an unbound
+variable in bash 3.2, which is what macOS ships.
+`tools/guards/check_shell_portability.py` named the line, the reason and the fix
+on the push that introduced it. That is a macOS runner round trip that did not
+happen, on a defect that would have been invisible on every Linux lane.
+
+**Next.** Nothing is chasing a defect any more. What remains: T-015's LA57 half
+(hardware luck), T-005's rule coverage, T-006's missing seventh demonstration —
+the only one of the seven that points at the *caller* rather than the host — and
+the false-positive campaign still resting on one host and one OS.
 
 ---
 

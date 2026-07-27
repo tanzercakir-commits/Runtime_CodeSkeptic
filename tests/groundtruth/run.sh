@@ -122,14 +122,47 @@ print(c['case'], c['contract'], c['program'])
     # died here the moment the selftest above stopped dying first. Read the
     # array the portable way.
     args=()
+    # Counted here rather than asked for later: `${#args[@]}` on an array that
+    # may be empty is an unbound variable under `set -u` in bash 3.2, which is
+    # what macOS ships. tools/guards/check_shell_portability.py caught this one
+    # on the push that introduced it, before any runner did.
+    nargs=0
     while IFS= read -r _arg; do
         args+=("$_arg")
+        nargs=$((nargs + 1))
     done < <(python3 -c "
 import json
 for a in json.load(open('$MANIFEST'))['cases'][$i]['args']: print(a)
 ")
 
-    "$RS_CHECK" "$CONTRACT_ROOT/$contract" --profile "$PROFILE" --format json >/dev/null 2>&1
+    # A CONTRACT MAY NOT NAME A CEILING AS A CONSTANT. See derive_contract.py:
+    # `exact-mapping-above-user-space` asked for 0x800000000000 and its name
+    # asserts that is above user space - true on a 4-level host, false by 63 PiB
+    # on a 5-level one, where the constant sits in ordinary mappable space. The
+    # sibling case `oversized-reservation-4pib` was CONTRADICTED on exactly such
+    # a runner for exactly this reason.
+    #
+    # A profile that does not carry the fact derives NOTHING and the committed
+    # constant stands, so a synthetic profile cannot quietly become a
+    # measurement - selftest.sh drives that path on purpose.
+    use_contract="$CONTRACT_ROOT/$contract"
+    derive_from=$(python3 -c "
+import json
+print(json.load(open('$MANIFEST'))['cases'][$i].get('derive_address_from', ''))
+")
+    if [ -n "$derive_from" ]; then
+        derived="$BIN/derived-$name.json"
+        if derived_addr=$(python3 "$HERE/derive_contract.py" \
+                "$CONTRACT_ROOT/$contract" "$PROFILE" "$derive_from" "$derived"); then
+            use_contract="$derived"
+            # The case program takes the same address; substituting only the
+            # contract would compare a prediction about one address against an
+            # observation of another.
+            if [ "$nargs" -gt 0 ]; then args[0]="$derived_addr"; fi
+        fi
+    fi
+
+    "$RS_CHECK" "$use_contract" --profile "$PROFILE" --format json >/dev/null 2>&1
     predicted=$(verdict_of $?)
 
     # A case may only settle a prediction if it checks EVERY postcondition its

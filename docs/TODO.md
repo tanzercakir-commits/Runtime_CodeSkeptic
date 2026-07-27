@@ -103,14 +103,25 @@ ordinary mapping on every fixture would carry the finding.
    5-level one**, because CI lands on LA57 hardware only sometimes. The
    `Done when` above asks for both, and the second cannot be arranged on demand.
    The unit tests pin the logic against a synthetic 56-bit profile in the meantime.
-3. **`exact-mapping-above-user-space` derives its address from a constant**
-   (`0x800000000000`), which is not above user space on an LA57 host. Renaming is
-   not the fix; deriving it from the measured bound is.
+3. **Done.** `exact-mapping-above-user-space` no longer names its ceiling as a
+   constant. `tests/groundtruth/derive_contract.py` rewrites the request address
+   and the postcondition that names it from the profile's measured
+   `max_user_address`, and `tests/groundtruth/manifest.json` asks for it with
+   `derive_address_from`. Nothing else in the contract moves, so the derived
+   document is the committed one with a single measured number substituted and is
+   still schema-valid.
 
-**Also note:** `exact-mapping-above-user-space` is the same host difference from
-the other side. `0x800000000000` is not above user space on an LA57 host, and the
-case's own name stops being true there. Renaming it is not the fix; deriving the
-address from the measured bound is.
+   ```
+   5-level host (LA57)      fffffffffff000     <- the constant was 63 PiB below this
+   the measured host        7ffffffff000
+   an unmeasured profile    <none>             <- the constant stands
+   ```
+
+   The third row is the one that keeps a synthetic profile from quietly becoming
+   a measurement. All three run in `tests/groundtruth/selftest.sh` on every push,
+   on whatever host is there — an LA57 machine is not needed to check the LA57
+   case, which is the same move `arena_ceiling_for()` made for the same hardware.
+   Made to fail on demand: restoring the constant breaks two of the three rows.
 
 
 ---

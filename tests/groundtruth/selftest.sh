@@ -204,4 +204,59 @@ done
 
 echo
 echo "rows: $((pass + fail))   ok: $pass   mismatched: $fail"
-[ "$fail" -eq 0 ] || exit 1
+
+# --- the derived ceiling ---------------------------------------------------
+#
+# `derive_contract.py` replaces a committed constant with a MEASURED bound, and
+# the case it exists for cannot be exercised on any machine this project can
+# obtain: a 5-level-paging host. CI has landed on one exactly once, by accident,
+# and `oversized-reservation-4pib` was CONTRADICTED there because a constant was
+# standing in for a measurement.
+#
+# So the derivation is checked against a profile that SAYS it is 5-level, here,
+# on whatever host is running. That is the same move `arena_ceiling_for()` made
+# for the same hardware and the same reason.
+derive_check() {
+    local label="$1" profile="$2" want="$3"
+    local got
+    got=$(python3 "$HERE/derive_contract.py" \
+              "$HERE/contracts/exact-mapping-above-user-space.json" \
+              "$profile" max_user_address "$WORK/derived.json" 2>/dev/null) \
+        || got="<none>"
+    if [ "$got" = "$want" ]; then
+        printf '%-34s %-16s ok\n' "$label" "$got"
+        return 0
+    fi
+    printf '%-34s %-16s MISMATCH (wanted %s)\n' "$label" "$got" "$want"
+    return 1
+}
+
+echo
+printf '%-34s %-16s %s\n' DERIVATION ADDRESS RESULT
+printf '%.0s-' {1..64}; echo
+dfail=0
+
+python3 -c "
+import json
+p = json.load(open('$MEASURED'))
+p['virtual_memory']['max_user_address']['value'] = '0xfffffffffff000'
+json.dump(p, open('$WORK/la57.json', 'w'))
+" 2>/dev/null && {
+    derive_check "5-level host (LA57)" "$WORK/la57.json" fffffffffff000 || dfail=$((dfail + 1))
+    derive_check "the measured host" "$MEASURED" \
+        "$(python3 -c "
+import json
+v = json.load(open('$MEASURED'))['virtual_memory']['max_user_address']['value']
+print(format(int(v, 16), 'x'))
+" 2>/dev/null)" || dfail=$((dfail + 1))
+}
+# A profile that measured nothing must derive nothing, or a synthetic host
+# quietly becomes a measurement - which is the defect `profile_for()` was added
+# for one file over.
+derive_check "an unmeasured profile" \
+    "$ROOT/profiles/fixtures/unknown-host.synthetic.json" "<none>" \
+    || dfail=$((dfail + 1))
+
+echo
+echo "derivations: ok=$(( 3 - dfail ))  mismatched: $dfail"
+[ "$fail" -eq 0 ] && [ "$dfail" -eq 0 ] || exit 1

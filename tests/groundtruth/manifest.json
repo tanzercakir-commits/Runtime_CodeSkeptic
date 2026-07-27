@@ -130,8 +130,9 @@
         "800000000000",
         "131072"
       ],
-      "why": "RS-VM-0003. The ceiling case, and the ceiling has been wrong before: the first macOS run reported the bottom of the commpage as the top of user address space and skipped the entire band above it.",
-      "verifies_all_postconditions": true
+      "why": "RS-VM-0003. The ceiling case, and the ceiling has been wrong before: the first macOS run reported the bottom of the commpage as the top of user address space and skipped the entire band above it. The address is DERIVED from the measured max_user_address rather than committed as 0x800000000000, which is above user space on a 4-level host and 63 PiB below it on a 5-level one.",
+      "verifies_all_postconditions": true,
+      "derive_address_from": "max_user_address"
     },
     {
       "case": "identity-without-translation",
