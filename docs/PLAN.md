@@ -123,17 +123,20 @@ findings from the set itself:
 
 ### Exit criteria
 
-- `[partial]` **repeated runs on the same stable host produce equivalent
-  canonical profiles** — `tools/campaign/check_reproducible.sh`, which runs the
-  probe as **five separate processes**. The in-process test was green while this
-  was false. **The gap:** this line read `[done]` on 2026-07-26 while the macOS
-  job failed exactly this criterion on roughly every second push — a landmark our
-  own mapping sat on was recorded with a different `note` from the same landmark
-  when free, and the note is inside the hashed subtree, so `profile_id` alternated
-  between two values. Fixed by `ladder_record()` on 2026-07-27 and **not yet
-  confirmed on a macOS runner**; one green run would not confirm it either, since
-  the old defect was green half the time. Promote after several consecutive green
-  `refs/status/<sha>/macos---apple-clang`.
+- `[done]` **repeated runs on the same stable host produce equivalent canonical
+  profiles** — `tools/campaign/check_reproducible.sh`, which runs the probe as
+  **five separate processes** and compares every id. The in-process test was green
+  while this was false. Measured on `de72b5e`: **15 macOS probe runs across three
+  environments** (`macos---apple-clang`, `native-arm64`, `rosetta-x86_64`, five
+  each) all agreeing, published to `refs/measurements/<sha>/*/reproducible.txt`,
+  plus Linux and Windows. **What this line cost:** it read `[done]` through
+  2026-07-26 while the macOS job failed exactly this criterion on roughly every
+  second push — a landmark our own mapping sat on was recorded with a different
+  `note` from the same landmark when free, and the note is inside the hashed
+  subtree, so `profile_id` alternated between two values. Fixed by
+  `ladder_record()`. Fifteen agreeing runs put a 50/50 bistable defect at 2⁻¹⁴;
+  a rarer instability is not excluded by any number of runs, only made less
+  likely, which is why the run count is a variable (`RUNS=`) and not a constant.
 - `[done]` failures preserve native error information — `errno` and
   `kern_return_t` names are carried into range notes by
   `src/probe/vm_probe_linux.cpp` and `src/probe/vm_probe_macos.cpp`

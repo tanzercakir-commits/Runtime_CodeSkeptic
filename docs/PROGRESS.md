@@ -126,9 +126,37 @@ evidence sitting after it was invisible. Writing the regex as
 whenever there is indentation, which is the rule both documents actually follow.
 Selftest 75 → **78 cases**, one of them the false positive itself.
 
-**Next.** Watch `refs/status/<sha>/macos---apple-clang` across several pushes: one
-green run no longer means much, since the old defect was green half the time.
-`docs/PLAN.md`'s reproducibility criterion is `[partial]` until then.
+### Confirmed, and the five-run change is what made one push enough
+
+`de72b5e`: **eight green**, including all three macOS environments.
+
+```
+macos---apple-clang ✓   native-arm64 ✓   rosetta-x86_64 ✓
+linux---gcc ✓  linux---clang ✓  windows---msvc ✓  determinism ✓  compatibility-gate ✓
+
+refs/measurements/de72b5e/native-arm64/reproducible.txt
+  reproducible: 5 separate probe processes agree
+    profile_id sha256:032555bcce4cb11eaf99613a8aae80081db3b640b6d37b9be23158d9da88c8d2
+refs/measurements/de72b5e/rosetta-x86_64/reproducible.txt
+  reproducible: 5 separate probe processes agree
+    profile_id sha256:55bb74f8f79961ac0f7db7e6090370a5727bb4c97cdd2d54812269902d46a934
+```
+
+**15 macOS probe runs across three environments, all agreeing.** Under the old
+defect that is 2⁻¹⁴ ≈ 0.006%. The entry above planned to watch several consecutive
+pushes precisely because one green run of a 2-run check meant almost nothing — and
+the five-run change is what collapsed that wait into a single push. Raising the
+sample was worth more than raising the patience.
+
+`docs/PLAN.md`'s reproducibility criterion goes back to `[done]`, with the
+arithmetic on the line rather than the word "verified". What fifteen runs do
+**not** exclude is a rarer instability — no run count does, it only makes one less
+likely — which is why `RUNS` is a variable.
+
+**Next.** Nothing is chasing this any more. The open items are T-015's two halves
+(one needs LA57 hardware luck, one does not), T-005's rule coverage, T-006's
+missing seventh demonstration, and the false-positive campaign still resting on
+one host and one OS.
 
 ---
 
