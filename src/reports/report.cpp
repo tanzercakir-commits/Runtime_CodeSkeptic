@@ -3,6 +3,9 @@
 
 #include <sstream>
 #include <string>
+#include <vector>
+
+#include "runtimeskeptic/core/json.hpp"
 
 namespace rs::reports {
 namespace {
@@ -359,6 +362,33 @@ std::string render_markdown(const vm::AnalysisResult& result,
     }
 
     return out.str();
+}
+
+// The rs-check `--format json` document, verbatim, so the bundle and the CLI
+// cannot drift. This was inline in tools/rs-check/main.cpp until the bundle
+// needed the same bytes; a copy would have been a second thing to keep in step.
+std::string render_run_json(const std::vector<vm::AnalysisResult>& results,
+                            SupportLevel overall,
+                            const vm::RequirementBundle& bundle) {
+    json::Value document = json::Value::object();
+    document["schema"] = std::string("runtime-skeptic.compatibility-run.v1");
+    document["overall"] = std::string(rs::to_string(overall));
+    document["requirement_count"] =
+        static_cast<unsigned long long>(results.size());
+    if (!bundle.producer_tool.empty()) {
+        json::Value producer = json::Value::object();
+        producer["tool"] = bundle.producer_tool;
+        producer["version"] = bundle.producer_version;
+        producer["rule"] = bundle.producer_rule;
+        document["producer"] = producer;
+    }
+    json::Value entries = json::Value::array();
+    for (const auto& result : results) entries.push_back(result.to_json());
+    document["results"] = entries;
+    json::Value skipped = json::Value::array();
+    for (const auto& r : bundle.rejected) skipped.push_back(json::Value(r));
+    document["rejected_requirements"] = skipped;
+    return json::serialize_pretty(document);
 }
 
 }  // namespace rs::reports

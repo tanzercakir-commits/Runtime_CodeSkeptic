@@ -16,6 +16,57 @@ re-litigated; a mistake recorded here does not need to be re-made.
 
 ---
 
+## 2026-07-28 — the evidence bundle: a verdict that survives leaving the machine
+
+**Changed.** `rs-check --bundle DIR` and a new `rs-replay` tool; the bundle logic
+is `reports/bundle.{hpp,cpp}`, the manifest schema is
+`schemas/analysis-bundle.v1.json`, and `tests/unit/test_evidence_bundle.cpp` is
+new (7 cases). T-007 closes; §17 in `docs/PLAN.md` goes `[open]` → `[done]`.
+
+```
+analysis_bundle/
+├── manifest.json                 versions, host key, hashes, finding IDs, replay
+├── environment_profile.json      the profile, VERBATIM
+├── application_requirements.json  the requirement, VERBATIM
+├── findings.json                 rs-check's own JSON, same code path
+├── report.md
+└── hashes.txt                    sha256sum -c works with no bespoke verifier
+```
+
+| | |
+|---|---|
+| **+** | the bundle **self-certifies**: `write_bundle` re-runs the analysis from the files it just wrote and records `reproduced` or `diverged`. A canonical round-trip that dropped a fact would surface as `diverged` at write time, not as a surprise on someone else's machine |
+| **+** | two lies, two independent catches. `rs-replay` hashes every stored file against the manifest, so an **edited file** is caught even if the verdict still re-derives; and it re-derives the verdict, so a **manifest that claims the wrong verdict** is caught even though every hash matches. A test for each |
+| **+** | `findings.json` is produced by the SAME `render_run_json()` rs-check prints — extracted from the tool for exactly this, so a bundle whose findings differed from the CLI could not happen |
+| **+** | the manifest schema is checked against a **freshly emitted** manifest, not a committed sample. A sample would drift the moment the emitter changed — the drift `validate_schemas.py` exists to prevent, reintroduced as a fixture |
+| **−** | §17 also names `static_assumptions.json` and `runtime_trace.jsonl`. Those need the Phase 4 monitor and Phase 5 extractor, which do not exist. The manifest's `absent_components` says so — a missing file reads as "there was no trace", and this reads as "not produced yet" |
+
+### The verbatim rule, and why it is not tidiness
+
+The two inputs go into the bundle as their exact bytes, never as a parsed-and-
+re-serialised copy. A re-serialised profile could differ from what the host
+actually produced — a field reordered, a number reformatted — and then the bundle
+would be a record of something that was never run. The same instinct that keeps
+`profile_id` over the facts subtree and not the file: the artifact must be the
+thing measured, not a rendering of it.
+
+### Where the honesty checks live
+
+The unit test covers the round trip in-process. CI adds a **cross-process**
+round-trip on a real measured profile — `rs-check --bundle` then `rs-replay`,
+reading only the bundle — because "survives leaving the machine" is a claim about
+a process boundary, and an in-process test cannot make it. `validate_schemas.py`
+runs the real emitter and validates the manifest it writes, so the schema a third
+party would check against is the schema the code actually emits.
+
+**Next.** T-005's rule-coverage accounting is the last `Next` item — the coverage
+tool under-reports because it is fed one profile, so RS-VM-0026 (which fires only
+under the constrained lane) shows as backlog though it has a case. Then the
+`Later` and `Blocked` items, none pullable without a decision or a dedicated
+machine.
+
+---
+
 ## 2026-07-27 — a second host, made rather than waited for
 
 **Changed.** `tools/campaign/constrained_lane.sh` is new and wired into the Linux

@@ -13,7 +13,9 @@ and a freshly produced analysis result. If the code emits a field the schema
 forbids, or omits one it requires, this fails.
 """
 import json
+import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 try:
@@ -31,6 +33,7 @@ BY_SCHEMA_ID = {
     "runtime-skeptic.application-requirements.v1": "application-requirements.v1.json",
     "runtime-skeptic.application-requirements-bundle.v1":
         "application-requirements-bundle.v1.json",
+    "runtime-skeptic.analysis-bundle.v1": "analysis-bundle.v1.json",
 }
 
 
@@ -41,6 +44,40 @@ def load_schemas():
         store[doc["$id"]] = doc
         store[path.name] = doc
     return store
+
+
+def _find_binary(name: str):
+    for candidate in (ROOT / "build" / "bin" / name,
+                      ROOT / "build" / "bin" / "RelWithDebInfo" / name,
+                      ROOT / "build" / "bin" / (name + ".exe")):
+        if candidate.exists():
+            return candidate
+    return None
+
+
+def _emit_bundle_manifest(rs_check: Path):
+    """Runs rs-check --bundle on a committed contract + profile and returns the
+    manifest it wrote, or None if a profile it accepts could not be found."""
+    contract = ROOT / "tests" / "groundtruth" / "contracts" / \
+        "pointer-truncation-32bit.json"
+    # Any committed MEASURED profile; the verdict does not matter here, only that
+    # the manifest is well-formed. The measured Windows profile is committed and
+    # small.
+    profiles = sorted((ROOT / "profiles" / "measured").glob("*.measured.json"))
+    if not contract.exists() or not profiles:
+        return None
+    with tempfile.TemporaryDirectory() as tmp:
+        out = Path(tmp) / "bundle"
+        proc = subprocess.run(
+            [str(rs_check), str(contract), "--profile", str(profiles[0]),
+             "--bundle", str(out), "--output", "/dev/null"],
+            capture_output=True, text=True)
+        # rs-check exits with the verdict code (1 = UNSUPPORTED etc); only 70
+        # (internal) or a missing manifest means the bundle itself failed.
+        manifest = out / "manifest.json"
+        if proc.returncode == 70 or not manifest.exists():
+            return None
+        return json.loads(manifest.read_text())
 
 
 def main() -> int:
@@ -56,24 +93,42 @@ def main() -> int:
 
     checked = 0
     failures = []
+
+    def validate(doc, label):
+        nonlocal checked
+        name = BY_SCHEMA_ID.get(doc.get("schema"))
+        if name is None:
+            return  # not a document these schemas describe
+        schema = store[name]
+        resolver = RefResolver(base_uri=schema["$id"], referrer=schema,
+                               store=store)
+        validator = Draft202012Validator(schema, resolver=resolver)
+        checked += 1
+        for e in sorted(validator.iter_errors(doc), key=lambda x: x.path)[:4]:
+            where = "/".join(str(p) for p in e.path) or "<root>"
+            failures.append(f"{label}: {where}: {e.message}")
+
     for path in targets:
         try:
             doc = json.loads(path.read_text())
         except json.JSONDecodeError as exc:
             failures.append(f"{path.relative_to(ROOT)}: not valid JSON: {exc}")
             continue
-        name = BY_SCHEMA_ID.get(doc.get("schema"))
-        if name is None:
-            continue  # not a document these schemas describe
-        schema = store[name]
-        resolver = RefResolver(base_uri=schema["$id"], referrer=schema,
-                               store=store)
-        validator = Draft202012Validator(schema, resolver=resolver)
-        errors = sorted(validator.iter_errors(doc), key=lambda e: e.path)
-        checked += 1
-        for e in errors[:4]:
-            where = "/".join(str(p) for p in e.path) or "<root>"
-            failures.append(f"{path.relative_to(ROOT)}: {where}: {e.message}")
+        validate(doc, str(path.relative_to(ROOT)))
+
+    # A FRESHLY PRODUCED BUNDLE MANIFEST, not a committed one. The manifest is an
+    # emitted artifact - its host fields, hashes and replay status are computed at
+    # write time - so a committed sample would drift the moment the emitter
+    # changed, which is the drift this guard exists to prevent, reintroduced as a
+    # fixture. Instead: run the real emitter on a committed contract and a
+    # committed profile, and validate what it wrote.
+    rs_check = _find_binary("rs-check")
+    manifest = _emit_bundle_manifest(rs_check) if rs_check else None
+    if manifest is not None:
+        validate(manifest, "a freshly emitted analysis-bundle manifest")
+    elif rs_check is None:
+        print("  (analysis-bundle: SKIPPED - rs-check not built; the manifest "
+              "schema is only checked against a real emitted manifest)")
 
     schema_count = len(list(SCHEMAS.glob("*.json")))
     print(f"validated {checked} artifact(s) against {schema_count} schema(s)")

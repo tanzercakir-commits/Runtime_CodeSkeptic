@@ -303,8 +303,15 @@ that risk materialising.
   selftest, because the comparison table was untested
 - `[partial]` rule coverage by execution — 13 of the 20 reachable rules;
   `tools/campaign/groundtruth_coverage.py` (T-005)
-- `[open]` §17 **evidence bundle** — `analysis_bundle/` with manifest, hashes
-  and replay status is specified in the ROADMAP and does not exist (T-007)
+- `[done]` §17 **evidence bundle** — `rs-check --bundle DIR` writes a directory
+  with the verbatim inputs, `findings.json`, `report.md`, `hashes.txt` and a
+  `manifest.json` (`runtime-skeptic.analysis-bundle.v1`, validated against a
+  freshly emitted manifest by `tools/guards/validate_schemas.py`). It
+  self-certifies by re-running the analysis from the written files, and
+  `rs-replay DIR` re-derives the verdict from the bundle alone, catching both an
+  edited file (hash mismatch) and a manifest that lies about its verdict
+  (re-derivation). `tests/unit/test_evidence_bundle.cpp`, and a cross-process
+  round-trip in CI. (T-007)
 - `[blocked]` §16 **differential test: hand-written vs statically extracted
   contract** — needs a second, independent producer of contracts, and by the
   Phase 5 decision that producer lives in CodeSkeptic. Blocked on the same

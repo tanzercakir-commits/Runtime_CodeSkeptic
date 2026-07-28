@@ -3,9 +3,11 @@
 
 #include <cerrno>
 #include <cstring>
+#include <filesystem>
 #include <fstream>
 #include <iostream>
 #include <sstream>
+#include <system_error>
 
 namespace rs::io {
 
@@ -46,6 +48,25 @@ bool write_file(const std::string& path, const std::string& contents,
     out.flush();
     if (!out) {
         error = "error while writing '" + path + "'";
+        return false;
+    }
+    return true;
+}
+
+bool make_directories(const std::string& path, std::string& error) {
+    std::error_code ec;
+    // `create_directories` returns false when the directory ALREADY EXISTS, which
+    // is a success here, not a failure - so the return value is not the signal;
+    // `ec` is. But an existing regular file at the path leaves ec clear and must
+    // still be rejected: writing bundle files into it would fail one by one with
+    // a worse message than saying so once, here.
+    std::filesystem::create_directories(path, ec);
+    if (ec) {
+        error = "cannot create directory '" + path + "': " + ec.message();
+        return false;
+    }
+    if (!std::filesystem::is_directory(path, ec)) {
+        error = "'" + path + "' exists and is not a directory";
         return false;
     }
     return true;

@@ -32,7 +32,8 @@ add_library(RuntimeSkeptic::vm ALIAS rs_vm)
 # rs_reports - rendering. Depends on the domain, never the other way round.
 # ---------------------------------------------------------------------------
 add_library(rs_reports STATIC
-    reports/report.cpp)
+    reports/report.cpp
+    reports/bundle.cpp)
 
 target_link_libraries(rs_reports PUBLIC rs_vm PRIVATE rs_warnings)
 add_library(RuntimeSkeptic::reports ALIAS rs_reports)

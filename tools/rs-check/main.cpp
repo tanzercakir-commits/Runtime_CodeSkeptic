@@ -9,6 +9,7 @@
 
 #include "runtimeskeptic/core/io.hpp"
 #include "runtimeskeptic/core/json.hpp"
+#include "runtimeskeptic/reports/bundle.hpp"
 #include "runtimeskeptic/reports/report.hpp"
 #include "runtimeskeptic/version.hpp"
 #include "runtimeskeptic/vm/analyzer.hpp"
@@ -32,6 +33,10 @@ OPTIONS
   --profile FILE       environment profile from rs-env-probe (required)
   --format FORMAT      text (default), json, or markdown
   --output FILE        write the report here (default: stdout)
+  --bundle DIR         also write a replayable evidence bundle to DIR: the
+                       inputs, the findings, a report and a manifest of hashes,
+                       self-certified by re-running the analysis from the
+                       written files. Replay it with rs-replay DIR.
   --no-unknowns        do not emit informational findings for unknown facts.
                        The verdict still becomes UNKNOWN; only the explanation
                        is suppressed.
@@ -78,6 +83,7 @@ int main(int argc, char** argv) {
     std::string requirement_path;
     std::string profile_path;
     std::string output_path = "-";
+    std::string bundle_dir;
     std::string format = "text";
     reports::Options report_options;
     vm::AnalysisOptions analysis_options;
@@ -106,6 +112,12 @@ int main(int argc, char** argv) {
                 return reports::exit_code::kUsage;
             }
             output_path = argv[++i];
+        } else if (arg == "--bundle") {
+            if (i + 1 >= argc) {
+                std::cerr << "rs-check: --bundle requires a directory\n";
+                return reports::exit_code::kUsage;
+            }
+            bundle_dir = argv[++i];
         } else if (arg == "--no-unknowns") {
             analysis_options.report_unknowns = false;
         } else if (arg == "--quiet") {
@@ -186,25 +198,7 @@ int main(int argc, char** argv) {
     }
 
     if (format == "json") {
-        json::Value document = json::Value::object();
-        document["schema"] = std::string("runtime-skeptic.compatibility-run.v1");
-        document["overall"] = std::string(rs::to_string(overall));
-        document["requirement_count"] =
-            static_cast<unsigned long long>(results.size());
-        if (!bundle->producer_tool.empty()) {
-            json::Value producer = json::Value::object();
-            producer["tool"] = bundle->producer_tool;
-            producer["version"] = bundle->producer_version;
-            producer["rule"] = bundle->producer_rule;
-            document["producer"] = producer;
-        }
-        json::Value entries = json::Value::array();
-        for (const auto& result : results) entries.push_back(result.to_json());
-        document["results"] = entries;
-        json::Value skipped = json::Value::array();
-        for (const auto& r : bundle->rejected) skipped.push_back(json::Value(r));
-        document["rejected_requirements"] = skipped;
-        rendered = json::serialize_pretty(document);
+        rendered = reports::render_run_json(results, overall, *bundle);
     }
 
     if (!io::write_file(output_path, rendered, error)) {
@@ -217,5 +211,50 @@ int main(int argc, char** argv) {
                   << " requirement(s); overall " << rs::to_string(overall)
                   << "\n";
     }
+
+    // The evidence bundle, if asked for. Emitted from the VERBATIM input bytes,
+    // not from the parsed-and-reserialised copies above, so the bundle records
+    // what the host actually produced. The bundle re-runs the analysis itself to
+    // self-certify - the same code path, so its verdict cannot disagree with the
+    // one just printed.
+    if (!bundle_dir.empty()) {
+        std::string req_text, prof_text;
+        if (auto t = io::read_file(requirement_path, error)) {
+            req_text = std::move(*t);
+        } else {
+            std::cerr << "rs-check: " << error << "\n";
+            return reports::exit_code::kInput;
+        }
+        if (auto t = io::read_file(profile_path, error)) {
+            prof_text = std::move(*t);
+        } else {
+            std::cerr << "rs-check: " << error << "\n";
+            return reports::exit_code::kInput;
+        }
+        bundle::Inputs inputs;
+        inputs.requirement_text = std::move(req_text);
+        inputs.profile_text = std::move(prof_text);
+        inputs.requirement_source = requirement_path;
+        inputs.profile_source = profile_path;
+
+        bundle::ReplayOutcome replay;
+        if (!bundle::write_bundle(bundle_dir, inputs, analysis_options, error,
+                                  &replay)) {
+            std::cerr << "rs-check: could not write bundle to '" << bundle_dir
+                      << "': " << error << "\n";
+            return reports::exit_code::kInput;
+        }
+        std::cerr << "rs-check: wrote evidence bundle to '" << bundle_dir
+                  << "' (replay: "
+                  << (replay.reproduced ? "reproduced" : "DIVERGED") << ")\n";
+        // A bundle that cannot reproduce its own verdict is a defect in the tool,
+        // not in the contract under test, so it is an internal error rather than
+        // the requirement's verdict.
+        if (!replay.reproduced) {
+            std::cerr << "rs-check: " << replay.detail << "\n";
+            return reports::exit_code::kInternal;
+        }
+    }
+
     return reports::exit_code_for(overall);
 }

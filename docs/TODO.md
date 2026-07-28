@@ -63,20 +63,6 @@ already made once, when the coverage tool reported 100% by grepping prose.
 
 ---
 
-### T-007 — The §17 evidence bundle `[next]`
-
-**Serves:** S6, S8 — anything where a verdict has to survive leaving the machine
-**Plan:** `docs/PLAN.md` cross-cutting, §17
-**Done when:** an analysis emits a directory containing the requirement, the
-profile, the findings, a manifest with hashes and a replay status, and re-running
-from the bundle alone reproduces the verdict.
-
-A verdict that cannot be replayed by someone else is an opinion with a machine
-behind it. Everything needed already exists — profiles are hashed, `profile_id`
-covers the facts subtree, the analyzer is deterministic. This is assembly.
-
----
-
 ## Later
 
 ### T-008 — Fleet aggregation `[later]`
@@ -170,6 +156,46 @@ Each needs a reason, so this cannot quietly become a way to empty the list.
 
 ## Done
 
+### T-007 — The §17 evidence bundle `[done]`
+
+**Serves:** S6, S8 — anything where a verdict has to survive leaving the machine
+**Plan:** `docs/PLAN.md` cross-cutting, §17
+**Done when:** an analysis emits a directory containing the requirement, the
+profile, the findings, a manifest with hashes and a replay status, and re-running
+from the bundle alone reproduces the verdict.
+
+**Closed.** `rs-check --bundle DIR` emits it; `rs-replay DIR` re-derives the
+verdict from the bundle alone.
+
+```
+analysis_bundle/
+├── manifest.json                 tool + schema versions, host key, hashes,
+│                                 finding IDs, replay status
+├── environment_profile.json      the profile, VERBATIM bytes
+├── application_requirements.json  the requirement, VERBATIM bytes
+├── findings.json                 rs-check's own JSON, same code path
+├── report.md                     the human report
+└── hashes.txt                    sha256sum(1) format: `sha256sum -c` works
+```
+
+| what the design refuses to do | why |
+|---|---|
+| re-serialise the inputs | a re-serialised profile could differ from the bytes the host produced, and then the bundle records something that was never run. They go in verbatim |
+| trust its own verdict | `write_bundle` re-runs the analysis from the FILES ON DISK and records `reproduced` or `diverged`. A canonical round-trip that lost a fact shows up as `diverged`, which is why replay happens at write time and not as an assertion |
+| write empty §17 files it cannot fill | `static_assumptions.json` and `runtime_trace.jsonl` need the Phase 4 monitor and Phase 5 extractor, which do not exist. The manifest's `absent_components` says so, because a missing file reads as "there was no trace" and this reads as "not produced yet" |
+
+Two lies, two catches. `rs-replay` hashes every stored file against the manifest,
+so an **edited file** is caught even if the verdict still re-derives; and it
+re-derives the verdict, so a **manifest that claims the wrong verdict** is caught
+even though every hash still matches. `tests/unit/test_evidence_bundle.cpp` has a
+case for each, plus a cross-process round-trip in `ci.yml` (emit with `rs-check`,
+replay with `rs-replay`, reading only the bundle).
+
+The manifest schema is not checked against a committed sample — a sample would
+drift the moment the emitter changed, which is the drift the guard exists to
+prevent. `validate_schemas.py` runs the real emitter and validates what it wrote.
+
+---
 ### T-017 — `max_single_reservation` is measured hintless and labelled as if it were not `[done]`
 
 **Serves:** the honesty of `RS-VM-0026`, which is now the rule T-015 rests on

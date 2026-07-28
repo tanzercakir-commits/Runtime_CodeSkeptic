@@ -166,6 +166,27 @@ jobs:
           bash tools/campaign/constrained_lane.sh 2>&1 \
             | tee /tmp/meas/gt_constrained.txt
 
+      # The evidence bundle, end to end: emit one from a real measured profile,
+      # then REPLAY IT with a different binary invocation reading only the
+      # bundle. The unit test covers the round trip in-process; this proves it
+      # across a process boundary on a profile the host actually produced, which
+      # is the claim - a verdict surviving off the machine.
+      - name: Evidence bundle round-trips
+        id: bundle
+        if: runner.os != 'Windows'
+        run: |
+          set -o pipefail
+          B=build/bin
+          [ -x "$B/rs-env-probe" ] || B=build/bin/RelWithDebInfo
+          "$B/rs-env-probe" vm --name bundle-host --output /tmp/meas/bundle-host.json
+          # rs-check exits with the VERDICT code (1 = UNSUPPORTED), so `|| true`:
+          # a contradiction is a valid bundle, not a build failure. What must
+          # succeed is rs-replay.
+          "$B/rs-check" tests/groundtruth/contracts/pointer-truncation-32bit.json \
+            --profile /tmp/meas/bundle-host.json \
+            --bundle /tmp/meas/bundle --output /dev/null || true
+          "$B/rs-replay" /tmp/meas/bundle
+
       # The probe is only implemented for Linux. On other platforms this step
       # proves the honest fallback: a schema-valid profile in which every fact
       # is unknown, and a non-zero warning list saying so.

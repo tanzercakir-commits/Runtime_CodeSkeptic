@@ -1,0 +1,109 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "runtime-skeptic.analysis-bundle.v1",
+  "title": "RuntimeSkeptic analysis bundle manifest",
+  "description": "The manifest of a replayable evidence bundle (ROADMAP §17). The bundle directory also holds environment_profile.json, application_requirements.json, findings.json, report.md and hashes.txt; this document records the tool and schema versions, host identity at a coarse privacy level, input and output hashes, the analysis options, the finding IDs, and a replay status that certifies the bundle reproduces its own verdict.",
+  "type": "object",
+  "required": [
+    "schema",
+    "tool_version",
+    "schema_versions",
+    "host",
+    "process_architecture",
+    "analysis_options",
+    "inputs",
+    "outputs",
+    "overall",
+    "finding_ids",
+    "replay"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema": { "const": "runtime-skeptic.analysis-bundle.v1" },
+    "tool_version": { "type": "string" },
+    "schema_versions": {
+      "type": "object",
+      "required": ["profile", "requirement", "result"],
+      "additionalProperties": { "type": "string" }
+    },
+    "host": {
+      "type": "object",
+      "description": "Host identity at an appropriate privacy level: the coarse key that changes the answer, not the machine. Deliberately excludes anything that merely names the box.",
+      "required": ["os", "process_arch", "translation_mode", "profile_id"],
+      "additionalProperties": false,
+      "properties": {
+        "os": { "type": "string" },
+        "process_arch": { "type": "string" },
+        "translation_mode": { "type": "string" },
+        "profile_id": { "type": "string", "pattern": "^sha256:" },
+        "profile_name": { "type": "string" },
+        "profile_origin": { "type": "string" }
+      }
+    },
+    "process_architecture": { "type": "string" },
+    "analysis_options": {
+      "type": "object",
+      "required": ["report_unknowns"],
+      "additionalProperties": true,
+      "properties": { "report_unknowns": { "type": "boolean" } }
+    },
+    "inputs": {
+      "type": "object",
+      "required": ["requirement", "profile"],
+      "additionalProperties": false,
+      "properties": {
+        "requirement": { "$ref": "#/$defs/hashedFile" },
+        "profile": {
+          "allOf": [{ "$ref": "#/$defs/hashedFile" }],
+          "properties": { "profile_id": { "type": "string", "pattern": "^sha256:" } }
+        }
+      }
+    },
+    "outputs": {
+      "type": "object",
+      "required": ["findings", "report"],
+      "additionalProperties": false,
+      "properties": {
+        "findings": { "$ref": "#/$defs/hashedFile" },
+        "report": { "$ref": "#/$defs/hashedFile" }
+      }
+    },
+    "overall": {
+      "enum": ["SUPPORTED", "UNSUPPORTED", "CONDITIONALLY_SUPPORTED", "UNKNOWN"]
+    },
+    "finding_ids": {
+      "type": "array",
+      "items": { "type": "string", "pattern": "^RS-VM-[0-9]{4}$" }
+    },
+    "absent_components": {
+      "type": "object",
+      "description": "§17 suggests a static-assumptions document, a runtime trace and an extracted-contracts directory. They come from producers not yet built; each key here is such a component and its value says why it is absent, so a missing file reads as 'not produced yet' rather than 'there was none'.",
+      "additionalProperties": { "type": "string" }
+    },
+    "replay": {
+      "type": "object",
+      "required": ["status", "recorded_overall", "replayed_overall"],
+      "additionalProperties": true,
+      "properties": {
+        "status": { "enum": ["reproduced", "diverged"] },
+        "method": { "type": "string" },
+        "recorded_overall": { "type": "string" },
+        "replayed_overall": { "type": "string" },
+        "finding_ids_match": { "type": "boolean" },
+        "detail": { "type": "string" }
+      }
+    }
+  },
+  "$defs": {
+    "hashedFile": {
+      "type": "object",
+      "required": ["file", "sha256"],
+      "additionalProperties": true,
+      "properties": {
+        "file": { "type": "string" },
+        "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "source": { "type": "string" }
+      }
+    }
+  }
+}

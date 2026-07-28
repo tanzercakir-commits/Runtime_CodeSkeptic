@@ -25,6 +25,7 @@ target_compile_definitions(test_impact PRIVATE RS_REPO_ROOT="${CMAKE_SOURCE_DIR}
 rs_add_test(test_report        SOURCES unit/test_report.cpp        LIBRARIES rs_reports)
 rs_add_test(test_bundle        SOURCES unit/test_bundle.cpp        LIBRARIES rs_vm)
 target_compile_definitions(test_bundle PRIVATE RS_REPO_ROOT="${CMAKE_SOURCE_DIR}")
+rs_add_test(test_evidence_bundle SOURCES unit/test_evidence_bundle.cpp LIBRARIES rs_reports)
 
 rs_add_test(test_mcp           SOURCES unit/test_mcp.cpp           LIBRARIES rs_server)
 

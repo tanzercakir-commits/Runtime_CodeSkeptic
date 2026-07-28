@@ -32,6 +32,14 @@ std::string render_markdown(const vm::AnalysisResult& result,
                             const vm::EnvironmentProfile& profile,
                             const Options& options = {});
 
+// The `runtime-skeptic.compatibility-run.v1` JSON document rs-check emits with
+// `--format json`. Extracted so the evidence bundle's `findings.json` is produced
+// by THE SAME code as the standalone output - a bundle whose findings differed
+// from what rs-check prints would defeat its own point.
+std::string render_run_json(const std::vector<vm::AnalysisResult>& results,
+                            SupportLevel overall,
+                            const vm::RequirementBundle& bundle);
+
 // Exit codes. Documented here because CI configurations depend on them and
 // they must not drift.
 //
