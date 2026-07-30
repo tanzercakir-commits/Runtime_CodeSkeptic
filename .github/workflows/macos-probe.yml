@@ -206,6 +206,39 @@ jobs:
       # purpose in one run (refs/measurements/3af0f9f/dtrace-feasibility:
       # SIP disabled, dtrace works) and was replaced by the instrument it
       # existed to justify.
+      # THE FIRST macOS ROUND MEASURED THE WRONG DOOR. One mprotect and zero
+      # mmaps for a whole python3 run - because on macOS real allocation goes
+      # through MACH TRAPS (mach_vm_allocate_trap, mach_vm_map_trap), which
+      # the syscall:: provider never sees. Before the observer grows a
+      # mach_trap clause, this inventories what the traps are actually called
+      # on this kernel and which ones a real program fires, so the D script is
+      # written against the runner rather than against XNU source from some
+      # year. Same method as the ETW/dtrace feasibility rounds; same reason.
+      - name: Mach trap inventory (T-018)
+        id: mach_inventory
+        continue-on-error: true
+        run: |
+          {
+            echo "=== mach_trap probes containing vm ==="
+            sudo dtrace -ln 'mach_trap:::entry' 2>&1 | grep -i vm || true
+            echo
+            echo "=== trap and syscall counts for one python3 run ==="
+            printf 'import hashlib\nprint(hashlib.sha256(b"x").hexdigest()[:8])\n' > /tmp/wl.py
+            sudo dtrace -qn '
+              mach_trap:::entry /progenyof($target)/ { @[probefunc] = count(); }
+              syscall:::entry  /progenyof($target)/ { @[strjoin("sys ", probefunc)] = count(); }
+            ' -c "python3 /tmp/wl.py" 2>&1 || true
+          } > /tmp/mach-inventory.txt 2>&1
+          tail -60 /tmp/mach-inventory.txt
+
+      - name: Publish the mach trap inventory
+        if: always() && steps.mach_inventory.outcome != 'skipped'
+        run: |
+          [ -f /tmp/mach-inventory.txt ] \
+            || echo "(the inventory step produced nothing)" > /tmp/mach-inventory.txt
+          bash tools/ci/publish_measurement.sh measurements \
+            "mach-inventory" "${{ github.sha }}" /tmp/mach-inventory.txt
+
       - name: False-positive campaign under dtrace (T-018)
         id: campaign
         if: steps.measure.outcome == 'success'
