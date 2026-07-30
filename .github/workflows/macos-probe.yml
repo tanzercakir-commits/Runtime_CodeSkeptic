@@ -197,42 +197,31 @@ jobs:
       # `git add` on top of the checked-out tree, which meant every measurement
       # ref carried a full copy of the repository - and the ground-truth output,
       # the thing this workflow exists to produce, was not in it at all.
-      # T-018 FEASIBILITY. The false-positive campaign needs a tracer on a
-      # second OS, and on macOS that is dtrace/dtruss - IF System Integrity
-      # Protection permits it on a hosted runner, which is exactly the kind of
-      # claim this project measures instead of assuming. Three questions, each
-      # answered by running the thing: what does csrutil report, does a
-      # trivial dtrace program run at all, and can dtruss follow a real child
-      # process's syscalls. continue-on-error and `|| true` throughout: a
-      # feasibility probe must not cost the measurement it rides with.
-      - name: dtrace feasibility for T-018
-        id: dtrace_feasibility
-        continue-on-error: true
+      # T-018: THE CAMPAIGN'S SECOND OPERATING SYSTEM. The same
+      # observe-and-replay loop that measured the Linux false-positive rate,
+      # under the tracer this OS has: dtrace, with a D script that prints one
+      # canonical line per completed mmap/mprotect (dtruss was disqualified by
+      # the feasibility measurement - it prints three arguments and MAP_FIXED
+      # is the fourth). The feasibility step that used to sit here served its
+      # purpose in one run (refs/measurements/3af0f9f/dtrace-feasibility:
+      # SIP disabled, dtrace works) and was replaced by the instrument it
+      # existed to justify.
+      - name: False-positive campaign under dtrace (T-018)
+        id: campaign
+        if: steps.measure.outcome == 'success'
         run: |
-          {
-            echo "=== csrutil status ==="
-            csrutil status || true
-            echo
-            echo "=== trivial dtrace program ==="
-            sudo dtrace -n 'BEGIN{trace(0); exit(0)}' 2>&1 || true
-            echo
-            echo "=== mmap return probe on a child process ==="
-            sudo dtrace -qn 'syscall::mmap:return/pid==$target/{printf("mmap -> %p\n", (void*)arg1)}' \
-              -c /usr/bin/true 2>&1 | head -12 || true
-            echo
-            echo "=== dtruss on a child process ==="
-            sudo dtruss -f /usr/bin/true 2>&1 | head -25 || true
-          } > /tmp/dtrace-feasibility.txt 2>&1
-          cat /tmp/dtrace-feasibility.txt
+          RS_BIN=build/bin bash tools/campaign/run_false_positive.sh /tmp/fp-macos 2>&1 \
+            | tee /tmp/fp-macos-summary.txt
+          exit "${PIPESTATUS[0]}"
 
-      - name: Publish the dtrace feasibility summary
-        if: always() && steps.dtrace_feasibility.outcome != 'skipped'
+      - name: Publish the campaign measurement
+        if: always() && steps.campaign.outcome == 'success'
         run: |
-          [ -f /tmp/dtrace-feasibility.txt ] \
-            || echo "(the dtrace feasibility step produced no summary - read its log)" \
-                 > /tmp/dtrace-feasibility.txt
           bash tools/ci/publish_measurement.sh measurements \
-            "dtrace-feasibility" "${{ github.sha }}" /tmp/dtrace-feasibility.txt
+            "fp-campaign-macos" "${{ github.sha }}" \
+            /tmp/fp-macos/false-positive-rate.json \
+            /tmp/fp-macos/host.json \
+            /tmp/fp-macos-summary.txt
 
       - name: Publish the measurement to refs/measurements/*
         if: always() && steps.measure.outcome == 'success'
@@ -260,12 +249,21 @@ jobs:
             || echo "(the reproducibility step did not run)" > /tmp/diag/reproducible.txt
           cp /tmp/groundtruth.txt /tmp/diag/groundtruth.txt 2>/dev/null \
             || echo "(the ground-truth step did not run)" > /tmp/diag/groundtruth.txt
+          # The campaign's own outputs, learned from ci.yml's gt_constrained
+          # omission the day it happened: the failing step's output must be IN
+          # the channel, not just near it.
+          cp /tmp/fp-macos-summary.txt /tmp/diag/fp_summary.txt 2>/dev/null \
+            || echo "(the campaign step did not run)" > /tmp/diag/fp_summary.txt
+          cp /tmp/fp-macos/observe.log /tmp/diag/fp_observe.log 2>/dev/null \
+            || echo "(no observe.log)" > /tmp/diag/fp_observe.log
           git config user.name "ci-logs"
           git config user.email "ci-logs@localhost"
           git checkout --detach -q
           cp /tmp/diag/steps.json /tmp/diag/build_tail.txt /tmp/diag/ctest_tail.txt \
-             /tmp/diag/reproducible.txt /tmp/diag/groundtruth.txt .
-          git add -f steps.json build_tail.txt ctest_tail.txt reproducible.txt groundtruth.txt
+             /tmp/diag/reproducible.txt /tmp/diag/groundtruth.txt \
+             /tmp/diag/fp_summary.txt /tmp/diag/fp_observe.log .
+          git add -f steps.json build_tail.txt ctest_tail.txt reproducible.txt \
+             groundtruth.txt fp_summary.txt fp_observe.log
           git commit -qm "macos diagnostics @ ${{ github.sha }}"
           git push --force origin \
             "HEAD:refs/ci-logs/${{ github.sha }}/native-arm64"

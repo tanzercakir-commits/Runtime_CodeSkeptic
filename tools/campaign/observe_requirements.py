@@ -55,6 +55,7 @@ import argparse
 import json
 import os
 import re
+import shlex
 import subprocess
 import sys
 import tempfile
@@ -78,6 +79,186 @@ def parse_prot(text):
     return {"read": "PROT_READ" in parts,
             "write": "PROT_WRITE" in parts,
             "execute": "PROT_EXEC" in parts}
+
+
+# ---------------------------------------------------------------------------
+# macOS: dtrace, NOT dtruss.
+#
+# The T-018 feasibility measurement (refs/measurements/3af0f9f/
+# dtrace-feasibility) settled two questions by running things rather than
+# reading about them: SIP is DISABLED on the macos-14 runners, so dtrace works
+# without ceremony - and dtruss is unusable for this campaign, because its
+# generic syscall clause prints only the first three arguments. For mmap that
+# is (addr, len, prot); the flags argument, the one that carries MAP_FIXED and
+# MAP_ANON - the two facts this whole file exists to observe - is argument
+# FOUR. A tracer that silently drops the field under test is the mingw-flags
+# mistake with a different vendor.
+#
+# So the D script below is the instrument: entry probes save all six
+# arguments thread-locally, return probes print ONE canonical line per
+# completed call, in a format this file defines and therefore can parse
+# without guessing. `progenyof($target)` follows children (java and node both
+# spawn them).
+#
+# THE RETURN-REGISTER QUESTION IS MEASURED, NOT ASSUMED. On this platform the
+# syscall return value reaches the probe in arg0 or arg1 depending on
+# conventions this project declines to trust documentation about (dtruss
+# itself prints arg0). The line carries BOTH; the parser takes whichever
+# looks like a mapping address (nonzero, page-aligned) and the two counts are
+# published in observations.json. If both ever qualify and disagree, the run
+# refuses loudly rather than guessing.
+# ---------------------------------------------------------------------------
+D_SCRIPT = """\
+syscall::mmap:entry
+/progenyof($target)/
+{
+    self->a = arg0; self->l = arg1; self->p = arg2;
+    self->f = arg3; self->fd = (int)arg4; self->o = arg5;
+    self->in_mmap = 1;
+}
+
+syscall::mmap:return
+/progenyof($target) && self->in_mmap/
+{
+    printf("RSOBS|mmap|%#llx|%llu|%llu|%llu|%lld|%llu|%#llx|%#llx|%d\\n",
+        (unsigned long long)self->a, (unsigned long long)self->l,
+        (unsigned long long)self->p, (unsigned long long)self->f,
+        (long long)self->fd, (unsigned long long)self->o,
+        (unsigned long long)arg0, (unsigned long long)arg1, errno);
+    self->in_mmap = 0;
+}
+
+syscall::mprotect:entry
+/progenyof($target)/
+{
+    self->pa = arg0; self->pl = arg1; self->pp = arg2;
+    self->in_mprotect = 1;
+}
+
+syscall::mprotect:return
+/progenyof($target) && self->in_mprotect/
+{
+    printf("RSOBS|mprotect|%#llx|%llu|%llu|%d\\n",
+        (unsigned long long)self->pa, (unsigned long long)self->pl,
+        (unsigned long long)self->pp, errno);
+    self->in_mprotect = 0;
+}
+"""
+
+# <sys/mman.h> on Darwin. Numeric because the D script prints numbers.
+DARWIN_PROT_READ = 0x1
+DARWIN_PROT_WRITE = 0x2
+DARWIN_PROT_EXEC = 0x4
+DARWIN_MAP_FIXED = 0x10
+DARWIN_MAP_ANON = 0x1000
+
+PAGE_MASK_4K = 0xFFF  # the loosest page size in play; alignment sanity only
+
+RSOBS = re.compile(r"RSOBS\|(?P<rest>mmap|mprotect)\|")
+
+
+def darwin_prot(bits):
+    return {"read": bool(bits & DARWIN_PROT_READ),
+            "write": bool(bits & DARWIN_PROT_WRITE),
+            "execute": bool(bits & DARWIN_PROT_EXEC)}
+
+
+def plausible_address(value):
+    return value > 0xFFF and (value & PAGE_MASK_4K) == 0
+
+
+def parse_rsobs_lines(text, convention_counts):
+    """Parse the canonical lines the D script prints. Successes only."""
+    calls = []
+    for line in text.splitlines():
+        idx = line.find("RSOBS|")
+        if idx < 0:
+            continue
+        parts = line[idx:].strip().split("|")
+        try:
+            if parts[1] == "mmap" and len(parts) == 11:
+                (addr, length, prot, flags,
+                 fd, off, ret0, ret1, err) = parts[2:]
+                if int(err) != 0:
+                    continue  # the campaign's ground truth is successes only
+                r0, r1 = int(ret0, 16), int(ret1, 16)
+                if plausible_address(r0) and plausible_address(r1) and r0 != r1:
+                    raise SystemExit(
+                        f"mmap return convention ambiguous: arg0={ret0} and "
+                        f"arg1={ret1} are both plausible addresses and "
+                        f"disagree. Refusing to guess which register this "
+                        f"kernel returns in.")
+                if plausible_address(r0):
+                    returned, which = r0, "arg0"
+                elif plausible_address(r1):
+                    returned, which = r1, "arg1"
+                else:
+                    continue  # a zero-page or unaligned result: not a mapping
+                convention_counts[which] = convention_counts.get(which, 0) + 1
+                flag_bits = int(flags)
+                fd_val = int(fd)
+                requested = int(addr, 16)
+                calls.append({
+                    "kind": "mmap",
+                    "requested_address": requested if requested else None,
+                    "size": int(length),
+                    "protection": darwin_prot(int(prot)),
+                    "fixed": bool(flag_bits & DARWIN_MAP_FIXED),
+                    "anonymous": bool(flag_bits & DARWIN_MAP_ANON),
+                    "file_backed": fd_val >= 0,
+                    "file_offset": int(off),
+                    "returned_address": returned,
+                })
+            elif parts[1] == "mprotect" and len(parts) == 6:
+                addr, length, prot, err = parts[2:]
+                if int(err) != 0:
+                    continue
+                calls.append({
+                    "kind": "mprotect",
+                    "requested_address": int(addr, 16),
+                    "size": int(length),
+                    "protection": darwin_prot(int(prot)),
+                    "fixed": False, "anonymous": False,
+                    "file_backed": False, "file_offset": 0,
+                    "returned_address": int(addr, 16),
+                })
+        except (ValueError, IndexError):
+            continue  # a child's own stdout that happened to contain RSOBS|
+    return calls
+
+
+def run_once_dtrace(command, keep_trace, convention_counts):
+    """One traced run under dtrace. Returns (exit_code, [calls]).
+
+    dtrace -c splits its command on whitespace without shell quoting, and the
+    workloads carry arguments with spaces (python3 -c '...'). So the command
+    goes into a wrapper script and -c gets a path with no spaces in it.
+    """
+    with tempfile.NamedTemporaryFile("w", suffix=".d", delete=False) as h:
+        h.write(D_SCRIPT)
+        script = h.name
+    with tempfile.NamedTemporaryFile("w", suffix=".sh", delete=False) as h:
+        h.write("#!/bin/sh\nexec " +
+                " ".join(shlex.quote(c) for c in command) + "\n")
+        wrapper = h.name
+    os.chmod(wrapper, 0o755)
+    try:
+        proc = subprocess.run(
+            ["sudo", "dtrace", "-q", "-b", "8m", "-s", script,
+             "-c", f"/bin/sh {wrapper}"],
+            capture_output=True, text=True, timeout=180)
+        calls = parse_rsobs_lines(proc.stdout, convention_counts)
+        if keep_trace:
+            Path(keep_trace).write_text(proc.stdout)
+        # dtrace's own exit status is not a reliable copy of the child's, so
+        # the caller verifies the workload untraced before believing any of
+        # this. Here: a run that produced no calls AND a nonzero dtrace exit
+        # is a broken trace, not a quiet program.
+        rc = 0 if (calls or proc.returncode == 0) else proc.returncode
+        return rc, calls
+    finally:
+        os.unlink(script)
+        os.unlink(wrapper)
 
 
 def run_once(command, keep_trace=None):
@@ -189,10 +370,11 @@ def requirement(name, component, call, with_address, observed):
         },
         "assumption_evidence": "observed_invariant",
         "extraction_limitations": [
-            "Derived mechanically from an strace of a program that ran to "
-            "completion on this host. It asserts only what the syscall "
-            "carried: no intent, no error handling, no guest/host identity "
-            "requirement, and no failure sink.",
+            "Derived mechanically from a syscall trace (strace on Linux, "
+            "dtrace on macOS) of a program that ran to completion on this "
+            "host. It asserts only what the syscall carried: no intent, no "
+            "error handling, no guest/host identity requirement, and no "
+            "failure sink.",
         ],
         "x_observed": observed,
     }
@@ -222,11 +404,29 @@ def main() -> int:
     outdir = Path(args.out)
     outdir.mkdir(parents=True, exist_ok=True)
 
+    tracer = "dtrace" if sys.platform == "darwin" else "strace"
+    convention_counts = {}
+
+    if tracer == "dtrace":
+        # dtrace's exit status is not a trustworthy copy of the child's, so
+        # "this program runs to completion on this host" - the fact the whole
+        # campaign rests on - is established by running it once WITHOUT the
+        # tracer. A program that only exits 0 while untraced would still be
+        # honest ground truth for its untraced behaviour; a program that
+        # cannot exit 0 at all must not become a contract.
+        verify = subprocess.run(command, capture_output=True, timeout=180)
+        if verify.returncode != 0:
+            print(f"{label}: exited {verify.returncode} untraced; not usable "
+                  f"as ground truth", file=sys.stderr)
+            return 70
+
     per_run, exit_codes = [], []
     for i in range(args.runs):
-        rc, calls = run_once(
-            command, keep_trace=outdir / f"{label}.run{i}.strace" if i == 0
-            else None)
+        keep = outdir / f"{label}.run{i}.{tracer}" if i == 0 else None
+        if tracer == "dtrace":
+            rc, calls = run_once_dtrace(command, keep, convention_counts)
+        else:
+            rc, calls = run_once(command, keep_trace=keep)
         exit_codes.append(rc)
         per_run.append(calls)
 
@@ -276,7 +476,7 @@ def main() -> int:
             "producer": {
                 "tool": "observe_requirements.py",
                 "version": "1",
-                "rule": f"strace {kind}; {args.runs} runs; successes only",
+                "rule": f"{tracer} {kind}; {args.runs} runs; successes only",
             },
             "requirements": reqs,
         }
@@ -287,9 +487,10 @@ def main() -> int:
         (outdir / f"{label}.address.json").write_text(
             json.dumps(bundle(address_reqs, "address"), indent=2) + "\n")
 
-    (outdir / f"{label}.observations.json").write_text(json.dumps({
+    observations = {
         "label": label,
         "command": command,
+        "tracer": tracer,
         "runs": args.runs,
         "exit_codes": exit_codes,
         "calls_first_run": len(per_run[0]),
@@ -297,7 +498,14 @@ def main() -> int:
         "shape_requirements": len(shape_reqs),
         "address_requirements": len(address_reqs),
         "write_then_execute_transitions": len(transitions),
-    }, indent=2) + "\n")
+    }
+    if tracer == "dtrace":
+        # Which register the return value arrived in, measured per call.
+        # parse_rsobs_lines refuses outright if the two ever disagree on one
+        # line; this records the tally so a drifting kernel shows up in data.
+        observations["return_register_counts"] = convention_counts
+    (outdir / f"{label}.observations.json").write_text(
+        json.dumps(observations, indent=2) + "\n")
 
     print(f"{label}: exit {exit_codes[0]}, {len(per_run[0])} calls, "
           f"{len(shape_reqs)} shape + {len(address_reqs)} address "

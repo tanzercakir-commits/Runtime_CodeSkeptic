@@ -23,7 +23,20 @@ RUNS="${RUNS:-3}"
 for tool in "$BIN/rs-check" "$BIN/rs-env-probe"; do
     [ -x "$tool" ] || { echo "$0: no $tool; build first (RS_BIN=... to override)" >&2; exit 64; }
 done
-command -v strace >/dev/null || { echo "$0: strace is required" >&2; exit 64; }
+# The tracer is the OS's: strace on Linux, dtrace on macOS (T-018). The
+# feasibility measurement (refs/measurements/3af0f9f/dtrace-feasibility)
+# established that SIP is disabled on the macos-14 runners and dtrace runs;
+# observe_requirements.py picks the tracer by platform, this only checks the
+# instrument exists before spending three runs per program finding out.
+case "$(uname -s)" in
+    Darwin)
+        command -v dtrace >/dev/null || { echo "$0: dtrace is required on macOS" >&2; exit 64; }
+        sudo -n true 2>/dev/null || { echo "$0: dtrace needs passwordless sudo" >&2; exit 64; }
+        ;;
+    *)
+        command -v strace >/dev/null || { echo "$0: strace is required" >&2; exit 64; }
+        ;;
+esac
 
 rm -rf "$OUT"; mkdir -p "$OUT"
 
@@ -59,11 +72,14 @@ observe perl    perl    perl -e '$s=0; $s+=$_ for 1..100000; print "$s\n"'
 observe ruby    ruby    ruby -e 's=0;20000.times{|i| s+=i};puts s'
 observe php     php     php -r 'echo array_sum(range(1,10000)),PHP_EOL;'
 observe git     git     git --version
-observe openssl openssl openssl dgst -sha256 /etc/hostname
+# /etc/hostname does not exist on macOS; /etc/hosts exists on both.
+DOC=/etc/hostname
+[ -f "$DOC" ] || DOC=/etc/hosts
+observe openssl openssl openssl dgst -sha256 "$DOC"
 observe jq      jq      jq -n '1+1'
 observe redis   redis-server redis-server --version
 observe gzip    gzip    bash -c 'gzip -c /etc/services > /dev/null'
-observe xz      xz      bash -c 'xz -c -0 /etc/hostname > /dev/null'
+observe xz      xz      bash -c "xz -c -0 $DOC > /dev/null"
 observe ffmpeg  ffmpeg  ffmpeg -hide_banner -f lavfi -i testsrc=size=64x64:rate=1 -frames:v 2 -f null -
 observe node-jit node   node "$OUT/jit.js"
 if command -v javac >/dev/null && javac -d "$OUT" "$OUT/jit.java" 2>/dev/null; then
