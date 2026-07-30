@@ -45,21 +45,27 @@ completes without leaving a trace in the log is work that will be redone.
 
 ## Next
 
----
+### T-018 — The false-positive campaign leaves Linux `[next]`
 
-### T-005 — Execute the rules that have never run `[next]`
+**Serves:** Gate B's credibility — "0 false positives" measured on one OS is a
+claim about one OS
+**Plan:** `docs/PLAN.md` Phase 3, "expected false-positive rate is low"
+**Done when:** the campaign's observe-and-replay loop runs on a second operating
+system against real programs, and the measured false-positive rate is published
+next to the Linux one.
 
-**Serves:** the credibility of every other row
-**Plan:** `docs/PLAN.md` cross-cutting, "rule coverage by execution"
-**Done when:** the coverage tool reports executed and synthetic-only counts
-**separately**, and the executed number has risen.
+The Linux number is strong — 0 false positives in 1292 requests from 13 real
+programs, twice re-measured, byte-identical — and it is still **one host, one
+OS**. `strace` is Linux-only, so the macOS and Windows lanes have measured
+profiles and no traced programs. The instrument to build is the tracer:
+`dtrace`/`dtruss` on macOS (SIP permitting on a runner) or ETW on Windows.
+Windows is the more valuable target — its address-space behaviour differs in
+kind, the probe now establishes 127 TiB there — and also the harder tracer.
 
-13 of the 20 reachable rules have been executed against a real kernel. The
-remaining 7 (0010, 0016, 0019, 0020, 0022, 0023, 0025) mostly fire when a host
-does *not* support something, which needs synthetic profiles — and a synthetic
-profile is not ground truth. Saying so in the number is the point; a single
-percentage that mixes both is the flattering-direction error this project has
-already made once, when the coverage tool reported 100% by grepping prose.
+**First step:** check what `macos-latest` runners permit for `dtrace` (SIP
+restricts probes); if blocked, evaluate ETW via `logman`/`wpr` on
+`windows-latest`, capturing `VirtualAlloc` bases and sizes from real programs
+(the campaign's own corpus binaries where they build there).
 
 ---
 
@@ -113,6 +119,16 @@ for the same source reach the same verdict on the same profile, as a test — an
 the extracted one is labelled `COUNTEREXAMPLE`, never `PROVEN`, per the ceiling
 in `docs/scenarios/README.md`.
 
+**Owner's update, 2026-07-30:** CodeSkeptic is FINISHED, per the owner. The
+blocker on this item is the owner's standing instruction, so it stays until the
+owner lifts it in so many words — but what it would unblock has narrowed to
+almost nothing: the differential test CONSUMES CodeSkeptic's emitted contract
+bundles (`rs-check` already loads the
+`application-requirements-bundle.v1` shape its `--runtime-assumptions` mode
+emits) and modifies nothing. The day the owner says go, the first step is an
+emitted bundle from CodeSkeptic checked into `contracts/` here and compared
+against a hand-written contract for the same source.
+
 Blocked by a decision, not by difficulty, and the decision looks right: the
 alternative was two extractors drifting apart in two repositories. An extractor
 was built here on 2026-07-25, worked, broke `docs/non_goals.md` §18, and was
@@ -155,6 +171,41 @@ Each needs a reason, so this cannot quietly become a way to empty the list.
 ---
 
 ## Done
+
+### T-005 — Execute the rules that have never run `[done]`
+
+**Serves:** the credibility of every other row
+**Plan:** `docs/PLAN.md` cross-cutting, "rule coverage by execution"
+**Done when:** the coverage tool reports executed and synthetic-only counts
+**separately**, and the executed number has risen.
+
+**Closed, and the separation immediately found something.** The tool now prints
+four buckets instead of two, and runs **in CI on every push** over both hosts the
+Linux job produces (unconstrained + `RLIMIT_AS`-constrained), publishing to
+`refs/measurements/<sha>/linux---*/coverage.txt`:
+
+```
+executed against a real kernel     10 / 27   (was 9; RS-VM-0026 via the
+                                              constrained host)
+synthetic-only (unit tests)        11        argued with, never shown a kernel
+not checkable by execution          4        each with its reason on the line
+NO COVERAGE OF ANY KIND             2        RS-VM-0016, RS-VM-0025
+```
+
+The last number is the point: it was **invisible** while the buckets were mixed —
+"backlog" lumped rules that unit tests argue with daily together with rules
+nothing has ever exercised. `RS-VM-0016` (no non-destructive exact-mapping
+primitive) and `RS-VM-0025` (address-space-lottery dependency) have no execution
+AND no unit test. They are now the sharpest edge of the backlog.
+
+Also fixed on the way: the tool's `NOT_EXECUTABLE` list still excused
+`RS-VM-0013` with a reason `pointer_truncation.c` had disproven — a stale excuse
+that would only have spoken up on the day the case broke. And the body of this
+very item said "13 of the 20 reachable" while the tool said 9/23: the number was
+hand-run, so it lied within a day. It is CI-run now, which is the actual closure.
+
+---
+
 
 ### T-007 — The §17 evidence bundle `[done]`
 

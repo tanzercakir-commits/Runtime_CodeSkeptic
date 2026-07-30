@@ -16,6 +16,75 @@ re-litigated; a mistake recorded here does not need to be re-made.
 
 ---
 
+## 2026-07-30 — the owner's rule made mechanical, and the audit it triggered
+
+**Changed.** `tools/guards/check_roadmap.py` freezes `ROADMAP.md` by hash
+(`tools/guards/roadmap.sha256`) and requires `docs/PLAN.md` to keep mirroring
+every phase the ROADMAP defines; `groundtruth_coverage.py` grows a
+**synthetic-only** bucket and runs **in CI on every push** over both Linux hosts;
+T-005 closes; T-018 is filed; a weekly maintenance session now keeps the working
+documents honest without anyone remembering to. Selftest 78 → **82 cases**.
+
+### The owner's rule, stated and then enforced
+
+> ROADMAP and PLAN must not break — they carry the project's spirit and
+> integrity. TODO and PROGRESS change as the work develops. Automate the
+> keeping-current, so nobody has to remember.
+
+The split was already this project's four-document model; what was missing was
+the *mechanical* half for the stable pair. Measured before enforcing: ROADMAP.md
+has been edited **exactly once in its life** — `51b4e21`, the commit that created
+it. The guard freezes that state by hash, so an accidental edit fails CI and a
+deliberate one becomes a loud decision (update the recorded hash in the same
+commit, say why here). PLAN's criteria are the ROADMAP's criteria: the guard
+checks every `## Phase N` the ROADMAP defines still appears in the PLAN, because
+a phase the map stops mentioning is a criterion nobody grades any more. What may
+change in PLAN is only the honest status of each criterion — which
+`check_plan.py` already polices.
+
+The changing pair gets the other half of the rule: a **weekly scheduled
+maintenance session** (Monday 06:00 UTC, after the Monday 04:17 UTC scheduled CI
+run — the one automated event nobody watches). It reads the CI ref channels,
+runs the guards, and updates TODO/PROGRESS when something changed state; when
+nothing did, it pushes nothing. The owner asked for exactly this: *"hatırlar
+mıyız diye kafa yormuyoruz artık."*
+
+### The audit: what reviewing the Opus-era work actually found
+
+| | |
+|---|---|
+| **+** | ROADMAP untouched since creation; PLAN mirrors all 11 phases; 9 CI jobs green at HEAD; 15 test suites, 82 selftest cases, 17 guards all passing — the structure held |
+| **−** | **the coverage number was stale in two documents within a day of being written.** T-005's body and PLAN both said "13 of the 20 reachable rules" while the tool said 9/23 — nothing recomputed it, so it lied almost immediately. It runs in CI now, which is the only durable fix this project knows |
+| **−** | the coverage tool itself carried a **stale excuse**: `NOT_EXECUTABLE` still listed `RS-VM-0013` with a reason `pointer_truncation.c` had disproven. Invisible, because a fired rule is dropped from the blocked list before printing — it would only have spoken up on the day the case broke |
+| **−** | the campaign `[partial]` criterion was tagged `(T-004)`, an item that closed days ago — the real remaining work (a second OS) had **no tracked item**. T-018 files it |
+| **−** | separating the buckets immediately exposed a number that was invisible while they were mixed: **`RS-VM-0016` and `RS-VM-0025` have no coverage of any kind** — no execution, no unit test. "Backlog" had lumped them with rules unit tests argue with daily |
+
+### The coverage accounting, honest for the first time
+
+```
+executed against a real kernel     10 / 27   RS-VM-0026 arrived via the
+                                             RLIMIT_AS-constrained host
+synthetic-only (unit tests)        11
+not checkable by execution          4        each with its reason
+NO COVERAGE OF ANY KIND             2        RS-VM-0016, RS-VM-0025
+```
+
+Two profiles, not one: RS-VM-0026 fires only under the constrained host, and
+feeding the tool a single profile had under-reported it as backlog for a day —
+the same lesson as every other number here: **a claim nobody recomputes is
+stale by default.**
+
+**Decisions taken by default, flagged for the owner:** T-011 stays blocked (the
+blocker is the owner's own standing instruction; the note now records that
+CodeSkeptic is finished and that the differential test would consume its output
+without modifying it — one word from the owner opens it). The maintenance cadence
+is weekly; it is one sentence to change.
+
+**Next.** T-018 (the campaign's second OS) is the compass's next item. Then the
+`Later` set, and whatever the weekly maintenance session surfaces.
+
+---
+
 ## 2026-07-28 — the evidence bundle: a verdict that survives leaving the machine
 
 **Changed.** `rs-check --bundle DIR` and a new `rs-replay` tool; the bundle logic

@@ -166,6 +166,26 @@ jobs:
           bash tools/campaign/constrained_lane.sh 2>&1 \
             | tee /tmp/meas/gt_constrained.txt
 
+      # THE COVERAGE NUMBER, MEASURED ON EVERY PUSH RATHER THAN BY HAND.
+      #
+      # "10 of 23 rules executed" was a claim that lived in two documents and was
+      # stale in both within a day of being written, because the only thing that
+      # recomputed it was a human remembering to run the tool. It runs here now,
+      # over BOTH hosts this job already produces - the unconstrained one and the
+      # RLIMIT_AS-constrained one - because RS-VM-0026 fires only on the second,
+      # and feeding one profile under-reported it as backlog for a day.
+      - name: Rule coverage by execution
+        id: coverage
+        if: runner.os == 'Linux'
+        run: |
+          set -o pipefail
+          ( ulimit -v 4194304
+            build/bin/rs-env-probe vm --name constrained \
+              --output /tmp/meas/constrained-host.json )
+          python3 tools/campaign/groundtruth_coverage.py \
+            /tmp/meas/gt-host.json /tmp/meas/constrained-host.json 2>&1 \
+            | tee /tmp/meas/coverage.txt
+
       # The evidence bundle, end to end: emit one from a real measured profile,
       # then REPLAY IT with a different binary invocation reading only the
       # bundle. The unit test covers the round trip in-process; this proves it
@@ -349,9 +369,17 @@ jobs:
         if: success() && runner.os != 'Windows' && github.event_name != 'pull_request'
         shell: bash
         run: |
+          # coverage.txt and gt_constrained.txt exist only on the Linux job;
+          # `2>/dev/null || true` would hide a real failure, so instead the
+          # list is built from what exists.
+          extra=""
+          for f in /tmp/meas/coverage.txt /tmp/meas/gt_constrained.txt \
+                   /tmp/meas/constrained-host.json; do
+            [ -f "$f" ] && extra="$extra $f"
+          done
           bash tools/ci/publish_measurement.sh measurements \
             "${{ matrix.name }}" "${{ github.sha }}" \
-            /tmp/meas/gt_run.txt /tmp/meas/gt-host.json
+            /tmp/meas/gt_run.txt /tmp/meas/gt-host.json $extra
       - name: Publish job status to refs/status/*
         if: always() && github.event_name != 'pull_request'
         shell: bash

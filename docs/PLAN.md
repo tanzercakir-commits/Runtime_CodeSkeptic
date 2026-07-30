@@ -199,7 +199,7 @@ findings from the set itself:
   remaining gap:** one host, one OS — `strace` is Linux-only, so the macOS
   lanes have measured profiles and no traced programs; and no false negative is
   measurable, because 13 programs over three runs each produced not one failing
-  `mmap`. (T-004)
+  `mmap`. (T-018)
 - `[done]` runs in CI without launching the application — `.github/workflows/ci.yml`
 
 ### The MVP's seven demonstrations (ROADMAP §14)
@@ -301,8 +301,16 @@ that risk materialising.
 
 - `[done]` ground-truth harness — `tests/groundtruth/`, 14 cases, and its own
   selftest, because the comparison table was untested
-- `[partial]` rule coverage by execution — 13 of the 20 reachable rules;
-  `tools/campaign/groundtruth_coverage.py` (T-005)
+- `[partial]` rule coverage by execution — **measured in CI on every push**:
+  `tools/campaign/groundtruth_coverage.py` runs over both hosts the Linux job
+  produces (unconstrained and `RLIMIT_AS`-constrained) and reports four buckets
+  separately: **10 of 23 checkable rules executed against a real kernel**, 11
+  exercised only against synthetic profiles in unit tests, 4 not checkable by
+  execution (each with its reason on the line), and **2 with no coverage of any
+  kind** (`RS-VM-0016`, `RS-VM-0025`) — a number that was invisible while the
+  buckets were mixed. This line read "13 of the 20 reachable" for two days
+  while the tool said 9, because nothing recomputed it; now the tool runs on
+  every push and the claim here names the buckets, not a snapshot
 - `[done]` §17 **evidence bundle** — `rs-check --bundle DIR` writes a directory
   with the verbatim inputs, `findings.json`, `report.md`, `hashes.txt` and a
   `manifest.json` (`runtime-skeptic.analysis-bundle.v1`, validated against a
@@ -322,7 +330,7 @@ that risk materialising.
   match the filesystem, and a named path must exist. Still `[partial]` because
   only paths and a fixed list of phrases are mechanical; the rest of the prose
   is unchecked and always will be.
-- `[done]` the guards are tested — `tools/guards/selftest.py`, 78 cases, each
+- `[done]` the guards are tested — `tools/guards/selftest.py`, 82 cases, each
   requiring a check to fail against a deliberately wrong throwaway repository
   before it is trusted on this one; first in `tools/guards/run_all.sh`. This
   number read `25` while there were 58, surviving two earlier increases, so

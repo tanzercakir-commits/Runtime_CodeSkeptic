@@ -53,6 +53,11 @@
 #                    build, and the diagnostics published a ctest run of a tree
 #                    that had never compiled. It reads the flags out of
 #                    CMakeLists.txt now instead of anyone restating them
+#   check_roadmap    the owner's rule, stated 2026-07-30: ROADMAP and PLAN carry
+#                    the project's spirit and must not break; TODO and PROGRESS
+#                    change with the work. ROADMAP is frozen by hash (edited
+#                    exactly once in its life: the commit that created it), and
+#                    PLAN must keep mirroring every phase it defines
 #
 # `selftest` runs FIRST and is not one of them. Every other guard here passes on
 # a repository that has already been fixed - and so would a guard whose patterns
@@ -93,6 +98,7 @@ run "shell dead variables"  python3 "$HERE/check_shell_vars.py"
 run "one probe per platform" python3 "$HERE/check_probe_platforms.py"
 run "ctest names a config"  python3 "$HERE/check_workflow_ctest.py"
 run "windows cross-compile" python3 "$HERE/check_windows_compiles.py"
+run "roadmap is frozen"     python3 "$HERE/check_roadmap.py"
 
 echo
 if [ "$failed" -eq 0 ]; then

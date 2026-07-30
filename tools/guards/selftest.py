@@ -188,6 +188,18 @@ int probe() {
 #endif
 """
 
+# check_roadmap needs a ROADMAP, its recorded hash, and a PLAN that mirrors the
+# phases. Hashes are computed here rather than pasted, so the fixture cannot rot.
+import hashlib as _hashlib
+
+
+def _sha(text: str) -> str:
+    return _hashlib.sha256(text.encode()).hexdigest()
+
+
+ROADMAP_OK = "# Spec\n\n## Phase 0 — begin\n\n## Phase 1 — continue\n"
+PLAN_MIRROR_OK = "# Plan\n\nPhase 0  begin  DONE\nPhase 1  continue  OPEN\n"
+
 CASES = [
     # ---- check_docs: check 3, named paths must exist -------------------
     Case("check_docs.py", "a doc naming a path that is not there fails",
@@ -648,6 +660,32 @@ CASES = [
              WORKFLOW_OK.replace("--build-config RelWithDebInfo",
                                  "--build-config Debug")},
          expect_fail=True, expect_text="which no -DCMAKE_BUILD_TYPE="),
+
+    # ---- check_roadmap: the spec is frozen, the map mirrors it ----------
+    Case("check_roadmap.py", "the real risk: ROADMAP edited under a stale hash",
+         {"ROADMAP.md": ROADMAP_OK + "a quiet extra promise\n",
+          "tools/guards/roadmap.sha256": _sha(ROADMAP_OK) + "  ROADMAP.md\n",
+          "docs/PLAN.md": PLAN_MIRROR_OK},
+         expect_fail=True, expect_text="ROADMAP.md has changed"),
+
+    Case("check_roadmap.py", "a matching hash and a mirroring plan pass",
+         {"ROADMAP.md": ROADMAP_OK,
+          "tools/guards/roadmap.sha256": _sha(ROADMAP_OK) + "  ROADMAP.md\n",
+          "docs/PLAN.md": PLAN_MIRROR_OK},
+         expect_fail=False),
+
+    # No recorded hash means nothing pins the spec - that is a failure with
+    # instructions, not a silent pass on first run.
+    Case("check_roadmap.py", "a missing recorded hash fails loudly",
+         {"ROADMAP.md": ROADMAP_OK, "docs/PLAN.md": PLAN_MIRROR_OK},
+         expect_fail=True, expect_text="nothing pins the specification"),
+
+    # A phase the plan stops mentioning is a criterion nobody grades any more.
+    Case("check_roadmap.py", "a plan that lost a phase fails",
+         {"ROADMAP.md": ROADMAP_OK,
+          "tools/guards/roadmap.sha256": _sha(ROADMAP_OK) + "  ROADMAP.md\n",
+          "docs/PLAN.md": "# Plan\n\nPhase 0  begin  DONE\n"},
+         expect_fail=True, expect_text="Phase 1"),
 
     # The line continuation matters: the flag is usually on the NEXT line.
     Case("check_workflow_ctest.py", "a flag on a continuation line still counts",

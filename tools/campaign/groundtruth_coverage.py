@@ -44,9 +44,15 @@ NOT_EXECUTABLE = {
     "RS-VM-0012": "claims failures MOVE from a checked call to an unchecked "
                   "access under memory pressure; provoking that means "
                   "exhausting the runner",
-    "RS-VM-0013": "needs a program that stores a truncated pointer and then "
-                  "dereferences it - the fault is in the subject's code, not "
-                  "in a call this harness can make",
+    # RS-VM-0013 was listed here with the reason "needs a program that stores a
+    # truncated pointer and then dereferences it". That was DISPROVEN by
+    # tests/groundtruth/cases/pointer_truncation.c: no dereference is needed.
+    # The case proves the mapping valid through the full pointer, then shows
+    # the address does not survive 32-bit storage, and reports `lost` - the
+    # sixth outcome, added for exactly this. The entry stayed here for a day
+    # after the case landed, invisible because a fired rule is dropped from
+    # the blocked list before printing - a stale excuse that would only have
+    # spoken up on the day the case broke. Removed rather than reworded.
     "RS-VM-0014": "an internal contradiction in the requirement; no host is "
                   "consulted, so there is nothing to execute",
     "RS-VM-0015": "about the shape of the subject's retry loop, not about a "
@@ -72,6 +78,20 @@ def main(argv) -> int:
     header = (ROOT / "include" / "runtimeskeptic" / "vm" / "finding.hpp").read_text()
     ids = re.findall(r'k[A-Za-z]+ = "(RS-VM-\d+)"', header)
 
+    # Which rules the UNIT TESTS exercise, against synthetic profiles. Tests
+    # reference the id constants (`ids::kPointerTruncation`), so the mapping is
+    # constant-name -> id from the header, then a scan for references. This is
+    # the "synthetic-only" bucket T-005 asked for: a rule covered here and
+    # nowhere else has been argued with, but has never met a kernel - and a
+    # single percentage that mixed the two was this tool's original sin.
+    const_to_id = dict(re.findall(r'(k[A-Za-z]+) = "(RS-VM-\d+)"', header))
+    unit_refs: set[str] = set()
+    for test in sorted((ROOT / "tests").rglob("*.cpp")):
+        text = test.read_text(errors="replace")
+        for name, rule_id in const_to_id.items():
+            if f"ids::{name}" in text:
+                unit_refs.add(rule_id)
+
     fired: dict[str, set[str]] = {}
     for profile in argv[1:]:
         label = Path(profile).stem
@@ -90,10 +110,13 @@ def main(argv) -> int:
 
     uncovered = [i for i in ids if i not in fired]
     blocked = [i for i in uncovered if i in NOT_EXECUTABLE]
-    backlog = [i for i in uncovered if i not in NOT_EXECUTABLE]
+    synthetic_only = [i for i in uncovered
+                      if i not in NOT_EXECUTABLE and i in unit_refs]
+    nothing = [i for i in uncovered
+               if i not in NOT_EXECUTABLE and i not in unit_refs]
 
     print(f"contracts: {len(CONTRACTS)}   profiles: {len(argv) - 1}")
-    print(f"rules exercised by an execution: {len(fired)}/{len(ids)}")
+    print(f"rules exercised by a real-kernel execution: {len(fired)}/{len(ids)}")
     print()
     for i in sorted(fired):
         print(f"  {i}  checked on: {' '.join(sorted(fired[i]))}")
@@ -104,20 +127,28 @@ def main(argv) -> int:
         for i in sorted(blocked):
             print(f"  {i}  {NOT_EXECUTABLE[i]}")
 
-    if backlog:
+    if synthetic_only:
         print()
-        print(f"No ground-truth case yet ({len(backlog)}) - these are the "
-              f"backlog, and they are")
-        print("the rules whose predictions nothing has ever contradicted or "
-              "confirmed:")
-        for i in sorted(backlog):
+        print(f"Exercised ONLY against synthetic profiles, in unit tests "
+              f"({len(synthetic_only)}):")
+        print("argued with, never shown a kernel - the backlog for new "
+              "ground-truth cases:")
+        for i in sorted(synthetic_only):
+            print(f"  {i}")
+
+    if nothing:
+        print()
+        print(f"No coverage of any kind ({len(nothing)}) - no execution, no "
+              f"unit test:")
+        for i in sorted(nothing):
             print(f"  {i}")
 
     reachable = len(ids) - len(blocked)
     print()
-    print(f"of the {reachable} rules an execution could check, "
-          f"{len(fired)} are checked "
-          f"({100 * len(fired) // reachable}%)")
+    print(f"of the {reachable} rules an execution could check, {len(fired)} "
+          f"are executed against a real kernel ({100 * len(fired) // reachable}%);")
+    print(f"{len(synthetic_only)} more have only synthetic coverage, "
+          f"{len(nothing)} have none at all")
     return 0
 
 
