@@ -308,7 +308,7 @@ def parse_rsobs_lines(text, convention_counts):
             if parts[1] == "mmap" and len(parts) == 11:
                 (addr, length, prot, flags,
                  fd, off, ret0, ret1, err) = parts[2:]
-                if int(err) != 0:
+                if int(err, 0) != 0:
                     continue  # the campaign's ground truth is successes only
                 r0, r1 = int(ret0, 16), int(ret1, 16)
                 if plausible_address(r0) and plausible_address(r1) and r0 != r1:
@@ -324,43 +324,52 @@ def parse_rsobs_lines(text, convention_counts):
                 else:
                     continue  # a zero-page or unaligned result: not a mapping
                 convention_counts[which] = convention_counts.get(which, 0) + 1
-                flag_bits = int(flags)
-                fd_val = int(fd)
-                requested = int(addr, 16)
+                flag_bits = int(flags, 0)
+                fd_val = int(fd, 0)
+                requested = int(addr, 0)
                 calls.append({
                     "kind": "mmap",
                     "requested_address": requested if requested else None,
-                    "size": int(length),
-                    "protection": darwin_prot(int(prot)),
+                    "size": int(length, 0),
+                    "protection": darwin_prot(int(prot, 0)),
                     "fixed": bool(flag_bits & DARWIN_MAP_FIXED),
                     "anonymous": bool(flag_bits & DARWIN_MAP_ANON),
                     "file_backed": fd_val >= 0,
-                    "file_offset": int(off),
+                    "file_offset": int(off, 0),
                     "returned_address": returned,
                 })
             elif parts[1] == "mprotect" and len(parts) == 6:
                 addr, length, prot, err = parts[2:]
-                if int(err) != 0:
+                if int(err, 0) != 0:
                     continue
                 calls.append({
                     "kind": "mprotect",
-                    "requested_address": int(addr, 16),
-                    "size": int(length),
-                    "protection": darwin_prot(int(prot)),
+                    "requested_address": int(addr, 0),
+                    "size": int(length, 0),
+                    "protection": darwin_prot(int(prot, 0)),
                     "fixed": False, "anonymous": False,
                     "file_backed": False, "file_offset": 0,
-                    "returned_address": int(addr, 16),
+                    "returned_address": int(addr, 0),
                 })
+            # int(x, 0) throughout, not int(x, 16): the D script prints
+            # some fields with %#llx and some with %llu, and reading a DECIMAL
+            # flags word as hex is exactly the silent misinterpretation the
+            # RSRAW records exist to expose. It did, on the first real run:
+            # 1006632961 (0x3C000001 - VM_FLAGS_ANYWHERE plus a malloc memory
+            # tag) parsed as hex became 0x1006632961, whose low bit happens to
+            # be set as well, so the ANYWHERE test came out RIGHT BY ACCIDENT.
+            # A wrong reading that agrees with the correct one on the data at
+            # hand is the worst kind; only the raw record made it visible.
             elif parts[1] == "vm_allocate" and len(parts) == 7:
                 requested, size, flags, granted, kr = parts[2:]
-                if int(kr) != 0:
+                if int(kr, 0) != 0:
                     continue  # KERN_SUCCESS only
-                req_val, granted_val = int(requested, 16), int(granted, 16)
-                flag_bits = int(flags, 16)
+                req_val, granted_val = int(requested, 0), int(granted, 0)
+                flag_bits = int(flags, 0)
                 calls.append({
                     "kind": "mmap",
                     "requested_address": req_val or None,
-                    "size": int(size),
+                    "size": int(size, 0),
                     # NOT OBSERVED. allocate_trap has no protection argument;
                     # the platform default is read+write and the protection a
                     # program ends up with comes from a later protect_trap.
@@ -377,34 +386,34 @@ def parse_rsobs_lines(text, convention_counts):
                 })
             elif parts[1] == "vm_map" and len(parts) == 9:
                 requested, size, _mask, flags, prot, granted, kr = parts[2:]
-                if int(kr) != 0:
+                if int(kr, 0) != 0:
                     continue
-                flag_bits = int(flags)
+                flag_bits = int(flags, 0)
                 calls.append({
                     "kind": "mmap",
-                    "requested_address": int(requested, 16) or None,
-                    "size": int(size),
-                    "protection": darwin_vm_prot(int(prot)),
+                    "requested_address": int(requested, 0) or None,
+                    "size": int(size, 0),
+                    "protection": darwin_vm_prot(int(prot, 0)),
                     "protection_observed": True,
                     "fixed": not (flag_bits & VM_FLAGS_ANYWHERE),
                     "anonymous": True,
                     "file_backed": False,
                     "file_offset": 0,
-                    "returned_address": int(granted, 16),
+                    "returned_address": int(granted, 0),
                 })
             elif parts[1] == "vm_protect" and len(parts) == 6:
                 addr, size, prot, kr = parts[2:]
-                if int(kr) != 0:
+                if int(kr, 0) != 0:
                     continue
                 calls.append({
                     "kind": "mprotect",
-                    "requested_address": int(addr, 16),
-                    "size": int(size),
-                    "protection": darwin_vm_prot(int(prot)),
+                    "requested_address": int(addr, 0),
+                    "size": int(size, 0),
+                    "protection": darwin_vm_prot(int(prot, 0)),
                     "protection_observed": True,
                     "fixed": False, "anonymous": False,
                     "file_backed": False, "file_offset": 0,
-                    "returned_address": int(addr, 16),
+                    "returned_address": int(addr, 0),
                 })
         except (ValueError, IndexError):
             continue  # a child's own stdout that happened to contain RSOBS|
