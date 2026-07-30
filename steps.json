@@ -1,0 +1,57 @@
+{
+  "configure": {
+    "outputs": {},
+    "outcome": "success",
+    "conclusion": "success"
+  },
+  "build": {
+    "outputs": {},
+    "outcome": "success",
+    "conclusion": "success"
+  },
+  "test": {
+    "outputs": {},
+    "outcome": "success",
+    "conclusion": "success"
+  },
+  "guards": {
+    "outputs": {},
+    "outcome": "success",
+    "conclusion": "success"
+  },
+  "reproducible": {
+    "outputs": {},
+    "outcome": "success",
+    "conclusion": "success"
+  },
+  "gt_selftest": {
+    "outputs": {},
+    "outcome": "success",
+    "conclusion": "success"
+  },
+  "gt_run": {
+    "outputs": {},
+    "outcome": "success",
+    "conclusion": "success"
+  },
+  "gt_constrained": {
+    "outputs": {},
+    "outcome": "failure",
+    "conclusion": "failure"
+  },
+  "coverage": {
+    "outputs": {},
+    "outcome": "skipped",
+    "conclusion": "skipped"
+  },
+  "bundle": {
+    "outputs": {},
+    "outcome": "skipped",
+    "conclusion": "skipped"
+  },
+  "probe": {
+    "outputs": {},
+    "outcome": "skipped",
+    "conclusion": "skipped"
+  }
+}
