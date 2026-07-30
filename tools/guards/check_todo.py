@@ -83,14 +83,22 @@ SECTION_FOR = {"now": "Now", "next": "Next", "later": "Later",
                "blocked": "Blocked", "done": "Done"}
 TAG = re.compile(r"\((T-\d{3}|untracked)\)")
 MARKER = re.compile(r"`\[([a-z/]+)\]`")
-# A PLAN criterion, not a marker mentioned in prose. The status must open the
-# line (a bullet is optional - the plan writes some criteria flush left). The
-# loose form matched "Still `[partial]` because the rest of the prose is
-# unchecked" inside another criterion's body and invented a criterion out of
-# it; check_plan.py had the identical bug against `[done]` and the identical
-# fix. A guard that reads its own project's prose as data will do this
-# forever unless the position is pinned.
-CRITERION = re.compile(r"^\s*(?:-\s+)?`\[([a-z/]+)\]`")
+# A PLAN criterion, not a marker mentioned in prose. Either the status opens
+# the line with no indent, or a bullet introduces it. Both forms occur in the
+# plan; what CANNOT be a criterion is an indented line with no bullet, because
+# that is a wrapped continuation of the criterion above it.
+#
+# Two false positives were needed to arrive at this, in one sitting:
+#   1. `^.*` anywhere matched "Still `[partial]` because the rest of the prose
+#      is unchecked" mid-sentence. check_plan.py had the identical bug against
+#      `[done]` and the identical fix, five days earlier.
+#   2. Allowing leading whitespace before the status then matched a WRAPPED
+#      line that happened to begin with one: "...wrong again.\n  `[partial]`
+#      while the synthetic-only bucket is a backlog". The criterion above it
+#      lost its own tag to the split and was reported as unowned.
+# A guard that scans its own project's prose for status markers will keep
+# inventing criteria out of sentences unless the position is pinned exactly.
+CRITERION = re.compile(r"^(?:\s*-\s+)?`\[([a-z/]+)\]`")
 STATES = {"now", "next", "later", "blocked", "done"}
 MAX_NOW = 3
 

@@ -801,4 +801,95 @@ RS_TEST(unknown_reporting_can_be_suppressed_without_changing_the_verdict) {
     RS_CHECK(silent.findings.size() < loud.findings.size());
 }
 
+// ---------------------------------------------------------------------------
+// T-020: the two rules that had coverage of NO kind.
+//
+// Splitting `groundtruth_coverage.py` into four buckets on 2026-07-30 made
+// these visible for the first time - they had been hiding inside "13 of the 20
+// reachable" while the tool itself said 9. Neither had ever been executed
+// against a kernel OR named by a test. A rule nothing has ever run is a claim,
+// and this repository's whole method is that claims get graded.
+//
+// Both are graded synthetically, and that is the honest instrument here, for
+// opposite reasons:
+//
+//   RS-VM-0016 cannot be reached by measurement on any host this project has.
+//              Linux >= 4.17 has MAP_FIXED_NOREPLACE, macOS has a
+//              non-destructive form of VM_FLAGS_FIXED, Windows has
+//              VirtualAlloc2 - every runner reports the primitive present. A
+//              synthetic profile is not a weaker test here; it is the only one.
+//
+//   RS-VM-0025 is PREDICTIVE per ROADMAP section 11: a statement about how a
+//              host behaves as it fragments, not about what was measured. A
+//              measurement cannot confirm it by construction.
+// ---------------------------------------------------------------------------
+
+RS_TEST(exact_placement_that_exists_only_destructively_is_reported) {
+    // The host CAN place at an exact address; it has no way to do so without
+    // overwriting whatever is already there. Success then carries no
+    // information, and the caller reads it as "the range was free".
+    EnvironmentProfile p = permissive_host();
+    p.vm.fixed_noreplace_available = Fact<bool>::known(
+        false, EvidenceClass::MeasuredCapability, "fixture: pre-4.17 kernel");
+
+    const auto result = analyze(exact_mapping_requirement(), p);
+
+    const Finding* f =
+        get_finding(result, ids::kExactMappingNonDestructiveUnavailable);
+    RS_CHECK(f != nullptr);
+    if (f != nullptr) {
+        RS_CHECK(f->confidence == Confidence::Proven);
+        RS_CHECK_MESSAGE(f->support_impact == SupportLevel::ConditionallySupported,
+                         "the operation is available, so this is not "
+                         "UNSUPPORTED - it is supported at a cost the caller "
+                         "is never told about");
+        RS_CHECK_MESSAGE(!f->structural_impossibility,
+                         "nothing here is impossible; that is the point");
+    }
+}
+
+RS_TEST(a_host_that_has_the_primitive_says_nothing) {
+    // The negative half. permissive_host() reports the primitive present, as
+    // does every runner this project measures - which is precisely why the
+    // positive case above can only ever be synthetic.
+    const auto result = analyze(exact_mapping_requirement(), permissive_host());
+    RS_CHECK(!has_finding(result,
+                          ids::kExactMappingNonDestructiveUnavailable));
+}
+
+RS_TEST(a_program_confined_to_a_corner_of_the_space_is_warned) {
+    // Satisfiable today, and dependent on the allocator continuing to hand out
+    // low addresses. The fixture's usable space ends at 0x7ffffffff000 (~128
+    // TiB) and its one free range is [0x1000000000, 0x1010000000) - so a
+    // ceiling at the top of that range is ~64.25 GiB of a ~128 TiB space.
+    Requirement r = plain_anonymous_mapping();
+    r.request.address_min = 0x1000000000ull;
+    r.request.address_max = 0x1010000000ull;
+
+    const auto result = analyze(r, permissive_host());
+
+    const Finding* f = get_finding(result, ids::kAddressBoundIsTight);
+    RS_CHECK(f != nullptr);
+    if (f != nullptr) {
+        RS_CHECK_MESSAGE(f->confidence == Confidence::Predictive,
+                         "a forecast about fragmentation, not a measurement - "
+                         "ROADMAP section 11");
+        RS_CHECK(f->support_impact == SupportLevel::ConditionallySupported);
+    }
+    RS_CHECK_MESSAGE(!has_finding(result, ids::kAddressBoundUnsatisfiable),
+                     "the bound IS reachable; calling it unsatisfiable would "
+                     "be the manufactured contradiction this rule replaced");
+}
+
+RS_TEST(a_program_using_a_comfortable_share_is_not_warned) {
+    // The threshold is top/4. Warning above it would make the rule fire on
+    // nearly every bounded request - the RS-VM-0005 shape (42% of all real
+    // mappings) that T-019 exists to decide.
+    Requirement r = plain_anonymous_mapping();
+    r.request.address_min = 0x1000000000ull;
+    r.request.address_max = 0x4000000000000ull;  // ~1 PiB, well above top/4
+    const auto result = analyze(r, permissive_host());
+    RS_CHECK(!has_finding(result, ids::kAddressBoundIsTight));
+}
+
 RS_TEST_MAIN("analyzer")

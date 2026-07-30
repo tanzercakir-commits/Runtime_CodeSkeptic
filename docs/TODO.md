@@ -87,41 +87,6 @@ the choice is really between (a) and (c).
 
 ---
 
-### T-020 — Two rules have no coverage of any kind `[next]`
-
-**Serves:** the project's own standard — a rule nothing has ever run is a claim,
-and this repository's whole method is that claims get graded
-**Plan:** `docs/PLAN.md` Cross-cutting, "rule coverage by execution"
-**Done when:** `tools/campaign/groundtruth_coverage.py` prints `0` in its
-`NO COVERAGE OF ANY KIND` bucket, on both Linux hosts, in CI.
-
-Splitting the coverage buckets made this visible for the first time — it was
-hidden inside "13 of the 20 reachable" while the tool itself said 9. Two rules
-are exercised by nothing at all, not even a synthetic profile in a unit test:
-
-```
-RS-VM-0016  no non-destructive exact-mapping primitive is available
-            rule_non_destructive_exact_mapping() / fixed_noreplace_available
-            reachable synthetically today: a profile with
-            fixed_noreplace_available=false and a requirement that needs an
-            exact address. Linux >= 4.17 has MAP_FIXED_NOREPLACE, so no
-            current CI host will produce it by measurement - which is exactly
-            why the unit test is the honest instrument here
-
-RS-VM-0025  the program can use only a small part of this host's address space
-            rule_address_bound_is_tight() / PREDICTIVE per ROADMAP section 11
-            the RLIMIT_AS constrained lane already produces a host whose usable
-            space is a fraction of its architectural space. Check first
-            whether the lane's profile trips this rule and the tool simply
-            never looked, before writing anything new
-```
-
-**First step:** run `tools/campaign/groundtruth_coverage.py` against the
-`RLIMIT_AS`-constrained profile alone and read whether `RS-VM-0025` appears.
-Half of this item may already be done and unmeasured.
-
----
-
 ### T-018 — The false-positive campaign leaves Linux `[next]`
 
 **Serves:** Gate B's credibility — "0 false positives" measured on one OS is a
@@ -147,6 +112,37 @@ restricts probes); if blocked, evaluate ETW via `logman`/`wpr` on
 ---
 
 ## Later
+
+### T-021 — The synthetic-only backlog: 14 rules argued with, never shown a kernel `[later]`
+
+**Serves:** the same standard T-020 served, one bucket further in — a rule that
+only ever meets a profile someone wrote by hand has never been contradicted by
+anything
+**Plan:** `docs/PLAN.md` Cross-cutting, "rule coverage by execution"
+**Done when:** the synthetic-only bucket has shrunk, and every rule remaining in
+it carries a written reason it cannot be executed — at which point it stops being
+a backlog and becomes the "not checkable by execution" list, which is already
+required to name its reason per line.
+
+T-020 emptied the `NO COVERAGE OF ANY KIND` bucket. The next bucket up is not a
+defect and is not nothing: **14 rules** have unit tests against synthetic
+profiles and have never been run against a kernel. The tool names them on every
+push, so this item does not need a list here — read the output.
+
+Two honest cautions before anyone treats this as a number to drive down:
+
+- **Some of these can never be executed here, and saying so is the work.**
+  `RS-VM-0016` needs a host with no non-destructive exact-placement primitive;
+  every runner this project can reach has one. That is a reason, and once it is
+  written down the rule belongs in the "not checkable" list, not the backlog.
+- **A ground-truth case that cannot fail is worse than none.** The harness
+  compares a prediction against what the kernel actually did; a case constructed
+  so the prediction is trivially right adds a green row and no information.
+
+**First step:** take the four rules whose ground-truth case is most obviously
+constructible (`RS-VM-0005`, `RS-VM-0006`, `RS-VM-0009`, `RS-VM-0010` are
+plain-mapping properties) and write one case each. Then re-read the bucket and
+decide whether the rest are backlog or reasons.
 
 ### T-008 — Fleet aggregation `[later]`
 
@@ -248,6 +244,49 @@ Each needs a reason, so this cannot quietly become a way to empty the list.
 ---
 
 ## Done
+
+### T-020 — Two rules had coverage of no kind at all `[done]`
+
+**Serves:** the project's own standard — a rule nothing has ever run is a claim,
+and this repository's whole method is that claims get graded
+**Plan:** `docs/PLAN.md` Cross-cutting, "rule coverage by execution"
+**Done when:** `tools/campaign/groundtruth_coverage.py` prints `0` in its
+`NO COVERAGE OF ANY KIND` bucket.
+**Done:** it does — `0 have none at all`, on a freshly measured host. Four new
+cases in `tests/unit/test_analyzer.cpp` (54 → 58).
+
+Splitting the coverage buckets on 2026-07-30 made this visible for the first
+time; it had been hiding inside "13 of the 20 reachable" while the tool itself
+said 9. `RS-VM-0016` and `RS-VM-0025` were exercised by nothing whatsoever — not
+a ground-truth case, not a unit test, not a synthetic profile.
+
+Both are now graded synthetically, and the synthetic test is the **honest**
+instrument for each, for opposite reasons:
+
+```
+RS-VM-0016  no non-destructive exact-mapping primitive is available
+            Linux >= 4.17 has MAP_FIXED_NOREPLACE, macOS has a non-destructive
+            VM_FLAGS_FIXED, Windows has VirtualAlloc2. EVERY runner this
+            project can reach reports the primitive present, so a measurement
+            cannot produce the case. A synthetic profile is not a weaker test
+            here - it is the only one.
+
+RS-VM-0025  the program can use only a small part of this host's address space
+            PREDICTIVE per ROADMAP section 11: a statement about how a host
+            behaves AS IT FRAGMENTS, not about what was measured. A measurement
+            cannot confirm it by construction.
+```
+
+**What was wrong in the guess:** this item predicted the `RLIMIT_AS`-constrained
+lane would already trip `RS-VM-0025` and that half the work was done and
+unmeasured. It does not. `max_user_address` is probed with a **one-page**
+`MAP_FIXED_NOREPLACE`, which `RLIMIT_AS` does not charge — so the constrained
+host reports the same architectural ceiling as the unconstrained one, and the
+rule's `upper <= top/4` test sees nothing unusual. The asymmetry that made the
+constrained lane useful for T-015 is exactly what makes it useless here.
+
+Each rule also got its **negative** half — the host that should stay silent —
+because a rule tested only where it fires is a rule that might fire everywhere.
 
 ### T-005 — Execute the rules that have never run `[done]`
 

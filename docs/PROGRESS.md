@@ -126,11 +126,50 @@ the unimplemented Windows stub the linker silently preferred; it was the
 status that exists to express doubt, and that nothing checks, is worse than no
 status — it reads as diligence.
 
-**Next.** Three items on the compass now, all `[next]`: **T-019** (cheap, a
-decision plus a re-measure, and directly on Gate B), **T-020** (check first
-whether the `RLIMIT_AS` lane already trips `RS-VM-0025` — half of it may be
-done and unmeasured), **T-018** (expensive: a tracer on a second OS). T-019
-and T-020 together are what stands between Phase 3 and a passed Gate B.
+### T-020 closed the same day, and the guess inside it was wrong
+
+Two rules had coverage of no kind whatsoever. `tests/unit/test_analyzer.cpp`
+grows four cases (54 → **58**) and the tool now prints `0 have none at all`.
+
+| | |
+|---|---|
+| **+** | `RS-VM-0016` (exact placement exists only destructively) and `RS-VM-0025` (the program can use one part in N of the space) are both graded, each with its **negative** half — the host that must stay silent. A rule tested only where it fires is a rule that might fire everywhere |
+| **+** | both are graded **synthetically, on purpose**, and the reason is written into the test file: `RS-VM-0016` cannot be reached by measurement because every runner this project can touch HAS the primitive; `RS-VM-0025` is `PREDICTIVE` per ROADMAP §11 and a measurement cannot confirm a forecast about fragmentation |
+| **−** | the item predicted the `RLIMIT_AS` lane already tripped `RS-VM-0025` and half the work was done and unmeasured. **It does not.** `max_user_address` is probed with a ONE-PAGE `MAP_FIXED_NOREPLACE`, which `RLIMIT_AS` does not charge — so the constrained host reports the same architectural ceiling as the unconstrained one. The exact asymmetry that made the constrained lane the answer for T-015 is what makes it useless here. Same fact, opposite consequence |
+
+The next bucket up is now the honest one, and it is filed as **T-021**
+(`Later`): 14 rules have unit tests and have never been shown a kernel. It is
+deliberately NOT a number to drive to zero — some of those rules cannot be
+executed on any host this project can reach, and writing that reason down is
+the work, not skipping it.
+
+### And the new rule bit me twice in one sitting
+
+Adding `[partial]` to the marker set produced **two** false positives against
+correct documents, both of the same family:
+
+```
+1. a status QUOTED MID-SENTENCE   "Still `[partial]` because the prose is
+                                   unchecked" read as a criterion
+                                   (check_plan.py: identical bug, identical
+                                    fix, five days earlier)
+
+2. a status opening a WRAPPED LINE  "...wrong again.\n  `[partial]` while the
+                                     bucket is a backlog (T-021)"
+                                    → split in two, and the criterion above
+                                      lost its own tag and was reported unowned
+```
+
+The rule is now exact: a criterion is a status at column 0, or a status
+introduced by a bullet. An indented status with no bullet is a continuation
+line and nothing else. Both false positives are kept as selftest cases
+(86 → **87**), because the third person to widen a marker set will make this
+mistake again.
+
+**Next.** Two items on the compass, both `[next]`: **T-019** (a decision plus a
+re-measure — cheap, and the only thing besides T-018 holding Gate B) and
+**T-018** (expensive: a tracer on a second OS). `Later` gained **T-021**.
+T-019 and T-018 together are what stands between Phase 3 and a passed Gate B.
 
 ---
 

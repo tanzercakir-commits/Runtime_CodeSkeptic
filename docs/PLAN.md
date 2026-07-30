@@ -304,14 +304,16 @@ that risk materialising.
 - `[partial]` rule coverage by execution — **measured in CI on every push**:
   `tools/campaign/groundtruth_coverage.py` runs over both hosts the Linux job
   produces (unconstrained and `RLIMIT_AS`-constrained) and reports four buckets
-  separately: **10 of 23 checkable rules executed against a real kernel**, 11
-  exercised only against synthetic profiles in unit tests, 4 not checkable by
-  execution (each with its reason on the line), and **2 with no coverage of any
-  kind** (`RS-VM-0016`, `RS-VM-0025`) — a number that was invisible while the
-  buckets were mixed. This line read "13 of the 20 reachable" for two days
-  while the tool said 9, because nothing recomputed it; now the tool runs on
-  every push and the claim here names the buckets, not a snapshot. `[partial]`
-  until the last bucket is empty (T-020)
+  separately: rules executed against a real kernel, rules exercised only
+  against synthetic profiles in unit tests, rules not checkable by execution
+  (each with its reason on the line), and rules with **no coverage of any
+  kind** — a bucket that was invisible while the buckets were mixed, held
+  `RS-VM-0016` and `RS-VM-0025`, and was emptied by T-020. This line read
+  "13 of the 20 reachable" for two days while the tool said 9, because nothing
+  recomputed it; it now names the buckets and lets the tool carry the numbers,
+  because a count restated in prose is a count that will be wrong again.
+  `[partial]` while the synthetic-only bucket is a backlog rather than a list
+  of written reasons (T-021)
 - `[done]` §17 **evidence bundle** — `rs-check --bundle DIR` writes a directory
   with the verbatim inputs, `findings.json`, `report.md`, `hashes.txt` and a
   `manifest.json` (`runtime-skeptic.analysis-bundle.v1`, validated against a
@@ -331,7 +333,7 @@ that risk materialising.
   match the filesystem, and a named path must exist. Still `[partial]` because
   only paths and a fixed list of phrases are mechanical; the rest of the prose
   is unchecked and always will be.
-- `[done]` the guards are tested — `tools/guards/selftest.py`, 86 cases, each
+- `[done]` the guards are tested — `tools/guards/selftest.py`, 87 cases, each
   requiring a check to fail against a deliberately wrong throwaway repository
   before it is trusted on this one; first in `tools/guards/run_all.sh`. This
   number read `25` while there were 58, surviving two earlier increases, so

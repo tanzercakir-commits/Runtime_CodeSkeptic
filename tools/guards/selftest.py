@@ -663,6 +663,18 @@ CASES = [
                           "machine-checked and never will be\n"},
          expect_fail=False),
 
+    # The second false positive, five minutes after the first: a WRAPPED line
+    # that happens to begin with a status. The criterion above lost its own tag
+    # to the split and was reported as unowned - the guard breaking a document
+    # that was correct.
+    Case("check_todo.py", "a wrapped line beginning with a status is not one",
+         {"docs/TODO.md": TODO_OK,
+          "docs/PLAN.md": "# Plan\n\n## Phase 1\n\n"
+                          "- `[partial]` the probe — measured every push, and\n"
+                          "  `[partial]` only while the last bucket is a "
+                          "backlog (T-001)\n"},
+         expect_fail=False),
+
     # ---- check_workflow_ctest: the diagnostics channel's own blind spot --
     Case("check_workflow_ctest.py", "the real bug: diagnostics ctest with no -C",
          {".github/workflows/ci.yml": WORKFLOW_OK.replace(
