@@ -1,0 +1,39 @@
+host: linux/x86_64+unknown
+profile: gt-host.json
+
+CASE                               PREDICTED     REALITY     PAIRING
+------------------------------------------------------------------------------------------------------------
+exact-mapping-in-carveout          UNKNOWN       satisfied   not asserted
+    mmap(0x1307200000, 131072, MAP_FIXED) placed the mapping exactly there and it accepted reads and writes
+exact-mapping-at-a-free-address    SUPPORTED     satisfied   held
+    mmap(0x7000000000, 131072, MAP_FIXED) placed the mapping exactly there and it accepted reads and writes
+rwx-anonymous-2mib                 SUPPORTED     satisfied   held
+    2097152 bytes mapped PROT_READ|PROT_WRITE|PROT_EXEC, written through, and executed without flipping protection
+page-size-at-most-4kib             SUPPORTED     satisfied   held
+    sysconf(_SC_PAGESIZE) is 4096 and the build assumes 4096; os_page <= PAGE, so the shipping check passes
+page-size-at-most-64kib            SUPPORTED     satisfied   held
+    sysconf(_SC_PAGESIZE) is 4096 and the build assumes 65536; os_page <= PAGE, so the shipping check passes
+file-map-beyond-eof                UNSUPPORTED   faulted     held
+    reading past the end of the mapped file killed the process with signal 7 (Bus error)
+file-map-partial-page              SUPPORTED     satisfied   held
+    the 4095 bytes between the end of a 1-byte file and the end of its final page read as zero, without faulting
+write-then-execute-2mib            SUPPORTED     satisfied   held
+    2097152 bytes mapped RW, written, flipped to RX with mprotect, and executed - W and X were never live together
+hinted-mapping-requires-identity   UNSUPPORTED   relocated   held
+    the hint 0x7f3979167000 was occupied, so the kernel placed the mapping at 0x7f3979147000 instead and reported SUCCESS - a program requiring guest/host identity has already lost here, and no error code told it
+oversized-reservation-4pib         UNSUPPORTED   refused     held
+    mmap of 4503599627370496 bytes (4096.0 TiB) was refused: errno=12 ENOMEM (Cannot allocate memory)
+reserve-then-commit-1gib           SUPPORTED     satisfied   held
+    1073741824 bytes reserved PROT_NONE, then one 4096-byte page inside it committed with mprotect and written
+exact-mapping-below-minimum        UNSUPPORTED   refused     held
+    mmap(0x800, 131072, MAP_FIXED) failed: errno=22 EINVAL (Invalid argument)
+exact-mapping-above-user-space     UNSUPPORTED   refused     held
+    mmap(0xfffffffffff000, 131072, MAP_FIXED) failed: errno=12 ENOMEM (Cannot allocate memory)
+identity-without-translation       CONDITIONAL   relocated   not asserted
+    the hint 0x7fb226664000 was occupied, so the kernel placed the mapping at 0x7fb226644000 instead and reported SUCCESS - a program requiring guest/host identity has already lost here, and no error code told it
+pointer-truncation-32bit           UNSUPPORTED   lost        held
+    the host returned a valid, writable mapping at 0x7fb6da4a5000 (a sentinel round-tripped through the full pointer); stored in 32 bits it becomes 0xda4a5000, a different address the program can no longer reach. The kernel did nothing wrong - the caller's storage is too narrow for the address it was given
+reservation-above-granted-1tib     SUPPORTED     satisfied   held
+    the host actually reserved 1099511627776 bytes (1.0 TiB) of address space
+
+cases: 16   held: 14   contradicted: 0   not asserted: 2
