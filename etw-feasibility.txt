@@ -1,0 +1,346 @@
+events parsed: 13572
+
+=== histogram: (provider, task, opcode, eventname) -> count ===
+    6084  ('', '0', 'VirtualAllocDCStart', 'PageFault')
+          fields: ['BaseAddress', 'RegionSize', 'ProcessId', 'Flags', 'CommitSizeInBytes']
+    6081  ('', '0', 'VirtualAllocDCEnd', 'PageFault')
+          fields: ['BaseAddress', 'RegionSize', 'ProcessId', 'Flags', 'CommitSizeInBytes']
+     379  ('', '0', 'VirtualAlloc', 'PageFault')
+          fields: ['BaseAddress', 'RegionSize', 'ProcessId', 'Flags']
+     335  ('', '0', 'VirtualFree', 'PageFault')
+          fields: ['BaseAddress', 'RegionSize', 'ProcessId', 'Flags']
+     259  ('', '0', 'Services', 'SystemConfig')
+          fields: ['ProcessId', 'ServiceState', 'SubProcessTag', 'ServiceName', 'DisplayName', 'ProcessName', 'LoadOrderGroup', 'SvchostGroup']
+     147  ('', '0', 'DCStart', 'Process')
+          fields: ['UniqueProcessKey', 'ProcessId', 'ParentId', 'SessionId', 'ExitStatus', 'DirectoryTableBase', 'Flags', 'UserSID', 'ImageFileName', 'CommandLine', 'PackageFullName', 'ApplicationId']
+     147  ('', '0', 'DCEnd', 'Process')
+          fields: ['UniqueProcessKey', 'ProcessId', 'ParentId', 'SessionId', 'ExitStatus', 'DirectoryTableBase', 'Flags', 'UserSID', 'ImageFileName', 'CommandLine', 'PackageFullName', 'ApplicationId']
+      70  ('', '0', 'PnP', 'SystemConfig')
+          fields: ['ClassGuid', 'UpperFiltersCount', 'LowerFiltersCount', 'DevStatus', 'DevProblem', 'DeviceID', 'DeviceDescription', 'FriendlyName', 'PdoName', 'ServiceName', 'UpperFilters', 'LowerFilters']
+      20  ('', '0', 'Defunct', 'Process')
+          fields: ['UniqueProcessKey', 'ProcessId', 'ParentId', 'SessionId', 'ExitStatus', 'DirectoryTableBase', 'Flags', 'UserSID', 'ImageFileName', 'CommandLine', 'PackageFullName', 'ApplicationId', 'ExitTime']
+       7  ('', '0', 'IRQ', 'SystemConfig')
+          fields: ['IRQAffinity', 'IRQGroup', 'Reserved', 'IRQNum', 'DeviceDescriptionLen', 'DeviceDescription']
+       5  ('', '0', 'Defragmentation', 'SystemConfig')
+          fields: ['AlignmentClusters', 'AvgFreeSpaceSize', 'ClustersPerSlab', 'FragmentedDirectoryExtents', 'FragmentedExtents', 'FreeSpaceCount', 'LargestFreeSpaceSize', 'LastRunActualPurgeClusters', 'LastRunClustersTrimmed', 'LastRunFullDefragTime', 'LastRunTime', 'MFTSize', 'TotalClusters', 'TotalUsedClusters', 'AvgFragmentsPerFile', 'BytesPerCluster', 'DirectoryCount', 'FragmentedDirectories', 'FragmentedFiles', 'FragmentedSpace', 'HardwareIssue', 'InUseMFTRecords', 'InUseSlabs', 'LastRunActualPurgeSlabs', 'LastRunInitialBackedSlabs', 'LastRunPercentFragmentation', 'LastRunPinnedSlabs', 'LastRunPotentialPurgeSlabs', 'LastRunSpaceInefficientSlabs', 'LastRunTrimmedSlabs', 'LastRunUnknownEvictFailSlabs', 'LastRunVolsnapPinnedSlabs', 'MFTFragmentCount', 'MovableFiles', 'TotalMFTRecords', 'TotalSlabs', 'UnmovableFiles', 'VolumeId', 'VolumePathNames']
+       4  ('', '0', 'Processors', 'SystemConfig')
+          fields: ['ProcessorIndex', 'FeatureSet', 'ProcessorSpeed', 'ProcessorName', 'VendorIdentifier', 'ProcessorIdentifier']
+       3  ('', '0', 'Extension', 'EventTrace')
+          fields: ['GroupMask1', 'GroupMask2', 'GroupMask3', 'GroupMask4', 'GroupMask5', 'GroupMask6', 'GroupMask7', 'GroupMask8', 'KernelEventVersion']
+       3  ('', '0', 'NIC', 'SystemConfig')
+          fields: ['PhysicalAddr', 'PhysicalAddrLen', 'Ipv4Index', 'Ipv6Index', 'NICDescription', 'IpAddresses', 'DnsServerAddresses']
+       2  ('', '0', 'EndExtension', 'EventTrace')
+          fields: ['GroupMask1', 'GroupMask2', 'GroupMask3', 'GroupMask4', 'GroupMask5', 'GroupMask6', 'GroupMask7', 'GroupMask8', 'KernelEventVersion']
+       2  ('', '0', 'RDComplete', 'EventTrace')
+          fields: []
+       2  ('', '0', 'Terminate', 'Process')
+          fields: ['ProcessId']
+       2  ('', '0', 'End', 'Process')
+          fields: ['UniqueProcessKey', 'ProcessId', 'ParentId', 'SessionId', 'ExitStatus', 'DirectoryTableBase', 'Flags', 'UserSID', 'ImageFileName', 'CommandLine', 'PackageFullName', 'ApplicationId']
+       2  ('', '0', 'Start', 'Process')
+          fields: ['UniqueProcessKey', 'ProcessId', 'ParentId', 'SessionId', 'ExitStatus', 'DirectoryTableBase', 'Flags', 'UserSID', 'ImageFileName', 'CommandLine', 'PackageFullName', 'ApplicationId']
+       2  ('', '0', 'PhyDisk', 'SystemConfig')
+          fields: ['DiskNumber', 'BytesPerSector', 'SectorsPerTrack', 'TracksPerCylinder', 'Cylinders', 'SCSIPort', 'SCSIPath', 'SCSITarget', 'SCSILun', 'Manufacturer', 'PartitionCount', 'WriteCacheEnabled', 'Pad', 'BootDriveLetter', 'Spare', 'Spare']
+       2  ('', '0', '19', '')
+          fields: []
+       2  ('', '0', 'LogDisk', 'SystemConfig')
+          fields: ['StartOffset', 'PartitionSize', 'DiskNumber', 'Size', 'DriveType', 'DriveLetterString', 'Pad1', 'PartitionNumber', 'SectorsPerCluster', 'BytesPerSector', 'Pad2', 'NumberOfFreeClusters', 'TotalNumberOfClusters', 'FileSystem', 'VolumeExt', 'Pad3']
+       1  ('', '0', 'Header', 'EventTrace')
+          fields: ['BufferSize', 'Version', 'ProviderVersion', 'NumberOfProcessors', 'EndTime', 'TimerResolution', 'MaxFileSize', 'LogFileMode', 'BuffersWritten', 'StartBuffers', 'PointerSize', 'EventsLost', 'CPUSpeed', 'LoggerName', 'LogFileName', 'BootTime', 'PerfFreq', 'StartTime', 'ReservedFlags', 'BuffersLost', 'SessionNameString', 'LogFileNameString']
+       1  ('', '0', 'PartitionInfoExtensionV2', 'EventTrace')
+          fields: []
+       1  ('', '0', 'DPI', 'SystemConfig')
+          fields: ['MachineDPI', 'UserDPI']
+       1  ('', '0', 'CPU', 'SystemConfig')
+          fields: ['MHz', 'NumberOfProcessors', 'MemSize', 'PageSize', 'AllocationGranularity', 'ComputerName', 'DomainName', 'HyperThreadingFlag', 'HighestUserAddress', 'ProcessorArchitecture', 'ProcessorLevel', 'ProcessorRevision', 'PaeEnabled', 'NxEnabled', 'MemorySpeed']
+       1  ('', '0', 'Power', 'SystemConfig')
+          fields: ['S1', 'S2', 'S3', 'S4', 'S5', 'Pad1', 'Pad2', 'Pad3']
+       1  ('', '0', 'Platform', 'SystemConfig')
+          fields: ['SystemManufacturer', 'SystemProductName', 'BiosDate', 'BiosVersion']
+       1  ('', '0', 'DeviceFamily', 'SystemConfig')
+          fields: ['UAPInfo', 'DeviceFamily', 'DeviceForm']
+       1  ('', '0', 'FlightIds', 'SystemConfig')
+          fields: ['UpdateId', 'FlightIdList']
+       1  ('', '0', 'CodeIntegrity', 'SystemConfig')
+          fields: ['CodeIntegrityInfo']
+       1  ('', '0', 'TelemetryConfiguration', 'SystemConfig')
+          fields: ['MachineId']
+       1  ('', '0', 'Virtualization Config Info', 'SystemConfig')
+          fields: ['VbsEnabled', 'HvciEnabled', 'HyperVisorEnabled', 'Reserved']
+       1  ('', '0', 'Boot Config Info', 'SystemConfig')
+          fields: ['BootFlags', 'FirmwareType', 'SecureBootEnabled', 'SecureBootCapable', 'Reserved1', 'Reserved2']
+
+=== raw samples of allocation-looking events (8) ===
+<ns0:Event xmlns:ns0="http://schemas.microsoft.com/win/2004/08/events/event" xmlns:ns1="http://schemas.microsoft.com/win/2004/08/events/trace">
+	<ns0:System>
+		<ns0:Provider Guid="{9e814aad-3204-11d2-9a82-006008a86939}" />
+		<ns0:EventID>0</ns0:EventID>
+		<ns0:Version>2</ns0:Version>
+		<ns0:Level>0</ns0:Level>
+		<ns0:Task>0</ns0:Task>
+		<ns0:Opcode>0</ns0:Opcode>
+		<ns0:Keywords>0x0</ns0:Keywords>
+		<ns0:TimeCreated SystemTime="2026-07-30T16:28:19.813889900+00:00" />
+		<ns0:Correlation ActivityID="{00000000-0000-0000-0000-000000000000}" />
+		<ns0:Execution ProcessID="7556" ThreadID="1380" ProcessorID="0" KernelTime="30" UserTime="60" />
+		<ns0:Channel />
+		<ns0:Computer />
+	</ns0:System>
+	<ns0:EventData>
+		<ns0:Data Name="BufferSize">    8192</ns0:Data>
+		<ns0:Data Name="Version">83951626</ns0:Data>
+		<ns0:Data Name="ProviderVersion">   26100</ns0:Data>
+		<ns0:Data Name="NumberOfProcessors">       4</ns0:Data>
+		<ns0:Data Name="EndTime">134299025000097904</ns0:Data>
+		<ns0:Data Name="TimerResolution">  156250</ns0:Data>
+		<ns0:Data Name="MaxFileSize">       0</ns0:Data>
+		<ns0:Data Name="LogFileMode">0x2000080</ns0:Data>
+		<ns0:Data Name="BuffersWritten">      98</ns0:Data>
+		<ns0:Data Name="StartBuffers">       1</ns0:Data>
+		<ns0:Data Name="PointerSize">       8</ns0:Data>
+		<ns0:Data Name="EventsLost">       0</ns0:Data>
+		<ns0:Data Name="CPUSpeed">    2300</ns0:Data>
+		<ns0:Data Name="LoggerName">0xA</ns0:Data>
+		<ns0:Data Name="LogFileName">0x7</ns0:Data>
+		<ns0:Data Name="BootTime">134299021435000000</ns0:Data>
+		<ns0:Data Name="PerfFreq">10000000</ns0:Data>
+		<ns0:Data Name="StartTime">134299024998138899</ns0:Data>
+		<ns0:Data Name="ReservedFlags">0x1</ns0:Data>
+		<ns0:Data Name="BuffersLost">       0</ns0:Data>
+		<ns0:Data Name="SessionNameString">NT Kernel Logger</ns0:Data>
+		<ns0:Data Name="LogFileNameString">D:\a\Runtime_CodeSkeptic\Runtime_CodeSkeptic\kernel.etl</ns0:Data>
+	</ns0:EventData>
+	<ns0:RenderingInfo Culture="en-US">
+		<ns0:Opcode>Header</ns0:O
+---
+<ns0:Event xmlns:ns0="http://schemas.microsoft.com/win/2004/08/events/event" xmlns:ns1="http://schemas.microsoft.com/win/2004/08/events/trace">
+	<ns0:System>
+		<ns0:Provider Guid="{9e814aad-3204-11d2-9a82-006008a86939}" />
+		<ns0:EventID>0</ns0:EventID>
+		<ns0:Version>2</ns0:Version>
+		<ns0:Level>0</ns0:Level>
+		<ns0:Task>0</ns0:Task>
+		<ns0:Opcode>128</ns0:Opcode>
+		<ns0:Keywords>0x0</ns0:Keywords>
+		<ns0:TimeCreated SystemTime="2026-07-30T16:28:19.814532300+00:00" />
+		<ns0:Correlation ActivityID="{00000000-0000-0000-0000-000000000000}" />
+		<ns0:Execution ProcessID="4294967295" ThreadID="4294967295" ProcessorID="2" KernelTime="0" UserTime="0" />
+		<ns0:Channel />
+		<ns0:Computer />
+	</ns0:System>
+	<ns0:EventData>
+		<ns0:Data Name="BaseAddress">0x7FFE0000</ns0:Data>
+		<ns0:Data Name="RegionSize">0x1000</ns0:Data>
+		<ns0:Data Name="ProcessId">       0</ns0:Data>
+		<ns0:Data Name="Flags">0x2000</ns0:Data>
+		<ns0:Data Name="CommitSizeInBytes">0x1000</ns0:Data>
+	</ns0:EventData>
+	<ns0:RenderingInfo Culture="en-US">
+		<ns0:Opcode>VirtualAllocDCStart</ns0:Opcode>
+		<ns0:Provider>MSNT_SystemTrace</ns0:Provider>
+		<ns1:EventName>PageFault</ns1:EventName>
+	</ns0:RenderingInfo>
+	<ns1:ExtendedTracingInfo>
+		<ns1:EventGuid>{3d6fa8d3-fe05-11d0-9dda-00c04fd7ba7c}</ns1:EventGuid>
+	</ns1:ExtendedTracingInfo>
+</ns0:Event>
+
+---
+<ns0:Event xmlns:ns0="http://schemas.microsoft.com/win/2004/08/events/event" xmlns:ns1="http://schemas.microsoft.com/win/2004/08/events/trace">
+	<ns0:System>
+		<ns0:Provider Guid="{9e814aad-3204-11d2-9a82-006008a86939}" />
+		<ns0:EventID>0</ns0:EventID>
+		<ns0:Version>2</ns0:Version>
+		<ns0:Level>0</ns0:Level>
+		<ns0:Task>0</ns0:Task>
+		<ns0:Opcode>128</ns0:Opcode>
+		<ns0:Keywords>0x0</ns0:Keywords>
+		<ns0:TimeCreated SystemTime="2026-07-30T16:28:19.814532400+00:00" />
+		<ns0:Correlation ActivityID="{00000000-0000-0000-0000-000000000000}" />
+		<ns0:Execution ProcessID="4294967295" ThreadID="4294967295" ProcessorID="2" KernelTime="0" UserTime="0" />
+		<ns0:Channel />
+		<ns0:Computer />
+	</ns0:System>
+	<ns0:EventData>
+		<ns0:Data Name="BaseAddress">0x7FFE4000</ns0:Data>
+		<ns0:Data Name="RegionSize">0x1000</ns0:Data>
+		<ns0:Data Name="ProcessId">       0</ns0:Data>
+		<ns0:Data Name="Flags">0x2000</ns0:Data>
+		<ns0:Data Name="CommitSizeInBytes">0x1000</ns0:Data>
+	</ns0:EventData>
+	<ns0:RenderingInfo Culture="en-US">
+		<ns0:Opcode>VirtualAllocDCStart</ns0:Opcode>
+		<ns0:Provider>MSNT_SystemTrace</ns0:Provider>
+		<ns1:EventName>PageFault</ns1:EventName>
+	</ns0:RenderingInfo>
+	<ns1:ExtendedTracingInfo>
+		<ns1:EventGuid>{3d6fa8d3-fe05-11d0-9dda-00c04fd7ba7c}</ns1:EventGuid>
+	</ns1:ExtendedTracingInfo>
+</ns0:Event>
+
+---
+<ns0:Event xmlns:ns0="http://schemas.microsoft.com/win/2004/08/events/event" xmlns:ns1="http://schemas.microsoft.com/win/2004/08/events/trace">
+	<ns0:System>
+		<ns0:Provider Guid="{9e814aad-3204-11d2-9a82-006008a86939}" />
+		<ns0:EventID>0</ns0:EventID>
+		<ns0:Version>2</ns0:Version>
+		<ns0:Level>0</ns0:Level>
+		<ns0:Task>0</ns0:Task>
+		<ns0:Opcode>128</ns0:Opcode>
+		<ns0:Keywords>0x0</ns0:Keywords>
+		<ns0:TimeCreated SystemTime="2026-07-30T16:28:19.814536500+00:00" />
+		<ns0:Correlation ActivityID="{00000000-0000-0000-0000-000000000000}" />
+		<ns0:Execution ProcessID="4294967295" ThreadID="4294967295" ProcessorID="2" KernelTime="0" UserTime="0" />
+		<ns0:Channel />
+		<ns0:Computer />
+	</ns0:System>
+	<ns0:EventData>
+		<ns0:Data Name="BaseAddress">0x7FFE0000</ns0:Data>
+		<ns0:Data Name="RegionSize">0x1000</ns0:Data>
+		<ns0:Data Name="ProcessId">       4</ns0:Data>
+		<ns0:Data Name="Flags">0x2000</ns0:Data>
+		<ns0:Data Name="CommitSizeInBytes">0x1000</ns0:Data>
+	</ns0:EventData>
+	<ns0:RenderingInfo Culture="en-US">
+		<ns0:Opcode>VirtualAllocDCStart</ns0:Opcode>
+		<ns0:Provider>MSNT_SystemTrace</ns0:Provider>
+		<ns1:EventName>PageFault</ns1:EventName>
+	</ns0:RenderingInfo>
+	<ns1:ExtendedTracingInfo>
+		<ns1:EventGuid>{3d6fa8d3-fe05-11d0-9dda-00c04fd7ba7c}</ns1:EventGuid>
+	</ns1:ExtendedTracingInfo>
+</ns0:Event>
+
+---
+<ns0:Event xmlns:ns0="http://schemas.microsoft.com/win/2004/08/events/event" xmlns:ns1="http://schemas.microsoft.com/win/2004/08/events/trace">
+	<ns0:System>
+		<ns0:Provider Guid="{9e814aad-3204-11d2-9a82-006008a86939}" />
+		<ns0:EventID>0</ns0:EventID>
+		<ns0:Version>2</ns0:Version>
+		<ns0:Level>0</ns0:Level>
+		<ns0:Task>0</ns0:Task>
+		<ns0:Opcode>128</ns0:Opcode>
+		<ns0:Keywords>0x0</ns0:Keywords>
+		<ns0:TimeCreated SystemTime="2026-07-30T16:28:19.814536600+00:00" />
+		<ns0:Correlation ActivityID="{00000000-0000-0000-0000-000000000000}" />
+		<ns0:Execution ProcessID="4294967295" ThreadID="4294967295" ProcessorID="2" KernelTime="0" UserTime="0" />
+		<ns0:Channel />
+		<ns0:Computer />
+	</ns0:System>
+	<ns0:EventData>
+		<ns0:Data Name="BaseAddress">0x7FFE4000</ns0:Data>
+		<ns0:Data Name="RegionSize">0x1000</ns0:Data>
+		<ns0:Data Name="ProcessId">       4</ns0:Data>
+		<ns0:Data Name="Flags">0x2000</ns0:Data>
+		<ns0:Data Name="CommitSizeInBytes">0x1000</ns0:Data>
+	</ns0:EventData>
+	<ns0:RenderingInfo Culture="en-US">
+		<ns0:Opcode>VirtualAllocDCStart</ns0:Opcode>
+		<ns0:Provider>MSNT_SystemTrace</ns0:Provider>
+		<ns1:EventName>PageFault</ns1:EventName>
+	</ns0:RenderingInfo>
+	<ns1:ExtendedTracingInfo>
+		<ns1:EventGuid>{3d6fa8d3-fe05-11d0-9dda-00c04fd7ba7c}</ns1:EventGuid>
+	</ns1:ExtendedTracingInfo>
+</ns0:Event>
+
+---
+<ns0:Event xmlns:ns0="http://schemas.microsoft.com/win/2004/08/events/event" xmlns:ns1="http://schemas.microsoft.com/win/2004/08/events/trace">
+	<ns0:System>
+		<ns0:Provider Guid="{9e814aad-3204-11d2-9a82-006008a86939}" />
+		<ns0:EventID>0</ns0:EventID>
+		<ns0:Version>2</ns0:Version>
+		<ns0:Level>0</ns0:Level>
+		<ns0:Task>0</ns0:Task>
+		<ns0:Opcode>128</ns0:Opcode>
+		<ns0:Keywords>0x0</ns0:Keywords>
+		<ns0:TimeCreated SystemTime="2026-07-30T16:28:19.814589200+00:00" />
+		<ns0:Correlation ActivityID="{00000000-0000-0000-0000-000000000000}" />
+		<ns0:Execution ProcessID="4294967295" ThreadID="4294967295" ProcessorID="2" KernelTime="0" UserTime="0" />
+		<ns0:Channel />
+		<ns0:Computer />
+	</ns0:System>
+	<ns0:EventData>
+		<ns0:Data Name="BaseAddress">0x7FFE0000</ns0:Data>
+		<ns0:Data Name="RegionSize">0x1000</ns0:Data>
+		<ns0:Data Name="ProcessId">     536</ns0:Data>
+		<ns0:Data Name="Flags">0x2000</ns0:Data>
+		<ns0:Data Name="CommitSizeInBytes">0x1000</ns0:Data>
+	</ns0:EventData>
+	<ns0:RenderingInfo Culture="en-US">
+		<ns0:Opcode>VirtualAllocDCStart</ns0:Opcode>
+		<ns0:Provider>MSNT_SystemTrace</ns0:Provider>
+		<ns1:EventName>PageFault</ns1:EventName>
+	</ns0:RenderingInfo>
+	<ns1:ExtendedTracingInfo>
+		<ns1:EventGuid>{3d6fa8d3-fe05-11d0-9dda-00c04fd7ba7c}</ns1:EventGuid>
+	</ns1:ExtendedTracingInfo>
+</ns0:Event>
+
+---
+<ns0:Event xmlns:ns0="http://schemas.microsoft.com/win/2004/08/events/event" xmlns:ns1="http://schemas.microsoft.com/win/2004/08/events/trace">
+	<ns0:System>
+		<ns0:Provider Guid="{9e814aad-3204-11d2-9a82-006008a86939}" />
+		<ns0:EventID>0</ns0:EventID>
+		<ns0:Version>2</ns0:Version>
+		<ns0:Level>0</ns0:Level>
+		<ns0:Task>0</ns0:Task>
+		<ns0:Opcode>128</ns0:Opcode>
+		<ns0:Keywords>0x0</ns0:Keywords>
+		<ns0:TimeCreated SystemTime="2026-07-30T16:28:19.814589300+00:00" />
+		<ns0:Correlation ActivityID="{00000000-0000-0000-0000-000000000000}" />
+		<ns0:Execution ProcessID="4294967295" ThreadID="4294967295" ProcessorID="2" KernelTime="0" UserTime="0" />
+		<ns0:Channel />
+		<ns0:Computer />
+	</ns0:System>
+	<ns0:EventData>
+		<ns0:Data Name="BaseAddress">0x7FFE4000</ns0:Data>
+		<ns0:Data Name="RegionSize">0x1000</ns0:Data>
+		<ns0:Data Name="ProcessId">     536</ns0:Data>
+		<ns0:Data Name="Flags">0x2000</ns0:Data>
+		<ns0:Data Name="CommitSizeInBytes">0x1000</ns0:Data>
+	</ns0:EventData>
+	<ns0:RenderingInfo Culture="en-US">
+		<ns0:Opcode>VirtualAllocDCStart</ns0:Opcode>
+		<ns0:Provider>MSNT_SystemTrace</ns0:Provider>
+		<ns1:EventName>PageFault</ns1:EventName>
+	</ns0:RenderingInfo>
+	<ns1:ExtendedTracingInfo>
+		<ns1:EventGuid>{3d6fa8d3-fe05-11d0-9dda-00c04fd7ba7c}</ns1:EventGuid>
+	</ns1:ExtendedTracingInfo>
+</ns0:Event>
+
+---
+<ns0:Event xmlns:ns0="http://schemas.microsoft.com/win/2004/08/events/event" xmlns:ns1="http://schemas.microsoft.com/win/2004/08/events/trace">
+	<ns0:System>
+		<ns0:Provider Guid="{9e814aad-3204-11d2-9a82-006008a86939}" />
+		<ns0:EventID>0</ns0:EventID>
+		<ns0:Version>2</ns0:Version>
+		<ns0:Level>0</ns0:Level>
+		<ns0:Task>0</ns0:Task>
+		<ns0:Opcode>128</ns0:Opcode>
+		<ns0:Keywords>0x0</ns0:Keywords>
+		<ns0:TimeCreated SystemTime="2026-07-30T16:28:19.814589400+00:00" />
+		<ns0:Correlation ActivityID="{00000000-0000-0000-0000-000000000000}" />
+		<ns0:Execution ProcessID="4294967295" ThreadID="4294967295" ProcessorID="2" KernelTime="0" UserTime="0" />
+		<ns0:Channel />
+		<ns0:Computer />
+	</ns0:System>
+	<ns0:EventData>
+		<ns0:Data Name="BaseAddress">0x3DBB6D0000</ns0:Data>
+		<ns0:Data Name="RegionSize">0x80000</ns0:Data>
+		<ns0:Data Name="ProcessId">     536</ns0:Data>
+		<ns0:Data Name="Flags">0x2000</ns0:Data>
+		<ns0:Data Name="CommitSizeInBytes">0x6000</ns0:Data>
+	</ns0:EventData>
+	<ns0:RenderingInfo Culture="en-US">
+		<ns0:Opcode>VirtualAllocDCStart</ns0:Opcode>
+		<ns0:Provider>MSNT_SystemTrace</ns0:Provider>
+		<ns1:EventName>PageFault</ns1:EventName>
+	</ns0:RenderingInfo>
+	<ns1:ExtendedTracingInfo>
+		<ns1:EventGuid>{3d6fa8d3-fe05-11d0-9dda-00c04fd7ba7c}</ns1:EventGuid>
+	</ns1:ExtendedTracingInfo>
+</ns0:Event>
+
+---
