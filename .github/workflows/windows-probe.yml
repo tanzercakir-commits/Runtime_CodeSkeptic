@@ -227,6 +227,39 @@ jobs:
           print("confirmed: a measured profile from a real Windows host")
           PY
 
+      # T-018 FEASIBILITY, NOT YET THE INSTRUMENT. The false-positive campaign
+      # needs a second OS, and on Windows the tracer is ETW. Every document
+      # describes the kernel VirtualAlloc events' fields differently, and this
+      # project has already paid for writing against documentation instead of
+      # against data (the mingw flag list, the ctest -C). So before any
+      # observer exists, one short kernel trace around one busy Python process
+      # is decoded and SUMMARIZED - histogram of event kinds, the field names
+      # each carries, raw samples of anything allocation-shaped. The observer
+      # gets written against this output. continue-on-error because a
+      # feasibility probe that fails the measurement job it hitched a ride on
+      # would cost the thing this workflow exists to produce.
+      - name: ETW feasibility for T-018
+        id: etw_feasibility
+        continue-on-error: true
+        shell: cmd
+        run: |
+          logman start "NT Kernel Logger" -p "Windows Kernel Trace" (process,virtalloc) -o kernel.etl -ets
+          python -c "x=[bytearray(1<<20) for _ in range(64)]; import mmap; m=mmap.mmap(-1, 1<<24); m.close(); print('workload ok')"
+          logman stop "NT Kernel Logger" -ets
+          tracerpt kernel.etl -o etw.xml -of XML -y
+          python tools\campaign\etw_feasibility.py etw.xml > etw-feasibility.txt 2>&1
+          type etw-feasibility.txt
+
+      - name: Publish the ETW feasibility summary
+        if: always() && steps.etw_feasibility.outcome != 'skipped'
+        shell: bash
+        run: |
+          [ -f etw-feasibility.txt ] \
+            || echo "(the ETW feasibility step produced no summary - read its log)" \
+                 > etw-feasibility.txt
+          bash tools/ci/publish_measurement.sh measurements \
+            "etw-feasibility" "${{ github.sha }}" etw-feasibility.txt
+
       - uses: actions/upload-artifact@v4
         if: always() && steps.measure.outcome == 'success'
         with:

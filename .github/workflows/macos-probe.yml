@@ -197,6 +197,43 @@ jobs:
       # `git add` on top of the checked-out tree, which meant every measurement
       # ref carried a full copy of the repository - and the ground-truth output,
       # the thing this workflow exists to produce, was not in it at all.
+      # T-018 FEASIBILITY. The false-positive campaign needs a tracer on a
+      # second OS, and on macOS that is dtrace/dtruss - IF System Integrity
+      # Protection permits it on a hosted runner, which is exactly the kind of
+      # claim this project measures instead of assuming. Three questions, each
+      # answered by running the thing: what does csrutil report, does a
+      # trivial dtrace program run at all, and can dtruss follow a real child
+      # process's syscalls. continue-on-error and `|| true` throughout: a
+      # feasibility probe must not cost the measurement it rides with.
+      - name: dtrace feasibility for T-018
+        id: dtrace_feasibility
+        continue-on-error: true
+        run: |
+          {
+            echo "=== csrutil status ==="
+            csrutil status || true
+            echo
+            echo "=== trivial dtrace program ==="
+            sudo dtrace -n 'BEGIN{trace(0); exit(0)}' 2>&1 || true
+            echo
+            echo "=== mmap return probe on a child process ==="
+            sudo dtrace -qn 'syscall::mmap:return/pid==$target/{printf("mmap -> %p\n", (void*)arg1)}' \
+              -c /usr/bin/true 2>&1 | head -12 || true
+            echo
+            echo "=== dtruss on a child process ==="
+            sudo dtruss -f /usr/bin/true 2>&1 | head -25 || true
+          } > /tmp/dtrace-feasibility.txt 2>&1
+          cat /tmp/dtrace-feasibility.txt
+
+      - name: Publish the dtrace feasibility summary
+        if: always() && steps.dtrace_feasibility.outcome != 'skipped'
+        run: |
+          [ -f /tmp/dtrace-feasibility.txt ] \
+            || echo "(the dtrace feasibility step produced no summary - read its log)" \
+                 > /tmp/dtrace-feasibility.txt
+          bash tools/ci/publish_measurement.sh measurements \
+            "dtrace-feasibility" "${{ github.sha }}" /tmp/dtrace-feasibility.txt
+
       - name: Publish the measurement to refs/measurements/*
         if: always() && steps.measure.outcome == 'success'
         run: |
