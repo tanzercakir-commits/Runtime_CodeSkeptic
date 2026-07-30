@@ -45,6 +45,83 @@ completes without leaving a trace in the log is work that will be redone.
 
 ## Next
 
+### T-019 — `RS-VM-0005` is correct on 42% of all real mappings `[next]`
+
+**Serves:** Gate B — a rule that fires on nearly half of everything is not
+wrong, it is unusable, and the gate cannot be passed while it is both
+**Plan:** `docs/PLAN.md` Decision gates, Gate B, second ground
+**Done when:** a decision is written into `docs/findings/registry.md` and
+`docs/PROGRESS.md`, the code matches it, and
+`tools/campaign/measure_false_positives.sh` is re-run so the campaign document
+reports the rate under the new behaviour next to the old one.
+
+The campaign measured 0 false positives across 1933 requests. It also measured
+that `RS-VM-0005` (requested size is not a multiple of the host allocation
+granularity, `medium`, `PROVEN`) accounted for 42% of all findings on real
+mappings. Both numbers are true. The registry itself already says the quiet
+part: "certainly true, usually harmless."
+
+The decision is which of these it is, and it has to be argued, not picked:
+
+```
+(a) demote to informational   honest about "usually harmless", but the
+                              information is real when the caller does care
+(b) require the requirement    fire only when the application's declared
+    to claim exactness         contract asks for an exact size. Needs the
+                              requirement model to be able to say that -
+                              check whether it can before promising it
+(c) keep it and widen Gate B   accept the noise, state the 42% in the gate
+                              text, and pass on the other grounds
+```
+
+Do not choose (a) because it makes the number look better. The rule was written
+because a host that rounds a reservation up gives the program more address
+space than it asked for, and a program that computes from its requested size
+walks off the end of what it believes it owns. That is a real defect class; the
+question is only when to say it.
+
+**First step:** re-read `rule_size_granularity()` and the requirement model in
+`include/runtimeskeptic/vm/`, and establish whether a requirement can express
+"the size must be exact" at all. If it cannot, (b) is not a one-line change and
+the choice is really between (a) and (c).
+
+---
+
+### T-020 — Two rules have no coverage of any kind `[next]`
+
+**Serves:** the project's own standard — a rule nothing has ever run is a claim,
+and this repository's whole method is that claims get graded
+**Plan:** `docs/PLAN.md` Cross-cutting, "rule coverage by execution"
+**Done when:** `tools/campaign/groundtruth_coverage.py` prints `0` in its
+`NO COVERAGE OF ANY KIND` bucket, on both Linux hosts, in CI.
+
+Splitting the coverage buckets made this visible for the first time — it was
+hidden inside "13 of the 20 reachable" while the tool itself said 9. Two rules
+are exercised by nothing at all, not even a synthetic profile in a unit test:
+
+```
+RS-VM-0016  no non-destructive exact-mapping primitive is available
+            rule_non_destructive_exact_mapping() / fixed_noreplace_available
+            reachable synthetically today: a profile with
+            fixed_noreplace_available=false and a requirement that needs an
+            exact address. Linux >= 4.17 has MAP_FIXED_NOREPLACE, so no
+            current CI host will produce it by measurement - which is exactly
+            why the unit test is the honest instrument here
+
+RS-VM-0025  the program can use only a small part of this host's address space
+            rule_address_bound_is_tight() / PREDICTIVE per ROADMAP section 11
+            the RLIMIT_AS constrained lane already produces a host whose usable
+            space is a fraction of its architectural space. Check first
+            whether the lane's profile trips this rule and the tool simply
+            never looked, before writing anything new
+```
+
+**First step:** run `tools/campaign/groundtruth_coverage.py` against the
+`RLIMIT_AS`-constrained profile alone and read whether `RS-VM-0025` appears.
+Half of this item may already be done and unmeasured.
+
+---
+
 ### T-018 — The false-positive campaign leaves Linux `[next]`
 
 **Serves:** Gate B's credibility — "0 false positives" measured on one OS is a

@@ -14,15 +14,30 @@ agreeing and nothing notices - the plan still lists a criterion as open while
 the todo has quietly dropped it, or the todo grows an item that answers to
 nothing. Six months later there is no way to tell which document is stale.
 
-FIVE CHECKS.
+SEVEN CHECKS.
 
-1. EVERY OPEN OR BLOCKED PLAN CRITERION IS ACCOUNTED FOR. It must carry the id
-   of an item in TODO.md, or be tagged `(untracked)` and named in TODO.md's
+1. EVERY UNFINISHED PLAN CRITERION IS ACCOUNTED FOR. It must carry the id of an
+   item in TODO.md, or be tagged `(untracked)` and named in TODO.md's
    "Deliberately not tracked" section with a reason. There is no third option:
    work is either on the compass or explicitly off it.
 
+   `[partial]` COUNTS AS UNFINISHED, and it did not until 2026-07-30. The
+   guard read `[open]` and `[blocked]` only, so `[partial]` - the marker this
+   project reaches for precisely when something is half-true and needs saying
+   out loud - was the one state nobody checked. Gate B sat `[partial]` on two
+   named grounds; one of them (`RS-VM-0005` fires on 42% of real mappings,
+   correct and unusable in a gate) had no item on the compass at all, and
+   nothing objected. Same shape as every other defect in this repository: the
+   state nobody looks at.
+
 2. EVERY ID RESOLVES. A `(T-nnn)` tag in the plan must name an item that
    exists. An item that is deleted takes its tags with it.
+
+7. AN UNFINISHED CRITERION MAY NOT BE OWNED BY A FINISHED ITEM. Found the same
+   day, one line below: Gate B was `[partial]` and cited `(T-004)`, which is
+   `[done]`. Read literally that says the work holding the gate open was
+   completed - so nobody is doing it and nothing says so. The tag had been
+   correct once and the reason underneath it changed.
 
 3. `NOW` HOLDS AT MOST THREE ITEMS. A list where everything is urgent is not a
    compass, it is a wall. This is the check most likely to be resented and it
@@ -68,6 +83,14 @@ SECTION_FOR = {"now": "Now", "next": "Next", "later": "Later",
                "blocked": "Blocked", "done": "Done"}
 TAG = re.compile(r"\((T-\d{3}|untracked)\)")
 MARKER = re.compile(r"`\[([a-z/]+)\]`")
+# A PLAN criterion, not a marker mentioned in prose. The status must open the
+# line (a bullet is optional - the plan writes some criteria flush left). The
+# loose form matched "Still `[partial]` because the rest of the prose is
+# unchecked" inside another criterion's body and invented a criterion out of
+# it; check_plan.py had the identical bug against `[done]` and the identical
+# fix. A guard that reads its own project's prose as data will do this
+# forever unless the position is pinned.
+CRITERION = re.compile(r"^\s*(?:-\s+)?`\[([a-z/]+)\]`")
 STATES = {"now", "next", "later", "blocked", "done"}
 MAX_NOW = 3
 
@@ -178,14 +201,14 @@ def main() -> int:
         for i, line in enumerate(lines, 1):
             if i <= body_starts:
                 continue
-            markers = [m for m in MARKER.findall(line)
-                       if m in ("open", "blocked")]
-            if not markers:
+            head = CRITERION.match(line)
+            if not head or head.group(1) not in ("open", "blocked", "partial"):
                 continue
+            marker = head.group(1)
             # The tag may land on a wrapped line, like the evidence does.
             entry, j = line, i
             while (j < len(lines) and lines[j].strip()
-                   and not MARKER.search(lines[j])
+                   and not CRITERION.match(lines[j])
                    and not lines[j].startswith(("#", "|", "```"))):
                 entry += " " + lines[j].strip()
                 j += 1
@@ -193,17 +216,28 @@ def main() -> int:
             found = TAG.findall(entry)
             if not found:
                 problems.append(
-                    f"docs/PLAN.md:{i}: `[{markers[0]}]` with no owner - add "
+                    f"docs/PLAN.md:{i}: `[{marker}]` with no owner - add "
                     f"`(T-nnn)` naming the docs/TODO.md item that will close "
                     f"it, or `(untracked)` and a reason in TODO.md's "
                     f"\"Deliberately not tracked\": "
                     f"\"{line.strip()[:70]}\"")
             for tag in found:
                 plan_tagged.add(tag)
-                if tag != "untracked" and tag not in items:
+                if tag == "untracked":
+                    continue
+                if tag not in items:
                     problems.append(
                         f"docs/PLAN.md:{i}: cites `{tag}`, which is not an "
                         f"item in docs/TODO.md")
+                elif items[tag]["state"] == "done":
+                    problems.append(
+                        f"docs/PLAN.md:{i}: `[{marker}]` cites `{tag}`, "
+                        f"which is `[done]` in docs/TODO.md. An unfinished "
+                        f"criterion owned by a finished item reads as: the work "
+                        f"holding this open was completed. Nobody is doing it "
+                        f"and nothing says so. Retag it to the item that will "
+                        f"actually close it, or file one: "
+                        f"\"{line.strip()[:70]}\"")
 
     if "untracked" in plan_tagged and "not tracked" not in untracked.lower():
         problems.append(

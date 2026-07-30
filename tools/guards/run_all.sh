@@ -25,7 +25,12 @@
 #                    is whatever the author believed at the time
 #   check_todo       four documents carry this project - the spirit, the
 #                    compass, the map and the past - and the way it gets lost
-#                    is two of them quietly disagreeing
+#                    is two of them quietly disagreeing. It read `[open]` and
+#                    `[blocked]` and NOT `[partial]` - the one marker this
+#                    project uses when something is half-true and needs saying
+#                    out loud. A gate was held open on a ground with no item on
+#                    the compass at all, and on a second ground owned by an
+#                    item that was `[done]`
 #   check_campaign   a measured number is a claim like any other, and prose
 #                    drifts from data exactly the way prose drifts from code
 #   check_includes   the first real Windows build failed on std::back_inserter

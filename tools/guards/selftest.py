@@ -625,6 +625,44 @@ CASES = [
           "docs/PLAN.md": "# Plan\n\n## Phase 1\n\n- `[open]` later (untracked)\n"},
          expect_fail=True, expect_text="no \"Deliberately not tracked\""),
 
+    # [partial] was the one unfinished state the guard never read, and it is
+    # exactly the state this project reaches for when something is half-true.
+    # Gate B sat [partial] on two grounds and one of them had no item on the
+    # compass at all - nothing objected for as long as the gate existed.
+    Case("check_todo.py", "a partial plan criterion with no owner fails",
+         {"docs/TODO.md": TODO_OK,
+          "docs/PLAN.md": "# Plan\n\n## Phase 1\n\n- `[partial]` the probe\n"},
+         expect_fail=True, expect_text="with no owner"),
+
+    Case("check_todo.py", "the same partial criterion, owned, passes",
+         {"docs/TODO.md": TODO_OK,
+          "docs/PLAN.md": "# Plan\n\n## Phase 1\n\n"
+                          "- `[partial]` the probe (T-001)\n"},
+         expect_fail=False),
+
+    # Found the same day, six lines below: Gate B was [partial] and cited a
+    # [done] item. Read literally that says the work holding the gate open was
+    # completed - so nobody owns it and nothing objects.
+    Case("check_todo.py", "an unfinished criterion owned by a done item fails",
+         {"docs/TODO.md": "# TODO\n\n## Done\n\n### T-001 — finished `[done]`\n\n"
+                          "**Done when:** it ran\n",
+          "docs/PLAN.md": "# Plan\n\n## Phase 1\n\n- `[partial]` still open "
+                          "(T-001)\n",
+          "docs/PROGRESS.md": "# Progress\n\nT-001 shipped.\n"},
+         expect_fail=True, expect_text="which is `[done]`"),
+
+    # And the false positive that fix introduced, kept as a case: a status
+    # QUOTED IN PROSE inside another criterion's body was read as a criterion
+    # of its own. check_plan.py had the identical bug against `[done]`, so this
+    # is the second time the same mistake was made in this directory.
+    Case("check_todo.py", "a marker quoted in prose is not a criterion",
+         {"docs/TODO.md": TODO_OK,
+          "docs/PLAN.md": "# Plan\n\n## Phase 1\n\n"
+                          "- `[done]` the probe — it stays `[partial]` only in "
+                          "the sense that\n  the prose below is not "
+                          "machine-checked and never will be\n"},
+         expect_fail=False),
+
     # ---- check_workflow_ctest: the diagnostics channel's own blind spot --
     Case("check_workflow_ctest.py", "the real bug: diagnostics ctest with no -C",
          {".github/workflows/ci.yml": WORKFLOW_OK.replace(

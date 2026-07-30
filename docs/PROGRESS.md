@@ -80,8 +80,57 @@ CodeSkeptic is finished and that the differential test would consume its output
 without modifying it — one word from the owner opens it). The maintenance cadence
 is weekly; it is one sentence to change.
 
-**Next.** T-018 (the campaign's second OS) is the compass's next item. Then the
-`Later` set, and whatever the weekly maintenance session surfaces.
+### Then the same session found the state nobody was checking
+
+The maintenance task above is now real (`0 6 * * 1`, Mondays, reading the
+git-ref CI channels and reporting; it cannot push, because a fresh container
+has no credential, so it delivers changed documents as files instead). Writing
+it meant re-reading what it would have to check — and that reading found three
+things in the very guard that exists to keep the compass and the map in step.
+
+`check_todo.py` read `[open]` and `[blocked]`. It did not read `[partial]`.
+That is the marker this project reaches for **precisely when something is
+half-true and needs saying out loud** — so the one status that means "there is
+unfinished work here, and I am being honest about it" was the one status no
+guard looked at. Three criteria were sitting in it:
+
+| | |
+|---|---|
+| **−** | **Gate B, second ground.** `RS-VM-0005` fires on 42% of all real mappings — correct, `PROVEN`, and unusable in a gate. Named in the map as a reason the gate is not passed, and **no item on the compass at all.** Now **T-019**, which states the three options and refuses to let (a) be chosen because it makes the number look better |
+| **−** | **Gate B, first ground** was tagged `(T-004)` — the Windows probe, `[done]`. Read literally: the work holding the gate open was completed. The tag was correct when written and the reason underneath it changed. Now `(T-018)` |
+| **−** | **rule coverage by execution** was `[partial]` with no owner. Two rules have coverage of no kind whatsoever — `RS-VM-0016`, `RS-VM-0025`. Now **T-020** |
+
+Two new rules, four new selftest cases (82 → **86**):
+
+```
+[partial] with no owner                    fails      (was invisible)
+[partial] with an owner                    passes
+[partial] citing a [done] item             fails      (new rule)
+a status QUOTED IN PROSE                   passes     (see below)
+```
+
+**What was wrong, and it was mine.** Adding `[partial]` to the marker set made
+the guard read `Still `[partial]` because the rest of the prose is unchecked`
+— a sentence inside another criterion's body — as a criterion of its own, and
+demand an owner for it. `check_plan.py` had the **identical** bug against
+`[done]` in prose and was fixed the identical way, five days ago, by me. A
+guard that scans its own project's prose for status markers will invent
+criteria out of sentences unless the position is pinned; both now require the
+marker to open the line. The false positive is kept as a selftest case, because
+the next person to widen a marker set will make this mistake a third time.
+
+**The general shape, for the sixth or seventh time in this repository:** the
+defect is never in the state everyone looks at. It was `[partial]` here; it was
+the unimplemented Windows stub the linker silently preferred; it was the
+`unknown` rows keyed on the measured host; it was `ctest` with no `-C`. A
+status that exists to express doubt, and that nothing checks, is worse than no
+status — it reads as diligence.
+
+**Next.** Three items on the compass now, all `[next]`: **T-019** (cheap, a
+decision plus a re-measure, and directly on Gate B), **T-020** (check first
+whether the `RLIMIT_AS` lane already trips `RS-VM-0025` — half of it may be
+done and unmeasured), **T-018** (expensive: a tracer on a second OS). T-019
+and T-020 together are what stands between Phase 3 and a passed Gate B.
 
 ---
 

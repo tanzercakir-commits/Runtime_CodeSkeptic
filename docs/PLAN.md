@@ -290,8 +290,8 @@ that risk materialising.
   at 0 across 1933 observed requests, 99.8% of them answered**
   (`docs/campaigns/2026-07-false-positive-rate.md`). Not yet passed, on two
   named grounds rather than one unmeasured one: the measurement covers a single
-  platform family, and `RS-VM-0005` fires on 42% of all real mappings, which is
-  correct and unusable in a gate until a decision is taken. (T-004)
+  platform family (T-018), and `RS-VM-0005` fires on 42% of all real mappings,
+  which is correct and unusable in a gate until a decision is taken (T-019).
 - `[blocked]` **Gate C** — Phase 5 is blocked. (T-011)
 - `[n/a]` **Gate D** — no new domain is proposed.
 
@@ -310,7 +310,8 @@ that risk materialising.
   kind** (`RS-VM-0016`, `RS-VM-0025`) — a number that was invisible while the
   buckets were mixed. This line read "13 of the 20 reachable" for two days
   while the tool said 9, because nothing recomputed it; now the tool runs on
-  every push and the claim here names the buckets, not a snapshot
+  every push and the claim here names the buckets, not a snapshot. `[partial]`
+  until the last bucket is empty (T-020)
 - `[done]` §17 **evidence bundle** — `rs-check --bundle DIR` writes a directory
   with the verbatim inputs, `findings.json`, `report.md`, `hashes.txt` and a
   `manifest.json` (`runtime-skeptic.analysis-bundle.v1`, validated against a
@@ -330,7 +331,7 @@ that risk materialising.
   match the filesystem, and a named path must exist. Still `[partial]` because
   only paths and a fixed list of phrases are mechanical; the rest of the prose
   is unchecked and always will be.
-- `[done]` the guards are tested — `tools/guards/selftest.py`, 82 cases, each
+- `[done]` the guards are tested — `tools/guards/selftest.py`, 86 cases, each
   requiring a check to fail against a deliberately wrong throwaway repository
   before it is trusted on this one; first in `tools/guards/run_all.sh`. This
   number read `25` while there were 58, surviving two earlier increases, so
