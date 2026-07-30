@@ -286,12 +286,14 @@ that risk materialising.
   zero-fill on ONE machine — `profiles/measured/`), and expose real
   constraints (the 384 GiB carveout).
 - `[partial]` **Gate B** (after Phase 3) — it diagnoses real failures, its
-  evidence beats ordinary logs, and the false-positive rate is now **measured
-  at 0 across 1933 observed requests, 99.8% of them answered**
-  (`docs/campaigns/2026-07-false-positive-rate.md`). Not yet passed, on two
-  named grounds rather than one unmeasured one: the measurement covers a single
-  platform family (T-018), and `RS-VM-0005` fires on 42% of all real mappings,
-  which is correct and unusable in a gate until a decision is taken (T-019).
+  evidence beats ordinary logs, and the false-positive rate is **measured at 0
+  in both populations, twice under the old `RS-VM-0005` and once under the
+  new** (`docs/campaigns/2026-07-false-positive-rate.md`). The noisy-rule
+  ground is resolved: T-019 made the rule's own precondition a declarable
+  fact, the conditional share fell from 42.1% to 0 with the finding still
+  emitted for every one of the same 544 mappings, and the re-measured shape
+  population reads 1292 of 1292 SUPPORTED. Not yet passed, on ONE named
+  ground: the measurement covers a single platform family (T-018).
 - `[blocked]` **Gate C** — Phase 5 is blocked. (T-011)
 - `[n/a]` **Gate D** — no new domain is proposed.
 

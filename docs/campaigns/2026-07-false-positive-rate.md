@@ -345,6 +345,71 @@ the facts subtree and therefore outside `profile_id`.
 processes**, because the in-process test was once green while this was false —
 reports identical `profile_id`s.
 
+# 7. After T-019: the 42% becomes information, and the reliance becomes a fact
+
+Data: `campaigns/false-positive/2026-07-linux-x86_64-after-T019.json`
+
+Section 2 ended with a decision owed: `RS-VM-0005` was correct on 42% of all
+real mappings and unusable in a gate, and the choice was "either the rule needs
+a condition (fires only when the program is observed to *use* the unrounded
+size), or it belongs at `info` severity". The decision (T-019) is the synthesis
+of the two, on the exact precedent of `accesses_beyond_eof`: the rule's own
+precondition - it had always said "only a defect if the program relies on the
+bytes past its requested size being unmapped" - became a declarable fact,
+`relies_on_unmapped_beyond_size`.
+
+```
+declared      the caller states it depends on the unmapped tail. On a host
+              that rounds, that guarantee holds in NO execution:
+              UNSUPPORTED, severity high, and the finding names the bytes.
+undeclared    the rounding is still true and still recorded - section 2
+              rejected deleting it - but as an info note on a SUPPORTED
+              verdict. What no caller gets any more is a condition nobody
+              stated.
+```
+
+The re-measurement, same workloads, same host:
+
+```
+                              old rule (§5/§6)        after T-019
+SHAPE    evaluated                 1292                   1292
+         SUPPORTED             748  57.9%             1292  100.0%
+         CONDITIONALLY_SUP.    544  42.1%                0    0.0%
+         UNSUPPORTED             0                       0
+         RS-VM-0005 emitted    544 (as condition)      544 (as info)
+
+ADDRESS  evaluated                  639                    640
+         SUPPORTED                    1   0.2%           639   99.8%
+         UNKNOWN                    637  99.7%             1    0.2%
+         UNSUPPORTED                  0                    0
+```
+
+Three things to read out of that, one of them a surprise:
+
+- **The fact did not move.** 544 mappings still carry unrounded sizes and the
+  finding is still emitted for every one - identical count, different verdict
+  weight. Nothing was hidden to make a number look better: the conditional
+  share went from 42.1% to 0 because the *claim* attached to the fact was
+  wrong, not the observation.
+- **The ADDRESS population flipped from 99.7% UNKNOWN to 99.8% SUPPORTED.**
+  The earlier sections measured before the T-013/T-014 ladder landed in the
+  probe; this re-run is the first time this document's own harness saw a
+  profile that records the region where programs actually map. One request
+  stays UNKNOWN. (640 vs 639: one more address requirement survived
+  observation this run; the harness keeps only requests present in every run,
+  so the population can move by ones.)
+- **Not one false positive in either population** under the new behaviour, and
+  one caller class gained a protection it never had: a guard-page scheme that
+  declares its reliance now gets UNSUPPORTED before it ships to a
+  64 KiB-granularity host, instead of the same `medium` condition every
+  unrounded `read()` buffer produced.
+
+The sink table also lost a lie in passing: the registry has always said
+"`info` is never raised", and `adjust_severity()` raised it to `critical` for
+fatal sinks anyway. The code now matches the published sentence, and severity
+adjustment no longer applies to findings on a SUPPORTED verdict at all - a
+fact has no failure for a sink to catch.
+
 ## Verdict on the criterion
 
 `docs/PLAN.md` Phase 3, *expected false-positive rate is low on curated
@@ -365,8 +430,10 @@ Still `[partial]`, and the remaining gaps are named rather than hidden:
   have measured profiles and no traced programs.
 - **No false negatives are measurable by this method.** Not one failing `mmap`
   in 13 programs × 3 runs. The other half of correctness is untouched.
-- **`RS-VM-0005` still fires on 42% of real mappings** (§2). Correct, and a
-  decision is owed before anyone gates a build on it.
+- ~~**`RS-VM-0005` still fires on 42% of real mappings** (§2). Correct, and a
+  decision is owed before anyone gates a build on it.~~ **Resolved by T-019**
+  (§7): the reliance is a declarable fact now, the conditional share is 0, and
+  the finding is still emitted for all 544 as information.
 
 ROADMAP **Gate B** likewise stays `[partial]`. The blocker has moved from
 "never measured" to "measured on one platform, with the noisy rule named",

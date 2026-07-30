@@ -45,48 +45,6 @@ completes without leaving a trace in the log is work that will be redone.
 
 ## Next
 
-### T-019 — `RS-VM-0005` is correct on 42% of all real mappings `[next]`
-
-**Serves:** Gate B — a rule that fires on nearly half of everything is not
-wrong, it is unusable, and the gate cannot be passed while it is both
-**Plan:** `docs/PLAN.md` Decision gates, Gate B, second ground
-**Done when:** a decision is written into `docs/findings/registry.md` and
-`docs/PROGRESS.md`, the code matches it, and
-`tools/campaign/measure_false_positives.sh` is re-run so the campaign document
-reports the rate under the new behaviour next to the old one.
-
-The campaign measured 0 false positives across 1933 requests. It also measured
-that `RS-VM-0005` (requested size is not a multiple of the host allocation
-granularity, `medium`, `PROVEN`) accounted for 42% of all findings on real
-mappings. Both numbers are true. The registry itself already says the quiet
-part: "certainly true, usually harmless."
-
-The decision is which of these it is, and it has to be argued, not picked:
-
-```
-(a) demote to informational   honest about "usually harmless", but the
-                              information is real when the caller does care
-(b) require the requirement    fire only when the application's declared
-    to claim exactness         contract asks for an exact size. Needs the
-                              requirement model to be able to say that -
-                              check whether it can before promising it
-(c) keep it and widen Gate B   accept the noise, state the 42% in the gate
-                              text, and pass on the other grounds
-```
-
-Do not choose (a) because it makes the number look better. The rule was written
-because a host that rounds a reservation up gives the program more address
-space than it asked for, and a program that computes from its requested size
-walks off the end of what it believes it owns. That is a real defect class; the
-question is only when to say it.
-
-**First step:** re-read `rule_size_granularity()` and the requirement model in
-`include/runtimeskeptic/vm/`, and establish whether a requirement can express
-"the size must be exact" at all. If it cannot, (b) is not a one-line change and
-the choice is really between (a) and (c).
-
----
-
 ### T-018 — The false-positive campaign leaves Linux `[next]`
 
 **Serves:** Gate B's credibility — "0 false positives" measured on one OS is a
@@ -246,6 +204,46 @@ Each needs a reason, so this cannot quietly become a way to empty the list.
 ---
 
 ## Done
+
+### T-019 — `RS-VM-0005` is correct on 42% of all real mappings `[done]`
+
+**Serves:** Gate B — a rule that fires on nearly half of everything is not
+wrong, it is unusable, and the gate cannot be passed while it is both
+**Plan:** `docs/PLAN.md` Decision gates, Gate B, second ground
+**Done when:** a decision is written into `docs/findings/registry.md` and
+`docs/PROGRESS.md`, the code matches it, and the campaign is re-run so its
+document reports the rate under the new behaviour next to the old one.
+**Done:** all three. `docs/campaigns/2026-07-false-positive-rate.md` §7,
+`campaigns/false-positive/2026-07-linux-x86_64-after-T019.json`.
+
+**The decision: (b) and (a) are the same decision, taken together.** The item
+posed them as alternatives; implemented, each is half of the other. The rule's
+own conclusion had always named its precondition - "only a defect if the
+program relies on the bytes past its requested size being unmapped" - and the
+requirement model could not say it. Now it can: `relies_on_unmapped_beyond_size`,
+on the exact precedent of `accesses_beyond_eof` (a behavioral claim belongs to
+the caller, not to the rule's imagination).
+
+```
+declared     UNSUPPORTED, high. The guarantee holds in no execution on a
+             rounding host - stronger than the old CONDITIONALLY_SUPPORTED,
+             which told a guard-page scheme "works, with conditions" about
+             a host where it cannot work.
+undeclared   info note on a SUPPORTED verdict. Still emitted - the campaign
+             analysis rejected deleting the fact - so nothing is hidden.
+```
+
+Re-measured, same workloads: conditional share 42.1% -> 0.0%, RS-VM-0005
+emitted for the same 544 mappings as before, 0 false positives in both
+populations. The (a)-warning in this item ("do not choose (a) because it makes
+the number look better") is answered by that middle line: the count did not
+move, only the claim attached to it.
+
+Two things found in passing, both fixed: `adjust_severity()` raised `info` to
+`critical` for fatal sinks while the registry's own §3.2 said "`info` is never
+raised" - the code now matches the published sentence; and severity adjustment
+applied to findings on SUPPORTED verdicts at all, where there is no failure
+for a sink to catch.
 
 ### T-020 — Two rules had coverage of no kind at all `[done]`
 

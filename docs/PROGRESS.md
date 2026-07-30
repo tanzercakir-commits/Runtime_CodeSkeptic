@@ -16,6 +16,55 @@ re-litigated; a mistake recorded here does not need to be re-made.
 
 ---
 
+## 2026-07-30 — T-019: the 42% rule, decided
+
+**Changed.** `RS-VM-0005`'s precondition became a declarable fact.
+`MappingRequest` gains `relies_on_unmapped_beyond_size` (header, parser,
+serializer, schema — the exact footprint `accesses_beyond_eof` has);
+`rule_size_granularity()` splits on it; the campaign was re-run under the new
+behaviour and committed as
+`campaigns/false-positive/2026-07-linux-x86_64-after-T019.json` with §7 in the
+campaign document reading the two runs side by side. Gate B's grounds: two →
+**one** (T-018, second OS). Analyzer tests 58 → 60: the old single CONDITIONALLY_SUPPORTED case became three - undeclared, declared, and aligned-with-declaration (which must stay silent rather than reward the flag).
+
+### The decision, and why (a)-vs-(b) was a false choice
+
+The item posed three options and warned against picking "demote to info"
+because it makes the number look better. Implemented, (a) and (b) turned out
+to be halves of one decision:
+
+```
+declared      relies_on_unmapped_beyond_size: true
+              UNSUPPORTED, high. On a rounding host the declared guarantee
+              holds in NO execution - which the old CONDITIONALLY_SUPPORTED
+              actively understated: it told a guard-page scheme "works,
+              with conditions" about a host where it cannot work.
+undeclared    info note on a SUPPORTED verdict. Still emitted, same count.
+```
+
+| | |
+|---|---|
+| **+** | the re-run reproduced the old populations almost exactly — 13 programs, 1292 shape requirements, **the same 544 unrounded sizes** — so the comparison is one variable wide. Conditional share 42.1% → **0.0%**; RS-VM-0005 emitted 544 times in both runs. The count did not move; the claim attached to it did |
+| **+** | one caller class is better protected than before, not worse: a declared guard-page reliance now gets `UNSUPPORTED` before shipping to a 64 KiB-granularity host, instead of the same `medium` condition every unrounded `read()` buffer produced |
+| **+** | the ADDRESS population, 99.7% UNKNOWN when §5 was written, reads **639 of 640 SUPPORTED** now — the first time the campaign's own harness ran against a profile carrying the T-013/T-014 ladder. Nothing in T-019 did that; T-019 was just the first re-measurement since |
+| **−** | two latent defects fell out of writing the quiet form. `adjust_severity()` raised `info` to `critical` for fatal sinks, while the registry's §3.2 had always published "`info` is never raised" — the code now matches its own documentation. And sink adjustment applied to findings on SUPPORTED verdicts at all, where nothing fails and there is nothing for a sink to catch — RS-VM-0020's wasted-hint line was silently `critical` for any caller whose unrelated failure path is an assert |
+
+### What was learned
+
+The rule had **always known its own precondition** — its conclusion text said
+"only a defect if the program relies on the bytes past its requested size
+being unmapped" from the day it was written. What it lacked was a place for
+the caller to answer. A rule that states a condition it cannot ask is a rule
+that assumes the answer, and 42% of real traffic inherited the assumption.
+`accesses_beyond_eof` had already solved this shape a month earlier; the
+precedent was sitting one struct field away.
+
+**Next.** Gate B now hangs on T-018 alone: the campaign needs a second OS,
+which means a tracer that is not `strace`. `Later` holds T-021, T-008, T-009,
+T-010; T-011/T-012 stay blocked.
+
+---
+
 ## 2026-07-30 — the owner's rule made mechanical, and the audit it triggered
 
 **Changed.** `tools/guards/check_roadmap.py` freezes `ROADMAP.md` by hash

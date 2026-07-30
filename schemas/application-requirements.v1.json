@@ -121,6 +121,10 @@
         "accesses_beyond_eof": {
           "type": "boolean"
         },
+        "relies_on_unmapped_beyond_size": {
+          "type": "boolean",
+          "description": "The program depends on bytes past its requested size staying unmapped (guard pages, fault-based bounds checks). Absent means no reliance declared: RS-VM-0005 then reports granularity rounding as information rather than as a condition."
+        },
         "eof_access_extent": {
           "enum": [
             "whole_page_past_end",

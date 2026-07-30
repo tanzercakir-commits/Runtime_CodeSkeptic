@@ -108,6 +108,19 @@ struct MappingRequest {
     // The program requires the mapping to be placed at exactly `address`.
     bool exact_address_required = false;
 
+    // The program relies on the bytes past its requested size staying
+    // unmapped: guard-page schemes, fault-based bounds checks, anything that
+    // treats "I asked for N" as "byte N faults". This is RS-VM-0005's own
+    // precondition, which the rule used to assume for every caller - and the
+    // false-positive campaign measured what that assumption costs: 42% of all
+    // real mappings pass unrounded sizes, because that is simply how mmap is
+    // called, and none of them was ever shown to care. The precedent is
+    // `accesses_beyond_eof` below: a behavioral claim belongs to the caller,
+    // not to the rule's imagination. Absent means "no reliance declared", and
+    // the rule then records the rounding as information instead of a
+    // condition.
+    bool relies_on_unmapped_beyond_size = false;
+
     // Additional alignment the program relies on, beyond page alignment.
     std::optional<std::uint64_t> required_alignment;
 

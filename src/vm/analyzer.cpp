@@ -13,10 +13,16 @@ std::string dec(std::uint64_t v) { return std::to_string(v); }
 // failure sink returns an error. Severity therefore depends on the program,
 // not only on the platform.
 Severity adjust_severity(Severity base, FailureSinkKind sink) {
+    // The registry (section 3.2) documents this table and ends with: "`info`
+    // is never raised". The two fatal cases did not honor that until T-019 -
+    // an informational note under a fatal-assert sink came out `critical`,
+    // which is how a rounding fact would have read as an abort. Unchecked and
+    // RetryLoop already preserved Info; now all sinks do, and the code matches
+    // the sentence that was already published about it.
     switch (sink) {
         case FailureSinkKind::FatalAssert:
         case FailureSinkKind::ProcessExit:
-            return Severity::Critical;
+            return base == Severity::Info ? Severity::Info : Severity::Critical;
         case FailureSinkKind::Unchecked:
             // Silent misbehavior is not milder than a crash; it is usually
             // worse, because the failure surfaces far from its cause.
@@ -92,7 +98,16 @@ private:
     }
 
     void emit(Finding f) {
-        f.severity = adjust_severity(f.severity, req_.failure_sink.kind);
+        // The sink adjustment models what happens when this finding's failure
+        // SURFACES - a fatal assert turns any real defect into an abort. A
+        // finding emitted on a SUPPORTED verdict describes a fact, not a
+        // failure; there is nothing for the sink to catch, and escalating it
+        // turned RS-VM-0020's wasted-hint line and RS-VM-0005's rounding note
+        // into "Critical" for any caller whose UNRELATED failure path is an
+        // assert. Found while giving RS-VM-0005 its quiet form (T-019).
+        if (f.support_impact != SupportLevel::Supported) {
+            f.severity = adjust_severity(f.severity, req_.failure_sink.kind);
+        }
         // The single place where overclaiming is prevented.
         f.confidence = clamp_confidence(f.confidence, f.evidence.weakest_class());
         result_.overall = combine(result_.overall, f.support_impact);
@@ -938,6 +953,26 @@ void Analysis::rule_address_alignment() {
 
 // ---------------------------------------------------------------------------
 // RS-VM-0005: size versus allocation granularity.
+//
+// This rule's conclusion always named its own precondition - "only a defect
+// if the program relies on the bytes past its requested size being unmapped" -
+// and then fired as a CONDITION for every caller anyway, because the
+// requirement model had no way to state the reliance. The false-positive
+// campaign measured what that assumption costs: 42% of all real mappings
+// (544 of 1292) pass unrounded sizes, because that is simply how mmap is
+// called, and every one came back CONDITIONALLY_SUPPORTED. Correct, and in a
+// CI gate indistinguishable from noise - and this project has already written
+// down what happens to a noisy guard: it gets switched off.
+//
+// The decision (T-019, 2026-07-30): the precondition became a declarable fact,
+// `relies_on_unmapped_beyond_size`, on the exact precedent of
+// `accesses_beyond_eof` - a behavioral claim belongs to the caller, not to the
+// rule's imagination. Declared, the rounding violates a stated guarantee in
+// every execution: UNSUPPORTED, and the finding says which bytes. Undeclared,
+// the fact is still true and still worth recording - the campaign's own
+// analysis rejected deleting it - so it is emitted as information on a
+// SUPPORTED verdict, the same quiet-line shape as RS-VM-0020's unhonourable
+// hint. What no caller gets any more is a condition nobody stated.
 // ---------------------------------------------------------------------------
 void Analysis::rule_size_granularity() {
     if (!profile_.vm.allocation_granularity.is_known()) return;
@@ -946,30 +981,70 @@ void Analysis::rule_size_granularity() {
 
     const auto rounded = round_up_to(req_.request.size, granularity);
     if (!rounded) return;
+    const std::uint64_t extra = *rounded - req_.request.size;
 
+    if (req_.request.relies_on_unmapped_beyond_size) {
+        // The caller stated the guarantee this host cannot give. No execution
+        // satisfies it: every reservation is rounded, so bytes
+        // [size, rounded) are addressable in all of them.
+        Finding f = start(ids::kSizeGranularityMismatch, Confidence::Proven,
+                          SupportLevel::Unsupported);
+        f.severity = Severity::High;  // silent guarantee violation, not noise
+        f.required = "bytes past the requested " + dec(req_.request.size) +
+                     " must stay unmapped (declared: the program relies on it)";
+        f.host_capability = "reservations are rounded up to " +
+                            dec(granularity) + "-byte units";
+        f.modeled_fallback =
+            "the host reserves " + dec(*rounded) + " bytes; the " + dec(extra) +
+            " bytes past the requested size are addressable and will not "
+            "fault, so whatever depends on that fault never fires";
+        f.conclusion =
+            "The program declares it relies on the bytes past its requested "
+            "size staying unmapped, and on this host they never are. The "
+            "mapping call succeeds; the guarantee it was trusted for does not "
+            "hold in any execution.";
+        add_application_claim(f, "program requests " + dec(req_.request.size) +
+                                     " bytes and relies on the remainder of "
+                                     "the region staying unmapped");
+        f.evidence.add(Layer::OperatingSystem,
+                       profile_.vm.allocation_granularity.evidence(),
+                       "allocation granularity is " + dec(granularity) +
+                           " bytes",
+                       profile_.profile_name);
+        f.remediations.push_back(
+            {RemediationClass::ReserveAddressSpaceEarlier,
+             "reserve " + dec(*rounded) + " bytes and place an explicit "
+             "PROT_NONE guard page after the " + dec(req_.request.size) +
+             " the program uses, instead of relying on the reservation edge"});
+        emit(std::move(f));
+        return;
+    }
+
+    // No reliance declared. The rounding is a fact about this host worth one
+    // line, not a condition on the verdict.
     Finding f = start(ids::kSizeGranularityMismatch, Confidence::Proven,
-                      SupportLevel::ConditionallySupported);
-    f.required = "a mapping of exactly " + dec(req_.request.size) + " bytes";
+                      SupportLevel::Supported);
+    f.severity = Severity::Info;
+    f.required = "a mapping of " + dec(req_.request.size) +
+                 " bytes, with no declared reliance on the bytes past it";
     f.host_capability = "reservations are rounded up to " + dec(granularity) +
                         "-byte units";
     f.modeled_fallback = "the host reserves " + dec(*rounded) +
-                         " bytes; the extra " + dec(*rounded - req_.request.size) +
+                         " bytes; the extra " + dec(extra) +
                          " bytes are addressable and will not fault";
     f.conclusion =
-        "The mapping succeeds but covers more address space than requested. "
-        "This is only a defect if the program relies on the bytes past its "
-        "requested size being unmapped.";
-
+        "The mapping succeeds and covers " + dec(*rounded) +
+        " bytes rather than the requested " + dec(req_.request.size) +
+        ". Recorded as information: this matters only to a program that "
+        "relies on the bytes past its requested size being unmapped, and this "
+        "requirement declares no such reliance "
+        "(`relies_on_unmapped_beyond_size`).";
     add_application_claim(f, "program requests " + dec(req_.request.size) +
                                  " bytes");
     f.evidence.add(Layer::OperatingSystem,
                    profile_.vm.allocation_granularity.evidence(),
                    "allocation granularity is " + dec(granularity) + " bytes",
                    profile_.profile_name);
-    f.remediations.push_back(
-        {RemediationClass::ReserveAddressSpaceEarlier,
-         "request " + dec(*rounded) + " bytes explicitly so the program's model "
-         "matches the reservation"});
     emit(std::move(f));
 }
 

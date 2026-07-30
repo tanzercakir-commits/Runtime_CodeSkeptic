@@ -196,6 +196,7 @@ json::Value MappingRequest::to_json() const {
                            : json::Value();
     v["file_offset"] = static_cast<unsigned long long>(file_offset);
     v["accesses_beyond_eof"] = accesses_beyond_eof;
+    v["relies_on_unmapped_beyond_size"] = relies_on_unmapped_beyond_size;
     v["eof_access_extent"] =
         std::string(eof_access_extent == EofAccessExtent::WithinFinalPartialPage
                         ? "within_final_partial_page"
@@ -288,6 +289,7 @@ constexpr const char* kKnownTopLevel[] = {
 constexpr const char* kKnownRequest[] = {
     "address", "size", "exact_address_required", "protection", "file_backed",
     "file_length", "file_offset", "accesses_beyond_eof", "eof_access_extent",
+    "relies_on_unmapped_beyond_size",
     "required_alignment", "required_page_size", "required_page_size_relation",
     "write_then_execute", "simultaneous_write_execute", "reserve_then_commit",
     "commit_is_checked_call", "validates_returned_address", "address_min",
@@ -465,6 +467,8 @@ std::optional<Requirement> Requirement::from_json(const json::Value& v,
         !read_flag(req, "file_backed", r.request.file_backed, error) ||
         !read_flag(req, "accesses_beyond_eof", r.request.accesses_beyond_eof,
                    error) ||
+        !read_flag(req, "relies_on_unmapped_beyond_size",
+                   r.request.relies_on_unmapped_beyond_size, error) ||
         !read_eof_access_extent(req, r.request.eof_access_extent, error) ||
         !read_flag(req, "validates_returned_address",
                    r.request.validates_returned_address, error) ||

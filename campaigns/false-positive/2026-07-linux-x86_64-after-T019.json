@@ -1,0 +1,36 @@
+{
+  "populations": {
+    "shape": {
+      "programs": 13,
+      "evaluated": 1292,
+      "rejected": 0,
+      "verdicts": {
+        "SUPPORTED": 1292
+      },
+      "false_positive_count": 0,
+      "false_positive_rate_percent": 0.0,
+      "unknown_share_percent": 0.0,
+      "findings": {
+        "RS-VM-0005": 544
+      },
+      "false_positives": []
+    },
+    "address": {
+      "programs": 13,
+      "evaluated": 640,
+      "rejected": 0,
+      "verdicts": {
+        "SUPPORTED": 639,
+        "UNKNOWN": 1
+      },
+      "false_positive_count": 0,
+      "false_positive_rate_percent": 0.0,
+      "unknown_share_percent": 0.16,
+      "findings": {
+        "RS-VM-0005": 102,
+        "RS-VM-0017": 1
+      },
+      "false_positives": []
+    }
+  }
+}

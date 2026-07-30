@@ -202,7 +202,13 @@ RS_TEST(alignment_mismatch_is_proven_from_host_granularity) {
     RS_CHECK(result.overall == SupportLevel::Unsupported);
 }
 
-RS_TEST(size_granularity_mismatch_is_conditional_not_fatal) {
+// T-019. This test used to expect CONDITIONALLY_SUPPORTED for every caller,
+// and the false-positive campaign measured what that cost: 42% of all real
+// mappings (544 of 1292) pass unrounded sizes, because that is how mmap is
+// called, and every one came back conditional. The rule's precondition -
+// "relies on the bytes past its requested size being unmapped" - is now a
+// declarable fact, on the precedent of `accesses_beyond_eof`.
+RS_TEST(size_granularity_rounding_without_declared_reliance_is_information) {
     EnvironmentProfile p = permissive_host();
     p.vm.allocation_granularity = Fact<std::uint64_t>::known(
         65536, EvidenceClass::MeasuredCapability, "fixture");
@@ -211,11 +217,59 @@ RS_TEST(size_granularity_mismatch_is_conditional_not_fatal) {
     r.request.size = 4096;  // not a multiple of 64 KiB
     const auto result = analyze(r, p);
 
+    // Still emitted - the campaign's own analysis rejected deleting the fact -
+    // but as information on a SUPPORTED verdict, not as a condition.
     RS_CHECK(has_finding(result, ids::kSizeGranularityMismatch));
     const Finding* f = get_finding(result, ids::kSizeGranularityMismatch);
     if (f != nullptr) {
-        RS_CHECK(f->support_impact == SupportLevel::ConditionallySupported);
+        RS_CHECK(f->support_impact == SupportLevel::Supported);
+        RS_CHECK(f->severity == Severity::Info);
     }
+    RS_CHECK_MESSAGE(result.overall == SupportLevel::Supported,
+                     "an undeclared reliance must not gate the verdict - that "
+                     "is the 42% the campaign measured");
+}
+
+RS_TEST(size_granularity_rounding_with_declared_reliance_is_unsupported) {
+    EnvironmentProfile p = permissive_host();
+    p.vm.allocation_granularity = Fact<std::uint64_t>::known(
+        65536, EvidenceClass::MeasuredCapability, "fixture");
+
+    Requirement r = plain_anonymous_mapping();
+    r.request.size = 4096;
+    r.request.relies_on_unmapped_beyond_size = true;  // guard-page scheme
+
+    const auto result = analyze(r, p);
+
+    // The caller stated the guarantee this host cannot give: bytes
+    // [4096, 65536) are addressable in EVERY execution. Not conditional -
+    // there is no execution in which the reliance holds.
+    const Finding* f = get_finding(result, ids::kSizeGranularityMismatch);
+    RS_CHECK(f != nullptr);
+    if (f != nullptr) {
+        RS_CHECK(f->support_impact == SupportLevel::Unsupported);
+        RS_CHECK(f->confidence == Confidence::Proven);
+        RS_CHECK_MESSAGE(f->severity != Severity::Info,
+                         "a declared reliance that cannot hold is a silent "
+                         "guarantee violation, not a note");
+    }
+    RS_CHECK(result.overall == SupportLevel::Unsupported);
+}
+
+RS_TEST(an_aligned_size_says_nothing_either_way) {
+    EnvironmentProfile p = permissive_host();
+    p.vm.allocation_granularity = Fact<std::uint64_t>::known(
+        65536, EvidenceClass::MeasuredCapability, "fixture");
+
+    Requirement r = plain_anonymous_mapping();
+    r.request.size = 131072;  // 2 x 64 KiB
+    r.request.relies_on_unmapped_beyond_size = true;
+
+    // The reliance is declared AND satisfiable: the reservation ends exactly
+    // where the program thinks it does, so the rule must stay silent rather
+    // than reward the declaration with a finding.
+    const auto result = analyze(r, p);
+    RS_CHECK(!has_finding(result, ids::kSizeGranularityMismatch));
 }
 
 // ---------------------------------------------------------------------------
