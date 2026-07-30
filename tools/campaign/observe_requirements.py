@@ -108,6 +108,36 @@ def parse_prot(text):
 # published in observations.json. If both ever qualify and disagree, the run
 # refuses loudly rather than guessing.
 # ---------------------------------------------------------------------------
+#
+# AND THE FIRST ROUND WATCHED THE WRONG DOOR. python3 produced ONE mprotect
+# and ZERO mmaps across an entire run (refs/measurements/3d47a41/
+# fp-campaign-macos). The inventory round explains it (refs/measurements/
+# e66cd64/mach-inventory): on macOS real allocation goes through MACH TRAPS,
+# which the syscall:: provider never sees.
+#
+#     _kernelrpc_mach_vm_allocate_trap     fired   syscall::mmap    did not
+#     _kernelrpc_mach_vm_map_trap          exists
+#     _kernelrpc_mach_vm_protect_trap      fired   syscall::mprotect fired once
+#
+# BSD mmap is the minority path on this OS. So the script watches both doors,
+# and the mach clauses carry a difficulty the BSD ones do not: allocate_trap
+# and map_trap take the address as an IN/OUT POINTER (arg1), so the address
+# the kernel chose only exists after the call, in the caller's memory. It is
+# read with copyin() at :return - and both the requested value (copied in at
+# :entry) and the returned one are printed, because the difference between
+# them IS relocation, the thing several rules are about.
+#
+# THE ARGUMENT LAYOUT IS PRINTED RAW ALONGSIDE THE PARSED LINE. Every mach
+# line carries its own arg0..arg5 in an RSRAW record. If the layout assumed
+# here is wrong, the next measurement says so in its own output instead of
+# producing plausible numbers - the failure mode this project keeps finding.
+#
+# WHAT THE MACH TRAPS DO NOT CARRY, recorded as a limitation rather than
+# invented: allocate_trap has NO protection argument. Its result is the
+# platform default and the protection a program ends up with comes from a
+# later protect_trap. So an allocate-derived requirement asserts read+write
+# and says in extraction_limitations that it was not observed.
+# ---------------------------------------------------------------------------
 D_SCRIPT = """\
 syscall::mmap:entry
 /progenyof($target)/
@@ -143,6 +173,88 @@ syscall::mprotect:return
         (unsigned long long)self->pp, errno);
     self->in_mprotect = 0;
 }
+
+/*
+ * The mach traps. arg1 is an IN/OUT pointer to the address on both allocate
+ * and map, so the requested value is copied in at :entry and the granted one
+ * at :return. Raw args travel with every line: if this layout is wrong, the
+ * measurement says so instead of producing plausible numbers.
+ */
+mach_trap::*mach_vm_allocate_trap:entry
+/progenyof($target)/
+{
+    self->va_p = arg1;
+    self->va_req = *(uint64_t *)copyin(arg1, 8);
+    self->va_size = arg2;
+    self->va_flags = arg3;
+    self->in_va = 1;
+    printf("RSRAW|allocate|%#llx|%#llx|%#llx|%#llx|%#llx|%#llx\\n",
+        (unsigned long long)arg0, (unsigned long long)arg1,
+        (unsigned long long)arg2, (unsigned long long)arg3,
+        (unsigned long long)arg4, (unsigned long long)arg5);
+}
+
+mach_trap::*mach_vm_allocate_trap:return
+/progenyof($target) && self->in_va/
+{
+    printf("RSOBS|vm_allocate|%#llx|%llu|%llu|%#llx|%d\\n",
+        (unsigned long long)self->va_req,
+        (unsigned long long)self->va_size,
+        (unsigned long long)self->va_flags,
+        (unsigned long long)*(uint64_t *)copyin(self->va_p, 8),
+        (int)arg1);
+    self->in_va = 0;
+}
+
+mach_trap::*mach_vm_map_trap:entry
+/progenyof($target)/
+{
+    self->vm_p = arg1;
+    self->vm_req = *(uint64_t *)copyin(arg1, 8);
+    self->vm_size = arg2;
+    self->vm_mask = arg3;
+    self->vm_flags = arg4;
+    self->vm_prot = arg5;
+    self->in_vm = 1;
+    printf("RSRAW|map|%#llx|%#llx|%#llx|%#llx|%#llx|%#llx\\n",
+        (unsigned long long)arg0, (unsigned long long)arg1,
+        (unsigned long long)arg2, (unsigned long long)arg3,
+        (unsigned long long)arg4, (unsigned long long)arg5);
+}
+
+mach_trap::*mach_vm_map_trap:return
+/progenyof($target) && self->in_vm/
+{
+    printf("RSOBS|vm_map|%#llx|%llu|%llu|%llu|%llu|%#llx|%d\\n",
+        (unsigned long long)self->vm_req,
+        (unsigned long long)self->vm_size,
+        (unsigned long long)self->vm_mask,
+        (unsigned long long)self->vm_flags,
+        (unsigned long long)self->vm_prot,
+        (unsigned long long)*(uint64_t *)copyin(self->vm_p, 8),
+        (int)arg1);
+    self->in_vm = 0;
+}
+
+mach_trap::*mach_vm_protect_trap:entry
+/progenyof($target)/
+{
+    self->vp_a = arg1; self->vp_l = arg2; self->vp_new = arg4;
+    self->in_vp = 1;
+    printf("RSRAW|protect|%#llx|%#llx|%#llx|%#llx|%#llx|%#llx\\n",
+        (unsigned long long)arg0, (unsigned long long)arg1,
+        (unsigned long long)arg2, (unsigned long long)arg3,
+        (unsigned long long)arg4, (unsigned long long)arg5);
+}
+
+mach_trap::*mach_vm_protect_trap:return
+/progenyof($target) && self->in_vp/
+{
+    printf("RSOBS|vm_protect|%#llx|%llu|%llu|%d\\n",
+        (unsigned long long)self->vp_a, (unsigned long long)self->vp_l,
+        (unsigned long long)self->vp_new, (int)arg1);
+    self->in_vp = 0;
+}
 """
 
 # <sys/mman.h> on Darwin. Numeric because the D script prints numbers.
@@ -151,6 +263,15 @@ DARWIN_PROT_WRITE = 0x2
 DARWIN_PROT_EXEC = 0x4
 DARWIN_MAP_FIXED = 0x10
 DARWIN_MAP_ANON = 0x1000
+
+# <mach/vm_statistics.h> / <mach/vm_prot.h>. The mach traps carry their own
+# vocabulary: VM_FLAGS_ANYWHERE means "place it wherever", and its ABSENCE is
+# what MAP_FIXED means here - the kernel will use the address in the in/out
+# pointer and clobber whatever is there.
+VM_FLAGS_ANYWHERE = 0x0001
+VM_PROT_READ = 0x1
+VM_PROT_WRITE = 0x2
+VM_PROT_EXECUTE = 0x4
 
 PAGE_MASK_4K = 0xFFF  # the loosest page size in play; alignment sanity only
 
@@ -161,6 +282,14 @@ def darwin_prot(bits):
     return {"read": bool(bits & DARWIN_PROT_READ),
             "write": bool(bits & DARWIN_PROT_WRITE),
             "execute": bool(bits & DARWIN_PROT_EXEC)}
+
+
+def darwin_vm_prot(bits):
+    """VM_PROT_*, which happen to share values with PROT_* but are a
+    different vocabulary - kept separate so a divergence stays visible."""
+    return {"read": bool(bits & VM_PROT_READ),
+            "write": bool(bits & VM_PROT_WRITE),
+            "execute": bool(bits & VM_PROT_EXECUTE)}
 
 
 def plausible_address(value):
@@ -218,6 +347,61 @@ def parse_rsobs_lines(text, convention_counts):
                     "requested_address": int(addr, 16),
                     "size": int(length),
                     "protection": darwin_prot(int(prot)),
+                    "fixed": False, "anonymous": False,
+                    "file_backed": False, "file_offset": 0,
+                    "returned_address": int(addr, 16),
+                })
+            elif parts[1] == "vm_allocate" and len(parts) == 7:
+                requested, size, flags, granted, kr = parts[2:]
+                if int(kr) != 0:
+                    continue  # KERN_SUCCESS only
+                req_val, granted_val = int(requested, 16), int(granted, 16)
+                flag_bits = int(flags, 16)
+                calls.append({
+                    "kind": "mmap",
+                    "requested_address": req_val or None,
+                    "size": int(size),
+                    # NOT OBSERVED. allocate_trap has no protection argument;
+                    # the platform default is read+write and the protection a
+                    # program ends up with comes from a later protect_trap.
+                    # Recorded as the default and declared in the bundle's
+                    # extraction_limitations rather than invented as a fact.
+                    "protection": {"read": True, "write": True,
+                                   "execute": False},
+                    "protection_observed": False,
+                    "fixed": not (flag_bits & VM_FLAGS_ANYWHERE),
+                    "anonymous": True,
+                    "file_backed": False,
+                    "file_offset": 0,
+                    "returned_address": granted_val,
+                })
+            elif parts[1] == "vm_map" and len(parts) == 9:
+                requested, size, _mask, flags, prot, granted, kr = parts[2:]
+                if int(kr) != 0:
+                    continue
+                flag_bits = int(flags)
+                calls.append({
+                    "kind": "mmap",
+                    "requested_address": int(requested, 16) or None,
+                    "size": int(size),
+                    "protection": darwin_vm_prot(int(prot)),
+                    "protection_observed": True,
+                    "fixed": not (flag_bits & VM_FLAGS_ANYWHERE),
+                    "anonymous": True,
+                    "file_backed": False,
+                    "file_offset": 0,
+                    "returned_address": int(granted, 16),
+                })
+            elif parts[1] == "vm_protect" and len(parts) == 6:
+                addr, size, prot, kr = parts[2:]
+                if int(kr) != 0:
+                    continue
+                calls.append({
+                    "kind": "mprotect",
+                    "requested_address": int(addr, 16),
+                    "size": int(size),
+                    "protection": darwin_vm_prot(int(prot)),
+                    "protection_observed": True,
                     "fixed": False, "anonymous": False,
                     "file_backed": False, "file_offset": 0,
                     "returned_address": int(addr, 16),
@@ -384,6 +568,16 @@ def requirement(name, component, call, with_address, observed):
         r["request"]["file_offset"] = call["file_offset"]
     if call["protection"]["write"] and call["protection"]["execute"]:
         r["request"]["simultaneous_write_execute"] = True
+    # mach_vm_allocate_trap carries no protection argument at all. Saying so
+    # in the document is the difference between a default and an observation,
+    # and this project's whole method is that the difference is written down.
+    if not call.get("protection_observed", True):
+        r["extraction_limitations"].append(
+            "Protection was NOT observed. This call came from "
+            "_kernelrpc_mach_vm_allocate_trap, which takes no protection "
+            "argument; read+write is the platform default, and the "
+            "protection this mapping ends up with is set by a later "
+            "mach_vm_protect_trap that this document does not model.")
     return r
 
 
