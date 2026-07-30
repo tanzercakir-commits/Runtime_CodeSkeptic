@@ -16,6 +16,89 @@ re-litigated; a mistake recorded here does not need to be re-made.
 
 ---
 
+## 2026-07-30 — T-018: the campaign gets a second operating system
+
+**Changed.** `observe_requirements.py` grows a macOS lane — `dtrace`, with a
+purpose-written D script watching **mach traps**, not `dtruss`, not
+`syscall::mmap`. **macOS 14 arm64: 10 programs, 37 requirements, 0 false
+positives**, published as
+`campaigns/false-positive/2026-07-macos-14-arm64.json` and read beside the
+Linux figures in §8 of the campaign document. T-018 closes; **T-022** files
+Windows, whose instrument the ETW round already identified.
+
+### Four rounds, and each one was a measurement
+
+| | |
+|---|---|
+| **+** | **Round 1 disqualified the obvious tool.** `dtruss` prints three arguments per syscall. `MAP_FIXED` is `mmap`'s **fourth**. A tracer that silently drops the field under test is the mingw-flags mistake with a different vendor, and it would have reported every mapping as a hint |
+| **−** | **Round 2 watched the wrong door.** ONE `mprotect` and ZERO `mmap`s for a whole `python3` run. Not a parser bug: on macOS real allocation goes through `_kernelrpc_mach_vm_allocate_trap` / `_kernelrpc_mach_vm_map_trap`, and `dtrace`'s `syscall::` provider never sees them. **BSD `mmap` is the minority path on this OS** — a fact this project asserted nowhere and assumed everywhere |
+| **+** | **Round 3 inventoried the traps by running them**, rather than reading XNU source from some year (`refs/measurements/e66cd64/mach-inventory`) |
+| **−** | **Round 4 caught my own parser, by a hair.** Every mach line prints its raw `arg0..arg5` beside the parsed line. That exposed a **decimal** flags word being read as **hex** — and the misreading AGREED with the correct one: `0x3C000001` and `0x1006632961` both have bit 0 set, so `VM_FLAGS_ANYWHERE` came out right **by accident**. A wrong reading that produces the correct answer on the data at hand is unfindable downstream. The raw record was added on a hunch and paid for itself in one round |
+
+### Two inversions the mach path required
+
+```
+VM_FLAGS_ANYWHERE   is the OPPOSITE of MAP_FIXED. On mach, "put it wherever"
+                    is a flag you SET; exact placement is its ABSENCE.
+                    Read the Linux way round, every ordinary allocation
+                    becomes an exact-placement demand - the most productive
+                    false positive available.
+
+allocate_trap       carries NO protection argument. read+write is the
+                    platform default and the real protection arrives in a
+                    later protect_trap. The requirement records the default
+                    AND declares in extraction_limitations that protection
+                    was not observed. A default presented as a measurement
+                    is the thing this project exists to object to.
+```
+
+### The result that arrived as an absence
+
+`RS-VM-0005` fired **zero** times on a **16 KiB**-granularity host — four
+times Linux's, where naively it should fire more. All 37 requested sizes are
+exact multiples of 16384, because the mach traps are handed already-rounded
+sizes by the allocator. The rule has nothing to say because **the situation
+does not arise on this path**.
+
+So **the 42% that forced T-019's decision this same day is a Linux `mmap`
+phenomenon, not a universal one.** Two measurements a few hours apart, and
+the second one reframes the first: a gate calibrated on that 42% would have
+been calibrated on one operating system's calling convention.
+
+### What must not be over-read
+
+**37 against 1292 is thirty-five times smaller and the two do not weigh the
+same.** The gap is measured, not excused: macOS's dyld shared cache maps the
+system libraries in ONE operation where `ld.so` does one `mmap` per object,
+and that is where most of the 1292 come from. This is loader-against-loader.
+`docs/PLAN.md` says so on the criterion line, and Gate B stays `[partial]`
+with the ground narrowed rather than removed.
+
+Also unmeasured, and named rather than hidden: **no `address` population on
+macOS at all** (every observed allocation used `VM_FLAGS_ANYWHERE`, so no
+concrete-address request exists to judge), three programs absent from the
+runner, and no false negatives on either OS because nothing was ever refused.
+
+### And a trigger list that had grown stale under a new job
+
+`756f3b0` rewrote the observer to watch mach traps — the entire point of the
+commit — and **started nothing**. `macos-probe.yml`'s path filter named the
+probe sources and the ground-truth harness; the campaign runs in that workflow
+now and its code was not in the list. **Second time in this repository**: the
+same file's comment records the first, where `vm_probe_unimplemented.cpp` was
+missing and "the commit that FIXED that triggered nothing". A workflow that
+grows a second job needs a second look at its filter, and nobody gave it one.
+Both filters updated; `ci.yml`'s diagnostics also learned to carry
+`gt_constrained.txt` after a failure published every step's output except the
+failing one.
+
+**Next.** Gate B's remaining ground is **T-022**, Windows — the one host where
+allocation granularity (64 KiB) differs from page size (4 KiB), which neither
+measured lane can exercise. The ETW feasibility round already published the
+event shapes, so the observer can be written against real records.
+
+---
+
 ## 2026-07-30 — T-019: the 42% rule, decided
 
 **Changed.** `RS-VM-0005`'s precondition became a declarable fact.

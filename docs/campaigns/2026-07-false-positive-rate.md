@@ -410,6 +410,102 @@ fatal sinks anyway. The code now matches the published sentence, and severity
 adjustment no longer applies to findings on a SUPPORTED verdict at all - a
 fact has no failure for a sink to catch.
 
+# 8. After T-018: the second operating system
+
+Data: `campaigns/false-positive/2026-07-macos-14-arm64.json`, measured on a
+`macos-14` Apple Silicon runner. Reproduce with the same
+`tools/campaign/run_false_positive.sh`; the tracer is chosen by platform.
+
+```
+SHAPE  10 programs, 37 requirements, 0 rejected
+       SUPPORTED                 37  100.0%
+       CONDITIONALLY_SUPPORTED    0    0.0%
+       UNKNOWN                    0    0.0%
+       UNSUPPORTED                0    0.0%   <- FALSE POSITIVES
+```
+
+**Zero false positives on a second operating system.** The requirement
+documents were transcribed from what the kernel did, exactly as on Linux; no
+contract here was written by anyone.
+
+## 8.1 Read the population before the rate
+
+**37 requirements against Linux's 1292.** Thirty-five times smaller, and no
+sentence in this document should be read as if the two numbers weigh the
+same. Where the difference comes from, measured rather than guessed:
+
+- **macOS's allocation path is not `mmap`.** The first round produced ONE
+  `mprotect` and ZERO `mmap`s across an entire `python3` run. Real allocation
+  goes through **mach traps** — `_kernelrpc_mach_vm_allocate_trap`,
+  `_kernelrpc_mach_vm_map_trap` — which `dtrace`'s `syscall::` provider never
+  sees. BSD `mmap` is the minority path on this OS. The observer watches both
+  doors now, and that is what took the count from 10 to 37.
+- **The dyld shared cache maps the system libraries in one operation.** On
+  Linux, `ld.so` performs a separate `mmap` per shared object, and that is
+  where most of the 1292 come from. The comparison is not
+  program-against-program; it is loader-against-loader.
+- **Only 4 distinct sizes appear** (16 KiB, 32 KiB, 272 KiB, 4.02 MiB) across
+  10 programs, versus Linux's long tail. That is the same fact from the other
+  side: fewer, larger, uniform allocations.
+
+## 8.2 The finding that did not appear, and why that is a result
+
+**`RS-VM-0005` fired zero times here**, on a host whose allocation
+granularity is 16 KiB — four times Linux's. The obvious reading is that the
+rule is broken on macOS. It is not:
+
+```
+37 of 37 requested sizes are exact multiples of 16384
+0 unaligned sizes in the entire population
+```
+
+**The mach traps are handed already-rounded sizes.** `mach_vm_allocate` is
+called by an allocator that has done the rounding itself, so the kernel never
+sees the ragged request that `mmap(NULL, 53867, ...)` represents on Linux.
+The rule has nothing to say because the situation does not arise on this
+path — not because it fails to notice it.
+
+This is worth stating next to §7: the 42% that forced T-019's decision is a
+**Linux `mmap` phenomenon**, not a universal one. A gate calibrated on it
+would have been calibrated on one OS's calling convention.
+
+## 8.3 What this round cost, and what it caught
+
+Four CI rounds, each one a measurement rather than a guess:
+
+| Round | Question | Answer |
+|---|---|---|
+| 1 | does `dtrace` run under the runner's SIP? | SIP **disabled**; it runs. And `dtruss` is disqualified — it prints three arguments, and `MAP_FIXED` is `mmap`'s fourth |
+| 2 | does the observer see anything? | ONE call per program. Wrong door |
+| 3 | which door, then? | `mach_trap:::` — inventory published at `refs/measurements/e66cd64/mach-inventory` |
+| 4 | is the mach layout right? | The raw records said no: a **decimal** flags word was being read as **hex**, and the misreading AGREED with the correct one on this data (`0x3C000001` and `0x1006632961` both have bit 0 set). A wrong reading that produces the right answer is the worst kind, and only printing the raw arguments beside the parsed line exposed it |
+
+Two inversions the mach path required, either of which would have been a
+silent, productive source of false findings:
+
+- **`VM_FLAGS_ANYWHERE` is the opposite of `MAP_FIXED`.** On mach, "put it
+  wherever" is a flag you SET. Reading it the Linux way round would have
+  labelled every ordinary allocation an exact-placement demand.
+- **`mach_vm_allocate_trap` carries no protection argument at all.** The
+  requirement records the platform default AND declares in
+  `extraction_limitations` that protection was not observed — a default
+  presented as a measurement is the thing this project exists to object to.
+
+## 8.4 What is still not measured
+
+- **No `address` population on macOS.** Every observed allocation used
+  `VM_FLAGS_ANYWHERE`, so there is no `MAP_FIXED`-equivalent request carrying
+  a concrete address. The address rules remain unexercised against real macOS
+  software — the same gap §1 records for Linux, arriving by a different route.
+- **Three programs absent** from the runner (`php`, `redis`, `ffmpeg`), and
+  the harness lists them rather than quietly covering less.
+- **Windows is not measured.** The ETW feasibility round decoded a real
+  kernel trace and found the events (`VirtualAlloc` / `VirtualFree`, with
+  `BaseAddress`, `RegionSize`, `ProcessId`, `Flags`), so the instrument is
+  identified and the observer is not written.
+- **No false negatives, again.** Not one failing allocation in 10 programs ×
+  3 runs. Same blind spot as Linux, for the same reason.
+
 ## Verdict on the criterion
 
 `docs/PLAN.md` Phase 3, *expected false-positive rate is low on curated
@@ -426,8 +522,12 @@ correcting the arithmetic.)*
 
 Still `[partial]`, and the remaining gaps are named rather than hidden:
 
-- **One host, one OS.** Linux x86-64. `strace` is Linux-only; the macOS lanes
-  have measured profiles and no traced programs.
+- ~~**One host, one OS.** Linux x86-64.~~ **Two operating systems now** (§8):
+  Linux x86-64, 1292 requirements, and macOS 14 arm64, 37. Read §8.1 before
+  weighing those together — the macOS population is 35x smaller, for reasons
+  that are measured and are about the platform's loader, not about the
+  harness. **Windows is still not measured**; its instrument is identified
+  (ETW) and its observer is not written.
 - **No false negatives are measurable by this method.** Not one failing `mmap`
   in 13 programs × 3 runs. The other half of correctness is untouched.
 - ~~**`RS-VM-0005` still fires on 42% of real mappings** (§2). Correct, and a

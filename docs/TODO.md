@@ -45,27 +45,48 @@ completes without leaving a trace in the log is work that will be redone.
 
 ## Next
 
-### T-018 — The false-positive campaign leaves Linux `[next]`
+### T-022 — The campaign's third operating system: Windows `[next]`
 
-**Serves:** Gate B's credibility — "0 false positives" measured on one OS is a
-claim about one OS
+**Serves:** the same thing T-018 served, and the platform whose address-space
+behaviour differs most in kind
 **Plan:** `docs/PLAN.md` Phase 3, "expected false-positive rate is low"
-**Done when:** the campaign's observe-and-replay loop runs on a second operating
-system against real programs, and the measured false-positive rate is published
-next to the Linux one.
+**Done when:** the observe-and-replay loop runs on `windows-latest` against
+real programs and the measured false-positive rate is published beside the
+Linux and macOS ones.
 
-The Linux number is strong — 0 false positives in 1292 requests from 13 real
-programs, twice re-measured, byte-identical — and it is still **one host, one
-OS**. `strace` is Linux-only, so the macOS and Windows lanes have measured
-profiles and no traced programs. The instrument to build is the tracer:
-`dtrace`/`dtruss` on macOS (SIP permitting on a runner) or ETW on Windows.
-Windows is the more valuable target — its address-space behaviour differs in
-kind, the probe now establishes 127 TiB there — and also the harder tracer.
+**The instrument is identified and the observer is not written.** The ETW
+feasibility round decoded a real NT Kernel Logger trace on the runner
+(`refs/measurements/3af0f9f/etw-feasibility`) and the events are there:
 
-**First step:** check what `macos-latest` runners permit for `dtrace` (SIP
-restricts probes); if blocked, evaluate ETW via `logman`/`wpr` on
-`windows-latest`, capturing `VirtualAlloc` bases and sizes from real programs
-(the campaign's own corpus binaries where they build there).
+```
+VirtualAlloc   x379   BaseAddress, RegionSize, ProcessId, Flags
+VirtualFree    x335   BaseAddress, RegionSize, ProcessId, Flags
+Process/Start          ImageFileName, CommandLine, ProcessId
+SystemConfig/CPU       PageSize, AllocationGranularity, HighestUserAddress
+```
+
+Note the last line: the kernel trace publishes the host's own
+`AllocationGranularity` and `HighestUserAddress`, which is an independent
+check on the probe's numbers and worth taking while the observer is being
+written.
+
+**What will be different from both existing lanes:**
+
+- **`Flags` is a bitmask of `MEM_COMMIT`/`MEM_RESERVE`/`MEM_TOP_DOWN`, not
+  protection.** Windows separates reserve from commit, which is `RS-VM-0012`'s
+  whole subject and has never been exercised against a real kernel.
+- **`ProcessId` filtering replaces `progenyof()`.** ETW is system-wide; the
+  trace will contain every process on the runner, and the observer must select
+  by the pid tree itself. Getting this wrong means measuring the false-positive
+  rate against the CI agent.
+- **64 KiB allocation granularity against a 4 KiB page size.** This is the one
+  host where the two differ, which is exactly the distinction §8.2 shows both
+  existing lanes could not exercise.
+
+**First step:** take the `VirtualAlloc`/`Process` records the feasibility
+round already published and write the parser against THAT file, then run one
+round and compare its counts against a `logman` trace of a single known
+process before trusting anything.
 
 ---
 
@@ -204,6 +225,66 @@ Each needs a reason, so this cannot quietly become a way to empty the list.
 ---
 
 ## Done
+
+### T-018 — The false-positive campaign leaves Linux `[done]`
+
+**Serves:** Gate B's credibility — "0 false positives" measured on one OS is a
+claim about one OS
+**Plan:** `docs/PLAN.md` Phase 3, "expected false-positive rate is low"
+**Done when:** the campaign's observe-and-replay loop runs on a second operating
+system against real programs, and the measured false-positive rate is published
+next to the Linux one.
+**Done:** macOS 14 arm64, 10 programs, **37 requirements, 0 false positives**,
+published in `docs/campaigns/2026-07-false-positive-rate.md` §8 beside the Linux
+figures. `campaigns/false-positive/2026-07-macos-14-arm64.json`.
+
+**Read §8.1 before quoting the rate.** 37 against Linux's 1292 is thirty-five
+times smaller and the two do not weigh the same. The gap is measured, not
+guessed: macOS's dyld shared cache maps the system libraries in ONE operation
+where `ld.so` does one `mmap` per object, and that is where most of the 1292
+come from. This is loader-against-loader, not program-against-program.
+
+**The instrument, and the four rounds it took to get right:**
+
+```
+1  does dtrace run under the runner's SIP?   SIP disabled - yes.
+   And dtruss is DISQUALIFIED: it prints three arguments per syscall,
+   and MAP_FIXED is mmap's fourth. A tracer that drops the field under
+   test is the mingw-flags mistake with a different vendor.
+
+2  does the observer see anything?           ONE call per program.
+   Wrong door.
+
+3  which door, then?                         mach traps. On macOS real
+   allocation goes through _kernelrpc_mach_vm_allocate_trap /
+   _kernelrpc_mach_vm_map_trap, which dtrace's syscall:: provider never
+   sees. BSD mmap is the MINORITY path on this OS.
+
+4  is the mach layout right?                 The raw records said no.
+```
+
+Round 4 is the one worth remembering. Every mach line prints its own raw
+`arg0..arg5` beside the parsed line, and that caught a **decimal** flags word
+being read as **hex** — where the misreading AGREED with the correct one on
+this data (`0x3C000001` and `0x1006632961` both have bit 0 set, so the
+`VM_FLAGS_ANYWHERE` test came out right by accident). A wrong reading that
+produces the correct answer on the data at hand cannot be found downstream at
+all.
+
+**A result that arrived as an absence:** `RS-VM-0005` fired **zero** times on
+a 16 KiB-granularity host — four times Linux's granularity, where naively it
+should fire more. All 37 requested sizes are exact multiples of 16384, because
+the mach traps are handed already-rounded sizes by the allocator. The rule has
+nothing to say because the situation does not arise on this path. So **the 42%
+that forced T-019's decision is a Linux `mmap` phenomenon, not a universal
+one** — a gate calibrated on it would have been calibrated on one OS's calling
+convention.
+
+**Two inversions the mach path required**, either of which would have silently
+manufactured findings: `VM_FLAGS_ANYWHERE` is the OPPOSITE of `MAP_FIXED` (on
+mach, "put it wherever" is a flag you set), and `mach_vm_allocate_trap` carries
+no protection argument at all — the requirement records the platform default
+and declares that protection was not observed.
 
 ### T-019 — `RS-VM-0005` is correct on 42% of all real mappings `[done]`
 

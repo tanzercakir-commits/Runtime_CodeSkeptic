@@ -195,11 +195,15 @@ findings from the set itself:
   `strace`, not authored, so the tool is not grading its own homework. After
   the probe fix the address population is answered too: **0 false positives in
   640 observed addresses, 99.8% of them answered**
-  (`campaigns/false-positive/2026-07-linux-x86_64-after-T013.json`). **The
-  remaining gap:** one host, one OS — `strace` is Linux-only, so the macOS
-  lanes have measured profiles and no traced programs; and no false negative is
-  measurable, because 13 programs over three runs each produced not one failing
-  `mmap`. (T-018)
+  (`campaigns/false-positive/2026-07-linux-x86_64-after-T013.json`). **A second
+  operating system now** — macOS 14 arm64, 10 programs, **37 requirements, 0
+  false positives** (`campaigns/false-positive/2026-07-macos-14-arm64.json`),
+  under `dtrace` watching the mach traps that macOS actually allocates through.
+  **The remaining gaps:** the macOS population is 35x smaller than the Linux
+  one for measured reasons about that platform's loader, so the two do not
+  weigh the same (§8.1); Windows is not measured, its instrument identified and
+  its observer unwritten (T-022); and no false negative is measurable on either
+  OS, because no program in the corpus was ever refused.
 - `[done]` runs in CI without launching the application — `.github/workflows/ci.yml`
 
 ### The MVP's seven demonstrations (ROADMAP §14)
@@ -292,8 +296,13 @@ that risk materialising.
   ground is resolved: T-019 made the rule's own precondition a declarable
   fact, the conditional share fell from 42.1% to 0 with the finding still
   emitted for every one of the same 544 mappings, and the re-measured shape
-  population reads 1292 of 1292 SUPPORTED. Not yet passed, on ONE named
-  ground: the measurement covers a single platform family (T-018).
+  population reads 1292 of 1292 SUPPORTED. The single-platform ground is
+  partly answered: **macOS 14 arm64 measured 0 false positives in 37
+  requirements** (§8). Not yet passed, on what remains of that ground: 37
+  against 1292 is thirty-five times smaller and §8.1 says why, and the third
+  platform family - the one whose allocation granularity differs from its page
+  size, which neither measured lane can exercise - is not measured at all
+  (T-022).
 - `[blocked]` **Gate C** — Phase 5 is blocked. (T-011)
 - `[n/a]` **Gate D** — no new domain is proposed.
 
