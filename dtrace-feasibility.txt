@@ -1,0 +1,38 @@
+=== csrutil status ===
+System Integrity Protection status: disabled.
+
+=== trivial dtrace program ===
+dtrace: description 'BEGIN' matched 1 probe
+CPU     ID                    FUNCTION:NAME
+  2      1                           :BEGIN         0
+
+
+=== mmap return probe on a child process ===
+
+
+=== dtruss on a child process ===
+	PID/THRD  SYSCALL(args) 		 = return
+dtrace: error on enabled probe ID 1690 (ID 845: syscall::stat64:return): invalid address (0x0) in action #12 at DIF offset 12
+ 3502/0x317c:  fork()		 = 0 0
+ 3502/0x317c:  munmap(0x104B7C000, 0x8C000)		 = 0 0
+ 3502/0x317c:  munmap(0x104C08000, 0x8000)		 = 0 0
+ 3502/0x317c:  munmap(0x104C10000, 0x4000)		 = 0 0
+ 3502/0x317c:  munmap(0x104C14000, 0x4000)		 = 0 0
+ 3502/0x317c:  munmap(0x104C18000, 0x50000)		 = 0 0
+ 3502/0x317c:  crossarch_trap(0x0, 0x0, 0x0)		 = -1 Err#45
+ 3502/0x317c:  fsgetpath(0x16B427238, 0x400, 0x16B427218)		 = 14 0
+ 3502/0x317c:  fsgetpath(0x16B427248, 0x400, 0x16B427228)		 = 14 0
+ 3502/0x317c:  csrctl(0x0, 0x16B42764C, 0x4)		 = -1 Err#1
+ 3502/0x317c:  __mac_syscall(0x192879CF8, 0x2, 0x16B427590)		 = 0 0
+ 3502/0x317c:  csrctl(0x0, 0x16B42763C, 0x4)		 = -1 Err#1
+ 3502/0x317c:  __mac_syscall(0x192876B2B, 0x5A, 0x16B4275D0)		 = 0 0
+ 3502/0x317c:  sysctl([unknown, 3, 0, 0, 0, 0] (2), 0x16B426B58, 0x16B426B50, 0x19287877C, 0xD)		 = 0 0
+ 3502/0x317c:  sysctl([CTL_KERN, 142, 0, 0, 0, 0] (2), 0x16B426C08, 0x16B426C00, 0x0, 0x0)		 = 0 0
+ 3502/0x317c:  open("/\0", 0x20100000, 0x0)		 = 3 0
+ 3502/0x317c:  openat(0x3, "System/Cryptexes/OS\0", 0x100000, 0x0)		 = 4 0
+ 3502/0x317c:  dup(0x4, 0x0, 0x0)		 = 5 0
+ 3502/0x317c:  fstatat64(0x4, 0x16B4266E1, 0x16B426650)		 = 0 0
+ 3502/0x317c:  openat(0x4, "System/Library/dyld/\0", 0x100000, 0x0)		 = 6 0
+ 3502/0x317c:  fcntl(0x6, 0x32, 0x16B4266E0)		 = 0 0
+ 3502/0x317c:  dup(0x6, 0x0, 0x0)		 = 7 0
+ 3502/0x317c:  dup(0x5, 0x0, 0x0)		 = 8 0
