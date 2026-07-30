@@ -359,8 +359,17 @@ jobs:
           git config user.name "ci-logs"
           git config user.email "ci-logs@localhost"
           git checkout --detach -q
-          cp /tmp/diag/*.txt /tmp/diag/steps.json /tmp/diag/profile.json .
-          git add -f steps.json build_tail.txt ctest_tail.txt guards.txt gt_selftest.txt gt_run.txt reproducible.txt profile.json
+          # ADD BY GLOB, NOT BY NAME. This list was written by hand and then
+          # fell behind twice: gt_constrained.txt and coverage.txt were added
+          # to /tmp/diag on 905e060 and copied into the tree by the line
+          # above, and never appeared in any diagnostics ref because nobody
+          # updated the `git add`. A file list restated in a second place is
+          # the same defect class as a count restated in prose - and under
+          # `bash -e`, one missing name here aborts the step and the channel
+          # publishes NOTHING, which is how 323dba2's linux-gcc failure
+          # produced a red status and no diagnostics at all.
+          cp /tmp/diag/*.txt /tmp/diag/*.json .
+          git add -f -- $(cd /tmp/diag && ls | tr '\n' ' ')
           git commit -qm "${slug} diagnostics @ ${{ github.sha }}"
           git push --force origin \
             "HEAD:refs/ci-logs/${{ github.sha }}/${slug}"
@@ -551,8 +560,17 @@ jobs:
           git config user.name "ci-logs"
           git config user.email "ci-logs@localhost"
           git checkout --detach -q
-          cp /tmp/diag/*.txt /tmp/diag/steps.json /tmp/diag/profile.json .
-          git add -f steps.json build_tail.txt ctest_tail.txt guards.txt gt_selftest.txt gt_run.txt reproducible.txt profile.json
+          # ADD BY GLOB, NOT BY NAME. This list was written by hand and then
+          # fell behind twice: gt_constrained.txt and coverage.txt were added
+          # to /tmp/diag on 905e060 and copied into the tree by the line
+          # above, and never appeared in any diagnostics ref because nobody
+          # updated the `git add`. A file list restated in a second place is
+          # the same defect class as a count restated in prose - and under
+          # `bash -e`, one missing name here aborts the step and the channel
+          # publishes NOTHING, which is how 323dba2's linux-gcc failure
+          # produced a red status and no diagnostics at all.
+          cp /tmp/diag/*.txt /tmp/diag/*.json .
+          git add -f -- $(cd /tmp/diag && ls | tr '\n' ' ')
           git commit -qm "${slug} diagnostics @ ${{ github.sha }}"
           git push --force origin \
             "HEAD:refs/ci-logs/${{ github.sha }}/${slug}"
@@ -768,8 +786,17 @@ jobs:
           git config user.name "ci-logs"
           git config user.email "ci-logs@localhost"
           git checkout --detach -q
-          cp /tmp/diag/*.txt /tmp/diag/steps.json /tmp/diag/profile.json .
-          git add -f steps.json build_tail.txt ctest_tail.txt guards.txt gt_selftest.txt gt_run.txt reproducible.txt profile.json
+          # ADD BY GLOB, NOT BY NAME. This list was written by hand and then
+          # fell behind twice: gt_constrained.txt and coverage.txt were added
+          # to /tmp/diag on 905e060 and copied into the tree by the line
+          # above, and never appeared in any diagnostics ref because nobody
+          # updated the `git add`. A file list restated in a second place is
+          # the same defect class as a count restated in prose - and under
+          # `bash -e`, one missing name here aborts the step and the channel
+          # publishes NOTHING, which is how 323dba2's linux-gcc failure
+          # produced a red status and no diagnostics at all.
+          cp /tmp/diag/*.txt /tmp/diag/*.json .
+          git add -f -- $(cd /tmp/diag && ls | tr '\n' ' ')
           git commit -qm "${slug} diagnostics @ ${{ github.sha }}"
           git push --force origin \
             "HEAD:refs/ci-logs/${{ github.sha }}/${slug}"
@@ -913,8 +940,17 @@ jobs:
           git config user.name "ci-logs"
           git config user.email "ci-logs@localhost"
           git checkout --detach -q
-          cp /tmp/diag/*.txt /tmp/diag/steps.json /tmp/diag/profile.json .
-          git add -f steps.json build_tail.txt ctest_tail.txt guards.txt gt_selftest.txt gt_run.txt reproducible.txt profile.json
+          # ADD BY GLOB, NOT BY NAME. This list was written by hand and then
+          # fell behind twice: gt_constrained.txt and coverage.txt were added
+          # to /tmp/diag on 905e060 and copied into the tree by the line
+          # above, and never appeared in any diagnostics ref because nobody
+          # updated the `git add`. A file list restated in a second place is
+          # the same defect class as a count restated in prose - and under
+          # `bash -e`, one missing name here aborts the step and the channel
+          # publishes NOTHING, which is how 323dba2's linux-gcc failure
+          # produced a red status and no diagnostics at all.
+          cp /tmp/diag/*.txt /tmp/diag/*.json .
+          git add -f -- $(cd /tmp/diag && ls | tr '\n' ' ')
           git commit -qm "${slug} diagnostics @ ${{ github.sha }}"
           git push --force origin \
             "HEAD:refs/ci-logs/${{ github.sha }}/${slug}"
