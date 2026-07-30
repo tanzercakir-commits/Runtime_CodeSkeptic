@@ -91,6 +91,16 @@ on:
       # The Rosetta lane runs this, and this is where it broke.
       - 'tests/groundtruth/run.sh'
       - 'tests/groundtruth/selftest.sh'
+      # T-018: THE CAMPAIGN RUNS HERE NOW, so the campaign's own code belongs
+      # in this list. It did not, and the omission behaved exactly as this
+      # file's comment above predicts it would: 756f3b0 rewrote the dtrace
+      # observer to watch mach traps - the whole point of the commit - and
+      # triggered nothing, because it touched no path named here. The fix for
+      # the thing this workflow exists to measure did not run on the commit
+      # that made it, for the second time in this repository's life.
+      - 'tools/campaign/observe_requirements.py'
+      - 'tools/campaign/false_positive_rate.py'
+      - 'tools/campaign/run_false_positive.sh'
 
 # Publishing measurements and job status as git refs needs push rights.
 permissions:

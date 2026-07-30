@@ -92,6 +92,11 @@ on:
       # Platform detection: RS_PLATFORM_WINDOWS is defined here, and nowhere else.
       - 'CMakeLists.txt'
       - 'src/CMakeLists.txt'
+      # T-018's ETW feasibility runs in this workflow, so its code triggers it.
+      # Same reasoning as the entry above about vm_probe_unimplemented.cpp, and
+      # the same reasoning that had to be applied to macos-probe.yml on
+      # 2026-07-30 after a campaign rewrite triggered nothing.
+      - 'tools/campaign/etw_feasibility.py'
 
 permissions:
   contents: write
