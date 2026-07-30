@@ -1,0 +1,38 @@
+contracts: 16   profiles: 2
+rules exercised by a real-kernel execution: 10/27
+
+  RS-VM-0002  checked on: constrained-host gt-host
+  RS-VM-0003  checked on: constrained-host gt-host
+  RS-VM-0004  checked on: constrained-host gt-host
+  RS-VM-0007  checked on: constrained-host gt-host
+  RS-VM-0008  checked on: constrained-host gt-host
+  RS-VM-0013  checked on: constrained-host gt-host
+  RS-VM-0017  checked on: constrained-host gt-host
+  RS-VM-0018  checked on: constrained-host gt-host
+  RS-VM-0021  checked on: constrained-host gt-host
+  RS-VM-0026  checked on: constrained-host
+
+Not checkable by executing a request, with the reason:
+  RS-VM-0012  claims failures MOVE from a checked call to an unchecked access under memory pressure; provoking that means exhausting the runner
+  RS-VM-0014  an internal contradiction in the requirement; no host is consulted, so there is nothing to execute
+  RS-VM-0015  about the shape of the subject's retry loop, not about a host response
+  RS-VM-0024  fires precisely because the constraint is not evaluable from a profile; an execution cannot settle it either
+
+Exercised ONLY against synthetic profiles, in unit tests (13):
+argued with, never shown a kernel - the backlog for new ground-truth cases:
+  RS-VM-0001
+  RS-VM-0005
+  RS-VM-0006
+  RS-VM-0009
+  RS-VM-0010
+  RS-VM-0011
+  RS-VM-0016
+  RS-VM-0019
+  RS-VM-0020
+  RS-VM-0022
+  RS-VM-0023
+  RS-VM-0025
+  RS-VM-0027
+
+of the 23 rules an execution could check, 10 are executed against a real kernel (43%);
+13 more have only synthetic coverage, 0 have none at all
