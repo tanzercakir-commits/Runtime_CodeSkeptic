@@ -62,7 +62,7 @@ observe() {
         return 0
     }
     python3 "$HERE/observe_requirements.py" --out "$OUT" --runs "$RUNS" \
-        --label "$label" -- "$@" >/dev/null 2>>"$OUT/observe.log" \
+        --label "$label" -- "$@" >>"$OUT/observe.log" 2>&1 \
         && echo "observed: $label" \
         || echo "FAILED   : $label (see $OUT/observe.log)" | tee -a "$OUT/skipped.txt"
 }

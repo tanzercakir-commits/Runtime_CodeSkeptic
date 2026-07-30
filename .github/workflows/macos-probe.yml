@@ -217,11 +217,21 @@ jobs:
       - name: Publish the campaign measurement
         if: always() && steps.campaign.outcome == 'success'
         run: |
+          # EVERYTHING the run produced, not just the headline. The first
+          # macOS round reported 10 shape requirements from 10 programs - one
+          # per program, against Linux's 1292 from 13 - and zero findings on a
+          # 16 KiB-granularity host where nearly every size should carry an
+          # RS-VM-0005 note. Diagnosing that needs the per-program
+          # observations, the emitted bundles and a raw trace, none of which
+          # this step published. Traces compress well; the whole directory
+          # goes as one tarball next to the headline files.
+          tar czf /tmp/fp-macos-debug.tgz -C /tmp/fp-macos .
           bash tools/ci/publish_measurement.sh measurements \
             "fp-campaign-macos" "${{ github.sha }}" \
             /tmp/fp-macos/false-positive-rate.json \
             /tmp/fp-macos/host.json \
-            /tmp/fp-macos-summary.txt
+            /tmp/fp-macos-summary.txt \
+            /tmp/fp-macos-debug.tgz
 
       - name: Publish the measurement to refs/measurements/*
         if: always() && steps.measure.outcome == 'success'
