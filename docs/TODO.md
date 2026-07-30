@@ -113,7 +113,7 @@ restricts probes); if blocked, evaluate ETW via `logman`/`wpr` on
 
 ## Later
 
-### T-021 — The synthetic-only backlog: 14 rules argued with, never shown a kernel `[later]`
+### T-021 — The synthetic-only backlog: argued with, never shown a kernel `[later]`
 
 **Serves:** the same standard T-020 served, one bucket further in — a rule that
 only ever meets a profile someone wrote by hand has never been contradicted by
@@ -125,9 +125,11 @@ a backlog and becomes the "not checkable by execution" list, which is already
 required to name its reason per line.
 
 T-020 emptied the `NO COVERAGE OF ANY KIND` bucket. The next bucket up is not a
-defect and is not nothing: **14 rules** have unit tests against synthetic
-profiles and have never been run against a kernel. The tool names them on every
-push, so this item does not need a list here — read the output.
+defect and is not nothing: those rules have unit tests against synthetic
+profiles and have never been run against a kernel. **The count is deliberately
+not written here** — the tool prints it on every push, over both hosts, and this
+project has already had one stale count ("13 of the 20 reachable") sitting in
+two documents while the tool said something else. Read the output.
 
 Two honest cautions before anyone treats this as a number to drive down:
 

@@ -119,11 +119,26 @@ ne sentetik profil. `groundtruth_coverage.py` artık `0 have none at all` yazıy
 | **+** | İkisi de **bilerek sentetik** test ediliyor ve gerekçe test dosyasının içinde: `RS-VM-0016` ölçümle erişilemez çünkü bu projenin dokunabildiği **her** runner'da primitif var (`MAP_FIXED_NOREPLACE`, `VM_FLAGS_FIXED`, `VirtualAlloc2`); `RS-VM-0025` ROADMAP §11'e göre `PREDICTIVE` — parçalanma (fragmentation) hakkında bir öngörü, ve bir ölçüm öngörüyü doğrulayamaz |
 | **−** | Maddenin kendi tahmini yanlıştı: `RLIMIT_AS` lane'inin `RS-VM-0025`'i zaten tetiklediğini sanmıştım. **Tetiklemiyor.** `max_user_address` **tek sayfalık** `MAP_FIXED_NOREPLACE` ile ölçülüyor, ve `RLIMIT_AS` tek sayfayı ücretlendirmiyor — yani kısıtlı konak, kısıtsız olanla aynı mimari tavanı bildiriyor. Senin T-015 için doğru cevap yapan asimetri, burada işe yaramaz kılan şeyin ta kendisi |
 
-Bir üst kova artık dürüst olan: **14 kural** birim testine sahip ve hiç
+Bir üst kova artık dürüst olan: bir grup kural birim testine sahip ve hiç
 çekirdeğe gösterilmemiş. **T-021** olarak `Later`'a yazıldı — ve bilerek
 "sıfıra indirilecek bir sayı" olarak değil, çünkü o kuralların bir kısmı bu
 projenin erişebildiği hiçbir konakta çalıştırılamaz; **gerekçeyi yazmak işin
 kendisi.**
+
+Maddeye sayı **bilerek yazılmadı**, ve bu aynı oturumda yaptığım bir hatanın
+düzeltmesi: önce "14" yazmıştım — tek konaklık bir çalıştırmadan. CI aracı
+**iki** konak üzerinden çalıştırıyor (kısıtsız + `RLIMIT_AS` kısıtlı) ve 13
+buluyor. Tek sayı, iki farklı ölçüm aleti, ve düzyazı yanlış olanı seçti — ki
+bu, "13 of the 20 reachable" ifadesini en baştan üreten hatanın ta kendisi.
+Sayıyı araç yazdırır; hiçbir belge onu tekrar etmez.
+
+**CI'ın 13fdaf3 için ölçtüğü (her iki konak):**
+
+```
+gerçek çekirdeğe karşı çalıştırılan  10 / 23   (%43)
+yalnızca sentetik kapsam             13
+hiçbir türden kapsamı olmayan         0        ← T-020 bunu boşalttı
+```
 
 ---
 

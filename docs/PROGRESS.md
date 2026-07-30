@@ -138,10 +138,18 @@ grows four cases (54 → **58**) and the tool now prints `0 have none at all`.
 | **−** | the item predicted the `RLIMIT_AS` lane already tripped `RS-VM-0025` and half the work was done and unmeasured. **It does not.** `max_user_address` is probed with a ONE-PAGE `MAP_FIXED_NOREPLACE`, which `RLIMIT_AS` does not charge — so the constrained host reports the same architectural ceiling as the unconstrained one. The exact asymmetry that made the constrained lane the answer for T-015 is what makes it useless here. Same fact, opposite consequence |
 
 The next bucket up is now the honest one, and it is filed as **T-021**
-(`Later`): 14 rules have unit tests and have never been shown a kernel. It is
-deliberately NOT a number to drive to zero — some of those rules cannot be
-executed on any host this project can reach, and writing that reason down is
-the work, not skipping it.
+(`Later`): the rules that have unit tests and have never been shown a kernel.
+It is deliberately NOT a number to drive to zero — some of them cannot be
+executed on any host this project can reach, and writing that reason down IS
+the work, not a way of skipping it.
+
+The item deliberately carries no count, and that is a correction of something I
+did an hour earlier in this same session: I wrote "14" into it from a
+**single-host** run, when CI runs the tool over **two** (unconstrained and
+`RLIMIT_AS`-constrained) and gets 13. One number, two instruments, and the
+prose picked the wrong one — which is precisely the failure that produced "13
+of the 20 reachable" in the first place. The tool prints it; nothing restates
+it.
 
 ### And the new rule bit me twice in one sitting
 
