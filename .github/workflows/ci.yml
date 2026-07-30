@@ -323,6 +323,19 @@ jobs:
           cp /tmp/meas/reproducible.txt /tmp/diag/reproducible.txt 2>/dev/null \
             || echo "(the reproducibility step did not run)" \
                  > /tmp/diag/reproducible.txt
+          # The constrained lane and the coverage tool tee their output into
+          # /tmp/meas, and this block copied neither - so when gt_constrained
+          # was the failing step (2026-07-30, linux-gcc, while linux-clang
+          # passed the same commit) the channel carried every step's output
+          # EXCEPT the one that failed. Same omission as the reproducibility
+          # file above, found one file later.
+          cp /tmp/meas/gt_constrained.txt /tmp/diag/gt_constrained.txt \
+              2>/dev/null \
+            || echo "(the constrained lane did not run)" \
+                 > /tmp/diag/gt_constrained.txt
+          cp /tmp/meas/coverage.txt /tmp/diag/coverage.txt 2>/dev/null \
+            || echo "(the coverage step did not run)" \
+                 > /tmp/diag/coverage.txt
           # The PROFILE, which the diagnostics did not carry - on a project whose
           # subject is what a probe measured, that is an odd thing to omit. When
           # ctest fails before the ground-truth step there is no profile in
