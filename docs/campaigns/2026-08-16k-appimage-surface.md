@@ -57,7 +57,7 @@ validated byte-exact against the exact reporter asset of MuseScore #20342:
 detects a known offender at the byte level, a `0` from it on a current binary is
 evidence of absence, not absence of evidence.
 
-## Class A — the current corpus (9 aarch64 AppImages, all clean)
+## Class A — the current corpus (8 aarch64 AppImages, all clean)
 
 | App | Ver | ELF objects | refused on 16K |
 |---|---|---:|---:|
@@ -84,14 +84,24 @@ objects, the same appimagetool shape as MuseScore — comes back clean.
 | Logseq 2.0.1 | Chrome/148.0.7778.180 | 42.3.0 | safe |
 | Zettlr 4.6.0 | Chrome/148.0.7778.218 | 42.3.3 | safe |
 | Mattermost 6.2.2 | Chrome/146.0.7680.179 | 41.2.0 | safe |
-| Notesnook 3.4.5 | Chrome/138.0.7204.25x | ~37 | safe |
-| Cryptomator 1.19.3 | (Electron, post-window) | — | safe |
+| Notesnook 3.4.5 | Chrome/138.0.7204.251 | 37.10.3 | safe |
+| Standard Notes 3.201.35 | Chrome/134.0.6998.205 | 35.2.0 | safe — narrowest margin |
 
-Every bundled Chromium is ≥ 138 — far past the 132-133 broken window. The three
-known Class-B offenders (VSCode #242742, Obsidian forum, Vesktop #1125) are all
-already reported and fixed. A novel Class-B report would need an app *still*
-shipping a 34.0.2-34.2.x Electron with no 16K issue of its own; none in this set
-qualifies.
+Every bundled Chromium is ≥ 134 — past the 132-133 broken window, with Standard
+Notes (Electron 35.2.0 / Chrome 134) the narrowest margin at one major above the
+34.3.0 fix. The three known Class-B offenders (VSCode #242742, Obsidian forum,
+Vesktop #1125) are all already reported and fixed. A novel Class-B report would
+need an app *still* shipping a 34.0.2-34.2.x Electron with no 16K issue of its
+own; none in this set qualifies.
+
+(**Cryptomator 1.19.3 is not an Electron app** and was removed from this table.
+It is JavaFX on the JVM — it carries `lib/runtime/lib/server/libjvm.so` and the
+`javafx.*` jars, and `grep -r 'Chrome/'` over its tree returns zero hits. It
+appears only in the Class A table above, where it scanned clean (44 objects, 0
+refused). An
+earlier draft listed it here as "(Electron, post-window)" — precisely the Class
+A/B conflation this note opens by warning against, caught in the note's own
+table. Recording the slip rather than quietly deleting it, per house rule.)
 
 ## Skipped, with the reason stated (no silent truncation)
 
@@ -144,13 +154,19 @@ reserved-VA, pointer truncation). The next hunt goes there.
 
 ## Credit
 
-The `ldso_predicate.py` predicate, its byte-exact validation against MuseScore
-#20342, and this 9-app / 5-Electron corpus scan were produced by an external
-reviewer running the tool on their own Apple Silicon host. They also corrected
-two defects in an earlier draft of the hunt (keying off first-segment `p_align`
-instead of the per-segment `(p_vaddr - p_offset)` congruence, which false-
-negatives a known-broken binary; and x86_64's `0x1000` being normal rather than
-a signal). Both corrections are baked into the tool and the contract.
+The byte-exact validation of this predicate against MuseScore #20342, the
+`p_align` `0x1000`-vs-`0x10000` triage signal, this 8-app corpus (+ the MuseScore
+control) / 5-Electron scan, and the Logseq x86_64-in-arm64 anomaly were all
+produced by an external reviewer running on their own Apple Silicon host; the
+committed `ldso_predicate.py` encodes that predicate with the same positive
+control. Its correctness traces to the same reviewer, but the defect they fixed
+was in the hunt **prompt**, not the tool: an earlier version of the prompt keyed
+off the first PT_LOAD's `p_align` — which false-negatives a known-broken binary —
+and treated x86_64's `0x1000` as a signal rather than the norm. The reviewer
+corrected both, so the spec the tool was written from already carried the correct
+per-segment `(p_vaddr - p_offset)` congruence. (The tool prints offenders by
+PT_LOAD ordinal; a program-header-ordinal count of the same libsndfile segment
+lands on a different index — same object, same bytes, same verdict.)
 
 ## Sources
 
