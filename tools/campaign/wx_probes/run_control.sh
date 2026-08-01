@@ -113,9 +113,12 @@ observe() {
         echo "  tracer is out of reach (dtrace needs SIP disabled: '$sip'; and an"
         echo "  interactive sudo). Observe on a permissive host - x86_64 Linux, or"
         echo "  aarch64 Linux/Asahi - then run 'predict' here against your M1 profile."
-        return 0
+        SKIP_REASON="not a permissive host (macOS enforces W^X; dtrace needs SIP off + sudo)"
+        return 2
     fi
-    command -v strace >/dev/null 2>&1 || { echo "observe: SKIP - no strace on PATH"; return 0; }
+    command -v strace >/dev/null 2>&1 || {
+        echo "observe: SKIP - no strace on PATH"
+        SKIP_REASON="no strace on PATH"; return 2; }
     cc -O0 -o "$OUT/naive" "$HERE/naive_rwx.c"
     cc -O0 -o "$OUT/flip" "$HERE/wx_flip.c"
     python3 "$OBSERVE" --out "$OUT/obs-naive" --runs 3 --label naive-rwx -- "$OUT/naive" >/dev/null 2>&1 || true
@@ -134,17 +137,31 @@ sys.exit(0 if n >= 1 else 1)
 PY
 }
 
-fail=0
+# A skipped phase is not a pass. observe() returns 2 (skip) distinctly from 0
+# (ran, passed) and 1 (ran, failed), and the summary says SKIPPED - matching the
+# vocabulary the mingw guard already uses - so a log scrape for PASS/FAIL never
+# banks a green tick for a phase that did not run. Skips keep exit 0.
+SKIP_REASON=""
+prc=0; orc=0
 case "$MODE" in
-    predict) predict || fail=1 ;;
-    observe) observe || fail=1 ;;
-    auto)    predict || fail=1; echo; observe || fail=1 ;;
+    predict) if predict; then prc=0; else prc=$?; fi ;;
+    observe) if observe; then orc=0; else orc=$?; fi ;;
+    auto)    if predict; then prc=0; else prc=$?; fi; echo
+             if observe; then orc=0; else orc=$?; fi ;;
 esac
 
+say() {   # $1 = phase, $2 = rc: 0 PASS, 2 SKIPPED, else FAIL
+    if [ "$2" -eq 0 ]; then echo "W^X control ($1): PASS"
+    elif [ "$2" -eq 2 ]; then echo "W^X control ($1): SKIPPED - $SKIP_REASON"
+    else echo "W^X control ($1): FAIL"; fi
+}
+
 echo
-if [ "$fail" -eq 0 ]; then
-    echo "W^X control ($MODE): PASS"
-else
-    echo "W^X control ($MODE): FAIL"
-fi
+fail=0
+case "$MODE" in
+    predict) say predict "$prc"; [ "$prc" -eq 0 ] || fail=1 ;;
+    observe) say observe "$orc"; [ "$orc" -ne 1 ] || fail=1 ;;
+    auto)    say predict "$prc"; [ "$prc" -eq 0 ] || fail=1
+             say observe "$orc"; [ "$orc" -ne 1 ] || fail=1 ;;
+esac
 exit "$fail"
