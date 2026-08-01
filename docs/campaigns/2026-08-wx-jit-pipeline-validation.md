@@ -1,9 +1,12 @@
 # The W^X pipeline, validated end to end — August 2026
 
-Status: Phase 3 hunt, instrument validation. **CI-adjacent, Linux-reproducible.**
-`tools/campaign/wx_probes/run_control.sh` reproduces every number below on any
-Linux host with a compiler and strace; on Apple Silicon it runs the same path
-through dtrace against the host's own measured profile.
+Status: Phase 3 hunt, instrument validation. **Split by host role.**
+`tools/campaign/wx_probes/run_control.sh observe` reproduces the capture on any
+permissive host with a compiler and strace (x86_64 Linux, or aarch64
+Linux/Asahi); `run_control.sh predict` validates the prediction from committed
+fixtures against a W^X profile on **any** host, including a hardened M1. The two
+are separate because one machine often cannot play both halves — see "What the
+M1 run found" below, which is why this note was revised.
 
 ## Why this exists
 
@@ -71,14 +74,50 @@ therefore known to round-trip before a single real target is touched.
 ## How to run it
 
 ```
-tools/campaign/wx_probes/run_control.sh                 # default W^X profile
-tools/campaign/wx_probes/run_control.sh path/to/host.json
+tools/campaign/wx_probes/run_control.sh predict [W^X_PROFILE.json]  # any host, incl M1
+tools/campaign/wx_probes/run_control.sh observe                     # permissive host only
+tools/campaign/wx_probes/run_control.sh auto                        # predict, + observe if able
 ```
 
-On an M1 it will measure the host with `rs-env-probe` and check against that;
-on Linux it uses the committed macOS-arm64 profile as the W^X reference (Linux
-itself does not enforce W^X, so the probes run but the verdict needs a W^X host
-to be about anything).
+`predict` runs anywhere: it takes the committed `fixtures/` (captured on a
+permissive host) and checks them against a W^X profile — measured live on an M1
+via `rs-env-probe` (which needs no dtrace, so SIP does not block it) or the
+committed macOS-arm64 profile elsewhere. `observe` self-gates: on a W^X or
+untraceable host it prints why and skips (exit 0), it does not fail.
+
+## What the M1 run found (why this note was revised)
+
+The first version of this control was validated only on x86_64 Linux and shipped
+telling the reader to "run it on an M1." A reviewer did exactly that, on a stock
+M1 (macOS 26.5.2, **SIP enabled**), and it could not even reach a verdict. Three
+defects, each confirmed by running rather than reading — the precise class of bug
+this whole project exists to catch, committed inside the tool meant to catch it:
+
+1. **x86_64 payload on aarch64.** Both probes embedded `B8 2A 00 00 00 C3`
+   (`mov eax,42; ret`) — x86_64, an illegal instruction on aarch64 (`wx_flip`
+   died `SIGILL`, exit 132). Fixed: the payload is now `#if __aarch64__`
+   (`mov w0,#42; ret` = `52800540 d65f03c0`) plus `__builtin___clear_cache`,
+   verified to return 42 on both x86_64 (native) and aarch64 (cross-compiled,
+   under qemu).
+2. **The circularity.** `naive_rwx` must *run* to be observed, but a W^X host
+   *refuses* a naive RWX map (`EACCES`) — the shape it models is the shape that
+   host forbids, so it exits 2 before emitting one traceable call. No payload fix
+   rescues that. The fix is architectural: `observe` on a permissive host,
+   `predict` from the captured fixtures anywhere. The control no longer asks one
+   machine to do both.
+3. **The tracer is out of reach on a stock Mac.** `observe_requirements.py` uses
+   `sudo dtrace`; its own comment notes SIP was *disabled on the CI runners* — a
+   property of those runners, not of a personal Mac (`csrutil status: enabled`,
+   and non-interactive `sudo` cannot be satisfied). `observe` now detects this and
+   skips with the reason, instead of surfacing an environment limit as a probe
+   failure.
+
+Net: **an M1 hosts the prediction half, not the observation half.** The numbers
+above stand — they are the pipeline working on a permissive host — but the claim
+that a hardened M1 could reproduce the capture was wrong, and is withdrawn.
+
+Credit: the reviewer who ran it on their M1, root-caused all three by experiment,
+and supplied the verified aarch64 payload.
 
 ## Honest limits
 
@@ -86,7 +125,9 @@ to be about anything).
   *incompatibility* is entirely in what rs-check predicts for a W^X host from the
   observed request. That is the design — observe on any host, predict for the
   target — but it means this control proves the *pipeline*, not that any real
-  program crashes on an M1. That is what the box64 live run is for.
+  program crashes. That is what a box64 live run is for — and box64 is a Linux
+  x86_64→ARM emulator with no macOS build, so that run belongs on aarch64 Linux
+  (Asahi), not on macOS at all.
 - **`pthread_jit_write_protect_np` is invisible.** The Apple-blessed fast path
   (MAP_JIT + per-thread write-protect toggling) does not go through mmap or
   mprotect, so the tracer sees the MAP_JIT mmap but not the toggle. "No flip
@@ -98,6 +139,8 @@ to be about anything).
 
 ## Relation to the hunt
 
-This is the positive control for `docs/hunt-wx-jit-m1.md`. Run it first on the
-M1; once it passes there, the box64 Card-2 live run (and the novel-target hunt
-after it) rests on an instrument proven against known answers.
+This is the positive control for `docs/hunt-wx-jit-m1.md`. Run `predict` on the
+M1 first — it passes there, validating the prediction half against the host's own
+W^X profile. The observation half (and box64's Card-2 live run) then belongs on a
+permissive aarch64 host — Asahi Linux — with the shape brought back for the M1 to
+predict on. The instrument is proven against known answers before either.

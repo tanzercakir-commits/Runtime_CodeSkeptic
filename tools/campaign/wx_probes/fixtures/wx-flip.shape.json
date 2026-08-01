@@ -1,0 +1,405 @@
+{
+  "schema": "runtime-skeptic.application-requirements-bundle.v1",
+  "producer": {
+    "tool": "observe_requirements.py",
+    "version": "1",
+    "rule": "strace shape; 3 runs; successes only"
+  },
+  "requirements": [
+    {
+      "schema": "runtime-skeptic.application-requirements.v1",
+      "name": "wx-flip: mmap 8192 bytes",
+      "component": "wx-flip",
+      "operation": "virtual_memory_map",
+      "request": {
+        "size": 8192,
+        "exact_address_required": false,
+        "protection": {
+          "read": true,
+          "write": true,
+          "execute": false
+        },
+        "file_backed": false
+      },
+      "assumptions": {
+        "guest_host_identity_required": false,
+        "translation_layer_available": false,
+        "retries_on_failure": false
+      },
+      "failure_sink": {
+        "kind": "error_return",
+        "description": "not observable in a trace; recorded as the weakest sink so severity is never inflated"
+      },
+      "assumption_evidence": "observed_invariant",
+      "extraction_limitations": [
+        "Derived mechanically from a kernel trace (strace on Linux, dtrace on macOS, ETW on Windows) of a program that ran to completion on this host. It asserts only what the trace carried: no intent, no error handling, no guest/host identity requirement, and no failure sink."
+      ],
+      "x_observed": "mmap succeeded on this host in 3/3 runs, returning 0x7fdd17189000"
+    },
+    {
+      "schema": "runtime-skeptic.application-requirements.v1",
+      "name": "wx-flip: mmap 55311 bytes",
+      "component": "wx-flip",
+      "operation": "virtual_memory_map",
+      "request": {
+        "size": 55311,
+        "exact_address_required": false,
+        "protection": {
+          "read": true,
+          "write": false,
+          "execute": false
+        },
+        "file_backed": true,
+        "file_offset": 0
+      },
+      "assumptions": {
+        "guest_host_identity_required": false,
+        "translation_layer_available": false,
+        "retries_on_failure": false
+      },
+      "failure_sink": {
+        "kind": "error_return",
+        "description": "not observable in a trace; recorded as the weakest sink so severity is never inflated"
+      },
+      "assumption_evidence": "observed_invariant",
+      "extraction_limitations": [
+        "Derived mechanically from a kernel trace (strace on Linux, dtrace on macOS, ETW on Windows) of a program that ran to completion on this host. It asserts only what the trace carried: no intent, no error handling, no guest/host identity requirement, and no failure sink."
+      ],
+      "x_observed": "mmap succeeded on this host in 3/3 runs, returning 0x7fdd1717b000"
+    },
+    {
+      "schema": "runtime-skeptic.application-requirements.v1",
+      "name": "wx-flip: mmap 2170256 bytes",
+      "component": "wx-flip",
+      "operation": "virtual_memory_map",
+      "request": {
+        "size": 2170256,
+        "exact_address_required": false,
+        "protection": {
+          "read": true,
+          "write": false,
+          "execute": false
+        },
+        "file_backed": true,
+        "file_offset": 0
+      },
+      "assumptions": {
+        "guest_host_identity_required": false,
+        "translation_layer_available": false,
+        "retries_on_failure": false
+      },
+      "failure_sink": {
+        "kind": "error_return",
+        "description": "not observable in a trace; recorded as the weakest sink so severity is never inflated"
+      },
+      "assumption_evidence": "observed_invariant",
+      "extraction_limitations": [
+        "Derived mechanically from a kernel trace (strace on Linux, dtrace on macOS, ETW on Windows) of a program that ran to completion on this host. It asserts only what the trace carried: no intent, no error handling, no guest/host identity requirement, and no failure sink."
+      ],
+      "x_observed": "mmap succeeded on this host in 3/3 runs, returning 0x7fdd16e00000"
+    },
+    {
+      "schema": "runtime-skeptic.application-requirements.v1",
+      "name": "wx-flip: mmap 1605632 bytes",
+      "component": "wx-flip",
+      "operation": "virtual_memory_map",
+      "request": {
+        "size": 1605632,
+        "exact_address_required": false,
+        "protection": {
+          "read": true,
+          "write": false,
+          "execute": true
+        },
+        "file_backed": true,
+        "file_offset": 163840
+      },
+      "assumptions": {
+        "guest_host_identity_required": false,
+        "translation_layer_available": false,
+        "retries_on_failure": false
+      },
+      "failure_sink": {
+        "kind": "error_return",
+        "description": "not observable in a trace; recorded as the weakest sink so severity is never inflated"
+      },
+      "assumption_evidence": "observed_invariant",
+      "extraction_limitations": [
+        "Derived mechanically from a kernel trace (strace on Linux, dtrace on macOS, ETW on Windows) of a program that ran to completion on this host. It asserts only what the trace carried: no intent, no error handling, no guest/host identity requirement, and no failure sink."
+      ],
+      "x_observed": "mmap succeeded on this host in 3/3 runs, returning 0x7fdd16e28000"
+    },
+    {
+      "schema": "runtime-skeptic.application-requirements.v1",
+      "name": "wx-flip: mmap 323584 bytes",
+      "component": "wx-flip",
+      "operation": "virtual_memory_map",
+      "request": {
+        "size": 323584,
+        "exact_address_required": false,
+        "protection": {
+          "read": true,
+          "write": false,
+          "execute": false
+        },
+        "file_backed": true,
+        "file_offset": 1769472
+      },
+      "assumptions": {
+        "guest_host_identity_required": false,
+        "translation_layer_available": false,
+        "retries_on_failure": false
+      },
+      "failure_sink": {
+        "kind": "error_return",
+        "description": "not observable in a trace; recorded as the weakest sink so severity is never inflated"
+      },
+      "assumption_evidence": "observed_invariant",
+      "extraction_limitations": [
+        "Derived mechanically from a kernel trace (strace on Linux, dtrace on macOS, ETW on Windows) of a program that ran to completion on this host. It asserts only what the trace carried: no intent, no error handling, no guest/host identity requirement, and no failure sink."
+      ],
+      "x_observed": "mmap succeeded on this host in 3/3 runs, returning 0x7fdd16fb0000"
+    },
+    {
+      "schema": "runtime-skeptic.application-requirements.v1",
+      "name": "wx-flip: mmap 24576 bytes",
+      "component": "wx-flip",
+      "operation": "virtual_memory_map",
+      "request": {
+        "size": 24576,
+        "exact_address_required": false,
+        "protection": {
+          "read": true,
+          "write": true,
+          "execute": false
+        },
+        "file_backed": true,
+        "file_offset": 2088960
+      },
+      "assumptions": {
+        "guest_host_identity_required": false,
+        "translation_layer_available": false,
+        "retries_on_failure": false
+      },
+      "failure_sink": {
+        "kind": "error_return",
+        "description": "not observable in a trace; recorded as the weakest sink so severity is never inflated"
+      },
+      "assumption_evidence": "observed_invariant",
+      "extraction_limitations": [
+        "Derived mechanically from a kernel trace (strace on Linux, dtrace on macOS, ETW on Windows) of a program that ran to completion on this host. It asserts only what the trace carried: no intent, no error handling, no guest/host identity requirement, and no failure sink."
+      ],
+      "x_observed": "mmap succeeded on this host in 3/3 runs, returning 0x7fdd16fff000"
+    },
+    {
+      "schema": "runtime-skeptic.application-requirements.v1",
+      "name": "wx-flip: mmap 52624 bytes",
+      "component": "wx-flip",
+      "operation": "virtual_memory_map",
+      "request": {
+        "size": 52624,
+        "exact_address_required": false,
+        "protection": {
+          "read": true,
+          "write": true,
+          "execute": false
+        },
+        "file_backed": false
+      },
+      "assumptions": {
+        "guest_host_identity_required": false,
+        "translation_layer_available": false,
+        "retries_on_failure": false
+      },
+      "failure_sink": {
+        "kind": "error_return",
+        "description": "not observable in a trace; recorded as the weakest sink so severity is never inflated"
+      },
+      "assumption_evidence": "observed_invariant",
+      "extraction_limitations": [
+        "Derived mechanically from a kernel trace (strace on Linux, dtrace on macOS, ETW on Windows) of a program that ran to completion on this host. It asserts only what the trace carried: no intent, no error handling, no guest/host identity requirement, and no failure sink."
+      ],
+      "x_observed": "mmap succeeded on this host in 3/3 runs, returning 0x7fdd17005000"
+    },
+    {
+      "schema": "runtime-skeptic.application-requirements.v1",
+      "name": "wx-flip: mmap 12288 bytes",
+      "component": "wx-flip",
+      "operation": "virtual_memory_map",
+      "request": {
+        "size": 12288,
+        "exact_address_required": false,
+        "protection": {
+          "read": true,
+          "write": true,
+          "execute": false
+        },
+        "file_backed": false
+      },
+      "assumptions": {
+        "guest_host_identity_required": false,
+        "translation_layer_available": false,
+        "retries_on_failure": false
+      },
+      "failure_sink": {
+        "kind": "error_return",
+        "description": "not observable in a trace; recorded as the weakest sink so severity is never inflated"
+      },
+      "assumption_evidence": "observed_invariant",
+      "extraction_limitations": [
+        "Derived mechanically from a kernel trace (strace on Linux, dtrace on macOS, ETW on Windows) of a program that ran to completion on this host. It asserts only what the trace carried: no intent, no error handling, no guest/host identity requirement, and no failure sink."
+      ],
+      "x_observed": "mmap succeeded on this host in 3/3 runs, returning 0x7fdd17178000"
+    },
+    {
+      "schema": "runtime-skeptic.application-requirements.v1",
+      "name": "wx-flip: mprotect 16384 bytes",
+      "component": "wx-flip",
+      "operation": "virtual_memory_map",
+      "request": {
+        "size": 16384,
+        "exact_address_required": false,
+        "protection": {
+          "read": true,
+          "write": false,
+          "execute": false
+        },
+        "file_backed": false
+      },
+      "assumptions": {
+        "guest_host_identity_required": false,
+        "translation_layer_available": false,
+        "retries_on_failure": false
+      },
+      "failure_sink": {
+        "kind": "error_return",
+        "description": "not observable in a trace; recorded as the weakest sink so severity is never inflated"
+      },
+      "assumption_evidence": "observed_invariant",
+      "extraction_limitations": [
+        "Derived mechanically from a kernel trace (strace on Linux, dtrace on macOS, ETW on Windows) of a program that ran to completion on this host. It asserts only what the trace carried: no intent, no error handling, no guest/host identity requirement, and no failure sink."
+      ],
+      "x_observed": "mprotect succeeded on this host in 3/3 runs, returning 0x7fdd16fff000"
+    },
+    {
+      "schema": "runtime-skeptic.application-requirements.v1",
+      "name": "wx-flip: mprotect 4096 bytes",
+      "component": "wx-flip",
+      "operation": "virtual_memory_map",
+      "request": {
+        "size": 4096,
+        "exact_address_required": false,
+        "protection": {
+          "read": true,
+          "write": false,
+          "execute": false
+        },
+        "file_backed": false
+      },
+      "assumptions": {
+        "guest_host_identity_required": false,
+        "translation_layer_available": false,
+        "retries_on_failure": false
+      },
+      "failure_sink": {
+        "kind": "error_return",
+        "description": "not observable in a trace; recorded as the weakest sink so severity is never inflated"
+      },
+      "assumption_evidence": "observed_invariant",
+      "extraction_limitations": [
+        "Derived mechanically from a kernel trace (strace on Linux, dtrace on macOS, ETW on Windows) of a program that ran to completion on this host. It asserts only what the trace carried: no intent, no error handling, no guest/host identity requirement, and no failure sink."
+      ],
+      "x_observed": "mprotect succeeded on this host in 3/3 runs, returning 0x5584c51e8000"
+    },
+    {
+      "schema": "runtime-skeptic.application-requirements.v1",
+      "name": "wx-flip: mprotect 8192 bytes",
+      "component": "wx-flip",
+      "operation": "virtual_memory_map",
+      "request": {
+        "size": 8192,
+        "exact_address_required": false,
+        "protection": {
+          "read": true,
+          "write": false,
+          "execute": false
+        },
+        "file_backed": false
+      },
+      "assumptions": {
+        "guest_host_identity_required": false,
+        "translation_layer_available": false,
+        "retries_on_failure": false
+      },
+      "failure_sink": {
+        "kind": "error_return",
+        "description": "not observable in a trace; recorded as the weakest sink so severity is never inflated"
+      },
+      "assumption_evidence": "observed_invariant",
+      "extraction_limitations": [
+        "Derived mechanically from a kernel trace (strace on Linux, dtrace on macOS, ETW on Windows) of a program that ran to completion on this host. It asserts only what the trace carried: no intent, no error handling, no guest/host identity requirement, and no failure sink."
+      ],
+      "x_observed": "mprotect succeeded on this host in 3/3 runs, returning 0x7fdd171c9000"
+    },
+    {
+      "schema": "runtime-skeptic.application-requirements.v1",
+      "name": "wx-flip: mmap 16384 bytes",
+      "component": "wx-flip",
+      "operation": "virtual_memory_map",
+      "request": {
+        "size": 16384,
+        "exact_address_required": false,
+        "protection": {
+          "read": true,
+          "write": true,
+          "execute": false
+        },
+        "file_backed": false
+      },
+      "assumptions": {
+        "guest_host_identity_required": false,
+        "translation_layer_available": false,
+        "retries_on_failure": false
+      },
+      "failure_sink": {
+        "kind": "error_return",
+        "description": "not observable in a trace; recorded as the weakest sink so severity is never inflated"
+      },
+      "assumption_evidence": "observed_invariant",
+      "extraction_limitations": [
+        "Derived mechanically from a kernel trace (strace on Linux, dtrace on macOS, ETW on Windows) of a program that ran to completion on this host. It asserts only what the trace carried: no intent, no error handling, no guest/host identity requirement, and no failure sink."
+      ],
+      "x_observed": "mmap succeeded on this host in 3/3 runs, returning 0x7fdd17185000"
+    },
+    {
+      "schema": "runtime-skeptic.application-requirements.v1",
+      "name": "wx-flip: mprotect 16384 bytes",
+      "component": "wx-flip",
+      "operation": "virtual_memory_map",
+      "request": {
+        "size": 16384,
+        "exact_address_required": false,
+        "protection": {
+          "read": true,
+          "write": false,
+          "execute": true
+        },
+        "file_backed": false
+      },
+      "assumptions": {
+        "guest_host_identity_required": false,
+        "translation_layer_available": false,
+        "retries_on_failure": false
+      },
+      "failure_sink": {
+        "kind": "error_return",
+        "description": "not observable in a trace; recorded as the weakest sink so severity is never inflated"
+      },
+      "assumption_evidence": "observed_invariant",
+      "extraction_limitations": [
+        "Derived mechanically from a kernel trace (strace on Linux, dtrace on macOS, ETW on Windows) of a program that ran to completion on this host. It asserts only what the trace carried: no intent, no error handling, no guest/host identity requirement, and no failure sink."
+      ],
+      "x_observed": "mprotect succeeded on this host in 3/3 runs, returning 0x7fdd17185000"
+    }
+  ]
+}

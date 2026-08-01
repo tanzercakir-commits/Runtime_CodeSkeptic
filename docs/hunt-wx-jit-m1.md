@@ -1,16 +1,27 @@
-# W^X / JIT avı — Apple Silicon (M1) canlı gözlem prompt'u
+# W^X / JIT avı — canlı gözlem prompt'u (host rolleri ayrı)
+
+> **DÜZELTME (M1'de koşuldu, 3 kusur çıktı).** Sabit-kodlu (hardened) bir M1
+> (macOS, SIP açık) bu avın **gözlem (observe) yarısını KOŞAMAZ**: (1) naif RWX
+> Apple Silicon'da reddedilir (EACCES) — modellediği şekli o konak yasaklar;
+> (2) dtrace SIP-kapalı + interaktif sudo ister, kişisel Mac'te yok; (3) box64
+> zaten Linux x86_64→ARM emülatörü, macOS build'i yok. Yani **M1 = tahmin
+> (predict) yarısı**; **gözlem + box64 = izin veren (permissive) aarch64 konak =
+> Asahi Linux**. Ayrıntı: `docs/campaigns/2026-08-wx-jit-pipeline-validation.md`.
+> Enstrüman `tools/campaign/wx_probes/run_control.sh` ile bu ayrımı uyguluyor;
+> M1'de `run_control.sh predict` PASS verir.
 
 Amaç: 16K avı **statik** kanıtla (ELF) sınırlıydı ve yüzey kapalıydı. Bu av
-**canlı**: elindeki M1, W^X (write-xor-execute) ve JIT-entitlement sınıfını
-*çalışırken* gözlemleyebilir. Bu, aracın "honest limit"ini (statik ≠ canlı)
-tam da kapatan şey.
+**canlı**: izin veren (permissive) bir aarch64 konak (Asahi) W^X ve
+JIT-entitlement sınıfını *çalışırken* gözler; M1 ise ölçülmüş W^X profiline karşı
+**tahmini** doğrular. Birlikte aracın "honest limit"ini (statik ≠ canlı) kapatır.
 
 İki iş birden (senin seçtiklerin, 1 + 3):
 
 ```
 MOD 1 — BİLİNENİ DOĞRULA (option 1)        statik tahmini CANLI kanıta çevir
   Araç box64'ün dynarec'i için RS-VM-0009/0011 UNSUPPORTED diyor (Kart 2).
-  M1'de box64'ü koştur, gerçekten ne yaptığını gözlemle:
+  box64'ü ASAHI'de (aarch64 Linux) koştur+gözle (macOS'te box64 yok), sonra
+  shape'i M1'e getirip predict et:
     - RWX'i tek mmap'te isteyip tutuyorsa  → tahmin CANLI DOĞRULANDI.
     - W→X flip / MAP_JIT yapıyorsa          → tahmin ÇÜRÜDÜ (bu build uyumlu).
   İkisi de kazanç: biri "araç haklı", diğeri "sözleşme eski commit'e sabit,
