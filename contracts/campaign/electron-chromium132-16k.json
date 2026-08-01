@@ -1,0 +1,43 @@
+{
+  "schema": "runtime-skeptic.application-requirements.v1",
+  "name": "Electron/Chromium 132: V8 page allocator assumes a 4K page, renderer crashes at runtime on 16K",
+  "component": "Electron 34.0.2-34.2.x (Chromium 132/133) bundled in an app; V8 pooled-page decommit uses a hard-coded page size. Applies to VSCode, Obsidian, and any app bundling an Electron in this window",
+  "operation": "virtual_memory_map",
+  "request": {
+    "size": 1048576,
+    "exact_address_required": false,
+    "protection": { "read": true, "write": true, "execute": false },
+    "required_page_size": 4096,
+    "required_page_size_relation": "at_most"
+  },
+  "assumptions": { "guest_host_identity_required": false, "translation_layer_available": false, "retries_on_failure": false },
+  "required_postconditions": [
+    "V8's page pool manages memory in units of its compiled-in page size; the host page size must not exceed 4096 or the pooled-page decommit math addresses the wrong span and the renderer faults"
+  ],
+  "permitted_fallbacks": [],
+  "failure_sink": {
+    "kind": "process_exit",
+    "description": "RUNTIME crash, not a load failure: the binary loads and starts, then the renderer process crashes on a 16K-page host because Chromium 132 hard-coded a 4K page size in V8's pooled-page decommit. Workaround: --js-flags=\"--nodecommit_pooled_pages\". This is what distinguishes Class B from the ELF-load-alignment class (MuseScore): ld.so is happy; V8 is not."
+  },
+  "assumption_evidence": "specified_guarantee",
+  "extraction_limitations": [
+    "the real defect is a runtime V8 crash, not a page-size predicate the loader enforces. required_page_size at_most 4096 is the closest this schema can encode: it stands in for 'V8's page pool needs the host page to be at most its compiled-in 4096'. The static verdict is therefore a proxy for a runtime failure, the same modelling compromise as the redis --with-lg-page contract.",
+    "detection of a broken binary is by bundled Chromium version, NOT by ELF layout; this contract expresses the consequence, not the way you find an offender."
+  ],
+  "x_campaign": {
+    "project": "Electron / Chromium 132 (Class B - runtime, NOT ELF-load)",
+    "source": "github.com/electron/electron/issues/45560; vscode#242742; Vesktop#1125",
+    "quote": "crashes the renderer on systems using 16K pages due to an incorrect hard-coded page size",
+    "broken_window": "Electron 34.0.2 - 34.2.x (Chromium 132-133). Fixed in 34.3.0+ / Chromium 134+. Safe at <= 33.3.2.",
+    "expected_on_host": "linux/x86_64+unknown",
+    "expected_verdict": "SUPPORTED",
+    "expected_verdict_by_host": {
+      "macos/aarch64+none": "UNSUPPORTED",
+      "macos/x86_64+rosetta2": "SUPPORTED",
+      "windows/x86_64+none": "SUPPORTED"
+    },
+    "expected_verdict_by_host_rationale": "required_page_size is at_most 4096. Only macos/aarch64+none measures a 16384 page, so RS-VM-0006 fires there and only there; every 4K host (linux, rosetta, windows) satisfies the bound. The historical incident was a 16K aarch64 LINUX host (Asahi/Pi5); macos/aarch64+none is the only measured 16K profile in this tree and stands in for it.",
+    "detection": "NOT ldso_predicate.py (ELF is fine). Signal is the bundled Chromium version: strings <appbin> | grep -oiE 'Chrome/[0-9]+' -> 132 or 133 = broken window.",
+    "status": "the CLASS is known/reported for VSCode, Obsidian, Vesktop. Novelty would be an app bundling a broken-window Electron with NO 16K issue of its own; the 2026-08 hunt found none still shipping in the broken window."
+  }
+}

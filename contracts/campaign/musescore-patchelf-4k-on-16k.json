@@ -1,0 +1,53 @@
+{
+  "schema": "runtime-skeptic.application-requirements.v1",
+  "name": "MuseScore AppImage: patchelf baked 4K ELF segment alignment; the loader needs the host page size",
+  "component": "MuseScore AppImage built with patchelf --with-page-size=4096; libsndfile.so.1 PT_LOAD segments aligned to 4096, mapped by ld.so at launch",
+  "operation": "virtual_memory_map",
+  "request": {
+    "size": 1048576,
+    "exact_address_required": false,
+    "protection": {
+      "read": true,
+      "write": false,
+      "execute": false
+    },
+    "file_backed": true,
+    "required_page_size": 4096,
+    "required_page_size_relation": "at_most"
+  },
+  "assumptions": {
+    "guest_host_identity_required": false,
+    "translation_layer_available": false,
+    "retries_on_failure": false
+  },
+  "required_postconditions": [
+    "a file-backed ELF PT_LOAD segment whose (p_vaddr - p_offset) is congruent to 0 modulo 4096 can be mapped: the host page size must not exceed that congruence or ld.so refuses it with 'ELF load command address/offset not page-aligned'"
+  ],
+  "permitted_fallbacks": [],
+  "failure_sink": {
+    "kind": "process_exit",
+    "description": "MuseScore #20342: ld.so reports 'libsndfile.so.1: ELF load command address/offset not page-aligned' and the process never starts. patchelf was built --with-page-size=4096 and did not auto-detect the host page size"
+  },
+  "assumption_evidence": "specified_guarantee",
+  "extraction_limitations": [
+    "required_page_size at_most 4096 stands in for the glibc predicate (p_vaddr - p_offset) mod host_page == 0. The schema cannot encode a per-segment congruence, so it encodes the host page bound that the worst offending segment implies. The byte-exact per-segment check lives in tools/campaign/ldso_predicate.py, not in this contract.",
+    "the incident is HISTORICAL and FIXED; this contract exists for retro-validation and as the Class-A anchor of the two-class 16K model, not as a live upstream report."
+  ],
+  "x_campaign": {
+    "project": "MuseScore (via patchelf / AppImage), aarch64",
+    "source": "github.com/musescore/MuseScore#20342; glibc elf/dl-load.c; patchelf --with-page-size",
+    "quote": "libsndfile.so.1: ELF load command address/offset not page-aligned",
+    "expected_on_host": "linux/x86_64+unknown",
+    "expected_verdict": "SUPPORTED",
+    "expected_verdict_by_host": {
+      "macos/aarch64+none": "UNSUPPORTED",
+      "macos/x86_64+rosetta2": "SUPPORTED",
+      "windows/x86_64+none": "SUPPORTED"
+    },
+    "expected_verdict_by_host_rationale": "required_page_size at_most 4096; only macos/aarch64+none (16384) exceeds it, so RS-VM-0006 fires there. The historical incident was a 16K aarch64 LINUX host (Asahi/Pi5); macos/aarch64+none is the only measured 16K profile in this tree and stands in for it.",
+    "real_predicate": "the loader test is (p_vaddr - p_offset) mod host_page_size == 0, NOT p_align. v4.2.0-beta.2 aarch64 lib/libsndfile.so.1 PT_LOAD: p_offset=0x74000 p_vaddr=0x86000 delta=0x12000 -> delta mod 16384 = 0x2000 != 0 (rejected on 16K); delta mod 4096 = 0 (loads on 4K). 15 of 154 objects fail on 16K.",
+    "status": "HISTORICAL, FIXED. #20342 opened 2023-12-06, closed(completed) 2023-12-07. Verified at the binary level in v4.2.0-beta.2 aarch64 (sha256 316697c5...76485). Current v4.7.4 is clean: 665 PT_LOADs, 0 rejected on 16K. NOT reportable upstream; value is retro-validation.",
+    "verified_by": "static ELF analysis of the exact reporter asset, matching the glibc source predicate bit-for-bit; live 16K runtime confirmation not performed (needs a 16K aarch64 host)",
+    "correction": "an earlier draft of this field wrongly said the issue was OPEN/unresolved; corrected against the GitHub API state 2026."
+  }
+}
