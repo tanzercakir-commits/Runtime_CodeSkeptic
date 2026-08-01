@@ -423,6 +423,38 @@ CASES = [
                                         "## 2026-07-25 — stale sense of today\n\nbody\n"})],
          expect_fail=True, expect_text="too far for a timezone artifact"),
 
+    # ---- check_profiles_fresh: a measurement older than its instrument -
+    # An external reviewer found a committed macOS profile carrying a ceiling
+    # bug two later commits had already fixed - the profile was never
+    # regenerated, and no guard asked whether a measurement still matches the
+    # probe that made it.
+    Case("check_profiles_fresh.py",
+         "a profile older than the probe that makes it is stale",
+         {},
+         commits=[("2026-07-25T12:00:00+00:00",
+                   {"profiles/measured/x.measured.json":
+                        '{"platform":{"os":"macos"},"virtual_memory":{}}',
+                    "src/probe/vm_probe_macos.cpp": "// probe v1\n"}),
+                  ("2026-07-27T12:00:00+00:00",
+                   {"src/probe/vm_probe_macos.cpp":
+                        "// probe v2 - ceiling measured correctly now\n"})],
+         expect_fail=True, expect_text="STALE"),
+
+    Case("check_profiles_fresh.py",
+         "a profile regenerated after the probe change passes",
+         {},
+         commits=[("2026-07-25T12:00:00+00:00",
+                   {"profiles/measured/x.measured.json":
+                        '{"platform":{"os":"macos"},"virtual_memory":{}}',
+                    "src/probe/vm_probe_macos.cpp": "// probe v1\n"}),
+                  ("2026-07-27T12:00:00+00:00",
+                   {"src/probe/vm_probe_macos.cpp": "// probe v2\n"}),
+                  ("2026-07-28T12:00:00+00:00",
+                   {"profiles/measured/x.measured.json":
+                        '{"platform":{"os":"macos"},'
+                        '"virtual_memory":{"note":"regenerated"}}'})],
+         expect_fail=False),
+
     # ---- check_includes: the MSVC class, caught without MSVC -----------
     Case("check_includes.py", "back_inserter without <iterator> fails",
          {"src/vm/impact.cpp": "#include <algorithm>\n#include <set>\n"

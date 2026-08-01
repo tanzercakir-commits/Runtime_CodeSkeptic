@@ -16,6 +16,58 @@ re-litigated; a mistake recorded here does not need to be re-made.
 
 ---
 
+## 2026-08-01 — a committed measurement outlived its instrument (found by an external run)
+
+**Changed.** Both committed macOS profiles regenerated from the current CI
+measurement, and a new guard added so a measurement can never again outlive the
+probe that made it.
+
+### What was stale, and how it was found
+
+An external reviewer built the tool on their own **Apple Silicon M1**, measured
+their host, and compared it to
+`profiles/measured/macos-14-arm64-native.measured.json`. It carried
+`max_user_address = 0x600000000000` and no `max_single_reservation`. **Both are
+the exact bug** that `d6abf18` ("macOS reported its own layout as the top of the
+address space") and `9311e1c` ("the ceiling asked whether an address was free,
+not whether it existed") fixed on 2026-07-27. The profile was last written by
+`a509cca` on 2026-07-25 — `git merge-base` confirms it is an ancestor of both
+fixes — and was **never regenerated**. The rosetta profile had the same stale
+ceiling.
+
+So the repository shipped two "measured" profiles carrying a ceiling bug the
+code had already corrected, and **every guard passed**, because none of them
+asked whether a committed measurement still matched the probe that produces it.
+
+### The fix, and the guard that makes it loud
+
+| | |
+|---|---|
+| **+** | both macOS profiles regenerated from the authoritative CI measurement (`c49cb4d`, same `macos-14` host, current probe): `max_user_address` `0x600000000000 → 0x7ffffe000000` (just under 2⁴⁷, the Apple Silicon user-VA ceiling), and `max_single_reservation` now present (64 TiB). The doc references to the old value were left — they are the append-only history describing the bug, not live claims |
+| **+** | `tools/guards/check_profiles_fresh.py`: for each committed measured profile, git's record of when it was last committed is compared to when the probe SOURCE for its OS last changed. A profile older than its instrument is stale and fails. Same shape as `check_dates.py` — git is the record, not the author. Selftest 87 → **89**; the failing case commits a probe source *after* the profile and expects `STALE` |
+| **−** | this guard did not exist because the drift class was not imagined. It is the sixth or seventh time the pattern repeats: the defect was in the state nobody re-checked. A measured fact recorded once and never re-derived drifts exactly like a documented claim drifts from code |
+
+Runs meaningfully in CI: the build-and-test job already checks out with
+`fetch-depth: 0` (for `check_dates`), so the git history this guard needs is
+there. In a shallow clone it skips rather than guessing — the honest default.
+
+### The bonus the external run also produced
+
+The same M1 run **independently measured the same 16K facts as CI** — page size
+16384, allocation granularity 16384, `posix_lazy`, W^X enforced — signing the
+MuseScore RS-VM-0006 prediction on a **second independent measured 16K host**,
+with a tamper-evident evidence bundle (`rs-replay` confirmed reproduced, and
+the reviewer proved the hash check fires by editing a byte → `TAMPERED`). The
+four playbook contracts reproduced their macOS-16K column 4/4, confidence
+levels included. None of that is committed — it is the reviewer's test output —
+but it is why the stale profile surfaced at all.
+
+**Next.** The real-world hunt continues (current aarch64 AppImage scan for a
+still-open incompatibility). Separately, the CI macOS profiles are current
+again and cannot silently drift past the probe.
+
+---
+
 ## 2026-08-01 — T-022: the third operating system, and Gate B passed
 
 **Changed.** The false-positive campaign reaches Windows. `observe_

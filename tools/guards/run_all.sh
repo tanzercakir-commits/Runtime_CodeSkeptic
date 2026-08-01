@@ -58,6 +58,14 @@
 #                    build, and the diagnostics published a ctest run of a tree
 #                    that had never compiled. It reads the flags out of
 #                    CMakeLists.txt now instead of anyone restating them
+#   check_profiles.. an external reviewer running the tool on their own M1 found
+#                    a committed macOS profile carrying a ceiling bug (max_user_
+#                    address 0x600000000000, no max_single_reservation) that two
+#                    commits had already fixed - the profile was written before
+#                    the fix and never regenerated, and no guard asked whether a
+#                    committed measurement still matches the probe that made it.
+#                    A measurement older than its instrument records what the old
+#                    probe would have said, not the host
 #   check_roadmap    the owner's rule, stated 2026-07-30: ROADMAP and PLAN carry
 #                    the project's spirit and must not break; TODO and PROGRESS
 #                    change with the work. ROADMAP is frozen by hash (edited
@@ -104,6 +112,7 @@ run "one probe per platform" python3 "$HERE/check_probe_platforms.py"
 run "ctest names a config"  python3 "$HERE/check_workflow_ctest.py"
 run "windows cross-compile" python3 "$HERE/check_windows_compiles.py"
 run "roadmap is frozen"     python3 "$HERE/check_roadmap.py"
+run "profiles are fresh"    python3 "$HERE/check_profiles_fresh.py"
 
 echo
 if [ "$failed" -eq 0 ]; then
