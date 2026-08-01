@@ -51,6 +51,23 @@ Runs meaningfully in CI: the build-and-test job already checks out with
 `fetch-depth: 0` (for `check_dates`), so the git history this guard needs is
 there. In a shallow clone it skips rather than guessing — the honest default.
 
+### The guard's first real CI run found two more
+
+It skips in the sandbox (shallow), so its first true run was in CI on
+`6929dcc` — and it immediately failed, correctly. The **Windows** profile was
+stale too: its headline facts (page size, granularity, ceiling, 64 TiB
+reservation) were identical to the current CI measurement, but its
+`profile_id` differed, because `vm_probe_windows.cpp` grew the T-017
+hinted-reservation field (`97f40a6`) after the profile was committed
+(`50aefca`). A profile can be stale without a single visible number changing —
+regenerated from its CI job. The **Wine** profile went with it, and it is the
+one case that has NO CI workflow to regenerate from: re-measuring under a
+different Wine version would be a new measurement, not a refresh. So the guard
+grew a documented exemption (the `docs/TODO.md` "Deliberately not tracked"
+discipline — an exemption states its reason and the guard prints it every
+run), and the Wine profile is now an explicit historical artifact rather than
+a silent stale one. Selftest 89 → **90**.
+
 ### The bonus the external run also produced
 
 The same M1 run **independently measured the same 16K facts as CI** — page size

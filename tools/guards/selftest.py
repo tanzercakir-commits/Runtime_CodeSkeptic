@@ -455,6 +455,20 @@ CASES = [
                         '"virtual_memory":{"note":"regenerated"}}'})],
          expect_fail=False),
 
+    # An exempt profile (no CI job regenerates it) is stale by date and still
+    # passes - the guard prints its reason instead of failing. The Wine profile
+    # is the real instance; the guard's first CI run flagged it with Windows.
+    Case("check_profiles_fresh.py",
+         "an exempt profile with no CI regeneration path is not failed",
+         {},
+         commits=[("2026-07-25T12:00:00+00:00",
+                   {"profiles/measured/wine-9.0-on-linux-x86_64.measured.json":
+                        '{"platform":{"os":"windows"},"virtual_memory":{}}',
+                    "src/probe/vm_probe_windows.cpp": "// probe v1\n"}),
+                  ("2026-07-27T12:00:00+00:00",
+                   {"src/probe/vm_probe_windows.cpp": "// probe v2\n"})],
+         expect_fail=False, expect_text="exempt"),
+
     # ---- check_includes: the MSVC class, caught without MSVC -----------
     Case("check_includes.py", "back_inserter without <iterator> fails",
          {"src/vm/impact.cpp": "#include <algorithm>\n#include <set>\n"

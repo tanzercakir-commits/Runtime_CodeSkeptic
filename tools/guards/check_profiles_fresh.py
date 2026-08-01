@@ -49,6 +49,25 @@ MEASURED = ROOT / "profiles" / "measured"
 # header and the arena walk are in every set because they shape the ranges and
 # the ceiling every platform reports.
 SHARED = ["include/runtimeskeptic/probe/vm_probe.hpp"]
+
+# Profiles that no CI workflow regenerates. Each needs a stated reason, the same
+# discipline as docs/TODO.md's "Deliberately not tracked": an exemption without
+# a reason is just a silenced guard, and the guard prints the reason on every
+# run so the exemption stays visible rather than forgotten.
+#
+# This mechanism exists because the guard's FIRST real CI run (it skips in the
+# shallow sandbox) found the Windows profile stale too - correctly, it predated
+# the T-017 hinted-reservation field and had a different profile_id - and the
+# Wine profile with it. Windows regenerates from its CI job; Wine does not.
+EXCEPTIONS = {
+    "wine-9.0-on-linux-x86_64.measured.json":
+        "a demonstration that the Windows probe runs under Wine, measured once "
+        "by hand; no CI workflow regenerates it, and re-measuring in a "
+        "different environment would produce a different Wine version, not a "
+        "refresh of THIS one. Treated as a historical artifact - its facts "
+        "predate the T-017 hinted-reservation field and are not maintained.",
+}
+
 PROBE_SOURCES = {
     "macos": ["src/probe/vm_probe_macos.cpp", "src/probe/arena_walk.cpp",
               "include/runtimeskeptic/probe/arena_walk.hpp"] + SHARED,
@@ -87,6 +106,9 @@ def main() -> int:
 
     for profile in sorted(MEASURED.glob("*.measured.json")):
         rel = str(profile.relative_to(ROOT))
+        if profile.name in EXCEPTIONS:
+            print(f"  exempt: {profile.name} - {EXCEPTIONS[profile.name]}")
+            continue
         try:
             os_name = json.loads(profile.read_text())["platform"]["os"]
         except (json.JSONDecodeError, KeyError) as exc:
