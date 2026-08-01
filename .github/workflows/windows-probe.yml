@@ -92,11 +92,15 @@ on:
       # Platform detection: RS_PLATFORM_WINDOWS is defined here, and nowhere else.
       - 'CMakeLists.txt'
       - 'src/CMakeLists.txt'
-      # T-018's ETW feasibility runs in this workflow, so its code triggers it.
+      # T-022's ETW campaign runs in this workflow, so its code triggers it.
       # Same reasoning as the entry above about vm_probe_unimplemented.cpp, and
       # the same reasoning that had to be applied to macos-probe.yml on
-      # 2026-07-30 after a campaign rewrite triggered nothing.
+      # 2026-07-30 after a campaign rewrite triggered nothing: a workflow that
+      # runs a piece of code must be triggered by a change to that code.
       - 'tools/campaign/etw_feasibility.py'
+      - 'tools/campaign/observe_requirements.py'
+      - 'tools/campaign/false_positive_rate.py'
+      - 'tools/campaign/run_false_positive.sh'
 
 permissions:
   contents: write
@@ -232,38 +236,53 @@ jobs:
           print("confirmed: a measured profile from a real Windows host")
           PY
 
-      # T-018 FEASIBILITY, NOT YET THE INSTRUMENT. The false-positive campaign
-      # needs a second OS, and on Windows the tracer is ETW. Every document
-      # describes the kernel VirtualAlloc events' fields differently, and this
-      # project has already paid for writing against documentation instead of
-      # against data (the mingw flag list, the ctest -C). So before any
-      # observer exists, one short kernel trace around one busy Python process
-      # is decoded and SUMMARIZED - histogram of event kinds, the field names
-      # each carries, raw samples of anything allocation-shaped. The observer
-      # gets written against this output. continue-on-error because a
-      # feasibility probe that fails the measurement job it hitched a ride on
-      # would cost the thing this workflow exists to produce.
-      - name: ETW feasibility for T-018
-        id: etw_feasibility
+      # T-022: THE CAMPAIGN'S THIRD OPERATING SYSTEM. The same observe-and-
+      # replay loop that measured the Linux and macOS false-positive rates,
+      # under the tracer this OS has: ETW, via the NT Kernel Logger. The
+      # feasibility step that used to sit here served its purpose in one run
+      # (refs/measurements/<sha>/etw-feasibility: the live VirtualAlloc event
+      # and its fields) and is replaced by the instrument it justified.
+      #
+      # continue-on-error for the FIRST rounds: the Windows PROBE measurement
+      # is this job's real deliverable and it works; the campaign is new code
+      # touching system-wide ETW, and a green probe run that also publishes the
+      # campaign's raw debug is how it gets corrected without costing the
+      # measurement. It gates the job once it is trusted, exactly as the macOS
+      # lane did.
+      - name: False-positive campaign under ETW (T-022)
+        id: campaign
         continue-on-error: true
-        shell: cmd
-        run: |
-          logman start "NT Kernel Logger" -p "Windows Kernel Trace" (process,virtalloc) -o kernel.etl -ets
-          python -c "x=[bytearray(1<<20) for _ in range(64)]; import mmap; m=mmap.mmap(-1, 1<<24); m.close(); print('workload ok')"
-          logman stop "NT Kernel Logger" -ets
-          tracerpt kernel.etl -o etw.xml -of XML -y
-          python tools\campaign\etw_feasibility.py etw.xml > etw-feasibility.txt 2>&1
-          type etw-feasibility.txt
-
-      - name: Publish the ETW feasibility summary
-        if: always() && steps.etw_feasibility.outcome != 'skipped'
         shell: bash
         run: |
-          [ -f etw-feasibility.txt ] \
-            || echo "(the ETW feasibility step produced no summary - read its log)" \
-                 > etw-feasibility.txt
+          set -o pipefail
+          RS_BIN=build/bin bash tools/campaign/run_false_positive.sh build/fp-windows 2>&1 \
+            | tee fp-windows-summary.txt
+          exit "${PIPESTATUS[0]}"
+
+      - name: Publish the campaign measurement and its raw debug
+        if: always() && steps.campaign.outcome != 'skipped'
+        shell: bash
+        run: |
+          [ -f fp-windows-summary.txt ] \
+            || echo "(the campaign step produced no summary - read its log)" \
+                 > fp-windows-summary.txt
+          # EVERYTHING the run produced travels, not the headline: the raw
+          # .etw sample files (whole XML of the first live events, so a wrong
+          # field assumption announces itself in the next round - the habit
+          # that caught a decimal-as-hex misread on the macOS lane), the
+          # emitted bundles, observe.log, and the host profile. tar is in Git
+          # Bash.
+          tar czf fp-windows-debug.tgz -C build/fp-windows . 2>/dev/null \
+            || echo "(no build/fp-windows to archive)" > fp-windows-debug.missing
+          FILES="fp-windows-summary.txt"
+          [ -f build/fp-windows/false-positive-rate.json ] \
+            && FILES="$FILES build/fp-windows/false-positive-rate.json"
+          [ -f build/fp-windows/host.json ] \
+            && FILES="$FILES build/fp-windows/host.json"
+          [ -f fp-windows-debug.tgz ] && FILES="$FILES fp-windows-debug.tgz"
+          [ -f fp-windows-debug.missing ] && FILES="$FILES fp-windows-debug.missing"
           bash tools/ci/publish_measurement.sh measurements \
-            "etw-feasibility" "${{ github.sha }}" etw-feasibility.txt
+            "fp-campaign-windows" "${{ github.sha }}" $FILES
 
       - uses: actions/upload-artifact@v4
         if: always() && steps.measure.outcome == 'success'

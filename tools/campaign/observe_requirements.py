@@ -59,6 +59,7 @@ import shlex
 import subprocess
 import sys
 import tempfile
+import xml.etree.ElementTree as ET
 from pathlib import Path
 
 # 14068 mmap(NULL, 8192, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0) = 0x7ff924600000
@@ -502,6 +503,206 @@ def run_once(command, keep_trace=None):
         os.unlink(trace_path)
 
 
+# ---------------------------------------------------------------------------
+# Windows: ETW, the NT Kernel Logger.
+#
+# There is no strace or dtrace on Windows; the tracer is Event Tracing for
+# Windows. The T-018 ETW feasibility round decoded a real kernel trace on the
+# runner and settled what this lane parses, and three of its facts shape every
+# requirement produced here:
+#
+#   - THE KERNEL VirtualAlloc EVENT CARRIES NO PROTECTION. flProtect is simply
+#     not in it. So Windows requirements, exactly like the macOS
+#     allocate_trap ones, record read+write as the platform default and
+#     DECLARE that protection was not observed rather than presenting a
+#     default as a fact.
+#   - IT CARRIES THE RESULT, NOT THE REQUEST. BaseAddress is where the mapping
+#     landed and RegionSize is the ALREADY-ROUNDED size. There is no way to
+#     see the ragged request that `mmap(NULL, 53867)` shows under strace - so,
+#     as on macOS, RS-VM-0005 (size not a granularity multiple) cannot fire on
+#     this path. The 42% that forced T-019's decision is a strace-visible,
+#     Linux-mmap phenomenon; both other tracers see post-rounding numbers.
+#   - ETW IS SYSTEM-WIDE. The trace contains every process on the runner, so
+#     the observer MUST filter to the workload's own pid subtree or it
+#     measures the CI agent (the exact warning T-022 was filed with). The
+#     Process events in the same trace carry ParentId, and the subtree is
+#     built from them.
+# ---------------------------------------------------------------------------
+KERNEL_LOGGER = "NT Kernel Logger"
+
+
+def _etw_local(tag):
+    return tag.rsplit("}", 1)[-1]
+
+
+def _etw_rendering(event):
+    """(opcode_name, event_name) from tracerpt's RenderingInfo block, where the
+    human-readable names live ('VirtualAlloc', 'Process'). System/Opcode is a
+    bare number and comes first in document order; RenderingInfo/Opcode is the
+    name and comes second, so the non-numeric one wins."""
+    opcode = name = ""
+    for child in event.iter():
+        tag = _etw_local(child.tag)
+        if tag == "Opcode":
+            text = (child.text or "").strip()
+            if text and not text.isdigit():
+                opcode = text
+        elif tag == "EventName":
+            name = (child.text or "").strip()
+    return opcode, name
+
+
+def _etw_data(event):
+    d = {}
+    for child in event.iter():
+        if _etw_local(child.tag) == "Data":
+            key = child.get("Name")
+            if key:
+                d[key] = (child.text or "").strip()
+    return d
+
+
+def parse_etw(xml_path, root_pid):
+    """Build the process subtree of root_pid, keep its live VirtualAllocs.
+
+    Returns (calls, raw_samples). The raw samples are the whole XML of the
+    first live events, written beside the run so a wrong field assumption
+    announces itself in the next measurement - the habit that caught a
+    decimal-as-hex misread on the macOS lane."""
+    parent_of = {}
+    allocs = []                       # (pid_str, base_str, size_str, flags_str)
+    raw = []
+    try:
+        for _, ev in ET.iterparse(xml_path):
+            if _etw_local(ev.tag) != "Event":
+                continue
+            opcode, name = _etw_rendering(ev)
+            if name == "Process" and opcode in ("Start", "DCStart"):
+                data = _etw_data(ev)
+                try:
+                    parent_of[int(data.get("ProcessId", "").strip())] = \
+                        int(data.get("ParentId", "").strip())
+                except ValueError:
+                    pass
+                if len(raw) < 45 and opcode == "Start":
+                    raw.append(ET.tostring(ev, encoding="unicode")[:1400])
+            elif opcode == "VirtualAlloc":     # LIVE only, not DCStart/DCEnd
+                data = _etw_data(ev)
+                allocs.append((data.get("ProcessId", ""),
+                               data.get("BaseAddress", ""),
+                               data.get("RegionSize", ""),
+                               data.get("Flags", "")))
+                if len(raw) < 45:
+                    raw.append(ET.tostring(ev, encoding="unicode")[:1400])
+            ev.clear()
+    except ET.ParseError as exc:
+        sys.stderr.write(f"ETW XML parse stopped early: {exc}\n")
+
+    children = {}
+    for pid, ppid in parent_of.items():
+        children.setdefault(ppid, []).append(pid)
+    subtree = {root_pid}
+    stack = [root_pid]
+    while stack:
+        for c in children.get(stack.pop(), []):
+            if c not in subtree:
+                subtree.add(c)
+                stack.append(c)
+
+    calls = []
+    for pid_s, base_s, size_s, flags_s in allocs:
+        try:
+            pid = int(pid_s.strip())
+        except ValueError:
+            continue
+        if pid not in subtree:
+            continue
+        try:
+            base = int(base_s, 0)
+            size = int(size_s, 0)
+        except ValueError:
+            continue
+        if size == 0:
+            continue
+        calls.append({
+            "kind": "mmap",
+            # ETW gives the RESULT, never the request: we cannot know whether a
+            # base was demanded, so requested_address is unknown and fixed
+            # stays False. Treating the returned base as a demand would
+            # manufacture exact-placement findings.
+            "requested_address": None,
+            "size": size,
+            "protection": {"read": True, "write": True, "execute": False},
+            "protection_observed": False,
+            "protection_note": (
+                "Protection was NOT observed. The Windows kernel VirtualAlloc "
+                "ETW event carries no flProtect; read+write is recorded as the "
+                "platform default, and the real protection is set by the "
+                "VirtualAlloc flProtect argument or a later VirtualProtect that "
+                "this trace does not capture."),
+            "fixed": False,
+            "anonymous": True,
+            "file_backed": False,
+            "file_offset": 0,
+            "returned_address": base,
+        })
+    return calls, raw
+
+
+def run_once_etw(command, keep_trace):
+    """One system-wide kernel trace around the workload. Returns (rc, [calls]).
+
+    A single NT Kernel Logger session exists system-wide, so a leftover from a
+    crashed run would make `logman start` fail with 'already exists' - hence
+    the defensive stop first."""
+    etl = tempfile.NamedTemporaryFile(suffix=".etl", delete=False).name
+    xml = tempfile.NamedTemporaryFile(suffix=".xml", delete=False).name
+    try:
+        subprocess.run(["logman", "stop", KERNEL_LOGGER, "-ets"],
+                       capture_output=True, text=True)
+        start = subprocess.run(
+            ["logman", "start", KERNEL_LOGGER, "-p", "Windows Kernel Trace",
+             "(process,virtalloc)", "-o", etl, "-ets"],
+            capture_output=True, text=True)
+        if start.returncode != 0:
+            sys.stderr.write("logman start failed: "
+                             + start.stdout + start.stderr + "\n")
+            return 70, []
+        proc = subprocess.Popen(command, stdout=subprocess.PIPE,
+                                stderr=subprocess.PIPE)
+        root_pid = proc.pid
+        try:
+            proc.communicate(timeout=180)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+            proc.communicate()
+        rc = proc.returncode
+        subprocess.run(["logman", "stop", KERNEL_LOGGER, "-ets"],
+                       capture_output=True, text=True)
+        conv = subprocess.run(
+            ["tracerpt", etl, "-o", xml, "-of", "XML", "-y"],
+            capture_output=True, text=True)
+        if not os.path.exists(xml) or os.path.getsize(xml) == 0:
+            sys.stderr.write("tracerpt produced no XML: "
+                             + conv.stdout + conv.stderr + "\n")
+            return rc, []
+        calls, raw = parse_etw(xml, root_pid)
+        if keep_trace:
+            Path(keep_trace).write_text(
+                f"root_pid={root_pid}\nexit={rc}\n"
+                f"live-events-parsed-into-calls={len(calls)}\n\n"
+                f"=== raw live VirtualAlloc / Process Start samples "
+                f"({len(raw)}) ===\n" + "\n---\n".join(raw),
+                errors="replace")
+        return rc, calls
+    finally:
+        for f in (etl, xml):
+            try:
+                os.unlink(f)
+            except OSError:
+                pass
+
+
 def shape_key(call):
     """What is invariant across runs: everything except the chosen address."""
     p = call["protection"]
@@ -563,9 +764,9 @@ def requirement(name, component, call, with_address, observed):
         },
         "assumption_evidence": "observed_invariant",
         "extraction_limitations": [
-            "Derived mechanically from a syscall trace (strace on Linux, "
-            "dtrace on macOS) of a program that ran to completion on this "
-            "host. It asserts only what the syscall carried: no intent, no "
+            "Derived mechanically from a kernel trace (strace on Linux, dtrace "
+            "on macOS, ETW on Windows) of a program that ran to completion on "
+            "this host. It asserts only what the trace carried: no intent, no "
             "error handling, no guest/host identity requirement, and no "
             "failure sink.",
         ],
@@ -581,12 +782,13 @@ def requirement(name, component, call, with_address, observed):
     # in the document is the difference between a default and an observation,
     # and this project's whole method is that the difference is written down.
     if not call.get("protection_observed", True):
-        r["extraction_limitations"].append(
+        r["extraction_limitations"].append(call.get(
+            "protection_note",
             "Protection was NOT observed. This call came from "
             "_kernelrpc_mach_vm_allocate_trap, which takes no protection "
             "argument; read+write is the platform default, and the "
             "protection this mapping ends up with is set by a later "
-            "mach_vm_protect_trap that this document does not model.")
+            "mach_vm_protect_trap that this document does not model."))
     return r
 
 
@@ -607,16 +809,21 @@ def main() -> int:
     outdir = Path(args.out)
     outdir.mkdir(parents=True, exist_ok=True)
 
-    tracer = "dtrace" if sys.platform == "darwin" else "strace"
+    if sys.platform == "darwin":
+        tracer = "dtrace"
+    elif sys.platform.startswith("win"):
+        tracer = "etw"
+    else:
+        tracer = "strace"
     convention_counts = {}
 
-    if tracer == "dtrace":
-        # dtrace's exit status is not a trustworthy copy of the child's, so
-        # "this program runs to completion on this host" - the fact the whole
-        # campaign rests on - is established by running it once WITHOUT the
-        # tracer. A program that only exits 0 while untraced would still be
-        # honest ground truth for its untraced behaviour; a program that
-        # cannot exit 0 at all must not become a contract.
+    if tracer in ("dtrace", "etw"):
+        # Neither dtrace's nor ETW's own exit status is a trustworthy copy of
+        # the child's, so "this program runs to completion on this host" - the
+        # fact the whole campaign rests on - is established by running it once
+        # WITHOUT the tracer. A program that only exits 0 while untraced would
+        # still be honest ground truth for its untraced behaviour; a program
+        # that cannot exit 0 at all must not become a contract.
         verify = subprocess.run(command, capture_output=True, timeout=180)
         if verify.returncode != 0:
             print(f"{label}: exited {verify.returncode} untraced; not usable "
@@ -628,6 +835,8 @@ def main() -> int:
         keep = outdir / f"{label}.run{i}.{tracer}" if i == 0 else None
         if tracer == "dtrace":
             rc, calls = run_once_dtrace(command, keep, convention_counts)
+        elif tracer == "etw":
+            rc, calls = run_once_etw(command, keep)
         else:
             rc, calls = run_once(command, keep_trace=keep)
         exit_codes.append(rc)
