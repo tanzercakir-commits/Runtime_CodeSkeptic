@@ -16,6 +16,74 @@ re-litigated; a mistake recorded here does not need to be re-made.
 
 ---
 
+## 2026-08-01 — T-022: the third operating system, and Gate B passed
+
+**Changed.** The false-positive campaign reaches Windows. `observe_
+requirements.py` gains an ETW lane (NT Kernel Logger, `tracerpt`, pid-subtree
+filtered); `run_false_positive.sh` now drives all three operating systems;
+`windows-probe.yml` runs the campaign and publishes to
+`refs/measurements/<sha>/fp-campaign-windows`. **Windows 10.0.26100: 11
+programs, 247 requirements, 0 false positives**
+(`campaigns/false-positive/2026-08-windows-x86_64.json`, campaign doc §9).
+**Gate B is passed** — three operating systems, three tracers, 0 false
+positives, no requirement authored. The Phase 3 false-positive exit criterion
+and Gate B both go `[done]`.
+
+### The two landings that had to meet, and did
+
+The result worth remembering is not the 0 — it is the **174**. `RS-VM-0005`
+fired 174 times on Windows, the first time in the entire campaign the rule
+fires against real software. Windows is the one host whose allocation
+granularity (64 KiB) differs from its page size (4 KiB), and the ETW event
+carries the committed, page-granular `RegionSize`:
+
+```
+247 requirements, all page-aligned (4096)
+ 73 also 64 KiB-aligned  (the reservations)
+174 page-aligned but NOT 64 KiB-aligned  == exactly the RS-VM-0005 count
+```
+
+And every one is `SUPPORTED` with an `info` note. **Had T-022 measured Windows
+before T-019 decided RS-VM-0005's shape, the honest Windows verdict would have
+been 174 gate-breaking `CONDITIONALLY_SUPPORTED` — "correct and unusable in a
+gate" — on the one platform where the rule matters most.** T-019 (2026-07-30)
+and T-022 (2026-08-01) are two days apart and the second is the proof the first
+was right: the rule speaks as information exactly where it finally has
+something to say.
+
+### What was learned about the tracer
+
+| | |
+|---|---|
+| **+** | it worked on the FIRST real round. The parser was written against the raw XML the feasibility round published, not against documentation, and the pid-subtree filter (ETW is system-wide) correctly kept 231 python3 allocations out of a whole-machine trace - proven because different programs got different counts (git 99, java 435), which a broken filter returning the system-wide number could not produce |
+| **+** | the raw-events-travel-with-the-run habit, added on the macOS lane, was carried forward and would have caught a field-position error had there been one. There was not: sizes were all page-aligned and the RS-VM-0005 count matched the size histogram exactly |
+| **−** | ETW sees less than `strace`, and every gap is in the requirements and §9.3: no protection (`flProtect` is not in the kernel event), no address population (it reports the resulting base, never whether one was demanded), and the result not the request (`RegionSize` is post-commit). `reserve_commit_model = windows_reserve_commit` was exercised by the campaign for the first time |
+
+### The portability work under it
+
+`run_false_positive.sh` became genuinely cross-OS: it resolves the
+`.exe`/`RelWithDebInfo` binary path, picks `python` vs `python3`, checks
+`logman`/`tracerpt` on Windows, and its workloads are **path-free** where the
+launcher is a native Windows exe — a POSIX path handed to a native binary is a
+portability trap, and sidestepping it before the fact (rather than after a red
+round) is the method this project runs on. Linux re-run after the change: 0
+false positives, unchanged.
+
+### Where this leaves the project
+
+Gate B was the last *measured* exit criterion in Phase 3. What remains is
+either owner-blocked (Phase 5 / CodeSkeptic, T-011) or new scope (Phase 4+),
+plus one blocked demonstration (RS-VM-0012 reserve/commit under memory
+pressure, T-012, which the harness cannot provoke safely). **There is no
+unfinished measurement standing between the tool and its own Phase 3 claim.**
+
+**Next.** Nothing is forced. The most defensible pick on the compass is T-021
+(the synthetic-only coverage backlog), and it is a `[later]`. The honest state
+is that the Phase 3 promise is measured and kept across three operating
+systems.
+
+---
+
 ## 2026-07-30 — T-018: the campaign gets a second operating system
 
 **Changed.** `observe_requirements.py` grows a macOS lane — `dtrace`, with a

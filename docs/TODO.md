@@ -46,19 +46,29 @@ completes without leaving a trace in the log is work that will be redone.
 For the session that begins after any amount of forgetting, on any model.
 Everything here is measured or enforced, not remembered.
 
-**Where the project stands (2026-07-30):**
+**Where the project stands (2026-08-01):**
 
 ```
 Phase 0-2   DONE
-Phase 3     PARTIAL - Gate B is the only open exit, and T-022 is the only
-            ground it still stands on
+Phase 3     PARTIAL, but the finish line moved: GATE B PASSED. The one thing
+            still open in Phase 3 is demonstration 5 (RS-VM-0012, reserve/
+            commit under memory pressure), which is BLOCKED - the harness
+            cannot provoke exhaustion safely (T-012), not a matter of effort.
 Phase 4+    not started; Phase 5 blocked by the owner's instruction
-Gate B      false-positive rate measured 0 on TWO operating systems:
-              Linux x86-64   1292 requirements   (strace)
-              macOS 14 arm64   37 requirements   (dtrace, mach traps)
-            remaining: Windows (T-022), the one host where allocation
-            granularity (64 KiB) differs from page size (4 KiB)
+Gate B      false-positive rate measured 0 on THREE operating systems:
+              Linux x86-64     1292 requirements   (strace)
+              macOS 14 arm64     37 requirements   (dtrace, mach traps)
+              Windows 10.0.26100 247 requirements  (ETW)
+            174 RS-VM-0005 notes on Windows, all SUPPORTED (T-019's payoff:
+            the noisy rule speaks as information, not a gate-breaking
+            condition, on the one host where it fires).
 ```
+
+**What "finish this project" now means.** Gate B was the last *measured* exit
+criterion. What is left is either blocked by the owner (Phase 5 / CodeSkeptic,
+T-011) or is new scope (Phase 4 runtime wrapper T-009, Phase 6+). There is no
+unfinished measurement standing between the tool and its own Phase 3 claim.
+The honest next moves are on the compass below, none of them urgent.
 
 **How to verify the tree before believing anything, including this file:**
 
@@ -109,76 +119,16 @@ it cannot push.
 
 ## Now
 
-### T-022 — The campaign's third operating system: Windows `[now]`
-
-**Serves:** the same thing T-018 served, and the platform whose address-space
-behaviour differs most in kind
-**Plan:** `docs/PLAN.md` Phase 3, "expected false-positive rate is low"
-**Done when:** the observe-and-replay loop runs on `windows-latest` against
-real programs and the measured false-positive rate is published beside the
-Linux and macOS ones.
-
-**The instrument is identified and the observer is not written.** The ETW
-feasibility round decoded a real NT Kernel Logger trace on the runner
-(`refs/measurements/3af0f9f/etw-feasibility`) and the events are there:
-
-```
-VirtualAlloc   x379   BaseAddress, RegionSize, ProcessId, Flags
-VirtualFree    x335   BaseAddress, RegionSize, ProcessId, Flags
-Process/Start          ImageFileName, CommandLine, ProcessId
-SystemConfig/CPU       PageSize, AllocationGranularity, HighestUserAddress
-```
-
-Note the last line: the kernel trace publishes the host's own
-`AllocationGranularity` and `HighestUserAddress`, which is an independent
-check on the probe's numbers and worth taking while the observer is being
-written.
-
-**What will be different from both existing lanes:**
-
-- **`Flags` is a bitmask of `MEM_COMMIT`/`MEM_RESERVE`/`MEM_TOP_DOWN`, not
-  protection.** Windows separates reserve from commit, which is `RS-VM-0012`'s
-  whole subject and has never been exercised against a real kernel.
-- **`ProcessId` filtering replaces `progenyof()`.** ETW is system-wide; the
-  trace will contain every process on the runner, and the observer must select
-  by the pid tree itself. Getting this wrong means measuring the false-positive
-  rate against the CI agent.
-- **64 KiB allocation granularity against a 4 KiB page size.** This is the one
-  host where the two differ, which is exactly the distinction §8.2 shows both
-  existing lanes could not exercise.
-
-**First step:** take the `VirtualAlloc`/`Process` records the feasibility
-round already published (`git fetch origin
-'+refs/measurements/*:refs/remotes/measurements/*'` then `git show
-refs/remotes/measurements/3af0f9ff56c314608c7b6a459f6060cd77d61d6c/etw-feasibility:etw-feasibility.txt`)
-and write the parser against THAT file, then run one round and compare its
-counts against a `logman` trace of a single known process before trusting
-anything.
-
-**The shape of the work, from the macOS lane that just closed:** the observer
-plugs into `observe_requirements.py` beside the strace and dtrace lanes; the
-scorer (`false_positive_rate.py`) and the bundle format need nothing - they
-are OS-blind. The CI wiring goes in `windows-probe.yml`, whose path filter
-must name every campaign file it runs (the macOS lane forgot this and the fix
-for the thing the workflow measures did not trigger the workflow - twice now
-in this repository). Publish through
-`tools/ci/publish_measurement.sh measurements "fp-campaign-windows" <sha> <files>`,
-and publish the RAW decoded events next to the parsed bundles: the macOS
-parser was saved by exactly that habit when a decimal flags word was being
-read as hex and agreeing with the correct answer by accident.
-
-**When it closes:** update campaign doc §8.4 and the Gate B line in
-`docs/PLAN.md` (both currently name T-022), move this item to Done with the
-measured numbers, and write the PROGRESS entry in the same commit -
-`check_todo.py` enforces the last two.
-
 ---
 
 ## Next
 
-*(empty - T-022 is the whole path to Gate B, and Gate B is the whole path to
-a finished Phase 3. After it: T-021, then the `Later` set, unless the owner
-lifts the Phase 5 block first.)*
+*(empty. Gate B is passed and no measured criterion is open. What is left is
+`Later` scope or owner-blocked work — nothing forced. The most defensible
+next pick is **T-021** (the synthetic-only coverage backlog: real, bounded,
+and the same "grade every claim" standard that has driven everything above),
+but it is a `[later]` and not urgent. The honest state of the project is that
+its Phase 3 promise is measured and kept.)*
 
 ---
 
@@ -317,6 +267,52 @@ Each needs a reason, so this cannot quietly become a way to empty the list.
 ---
 
 ## Done
+
+### T-022 — The campaign's third operating system: Windows `[done]`
+
+**Serves:** Gate B — a false-positive rate measured on one OS is a claim about
+one OS; this is the platform whose address-space behaviour differs most in kind
+**Plan:** `docs/PLAN.md` Phase 3, "expected false-positive rate is low"; Gate B
+**Done when:** the observe-and-replay loop runs on `windows-latest` against real
+programs and the measured false-positive rate is published beside the Linux and
+macOS ones.
+**Done:** Windows 10.0.26100, 11 programs, **247 requirements, 0 false
+positives**, under ETW (`campaigns/false-positive/2026-08-windows-x86_64.json`,
+campaign doc §9). **Gate B is passed** — three operating systems, three
+tracers, 0 false positives, no requirement authored.
+
+**The result that made T-019 and T-022 worth landing together:**
+`RS-VM-0005` fired **174 times** here — the first time in the whole campaign
+the rule fires against real software, because Windows is the one host whose
+allocation granularity (64 KiB) differs from its page size (4 KiB). The ETW
+`VirtualAlloc` event carries the committed (page-granular) `RegionSize`, so
+174 of 247 requested sizes are page-aligned but not 64 KiB-aligned — exactly
+the defect class the rule is for. Every one is `SUPPORTED` with an `info`
+note, not a condition: **had Windows been measured before T-019, the honest
+verdict would have been 174 gate-breaking `CONDITIONALLY_SUPPORTED` on the one
+platform where the rule matters most.**
+
+**The instrument, and what it cost:** ETW, the NT Kernel Logger, decoded with
+`tracerpt`, filtered to the workload's own pid subtree (system-wide capture
+would have measured the CI agent — the warning this item was filed with). It
+worked on the FIRST real round, because the parser was written against the raw
+XML the feasibility round published rather than against documentation, and
+because the whole XML of the first live events travels with every run so a
+wrong field assumption would announce itself. It did not have to: the pid
+filter kept 231 python3 allocations out of a system-wide trace, the sizes were
+all page-aligned, and the RS-VM-0005 count matched the size histogram exactly.
+
+**What ETW cannot see, recorded not hidden (§9.3):** no protection (the kernel
+event carries no `flProtect`; read+write default, declared unobserved), no
+address population (it reports the resulting base, never whether one was
+requested), and the result not the request (`RegionSize` is post-commit). All
+three named in the requirements and the campaign doc.
+
+**One correction made in passing:** the `run_false_positive.sh` orchestrator
+now drives all three operating systems — it resolves the `.exe`/`RelWithDebInfo`
+binary path, picks `python` vs `python3`, and its workloads are path-free where
+the launcher is a native Windows exe (a POSIX path to a native binary is a
+portability trap that would have cost a CI round).
 
 ### T-018 — The false-positive campaign leaves Linux `[done]`
 

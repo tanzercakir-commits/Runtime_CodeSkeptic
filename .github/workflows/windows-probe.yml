@@ -243,15 +243,16 @@ jobs:
       # (refs/measurements/<sha>/etw-feasibility: the live VirtualAlloc event
       # and its fields) and is replaced by the instrument it justified.
       #
-      # continue-on-error for the FIRST rounds: the Windows PROBE measurement
-      # is this job's real deliverable and it works; the campaign is new code
-      # touching system-wide ETW, and a green probe run that also publishes the
-      # campaign's raw debug is how it gets corrected without costing the
-      # measurement. It gates the job once it is trusted, exactly as the macOS
-      # lane did.
+      # It gated the job from the round after it was proven: T-022 measured 247
+      # requirements, 0 false positives, on the first real round (c49cb4d),
+      # with the pid-subtree filter and the RS-VM-0005 count both checked
+      # against the raw events. So this now fails the job on an ETW regression,
+      # loudly, exactly as the macOS campaign does - the continue-on-error that
+      # let the first round publish its debug without costing the measurement
+      # has done its job and is gone.
       - name: False-positive campaign under ETW (T-022)
         id: campaign
-        continue-on-error: true
+        if: steps.measure.outcome == 'success'
         shell: bash
         run: |
           set -o pipefail

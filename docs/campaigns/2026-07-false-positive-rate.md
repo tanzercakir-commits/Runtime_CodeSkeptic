@@ -499,12 +499,95 @@ silent, productive source of false findings:
   software — the same gap §1 records for Linux, arriving by a different route.
 - **Three programs absent** from the runner (`php`, `redis`, `ffmpeg`), and
   the harness lists them rather than quietly covering less.
-- **Windows is not measured.** The ETW feasibility round decoded a real
-  kernel trace and found the events (`VirtualAlloc` / `VirtualFree`, with
-  `BaseAddress`, `RegionSize`, `ProcessId`, `Flags`), so the instrument is
-  identified and the observer is not written.
+- ~~**Windows is not measured.**~~ **Measured now (§9):** 11 programs, 247
+  requirements, 0 false positives, on a host where allocation granularity
+  (64 KiB) genuinely differs from page size (4 KiB).
 - **No false negatives, again.** Not one failing allocation in 10 programs ×
   3 runs. Same blind spot as Linux, for the same reason.
+
+# 9. After T-022: the third operating system, and the rule that finally fires
+
+Data: `campaigns/false-positive/2026-08-windows-x86_64.json`, measured on a
+`windows-latest` runner (Windows 10.0.26100). Same
+`tools/campaign/run_false_positive.sh`; the tracer is **ETW**, the NT Kernel
+Logger, decoded with `tracerpt` and filtered to the workload's own pid
+subtree.
+
+```
+SHAPE  11 programs, 247 requirements, 0 rejected
+       SUPPORTED                247  100.0%
+       CONDITIONALLY_SUPPORTED    0    0.0%
+       UNKNOWN                    0    0.0%
+       UNSUPPORTED                0    0.0%   <- FALSE POSITIVES
+       RS-VM-0005 emitted       174   (as information, on SUPPORTED verdicts)
+```
+
+**Zero false positives on the third operating system**, and — for the first
+time in this whole campaign — **`RS-VM-0005` actually fires against real
+software**: 174 times, on the one host where it can.
+
+## 9.1 Why the rule fires here and nowhere else
+
+§8.2 recorded that `RS-VM-0005` fired zero times on macOS because the mach
+traps are handed already-rounded sizes. Windows is the host that separates the
+two numbers the rule is about:
+
+```
+page_size               4096    (4 KiB)   - the commit granularity
+allocation_granularity  65536   (64 KiB)  - the reservation granularity
+```
+
+Measured over the 247 requirements:
+
+```
+page-aligned (4096-multiple)        247 / 247   every one
+granularity-aligned (65536-multiple) 73 / 247
+page-aligned but NOT 64 KiB-aligned 174 / 247   <- exactly the RS-VM-0005 count
+```
+
+The ETW `VirtualAlloc` event carries the **committed** `RegionSize`, which is
+page-granular, not reservation-granular. So a program that commits 0x2A000
+bytes (168 KiB — a 4 KiB multiple, not a 64 KiB multiple) produces a size the
+rule correctly flags: on Windows the reservation covering it rounds up to the
+next 64 KiB. **This is the exact defect class `RS-VM-0005` was written for, and
+Windows is the first host whose tracer exposes it.**
+
+And every one of the 174 is `SUPPORTED` with an `info` note, not a condition —
+because T-019 made `RS-VM-0005` speak as information unless the caller declares
+it relies on the unmapped tail. **This is the payoff of T-019 and T-022
+landing together:** the rule that would have fired on 174 real Windows
+allocations as a gate-breaking `CONDITIONALLY_SUPPORTED` under the old design
+now fires as information, and the false-positive rate is 0. Had T-022 measured
+Windows *before* T-019, the honest verdict would have been 174 conditions —
+"correct and unusable in a gate" — on the one platform where the rule matters
+most.
+
+## 9.2 What Windows established that nothing else could
+
+- **`reserve_commit_model = windows_reserve_commit`, exercised by the campaign
+  for the first time.** The value has existed in the model since it was
+  written; this is the first false-positive run against a host that actually
+  carries it.
+- **The `Flags` word is the allocation TYPE** (`MEM_COMMIT` / `MEM_RESERVE`),
+  not protection — recorded in each observation and not mistaken for it.
+
+## 9.3 What ETW cannot see, named rather than hidden
+
+- **No protection.** The kernel `VirtualAlloc` event carries no `flProtect`.
+  Every Windows requirement records read+write as the platform default and
+  declares in `extraction_limitations` that protection was not observed — the
+  same honesty the macOS `allocate_trap` lane uses. No W^X rule can be
+  exercised on this path.
+- **No `address` population.** ETW reports the resulting `BaseAddress`, never
+  whether a base was *requested*, so there is no `MAP_FIXED`-equivalent
+  request to judge. Third platform, third route to the same gap §1 records.
+- **Result, not request.** `RegionSize` is the committed size the kernel
+  produced. Unlike `strace`'s view of the exact `mmap` length argument, the
+  ragged pre-rounding request is invisible — which is why RS-VM-0005 keys off
+  the page/granularity mismatch here rather than off an unrounded request.
+- **Two programs absent** (`redis`, `ffmpeg`); the harness lists them.
+- **No false negatives.** Not one failing allocation across 11 programs × 3
+  runs. Same blind spot as the other two lanes.
 
 ## Verdict on the criterion
 
@@ -522,12 +605,16 @@ correcting the arithmetic.)*
 
 Still `[partial]`, and the remaining gaps are named rather than hidden:
 
-- ~~**One host, one OS.** Linux x86-64.~~ **Two operating systems now** (§8):
-  Linux x86-64, 1292 requirements, and macOS 14 arm64, 37. Read §8.1 before
-  weighing those together — the macOS population is 35x smaller, for reasons
-  that are measured and are about the platform's loader, not about the
-  harness. **Windows is still not measured**; its instrument is identified
-  (ETW) and its observer is not written.
+- ~~**One host, one OS.** Linux x86-64.~~ ~~**Two operating systems now.**~~
+  **Three operating systems** (§8, §9): Linux x86-64 (1292 requirements),
+  macOS 14 arm64 (37), and Windows 10.0.26100 (247). Read §8.1 before weighing
+  the counts together — the macOS population is 35x smaller for measured
+  reasons about that platform's loader. All three measured **0 false
+  positives**, and each of the three tracers (`strace`, `dtrace` mach-traps,
+  ETW) sees a different, honestly-recorded slice: only `strace` sees the
+  pre-rounding request, only ETW's host makes `RS-VM-0005` fire, only Linux
+  and macOS carry an address population (both empty of concrete-address
+  requests except Linux's `MAP_FIXED` set).
 - **No false negatives are measurable by this method.** Not one failing `mmap`
   in 13 programs × 3 runs. The other half of correctness is untouched.
 - ~~**`RS-VM-0005` still fires on 42% of real mappings** (§2). Correct, and a

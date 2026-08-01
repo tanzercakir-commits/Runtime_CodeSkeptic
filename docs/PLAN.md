@@ -28,7 +28,9 @@ Phase 0  taxonomy + corpus        DONE      corpus 44/30, vm 35/10
 Phase 1  environment probe        DONE      Linux + macOS x2 + Windows, all
                                             measured, all establishing ranges
 Phase 2  semantic IR + evaluator  DONE
-Phase 3  VM analyzer MVP          PARTIAL   one exit criterion never measured
+Phase 3  VM analyzer MVP          PARTIAL   Gate B PASSED (0 false positives on
+                                            3 OSes); one demonstration (RS-VM-0012
+                                            reserve/commit under pressure) unrun
 Phase 4  runtime wrapper          OPEN      not started
 Phase 5  CodeSkeptic integration  BLOCKED   owner's instruction: do not touch CodeSkeptic
 Phase 6  counterfactual           OPEN
@@ -186,7 +188,7 @@ findings from the set itself:
   `tests/conformance/test_probe.cpp`
 - `[done]` each finding contains an evidence chain — an empty chain collapses
   to HYPOTHESIS by construction; `tests/unit/test_evidence.cpp`
-- `[partial]` **expected false-positive rate is low on curated examples** —
+- `[done]` **expected false-positive rate is low on curated examples** —
   **MEASURED: 0 false positives in 1292 requests** that 13 real programs were
   observed to perform successfully on a measured Linux host
   (`docs/campaigns/2026-07-false-positive-rate.md`,
@@ -199,11 +201,18 @@ findings from the set itself:
   operating system now** — macOS 14 arm64, 10 programs, **37 requirements, 0
   false positives** (`campaigns/false-positive/2026-07-macos-14-arm64.json`),
   under `dtrace` watching the mach traps that macOS actually allocates through.
-  **The remaining gaps:** the macOS population is 35x smaller than the Linux
-  one for measured reasons about that platform's loader, so the two do not
-  weigh the same (§8.1); Windows is not measured, its instrument identified and
-  its observer unwritten (T-022); and no false negative is measurable on either
-  OS, because no program in the corpus was ever refused.
+  **And a third** — Windows 10.0.26100, 11 programs, **247 requirements, 0
+  false positives** (`campaigns/false-positive/2026-08-windows-x86_64.json`),
+  under ETW, on the one host where allocation granularity (64 KiB) differs from
+  page size (4 KiB) and `RS-VM-0005` therefore fires — 174 times, as
+  information on SUPPORTED verdicts, which is exactly the T-019 behaviour that
+  keeps it out of the false-positive count (§9). **The remaining gaps, all
+  named:** the macOS population is 35x smaller than the Linux one for measured
+  reasons about that platform's loader (§8.1); only `strace` sees the
+  pre-rounding request, so the address rules are unexercised against real
+  software on all three (§9.3); and no false negative is measurable on any OS,
+  because no program in the corpus was ever refused. `[partial]` on those
+  named grounds, not on an unmeasured rate.
 - `[done]` runs in CI without launching the application — `.github/workflows/ci.yml`
 
 ### The MVP's seven demonstrations (ROADMAP §14)
@@ -289,20 +298,25 @@ that risk materialising.
   platforms (16 KiB vs 4 KiB pages, W^X refused vs permitted, SIGBUS vs
   zero-fill on ONE machine — `profiles/measured/`), and expose real
   constraints (the 384 GiB carveout).
-- `[partial]` **Gate B** (after Phase 3) — it diagnoses real failures, its
-  evidence beats ordinary logs, and the false-positive rate is **measured at 0
-  in both populations, twice under the old `RS-VM-0005` and once under the
-  new** (`docs/campaigns/2026-07-false-positive-rate.md`). The noisy-rule
-  ground is resolved: T-019 made the rule's own precondition a declarable
-  fact, the conditional share fell from 42.1% to 0 with the finding still
-  emitted for every one of the same 544 mappings, and the re-measured shape
-  population reads 1292 of 1292 SUPPORTED. The single-platform ground is
-  partly answered: **macOS 14 arm64 measured 0 false positives in 37
-  requirements** (§8). Not yet passed, on what remains of that ground: 37
-  against 1292 is thirty-five times smaller and §8.1 says why, and the third
-  platform family - the one whose allocation granularity differs from its page
-  size, which neither measured lane can exercise - is not measured at all
-  (T-022).
+- `[done]` **Gate B** (after Phase 3) — it diagnoses real failures
+  (ground-truth harness, 16 cases, 0 contradicted), its evidence beats
+  ordinary logs (the §17 bundle), and **the false-positive rate is measured at
+  0 across three operating systems**: Linux x86-64 (1292 requirements), macOS
+  14 arm64 (37), Windows 10.0.26100 (247), under three different tracers
+  (`strace`, `dtrace` mach-traps, ETW), no requirement authored — all
+  transcribed from what each kernel actually did
+  (`docs/campaigns/2026-07-false-positive-rate.md`). Both grounds that held
+  this open are closed: the noisy `RS-VM-0005` rule (T-019 made its
+  precondition declarable, conditional share 42.1% → 0), and the
+  single-platform coverage (T-018 macOS, T-022 Windows). Windows is where the
+  two landings meet — `RS-VM-0005` fires on 174 real allocations there, the
+  one host whose granularity differs from its page size, and every one is
+  `SUPPORTED` with an `info` note rather than a gate-breaking condition.
+  **Named limitations, carried not hidden:** only `strace` sees the
+  pre-rounding request so the address rules are under-exercised against real
+  software (§9.3), and the campaign measures no false negatives because no
+  observed program was ever refused — that half of correctness is the
+  ground-truth harness's job, not this campaign's.
 - `[blocked]` **Gate C** — Phase 5 is blocked. (T-011)
 - `[n/a]` **Gate D** — no new domain is proposed.
 
