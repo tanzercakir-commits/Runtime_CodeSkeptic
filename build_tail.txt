@@ -1,0 +1,25 @@
+[  7%] Built target rs_core
+[ 18%] Built target rs_vm
+[ 23%] Built target rs_reports
+[ 34%] Built target rs_probe
+[ 37%] Built target rs_server
+[ 40%] Built target rs-env-probe
+[ 43%] Built target rs-check
+[ 46%] Built target rs-replay
+[ 50%] Built target rs-profile
+[ 53%] Built target rs-mcp
+[ 56%] Built target test_json
+[ 59%] Built target test_sha256
+[ 62%] Built target test_evidence
+[ 65%] Built target test_address_range
+[ 68%] Built target test_profile
+[ 71%] Built target test_analyzer
+[ 75%] Built target test_mutation
+[ 78%] Built target test_impact
+[ 81%] Built target test_report
+[ 84%] Built target test_bundle
+[ 87%] Built target test_evidence_bundle
+[ 90%] Built target test_mcp
+[ 93%] Built target test_arena_walk
+[ 96%] Built target test_probe
+[100%] Built target test_incidents

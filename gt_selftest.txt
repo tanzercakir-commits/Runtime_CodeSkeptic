@@ -1,0 +1,28 @@
+PREDICTION    OUTCOME     EXPECTED       RESULT
+----------------------------------------------------------------
+SUPPORTED     satisfied   held           ok
+SUPPORTED     refused     CONTRADICTED   ok
+SUPPORTED     relocated   CONTRADICTED   ok
+SUPPORTED     faulted     CONTRADICTED   ok
+SUPPORTED     lost        CONTRADICTED   ok
+SUPPORTED     skipped     skipped        ok
+SUPPORTED     -           CASE BROKEN    ok
+UNSUPPORTED   refused     held           ok
+UNSUPPORTED   relocated   held           ok
+UNSUPPORTED   faulted     held           ok
+UNSUPPORTED   lost        held           ok
+UNSUPPORTED   satisfied   CONTRADICTED   ok
+UNSUPPORTED   skipped     skipped        ok
+UNSUPPORTED   -           CASE BROKEN    ok
+UNKNOWN       satisfied   not asserted   ok
+UNKNOWN       refused     not asserted   ok
+
+rows: 16   ok: 16   mismatched: 0
+
+DERIVATION                         ADDRESS          RESULT
+----------------------------------------------------------------
+5-level host (LA57)                fffffffffff000   ok
+the measured host                  7ffffffff000     ok
+an unmeasured profile              <none>           ok
+
+derivations: ok=3  mismatched: 0
