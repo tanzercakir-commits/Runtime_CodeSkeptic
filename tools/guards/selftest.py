@@ -593,6 +593,30 @@ CASES = [
          {"tests/x.sh": '#!/usr/bin/env bash\nfor key in a b; do echo hi; done\n'},
          expect_fail=False),
 
+    # A here-doc body is data, often another language. A Python kwarg
+    # `file=sys.stderr` inside one is not a shell assignment; scanning it flagged
+    # the first script in this repo to embed a Python heredoc.
+    Case("check_shell_vars.py", "a kwarg inside a heredoc body is not an assignment",
+         {"tests/x.sh": '#!/usr/bin/env bash\n'
+                        "python3 - <<'PY'\n"
+                        'import sys\n'
+                        'print("x", file=sys.stderr)\n'
+                        'PY\n'
+                        'echo done\n'},
+         expect_fail=False),
+
+    # ...but masking the body must not hide a real dead variable beside it, nor
+    # swallow the whole file: DEAD is still caught, the heredoc's `val=1` is not.
+    Case("check_shell_vars.py", "a dead var is still caught alongside a heredoc",
+         {"tests/x.sh": '#!/usr/bin/env bash\n'
+                        'DEAD="$ROOT/x"\n'
+                        "python3 - <<'PY'\n"
+                        'val=1\n'
+                        'print(val)\n'
+                        'PY\n'
+                        'echo done\n'},
+         expect_fail=True, expect_text="`DEAD` is assigned and never read"),
+
     # ---- check_todo: the compass and the map must agree ----------------
     Case("check_todo.py", "an open plan criterion with no owner fails",
          {"docs/TODO.md": TODO_OK,

@@ -70,6 +70,44 @@ EXPORTED = re.compile(r"^\s*(?:export|declare\s+-[a-zA-Z]*x|local)\b")
 
 COMMENT = re.compile(r"^\s*#")
 
+# The opener of a here-document: `<<WORD`, `<< WORD`, `<<-WORD`, `<<'WORD'`.
+# `$((a << 2))` does not match - a shift is followed by a number or `$var`, not
+# a bare identifier. The body of a heredoc is DATA, frequently another language
+# (a Python or awk program passed to `python3 -`/`awk`), so a `kwarg=value` in
+# it - `print(x, file=sys.stderr)` - is not a shell assignment. The first script
+# in this repo to embed a Python heredoc tripped exactly that false positive.
+HEREDOC_OPEN = re.compile(r"<<-?\s*([\"']?)([A-Za-z_][A-Za-z0-9_]*)\1")
+
+
+def mask_heredocs(lines):
+    """Blank every here-document BODY, keeping line numbers aligned so error
+    messages still point at the right line. A body is masked only when a closing
+    delimiter line is actually found below the opener; an unmatched `<<` (an
+    arithmetic shift, say) is left alone, so this never hides more than a real
+    heredoc."""
+    out = list(lines)
+    i, n = 0, len(lines)
+    while i < n:
+        line = lines[i]
+        if not line.lstrip().startswith("#"):
+            m = HEREDOC_OPEN.search(line)
+            if m:
+                delim, strip = m.group(2), "<<-" in line
+                j, closed_at = i + 1, None
+                while j < n:
+                    cand = lines[j].lstrip("\t") if strip else lines[j]
+                    if cand == delim:
+                        closed_at = j
+                        break
+                    j += 1
+                if closed_at is not None:
+                    for k in range(i + 1, closed_at):
+                        out[k] = ""
+                    i = closed_at + 1
+                    continue
+        i += 1
+    return out
+
 # Loop and read targets are assignments too, but of a kind whose non-use is a
 # different (and often legitimate) thing - `while read -r a b _` discards fields
 # on purpose.
@@ -106,7 +144,7 @@ def statements(line: str):
 
 def scan(path: Path):
     """[(line, name)] for each variable assigned as a statement and never read."""
-    lines = path.read_text(errors="replace").splitlines()
+    lines = mask_heredocs(path.read_text(errors="replace").splitlines())
 
     assigned = {}          # name -> first line it is assigned on
     assign_lines = set()    # line numbers that are pure assignments
