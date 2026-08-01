@@ -41,11 +41,75 @@ completes without leaving a trace in the log is work that will be redone.
 
 ---
 
+## Cold start — read this before anything else
+
+For the session that begins after any amount of forgetting, on any model.
+Everything here is measured or enforced, not remembered.
+
+**Where the project stands (2026-07-30):**
+
+```
+Phase 0-2   DONE
+Phase 3     PARTIAL - Gate B is the only open exit, and T-022 is the only
+            ground it still stands on
+Phase 4+    not started; Phase 5 blocked by the owner's instruction
+Gate B      false-positive rate measured 0 on TWO operating systems:
+              Linux x86-64   1292 requirements   (strace)
+              macOS 14 arm64   37 requirements   (dtrace, mach traps)
+            remaining: Windows (T-022), the one host where allocation
+            granularity (64 KiB) differs from page size (4 KiB)
+```
+
+**How to verify the tree before believing anything, including this file:**
+
+```
+bash tools/guards/run_all.sh          17 guards; all must pass
+cmake --build build -j4 && ctest --test-dir build
+```
+
+**How to reach CI** (api.github.com answers 403 for this repo; the git
+protocol is the only channel):
+
+```
+git fetch origin '+refs/status/*:refs/remotes/status/*' \
+                 '+refs/measurements/*:refs/remotes/measurements/*' \
+                 '+refs/ci-logs/*:refs/remotes/ci-logs/*'
+refs/status/<sha>/<job>/<state>      every job, always
+refs/measurements/<sha>/<job>        artifacts, on success
+refs/ci-logs/<sha>/<job>             diagnostics, on failure
+```
+
+**The credential rule, violated once and not again:** the GitHub PAT lives in
+`~/.rs-cred` and is used ONLY via `git config credential.helper '!/root/.rs-cred'`.
+Nothing may print, cat, grep or sed that file. Diagnose auth failures from
+git's own error output alone. (A token was leaked into a transcript on
+2026-07-30 by a masking sed that guessed the wrong prefix. The file's own
+header now states the rule.)
+
+**The working method that produced everything below, in one line:** measure
+before writing, publish the raw data next to the parsed claim, and when CI
+must be the instrument, make each push answer ONE question. T-018 took eight
+CI rounds; four were measurements and four were fixes the measurements
+demanded, and none was a guess.
+
+**One open observation, deliberately not an item:** `004ee5c`'s `linux-gcc`
+job failed at `gt_constrained` while `linux-clang` passed the same commit;
+5/5 local runs pass, and the failure predates nothing relevant. The
+diagnostics channel now carries the constrained lane's own output (it did not
+then, twice over - see fcbbdeb). Do not chase it; the next red run will carry
+its evidence.
+
+**A rule for maintaining THIS file:** `ROADMAP.md` is frozen by hash
+(`tools/guards/check_roadmap.py`); `docs/PLAN.md` moves only its status
+markers; this file and `docs/PROGRESS.md` are the ones that change. A weekly
+scheduled session (Mondays 06:00 UTC) reads the CI channels and reports drift;
+it cannot push.
+
+---
+
 ## Now
 
-## Next
-
-### T-022 — The campaign's third operating system: Windows `[next]`
+### T-022 — The campaign's third operating system: Windows `[now]`
 
 **Serves:** the same thing T-018 served, and the platform whose address-space
 behaviour differs most in kind
@@ -84,9 +148,37 @@ written.
   existing lanes could not exercise.
 
 **First step:** take the `VirtualAlloc`/`Process` records the feasibility
-round already published and write the parser against THAT file, then run one
-round and compare its counts against a `logman` trace of a single known
-process before trusting anything.
+round already published (`git fetch origin
+'+refs/measurements/*:refs/remotes/measurements/*'` then `git show
+refs/remotes/measurements/3af0f9f6c37546899624be5b32c66827d20e6423/etw-feasibility:etw-feasibility.txt`)
+and write the parser against THAT file, then run one round and compare its
+counts against a `logman` trace of a single known process before trusting
+anything.
+
+**The shape of the work, from the macOS lane that just closed:** the observer
+plugs into `observe_requirements.py` beside the strace and dtrace lanes; the
+scorer (`false_positive_rate.py`) and the bundle format need nothing - they
+are OS-blind. The CI wiring goes in `windows-probe.yml`, whose path filter
+must name every campaign file it runs (the macOS lane forgot this and the fix
+for the thing the workflow measures did not trigger the workflow - twice now
+in this repository). Publish through
+`tools/ci/publish_measurement.sh measurements "fp-campaign-windows" <sha> <files>`,
+and publish the RAW decoded events next to the parsed bundles: the macOS
+parser was saved by exactly that habit when a decimal flags word was being
+read as hex and agreeing with the correct answer by accident.
+
+**When it closes:** update campaign doc §8.4 and the Gate B line in
+`docs/PLAN.md` (both currently name T-022), move this item to Done with the
+measured numbers, and write the PROGRESS entry in the same commit -
+`check_todo.py` enforces the last two.
+
+---
+
+## Next
+
+*(empty - T-022 is the whole path to Gate B, and Gate B is the whole path to
+a finished Phase 3. After it: T-021, then the `Later` set, unless the owner
+lifts the Phase 5 block first.)*
 
 ---
 
