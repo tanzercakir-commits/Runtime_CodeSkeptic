@@ -1,0 +1,64 @@
+
+=== guards themselves ===
+
+guard selftest: 89/89 cases
+
+=== plan structure ===
+plan: blocked=4  done=48  n/a=1  open=5  partial=8  (total 66, across 2 document(s))
+
+=== documentation drift ===
+doc guard: scanned 73 document(s)
+
+=== finding registry ===
+registry: 27 ids declared, 27 emitted by rules
+
+=== schemas vs code ===
+validated 62 artifact(s) against 4 schema(s)
+
+=== normative non-goals ===
+non-goals: no conflicts, no stale names
+
+=== dates against git ===
+dates: checked against git, newest commit 2026-08-01
+
+=== compass vs map ===
+todo: blocked=2  done=16  later=4  (22 items, 5 plan tag(s))
+
+=== published numbers ===
+campaigns: 12 population(s) checked against docs/campaigns/
+
+=== corpus rules ===
+corpus: 54 entries, 44 counting toward 30, 35 toward the virtual-memory 10
+
+=== includes vs MSVC ===
+includes: 42 translation unit(s) and header(s) checked against 15 standard headers
+
+=== shell vs bash 3.2 ===
+shell: 10 script(s) checked against bash 3.2 and BSD userland
+
+=== shell dead variables ===
+shell vars: 10 script(s) checked for assigned-and-never-read
+
+=== one probe per platform ===
+probe platforms: 4 implementation(s), checked against 5 platform settings
+
+=== ctest names a config ===
+workflow ctest: 12 invocation(s) across 3 workflow(s)
+
+=== windows cross-compile ===
+windows cross-compile: 1 Windows-only translation unit(s) via x86_64-w64-mingw32-g++, with the project's own flags (-Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wsign-conversion)
+
+=== roadmap is frozen ===
+roadmap: frozen at sha256:494ce23a5da2..., 11 phase(s) mirrored in the plan
+
+=== profiles are fresh ===
+
+2 stale or unmapped profile(s):
+  - profiles/measured/windows-server-2025-x86_64.measured.json is STALE: it was last committed before src/probe/vm_probe_windows.cpp, which is part of the probe that produces it. A measurement older than its instrument records what the old probe would have said, not the host. Regenerate it from a fresh measurement - the platform's CI workflow publishes one to refs/measurements/<sha>/<job> - and re-commit it.
+  - profiles/measured/wine-9.0-on-linux-x86_64.measured.json is STALE: it was last committed before src/probe/vm_probe_windows.cpp, which is part of the probe that produces it. A measurement older than its instrument records what the old probe would have said, not the host. Regenerate it from a fresh measurement - the platform's CI workflow publishes one to refs/measurements/<sha>/<job> - and re-commit it.
+profiles fresh: 4 measured profile(s) checked against the probe sources that produce them
+
+1 guard(s) failed: profiles are fresh
+
+These are project rules, not style. Fix the repository or change the
+rule deliberately - do not silence the guard.
