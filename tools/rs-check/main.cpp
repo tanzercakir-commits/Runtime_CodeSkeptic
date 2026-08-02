@@ -256,5 +256,21 @@ int main(int argc, char** argv) {
         }
     }
 
+    // A bundle with any requirement the reader could not parse was NOT fully
+    // evaluated, whatever the parsed ones came to. The help promises "every
+    // requirement in a bundle is evaluated"; when one was skipped, a clean exit
+    // would tell a CI watching only the code that all requirements passed. The
+    // skips were named on stderr above; here they decide the exit. Reported
+    // even when the parsed requirements were themselves UNSUPPORTED, because
+    // "some could not be checked" is a different, and worse, fact than "checked
+    // and refused".
+    if (!bundle->rejected.empty()) {
+        std::cerr << "rs-check: " << bundle->rejected.size()
+                  << " requirement(s) in the bundle could not be evaluated; the "
+                     "run is incomplete and its exit code says so (not a clean "
+                     "pass)\n";
+        return reports::exit_code::kInput;
+    }
+
     return reports::exit_code_for(overall);
 }

@@ -58,13 +58,17 @@ real false-green: CI can skip a requirement it believes it checked. Fix: apply
 the same type-enforcement to the profile parser (`src/vm/profile.cpp`) and
 reconcile it with the published profile schema in both directions.
 
-### A4 — a bundle is not all-or-nothing  ·  TRACKED (T-024)
+### A4 — a bundle is not all-or-nothing  ·  FIXED
 A two-requirement bundle whose second entry was broken: the tool wrote "skipped"
 to stderr and recorded `rejected_requirements` in JSON, but the overall verdict
 was SUPPORTED / exit 0 because the first entry was supported. CI watching only
 the exit code turns green believing every requirement ran — contradicting the
-help text "Every requirement in a bundle is evaluated." Fix: any rejected/broken
-entry makes the overall exit non-clean.
+help text "Every requirement in a bundle is evaluated."
+Fix (`tools/rs-check/main.cpp`): a non-empty `bundle->rejected` now returns exit
+65 with a message, whatever the parsed entries came to. Verified: the mixed
+bundle exits 65 (was 0); a clean single-entry bundle still exits 0. The parsing
+half (rejected list populated) is unit-tested by
+`one_malformed_entry_does_not_discard_the_rest` in `tests/unit/test_bundle.cpp`.
 
 ### A3 — rs-replay accepts an incomplete bundle as verified  ·  TRACKED (T-024)
 A bundle with only `application_requirements.json`, `environment_profile.json`,
