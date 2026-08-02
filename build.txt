@@ -1,0 +1,8 @@
+[  1%] Building CXX object src/CMakeFiles/rs_core.dir/core/schema_registry.cpp.o
+/home/runner/work/Runtime_CodeSkeptic/Runtime_CodeSkeptic/src/core/schema_registry.cpp:12:23: error: unused variable 'kRequirementConst' [-Werror,-Wunused-const-variable]
+   12 | constexpr const char* kRequirementConst = "runtime-skeptic.application-requirements.v1";
+      |                       ^~~~~~~~~~~~~~~~~
+1 error generated.
+gmake[2]: *** [src/CMakeFiles/rs_core.dir/build.make:149: src/CMakeFiles/rs_core.dir/core/schema_registry.cpp.o] Error 1
+gmake[1]: *** [CMakeFiles/Makefile2:224: src/CMakeFiles/rs_core.dir/all] Error 2
+gmake: *** [Makefile:146: all] Error 2

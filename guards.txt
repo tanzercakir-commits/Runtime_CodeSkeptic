@@ -1,0 +1,72 @@
+
+=== guards themselves ===
+
+guard selftest: 92/92 cases
+
+=== plan structure ===
+plan: blocked=4  done=48  n/a=1  open=6  partial=8  (total 67, across 2 document(s))
+
+=== documentation drift ===
+doc guard: scanned 80 document(s)
+
+=== finding registry ===
+registry: 27 ids declared, 27 emitted by rules
+
+=== schemas vs code ===
+  (analysis-bundle: SKIPPED - rs-check not built; the manifest schema is only checked against a real emitted manifest)
+validated 63 artifact(s) against 4 schema(s)
+
+=== input boundary matrix ===
+Traceback (most recent call last):
+  File "/home/runner/work/Runtime_CodeSkeptic/Runtime_CodeSkeptic/tools/guards/../audit/boundary_matrix.py", line 107, in <module>
+    from referencing import Registry, Resource  # noqa: E402
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ModuleNotFoundError: No module named 'referencing'
+
+=== normative non-goals ===
+non-goals: no conflicts, no stale names
+
+=== dates against git ===
+dates: checked against git, newest commit 2026-08-02
+
+=== compass vs map ===
+todo: blocked=2  later=5  (7 items, 6 plan tag(s))
+
+=== published numbers ===
+campaigns: 12 population(s) checked against docs/campaigns/
+
+=== corpus rules ===
+corpus: 54 entries, 44 counting toward 30, 35 toward the virtual-memory 10
+
+=== includes vs MSVC ===
+includes: 47 translation unit(s) and header(s) checked against 15 standard headers
+
+=== shell vs bash 3.2 ===
+shell: 11 script(s) checked against bash 3.2 and BSD userland
+
+=== shell dead variables ===
+shell vars: 11 script(s) checked for assigned-and-never-read
+
+=== one probe per platform ===
+probe platforms: 4 implementation(s), checked against 5 platform settings
+
+=== ctest names a config ===
+workflow ctest: 12 invocation(s) across 3 workflow(s)
+
+=== windows cross-compile ===
+windows cross-compile: SKIPPED - no mingw cross-compiler on PATH
+  wanted one of: x86_64-w64-mingw32-g++, x86_64-w64-mingw32-c++
+  Debian/Ubuntu: apt-get install g++-mingw-w64-x86-64
+  This is the check that would have caught C4456 in b661c94 without a Windows runner.
+
+=== roadmap is frozen ===
+roadmap: frozen at sha256:494ce23a5da2..., 11 phase(s) mirrored in the plan
+
+=== profiles are fresh ===
+  exempt: wine-9.0-on-linux-x86_64.measured.json - a demonstration that the Windows probe runs under Wine, measured once by hand; no CI workflow regenerates it, and re-measuring in a different environment would produce a different Wine version, not a refresh of THIS one. Treated as a historical artifact - its facts predate the T-017 hinted-reservation field and are not maintained.
+profiles fresh: 3 measured profile(s) checked against the probe sources that produce them
+
+1 guard(s) failed: input boundary matrix
+
+These are project rules, not style. Fix the repository or change the
+rule deliberately - do not silence the guard.
