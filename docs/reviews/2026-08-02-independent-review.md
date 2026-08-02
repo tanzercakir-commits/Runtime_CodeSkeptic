@@ -12,17 +12,39 @@ chains, the UNKNOWN discipline, remediation and "will not work" sections are
 not yet trustworthy as a production CI gate.** That framing is correct and is
 now the release posture.
 
-## Resolution status — all findings fixed, awaiting re-test
+## Resolution status — two rounds, and why the first did not hold
 
-Every finding below is **FIXED**: the five false-green / trust blockers
-(A1, A2, A3, A4, A5), all seven documentation/build/MCP items (B1, B2, B3, B4a,
-B4b, B4c, B4d), and one defect discovered while fixing (D1, a stale `profile_id`
-on the tracked Wine profile). The work spans commits `861f6af` (A1/A5) through
-`82d5d58` (B4a) on the `fix/review-hardening` branch, each with regression tests
-where a test could pin the behaviour. Nothing is merged to `main`: the branch is
-waiting on the reviewer's re-test, per the standing rule that nothing reaches
-`main` until it is confirmed to work. Every finding's own entry below carries the
-specific fix and commit.
+**Round 1 (commits `861f6af`…`82d5d58`) was marked "all FIXED" and it was not.**
+A second independent re-test on 2026-08-02 ran a **300-case boundary matrix** and
+found the false-green blockers A1/A2/A5 had been patched only at their *named
+examples*: the input readers still read a wrong TYPE as an absent field, so
+`required_page_size: "16384"` (a string) still meant "no page size required" and
+passed. The bundle blockers A3/A4 still let an incomplete run be written and a
+gutted manifest replay clean. Marking them FIXED off a handful of hand cases,
+with no systematic check, was the mistake — the same "a check that is not
+systematic is the shape of error this project keeps finding in itself" the CI
+comments already warn about.
+
+**Round 2 closes them at the root and, this time, against a matrix that runs as a
+guard.** `tools/audit/boundary_matrix.py` reports **0 disagreements across 249
+cases** (was 89), and status now follows it, not a feeling:
+
+- **A1/A2/A5 — FIXED (T-024, commit `f72e834`).** Every reader rejects a wrong
+  type instead of dropping it; the schemas were tightened (min/max, address
+  pattern, no `operation:"unknown"`, no `unknown` range-evidence, typed fact
+  values) so the tool and schema agree in both directions; `address+size`
+  overflow is now a PROVEN UNSUPPORTED verdict, not a limitation.
+- **A3/A4 — FIXED (T-025, commit `ed34812`).** `rs-check` writes no bundle when
+  any requirement was rejected; `rs-replay` requires every field
+  `analysis-bundle.v1` lists, so a stripped manifest is refused.
+- **B1, B2, B3, B4a, B4b, B4c, B4d, D1 — FIXED** in round 1 and re-checked; the
+  re-test confirmed the profile-id and MCP fixes hold, and flagged remaining doc
+  drift (README timing, "Only Linux" help text, the `set -e` CI snippet, and
+  this document's own premature "all FIXED"), fixed under T-026.
+
+Still open before "ready" can be said: **CI has not run on the fixed SHA** — the
+branch triggers no CI, so the matrix must be made green in CI, not just locally,
+before the next re-test is requested. Nothing is merged to `main`.
 
 ## Confirmed working (recorded so the fixes do not regress them)
 

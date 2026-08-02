@@ -13,10 +13,11 @@ plan: [ROADMAP.md](ROADMAP.md)
 
 ---
 
-## Try it in 60 seconds
+## Try it
 
 A C++20 compiler and CMake 3.20 are enough — no external dependencies, no
-network access, nothing to configure.
+network access, nothing to configure. The one-time build takes a minute or two
+(longer on Windows/MSVC); after that, every query below is instant.
 
 ```console
 $ git clone https://github.com/tanzercakir-commits/Runtime_CodeSkeptic && cd Runtime_CodeSkeptic

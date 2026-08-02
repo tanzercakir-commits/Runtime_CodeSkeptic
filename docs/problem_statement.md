@@ -2,7 +2,7 @@
 
 The failures RuntimeSkeptic targets are not wrong instructions; they are correct instructions executed against a layer that quietly supplied weaker semantics than the caller required.
 
-**Status:** v0.1 built and shipping. The problem framing and terminology described here are stable and implemented in code (`include/runtimeskeptic/core/evidence.hpp`, `src/core/evidence.cpp`). The analysis capability described in "Scope of v0.1" is implemented and under test: the requirement/profile/analyzer path (`src/vm/analyzer.cpp`), the environment probe (`rs-env-probe` — Linux and macOS measured, Windows a stub that reports every fact unknown rather than guessing), and the command-line tools (`rs-check`, `rs-profile`, `rs-replay`, `rs-mcp`) all exist and build with nothing but a C++20 compiler and CMake. <!-- checked: 2026-08-02 -->
+**Status:** v0.1 built and shipping. The problem framing and terminology described here are stable and implemented in code (`include/runtimeskeptic/core/evidence.hpp`, `src/core/evidence.cpp`). The analysis capability described in "Scope of v0.1" is implemented and under test: the requirement/profile/analyzer path (`src/vm/analyzer.cpp`), the environment probe (`rs-env-probe` — Linux, macOS and Windows all measured directly; a platform with no probe returns an all-unknown profile rather than guessing), and the command-line tools (`rs-check`, `rs-profile`, `rs-replay`, `rs-mcp`) all exist and build with nothing but a C++20 compiler and CMake. <!-- checked: 2026-08-02 -->
 
 ---
 
@@ -184,7 +184,7 @@ Two consequences worth stating in the problem statement itself:
 
 | Document | Schema | Written by |
 | --- | --- | --- |
-| Environment profile | `runtime-skeptic.environment-profile.v1` | `rs-env-probe` (Phase 1; Linux and macOS implemented, Windows a stub) or hand-authored fixture |
+| Environment profile | `runtime-skeptic.environment-profile.v1` | `rs-env-probe` (Phase 1; Linux, macOS and Windows all implemented) or hand-authored fixture |
 | Application requirement | `runtime-skeptic.application-requirements.v1` | by hand in Phase 3; by CodeSkeptic in Phase 5 |
 
 **Output.** A compatibility result (`runtime-skeptic.compatibility-result.v1`) with an overall verdict in `{SUPPORTED, CONDITIONALLY_SUPPORTED, UNKNOWN, UNSUPPORTED}` and a list of findings, each with an evidence chain, remediation classes, and provably useless "rejected fixes".
@@ -193,7 +193,7 @@ Two consequences worth stating in the problem statement itself:
 
 **Properties checked.** Exact-address availability, address-space bounds, alignment against allocation granularity, size granularity, page size, hinted-mapping relocation, guest/host identity without translation, write-xor-execute, anonymous executable mappings, JIT entitlement, reserve/commit model, pointer truncation, self-contradictory fallback contracts, and retry loops around structurally impossible operations. That is 15 rules and 17 reachable finding IDs; see `docs/findings/registry.md`.
 
-**Platforms named as targets.** Windows x64, Linux x86-64, macOS on Apple Silicon, and x86-64 processes under Rosetta where measurable. Linux and macOS - natively and as a translated x86-64 process - are now MEASURED; see `profiles/measured/`. <!-- checked: 2026-07-25 --> Windows is still only *modeled*, because its probe is a stub that reports every fact unknown rather than guessing.
+**Platforms named as targets.** Windows x64, Linux x86-64, macOS on Apple Silicon, and x86-64 processes under Rosetta where measurable. All are now MEASURED by their own probe — Linux and macOS natively and as a translated x86-64 process, and Windows via `VirtualQuery`/`VirtualAlloc`; see `profiles/measured/`. <!-- checked: 2026-08-02 --> A platform with no probe returns a schema-valid, all-unknown profile rather than guessing.
 
 ### 7.2 Explicitly out of scope for v0.1
 

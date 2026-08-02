@@ -208,11 +208,16 @@ A job that should fail on proven contradictions but tolerate unknowns treats
 
 - name: Fail only on proven contradictions
   run: |
-    rs-check assumptions.json --profile host-profile.json --format markdown \
-      --output report.md
-    code=$?
+    # GitHub runs each step under `bash -eo pipefail`, so a non-zero rs-check
+    # (exit 1 = UNSUPPORTED) would abort the step before $? is ever read.
+    # Capture the code WITHOUT tripping -e, then decide.
+    code=0
+    rs-check assumptions.json --profile host-profile.json \
+      --format markdown --output report.md || code=$?
     cat report.md
-    [ "$code" = "1" ] && exit 1 || exit 0
+    # Fail the job only on a PROVEN contradiction (1); tolerate UNKNOWN (3) and
+    # CONDITIONALLY_SUPPORTED (2). Anything else (64/65/70) is a real error.
+    if [ "$code" = "1" ] || [ "$code" -ge 64 ]; then exit 1; fi
 ```
 
 Two things worth doing beyond the gate:

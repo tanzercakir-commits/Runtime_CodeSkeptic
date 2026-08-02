@@ -202,15 +202,15 @@ Value handle_tools_list(const Value& id) {
         props["scan_address_space"] = property(
             "\"false\" to skip the address-space scan. Default \"true\".");
         props["faulting_tests"] = property(
-            "\"false\" to skip tests that fault in a forked child. Default "
-            "\"true\".");
+            "\"false\" to skip tests that deliberately fault in an isolated "
+            "child process. Default \"true\".");
         tools.push_back(tool(
             "probe_host",
             "Measure this machine's virtual-memory behaviour and return an "
             "environment profile. Every capability carries an evidence class; "
             "anything not measured is reported as unknown rather than guessed. "
-            "Only Linux is implemented in v0.1 - other platforms return a "
-            "schema-valid profile in which every fact is unknown.",
+            "Linux, macOS and Windows are measured directly; a platform with no "
+            "probe returns a schema-valid profile in which every fact is unknown.",
             std::move(props), {}));
     }
 
