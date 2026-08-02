@@ -16,6 +16,34 @@ re-litigated; a mistake recorded here does not need to be re-made.
 
 ---
 
+## 2026-08-02 — honest docs, and CI green on the fixed SHA (T-026)
+
+**Changed.** The re-test's secondary findings, one drift the re-test exposed in
+my own round-1 docs, and the piece that had been missing all along: CI actually
+running on the fix.
+
+- README dropped the false "60 seconds" (209 s on Windows); MCP/probe help text
+  no longer says "Only Linux is implemented" (Linux, macOS and Windows all
+  measure — the Windows probe is 1204 lines of VirtualQuery/VirtualAlloc, and my
+  own round-1 problem_statement edit had wrongly called it "a stub"); the
+  `docs/integrations.md` CI snippet now captures `$?` with `|| code=$?` so it
+  works under Actions' default `bash -eo pipefail`; the review doc's premature
+  "all FIXED" became the honest two-round account.
+- `ci.yml` gained `fix/review-hardening` in `on.push` (temporary, no merge) so
+  the round-2 fixes are exercised. **CI run #137 on `681b048` is green on all
+  six jobs** — `linux-gcc`, `linux-clang`, `macos-apple-clang`, `windows-msvc`,
+  `compatibility-gate`, `determinism` — and the guards step that runs the
+  boundary matrix passed with it. `refs/status/681b048…/*` are all `/success`.
+
+**Learned.** The re-test was right that "no CI on the SHA" is not a footnote: a
+fix is not verified until the instrument the project trusts has run on it.
+`api.github.com` still answers unauthenticated queries with `total_count: 0`
+(hence the re-test's finding); the git-protocol `refs/status/*` channel is the
+one that works, and it now carries a green result for the fixed SHA.
+
+**Next.** The round-2 hardening is complete and awaiting the reviewer's re-test.
+When the branch lands, drop it from `ci.yml` `on.push`. Nothing merged to `main`.
+
 ## 2026-08-02 — the evidence bundle stops certifying an incomplete run (T-025)
 
 **Changed.** Two bundle false-greens from the re-test, closed. `rs-check` no

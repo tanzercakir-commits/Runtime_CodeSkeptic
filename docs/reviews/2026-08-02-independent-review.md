@@ -42,9 +42,13 @@ cases** (was 89), and status now follows it, not a feeling:
   drift (README timing, "Only Linux" help text, the `set -e` CI snippet, and
   this document's own premature "all FIXED"), fixed under T-026.
 
-Still open before "ready" can be said: **CI has not run on the fixed SHA** — the
-branch triggers no CI, so the matrix must be made green in CI, not just locally,
-before the next re-test is requested. Nothing is merged to `main`.
+**CI is now green on the fixed SHA** (`681b048`, CI run #137): all six jobs —
+`linux-gcc`, `linux-clang`, `macos-apple-clang`, `windows-msvc`,
+`compatibility-gate`, `determinism` — succeeded, and the guards step that runs
+the boundary matrix passed with it. The branch was added to `on.push`
+temporarily to get there (`refs/status/681b048…/*` all `/success`); it is to be
+removed when the branch lands and it never merges anything. Nothing is merged to
+`main`.
 
 ## Confirmed working (recorded so the fixes do not regress them)
 

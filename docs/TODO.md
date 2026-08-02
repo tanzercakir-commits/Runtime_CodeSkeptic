@@ -122,36 +122,15 @@ it cannot push.
 
 ## Now
 
-An independent re-test on 2026-08-02 (branch `fix/review-hardening`, `d42fe30`)
-found that the first round of review fixes patched the named examples but not
-the underlying class of bug: the input readers still treat a wrong type as an
-absent field. A 300-case boundary matrix caught 54 schema-invalid requirements
-accepted, 16 invalid profiles accepted, 22 valid requirements rejected, 52 valid
-profiles rejected, plus surviving negative/overflow and bundle-replay
-false-greens. **T-024 is now closed** — the boundary matrix
-(`tools/audit/boundary_matrix.py`, wired as a guard) reports 0 disagreements
-across 249 cases and its account is in `docs/PROGRESS.md`. **T-025 is also
-closed** — a mixed bundle now writes nothing and exits 65, and `rs-replay`
-rejects a manifest missing any field `analysis-bundle.v1` requires. The one item
-below remains, and status follows the matrix and CI, not a feeling. The full
-account is in `docs/reviews/2026-08-02-independent-review.md`.
-
-### T-026 — Honest docs, help text, and real CI evidence for the fix `[now]`
-
-**Serves:** the project's own rule — a repository that has started lying about
-itself passes every test right up until someone trusts a document.
-**Plan:** `docs/PLAN.md` Documentation accuracy; the "make CI the instrument"
-method at the top of this file.
-**Done when:** the README timing claim holds on Windows (~209 s measured, not
-60); the MCP and probe help text no longer say "Only Linux is implemented" /
-`fork` / `MAP_FIXED_NOREPLACE` against a shipped Windows probe; the
-`docs/integrations.md` CI snippet works under Actions' default `set -e`; the
-review doc reflects the matrix, not "all FIXED"; and CI has actually run green on
-the fixed SHA across GCC/Clang/AppleClang/MSVC (`refs/status/<sha>/*`), which it
-has not — `d42fe30` was pushed to a branch and `ci.yml` triggers only on `main`
-and pull requests.
-**First step:** correct the four documents; then open a PR (no merge) or add the
-branch to `on.push` so CI runs, and read back `refs/status/*`.
+*(empty — the round-2 review-hardening work is done and awaiting the reviewer's
+re-test. The 2026-08-02 re-test found the first round of fixes had patched the
+named examples but not the class of bug; T-024, T-025 and T-026 closed it at the
+root, verified by a boundary matrix (`tools/audit/boundary_matrix.py`, 0 of 249,
+wired as a guard) and CI green on the fixed SHA `681b048` across
+GCC/Clang/AppleClang/MSVC. Their accounts are in `docs/PROGRESS.md`; the durable
+record is `docs/reviews/2026-08-02-independent-review.md`. Nothing is merged to
+`main`; `fix/review-hardening` waits on the re-test. The one-line follow-up when
+it lands: drop the branch from `ci.yml` `on.push`.)*
 
 ---
 
