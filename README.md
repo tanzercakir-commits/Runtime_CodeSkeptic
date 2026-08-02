@@ -109,20 +109,48 @@ a range the probe never tested answers `UNKNOWN` rather than
 Profiles live in [profiles/measured/](profiles/measured/); each fact records
 how it was measured.
 
-## Documentation
+## System architecture
 
-| Document | Job |
-|---|---|
-| [docs/scenarios/](docs/scenarios/) | the spirit — why this exists, who it is for |
-| [docs/TODO.md](docs/TODO.md) | the compass — what we are doing now. **Start here.** |
-| [docs/PLAN.md](docs/PLAN.md) | the map — status against the ROADMAP, criterion by criterion |
-| [docs/PROGRESS.md](docs/PROGRESS.md) | the past — what changed and what was learned, append-only |
-| [docs/evidence_model.md](docs/evidence_model.md) | evidence classes, confidence ceiling, verdicts |
-| [docs/failure_taxonomy.md](docs/failure_taxonomy.md) | the failure family, with examples |
-| [docs/findings/registry.md](docs/findings/registry.md) | every `RS-VM-xxxx` id |
-| [docs/campaigns/](docs/campaigns/) | measurement campaigns — including the false-positive rate and the honest negative hunts |
-| [docs/real-world-test-playbook.md](docs/real-world-test-playbook.md) | reproduce the external-project verdicts yourself |
-| [docs/architecture/determinism.md](docs/architecture/determinism.md) | canonicalization and `profile_id` |
+```text
+                        ┌────────────────────────────┐
+                        │ Static Program Analyzer    │
+                        │ CodeSkeptic integration    │
+                        └──────────────┬─────────────┘
+                                       │
+                                       │ extracted assumptions
+                                       ▼
+┌─────────────────────┐     ┌────────────────────────────┐
+│ Environment Probes  │────▶│ Runtime Semantic IR        │
+│ Measured profiles   │     │                            │
+└─────────────────────┘     │ resources                  │
+                            │ operations                 │
+┌─────────────────────┐     │ effects                    │
+│ API/OS Specifications│───▶│ postconditions             │
+│ Curated contracts   │     │ failure modes              │
+└─────────────────────┘     │ temporal transitions       │
+                            │ evidence classifications    │
+┌─────────────────────┐     └──────────────┬─────────────┘
+│ Runtime Wrappers    │────────────────────▶│
+│ Instrumentation     │                     │
+└─────────────────────┘                     ▼
+                               ┌──────────────────────────┐
+                               │ Constraint and State     │
+                               │ Analysis Engine          │
+                               └─────────────┬────────────┘
+                                             │
+                                             ▼
+                               ┌──────────────────────────┐
+                               │ Evidence and Diagnosis   │
+                               │ Reports                  │
+                               └──────────────────────────┘
+```
+
+The full architecture, component by component: [ROADMAP.md](ROADMAP.md)
+sections 9–10. Not every box exists yet — v0.1 ships the probes, the contracts,
+the analysis engine and the evidence reports; the static extractor is a later
+phase and belongs to CodeSkeptic
+([docs/non_goals.md](docs/non_goals.md)). Project docs — compass, map, history,
+campaigns — start at [docs/TODO.md](docs/TODO.md).
 
 ## License
 
