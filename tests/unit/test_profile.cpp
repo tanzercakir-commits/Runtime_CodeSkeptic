@@ -358,4 +358,151 @@ RS_TEST(a_correct_requirement_reports_no_unrecognized_fields) {
                          : restored->unrecognized_fields.front());
 }
 
+// ---------------------------------------------------------------------------
+// Independent review 2026-08-02, A2: the profile parser did not match the
+// published environment-profile.v1 schema in either direction. It REJECTED
+// documents the schema allows (a profile with no virtual_memory; an os or arch
+// string the tool does not model) and ACCEPTED documents the schema forbids (a
+// non-string profile_name; a fact carrying an extra field or a non-string
+// source). The two directions are the real false-green: a profile CI believes
+// it verified can be one the tool silently mangled, or one it needlessly threw
+// away. These regressions pin both halves shut.
+// ---------------------------------------------------------------------------
+
+// Over-strict half. virtual_memory is not a required field in the schema, and
+// "absent = unknown" makes a platform-only profile valid: it simply answers
+// UNKNOWN to every memory question rather than being refused outright.
+RS_TEST(a_profile_without_virtual_memory_is_valid_and_all_unknown) {
+    auto parsed = json::parse(R"({
+        "schema": "runtime-skeptic.environment-profile.v1",
+        "origin": "measured",
+        "platform": {"os": "linux", "process_arch": "x86_64"}
+    })");
+    RS_CHECK(parsed.ok());
+    std::string error;
+    auto p = EnvironmentProfile::from_json(*parsed.value, error);
+    RS_CHECK_MESSAGE(p.has_value(), error);
+    if (!p) return;
+    RS_CHECK(!p->vm.page_size.is_known());
+    RS_CHECK(!p->vm.max_user_address.is_known());
+    RS_CHECK(p->vm.available_ranges.empty());
+    // And it names the same host as an explicit empty virtual_memory object,
+    // because omitting the block says exactly what an empty block says.
+    auto with_empty = json::parse(R"({
+        "schema": "runtime-skeptic.environment-profile.v1",
+        "origin": "measured",
+        "platform": {"os": "linux", "process_arch": "x86_64"},
+        "virtual_memory": {}
+    })");
+    auto q = EnvironmentProfile::from_json(*with_empty.value, error);
+    RS_CHECK(q.has_value());
+    if (q) RS_CHECK_EQ(p->profile_id(), q->profile_id());
+}
+
+// Over-strict half. os / host_arch / process_arch are typed `string` in the
+// schema, not `enum`: a host the tool does not model specially is still a real
+// measurement, so an unrecognized name maps to `other`, not to a rejection.
+RS_TEST(an_unmodeled_os_or_arch_maps_to_other_not_rejected) {
+    auto parsed = json::parse(R"({
+        "schema": "runtime-skeptic.environment-profile.v1",
+        "origin": "measured",
+        "platform": {"os": "freebsd", "process_arch": "riscv64"}
+    })");
+    RS_CHECK(parsed.ok());
+    std::string error;
+    auto p = EnvironmentProfile::from_json(*parsed.value, error);
+    RS_CHECK_MESSAGE(p.has_value(), error);
+    if (!p) return;
+    RS_CHECK(p->platform.os == OperatingSystem::Other);
+    RS_CHECK(p->platform.process_arch == Architecture::Other);
+    // `other` is not `unknown`: the field was present, just unmodeled. But an
+    // unmodeled arch carries no pointer width, so nothing is fabricated from it.
+    RS_CHECK_EQ(p->process_pointer_width(), 0u);
+}
+
+// Under-strict half. The schema types os as a string; a number is not a
+// string, and coercing it to "" silently (the old behavior) is a schema
+// violation the reader must refuse, not paper over.
+RS_TEST(a_non_string_os_is_rejected) {
+    auto parsed = json::parse(R"({
+        "schema": "runtime-skeptic.environment-profile.v1",
+        "origin": "measured",
+        "platform": {"os": 123, "process_arch": "x86_64"}
+    })");
+    RS_CHECK(parsed.ok());
+    std::string error;
+    RS_CHECK(!EnvironmentProfile::from_json(*parsed.value, error).has_value());
+}
+
+// Under-strict half. profile_name is typed `string`; a non-string used to be
+// coerced to "(unnamed)" and the document accepted.
+RS_TEST(a_non_string_profile_name_is_rejected) {
+    auto parsed = json::parse(R"({
+        "schema": "runtime-skeptic.environment-profile.v1",
+        "origin": "measured",
+        "profile_name": 123,
+        "platform": {"os": "linux", "process_arch": "x86_64"}
+    })");
+    RS_CHECK(parsed.ok());
+    std::string error;
+    RS_CHECK(!EnvironmentProfile::from_json(*parsed.value, error).has_value());
+    RS_CHECK(error.find("profile_name") != std::string::npos);
+}
+
+// Under-strict half. A fact is additionalProperties:false in the schema. An
+// extra key is a misspelling whose data is then dropped in silence - write
+// `valeu` and the real value goes unread - so it is a violation, not a fact.
+RS_TEST(an_extra_field_in_a_fact_is_rejected) {
+    auto parsed = json::parse(R"({
+        "schema": "runtime-skeptic.environment-profile.v1",
+        "origin": "measured",
+        "platform": {"os": "linux", "process_arch": "x86_64"},
+        "virtual_memory": {
+            "page_size": {"value": 4096, "evidence": "measured_capability",
+                          "valeu": 8192}
+        }
+    })");
+    RS_CHECK(parsed.ok());
+    std::string error;
+    RS_CHECK(!EnvironmentProfile::from_json(*parsed.value, error).has_value());
+    RS_CHECK(error.find("valeu") != std::string::npos);
+}
+
+// Under-strict half. A fact's source/note are typed `string`; a number was
+// coerced silently.
+RS_TEST(a_non_string_fact_source_is_rejected) {
+    auto parsed = json::parse(R"({
+        "schema": "runtime-skeptic.environment-profile.v1",
+        "origin": "measured",
+        "platform": {"os": "linux", "process_arch": "x86_64"},
+        "virtual_memory": {
+            "page_size": {"value": 4096, "evidence": "measured_capability",
+                          "source": 5}
+        }
+    })");
+    RS_CHECK(parsed.ok());
+    std::string error;
+    RS_CHECK(!EnvironmentProfile::from_json(*parsed.value, error).has_value());
+}
+
+// Under-strict half, ranges. A range is additionalProperties:false too, and a
+// misspelled `evidance` slips the real evidence past the reader.
+RS_TEST(an_extra_field_in_a_range_is_rejected) {
+    auto parsed = json::parse(R"({
+        "schema": "runtime-skeptic.environment-profile.v1",
+        "origin": "measured",
+        "platform": {"os": "linux", "process_arch": "x86_64"},
+        "virtual_memory": {
+            "unavailable_ranges": [
+                {"start": "0x1000", "end": "0x2000",
+                 "evidence": "measured_capability", "reigon": "typo"}
+            ]
+        }
+    })");
+    RS_CHECK(parsed.ok());
+    std::string error;
+    RS_CHECK(!EnvironmentProfile::from_json(*parsed.value, error).has_value());
+    RS_CHECK(error.find("reigon") != std::string::npos);
+}
+
 RS_TEST_MAIN("profile")

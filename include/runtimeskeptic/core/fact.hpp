@@ -132,6 +132,20 @@ Fact<T> fact_from_json(const json::Value* node, Reader read_value,
         error = "fact must be an object with 'value' and 'evidence'";
         return Fact<T>::unknown("malformed");
     }
+    // The published schema types every fact with additionalProperties:false.
+    // A key the reader does not recognize is a misspelled field whose data is
+    // then silently ignored - a `valeu` typo leaves the real value unread - so
+    // it is a schema violation, not a fact. This is the profile half of the
+    // "extra field accepted" defect the independent review flagged (A2).
+    for (const auto& [key, child] : node->as_object()) {
+        (void)child;
+        if (key != "value" && key != "evidence" && key != "source" &&
+            key != "note") {
+            error = "fact has an unrecognized field '" + key +
+                    "'; the schema forbids extra fields on a fact";
+            return Fact<T>::unknown("malformed");
+        }
+    }
     const json::Value* evidence_node = node->find("evidence");
     if (evidence_node == nullptr || !evidence_node->is_string()) {
         error = "fact requires an explicit 'evidence' string";
@@ -145,10 +159,18 @@ Fact<T> fact_from_json(const json::Value* node, Reader read_value,
 
     std::string source;
     if (const json::Value* s = node->find("source"); s != nullptr) {
+        if (!s->is_string()) {
+            error = "fact 'source' must be a string";
+            return Fact<T>::unknown("malformed");
+        }
         source = s->as_string();
     }
     std::string note;
     if (const json::Value* n = node->find("note"); n != nullptr) {
+        if (!n->is_string()) {
+            error = "fact 'note' must be a string";
+            return Fact<T>::unknown("malformed");
+        }
         note = n->as_string();
     }
 

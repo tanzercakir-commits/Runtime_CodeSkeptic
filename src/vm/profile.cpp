@@ -299,6 +299,10 @@ std::optional<EnvironmentProfile> EnvironmentProfile::from_json(
     }
 
     if (const json::Value* name = v.find("profile_name"); name != nullptr) {
+        if (!name->is_string()) {
+            error = "profile_name must be a string";
+            return std::nullopt;
+        }
         p.profile_name = name->as_string();
     }
 
@@ -308,6 +312,8 @@ std::optional<EnvironmentProfile> EnvironmentProfile::from_json(
         error = "profile requires a 'platform' object";
         return std::nullopt;
     }
+    // A closed enum: the schema constrains the value to a fixed set, so an
+    // unrecognized string is a schema violation. Used for translation_mode.
     auto read_enum = [&](const char* key, auto parser, auto& out) -> bool {
         const json::Value* node = platform->find(key);
         if (node == nullptr) return true;  // stays Unknown
@@ -317,14 +323,34 @@ std::optional<EnvironmentProfile> EnvironmentProfile::from_json(
         }
         return true;
     };
-    if (!read_enum("os", operating_system_from_string, p.platform.os)) {
+    // An open enum: os / host_arch / process_arch are typed `string` in the
+    // schema, not `enum`, precisely because a host the tool does not model
+    // specially is still a real measurement. An unrecognized name is therefore
+    // NOT a schema violation - it maps to `other`, a known, non-absent value
+    // (distinct from an absent field, which stays `unknown`). Rejecting these
+    // was the over-strict half of review finding A2. A non-string still is a
+    // violation, because the schema types the field as a string.
+    auto read_open_enum = [&](const char* key, auto parser, auto& out,
+                              auto other) -> bool {
+        const json::Value* node = platform->find(key);
+        if (node == nullptr) return true;  // absent stays Unknown
+        if (!node->is_string()) {
+            error = std::string("platform.") + key + " must be a string";
+            return false;
+        }
+        if (!parser(node->as_string(), out)) out = other;
+        return true;
+    };
+    if (!read_open_enum("os", operating_system_from_string, p.platform.os,
+                        OperatingSystem::Other)) {
         return std::nullopt;
     }
-    if (!read_enum("host_arch", architecture_from_string, p.platform.host_arch)) {
+    if (!read_open_enum("host_arch", architecture_from_string,
+                        p.platform.host_arch, Architecture::Other)) {
         return std::nullopt;
     }
-    if (!read_enum("process_arch", architecture_from_string,
-                   p.platform.process_arch)) {
+    if (!read_open_enum("process_arch", architecture_from_string,
+                        p.platform.process_arch, Architecture::Other)) {
         return std::nullopt;
     }
     if (!read_enum("translation_mode", translation_mode_from_string,
@@ -338,10 +364,19 @@ std::optional<EnvironmentProfile> EnvironmentProfile::from_json(
         p.platform.kernel_version = n->as_string();
     }
 
-    // -- virtual memory ----------------------------------------------------
+    // -- virtual memory (optional in the schema) --------------------------
+    // The schema does not list virtual_memory among its required fields, and
+    // "absent = unknown" means a profile that measured the platform but no
+    // memory fact is valid: it answers UNKNOWN to every memory question.
+    // Rejecting it was the over-strict half of review finding A2. An absent
+    // object is treated as an empty one, so every fact below reads its unknown
+    // default; a present non-object is still a hard schema error.
+    const json::Value empty_vm = json::Value::object();
     const json::Value* mem = v.find("virtual_memory");
-    if (mem == nullptr || !mem->is_object()) {
-        error = "profile requires a 'virtual_memory' object";
+    if (mem == nullptr) {
+        mem = &empty_vm;
+    } else if (!mem->is_object()) {
+        error = "profile 'virtual_memory' must be an object";
         return std::nullopt;
     }
 

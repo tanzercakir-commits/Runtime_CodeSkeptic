@@ -65,6 +65,17 @@ std::optional<ClassifiedRange> ClassifiedRange::from_json(const json::Value& v,
         error = "range entry must be an object";
         return std::nullopt;
     }
+    // The schema types a range with additionalProperties:false: an unrecognized
+    // key is a misspelled field, not data, and accepting it silently was part
+    // of the "extra field accepted" defect the independent review flagged (A2).
+    for (const auto& [key, child] : v.as_object()) {
+        (void)child;
+        if (key != "start" && key != "end" && key != "evidence" &&
+            key != "note" && key != "source") {
+            error = "range entry has an unrecognized field '" + key + "'";
+            return std::nullopt;
+        }
+    }
     const json::Value* start = v.find("start");
     const json::Value* end = v.find("end");
     const json::Value* evidence = v.find("evidence");
@@ -113,9 +124,17 @@ std::optional<ClassifiedRange> ClassifiedRange::from_json(const json::Value& v,
     }
 
     if (const json::Value* source = v.find("source"); source != nullptr) {
+        if (!source->is_string()) {
+            error = "range 'source' must be a string";
+            return std::nullopt;
+        }
         out.source = source->as_string();
     }
     if (const json::Value* note = v.find("note"); note != nullptr) {
+        if (!note->is_string()) {
+            error = "range 'note' must be a string";
+            return std::nullopt;
+        }
         out.note = note->as_string();
     }
     return out;
