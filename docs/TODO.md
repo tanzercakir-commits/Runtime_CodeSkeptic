@@ -122,18 +122,59 @@ it cannot push.
 
 ## Now
 
-*(empty — round 3 is done and awaiting the reviewer's re-test. The third re-test
-confirmed round 2 held (CI green 6/6) but found what its matrix could not see:
-it measured only accept/reject, never verdict correctness, the nested/container
-fields, or the bundle's file integrity. T-027 (verdict correctness — file_offset
-overflow, zero page/granularity), T-028 (the matrix reaches nested fields — 22
-disagreements closed), and T-029 (bundle integrity — hash the fixed files, no
-`../` traversal, full manifest types) closed them. The harness now also checks
-GOLDEN VERDICTS, not just accept/reject: `tools/audit/boundary_matrix.py`, 0 of
-310 type cases + 0 verdict mismatches, wired as a guard. Accounts in
-`docs/PROGRESS.md`; record in `docs/reviews/2026-08-02-independent-review.md`.
-Nothing merged to `main`; the branch waits on the re-test, and the follow-up
-when it lands is to drop it from `ci.yml` `on.push`.)*
+A FOURTH re-test (2026-08-02, `58f6851`, CI green 6/6) confirmed round 3 held —
+verdict, nested and canonical-hash fixes all work — then found the class the
+hand-parsers keep leaking: an independent null/container matrix accepted **36/36
+schema-invalid documents** (`assumptions:null`, a null `page_size` fact,
+`source_locations[].line:null`), a replay matrix accepted **28/111** manifests
+with wrong/missing NESTED fields, more verdict false-greens, and the guard
+itself is fail-OPEN. Four rounds of hand-fixing have each missed a different
+part of the schema. The decisive move is to stop hand-checking and validate
+against the schema itself. Full account:
+`docs/reviews/2026-08-02-independent-review.md`.
+
+### T-030 — A real schema validator gates every input `[now]`
+
+**Serves:** the whole promise — "trustworthy CI gate" cannot mean "the fields I
+remembered to check". A validator that reads `schemas/*.json` cannot forget a
+field, a null, or a nested one.
+**Plan:** `docs/PLAN.md` Phase 3 exit; the reviewer's fix order #1 (enforce the
+published schemas on ALL inputs) — properly, this time.
+**Done when:** a C++ subset validator (type incl arrays+null, required,
+properties, additionalProperties, enum, const, items, `$ref`, pattern,
+min/max, anyOf) gates rs-check (requirement+profile), rs-profile, rs-mcp and the
+rs-replay manifest; and the boundary matrix — extended to null/container and a
+manifest matrix — reports **0** with `jsonschema` as the oracle, which is the
+proof the C++ validator matches it. Schemas embedded at build via CMake, no
+Python dependency.
+**First step:** `include/runtimeskeptic/core/schema.hpp` + `src/core/schema.cpp`;
+embed via `configure_file`; run the matrix red, then gate until it is 0.
+
+### T-031 — The verdict is correct at the analyzer's edges `[now]`
+
+**Serves:** a green run must mean the right answer at the boundaries too.
+**Plan:** `docs/PLAN.md` Phase 3 exit — the incident is diagnosed correctly.
+**Done when:** golden verdicts cover and pass: `min_map_address >=
+max_user_address` is refused (contradictory bounds, not a giant SUPPORTED
+reservation); `file_length` at the uint64 boundary does not overflow to
+SUPPORTED; a missing `file_length` or `allocation_granularity = 3` does not turn
+an UNSUPPORTED into clean success; a Windows profile that rejects beyond-EOF is
+never SUPPORTED for an EOF mapping; and a stored `profile_id` that does not match
+the recomputed hash is refused by `rs-profile verify`.
+**First step:** reproduce each as a golden case (red), then fix the analyzer /
+profile parser.
+
+### T-032 — The guards fail closed, not open `[now]`
+
+**Serves:** the project's own rule — a guard that is skipped everywhere is a
+comment. CI green must PROVE the matrix ran.
+**Plan:** the "make CI the instrument" method at the top of this file.
+**Done when:** the matrix guard is an ERROR, not a skip, when its binary or
+`jsonschema` is missing in CI; `_bin` also finds `build/bin/Release`; the matrix
+counts exit 70 / a crash as NOT accepted; and the CI `jsonschema` install drops
+its `|| true`.
+**First step:** a `--require` mode on the matrix (fail if it cannot run), wired
+into `run_all.sh`; fix `_bin`; fix `tool_accepts`.
 
 ---
 
