@@ -217,7 +217,18 @@ int main(int argc, char** argv) {
     // what the host actually produced. The bundle re-runs the analysis itself to
     // self-certify - the same code path, so its verdict cannot disagree with the
     // one just printed.
-    if (!bundle_dir.empty()) {
+    // An evidence bundle certifies a COMPLETE run. If any requirement in the
+    // input could not be evaluated, writing one would seal a partial analysis as
+    // though it were the whole - and rs-replay would then report it "reproduced".
+    // Refuse to write it; the exit code below already says the run was incomplete.
+    if (!bundle_dir.empty() && !bundle->rejected.empty()) {
+        std::cerr << "rs-check: not writing an evidence bundle to '" << bundle_dir
+                  << "': " << bundle->rejected.size()
+                  << " requirement(s) could not be evaluated, so the run is "
+                     "incomplete and a bundle would certify a partial analysis "
+                     "as a whole one\n";
+    }
+    if (!bundle_dir.empty() && bundle->rejected.empty()) {
         std::string req_text, prof_text;
         if (auto t = io::read_file(requirement_path, error)) {
             req_text = std::move(*t);

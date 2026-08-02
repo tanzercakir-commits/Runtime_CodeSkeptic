@@ -16,6 +16,47 @@ re-litigated; a mistake recorded here does not need to be re-made.
 
 ---
 
+## 2026-08-02 — the evidence bundle stops certifying an incomplete run (T-025)
+
+**Changed.** Two bundle false-greens from the re-test, closed. `rs-check` no
+longer writes an evidence bundle when any requirement in the input could not be
+evaluated, and `rs-replay` now rejects a manifest missing any field
+`analysis-bundle.v1` requires — not just the inputs/outputs hash nodes the
+round-1 fix checked.
+
+### What was wrong
+
+- A bundle with one valid and one invalid requirement: `rs-check` exited 65 and
+  said "incomplete", **but still wrote a self-certified bundle** ("replay:
+  reproduced"), and `rs-replay` then reported it `reproduced / 0`. An incomplete
+  analysis could be handed on as a clean, replayable proof.
+- A manifest stripped of six required sections (`tool_version`,
+  `schema_versions`, `host`, `process_architecture`, `analysis_options`,
+  `replay`) still replayed `reproduced / 0`: the round-1 completeness check
+  required only `inputs`/`outputs`, so the tamper check never looked at the
+  fields that were gone.
+
+### The fix
+
+| | |
+|---|---|
+| **+** | `tools/rs-check/main.cpp`: the bundle is written only when `bundle->rejected` is empty; otherwise it says why it wrote nothing, and the exit code is 65. A clean single/whole bundle is unaffected |
+| **+** | `src/reports/bundle.cpp` `replay_bundle`: requires every top-level field `analysis-bundle.v1` lists (`tool_version`, `schema_versions`, `host`, `process_architecture`, `analysis_options`, `inputs`, `outputs`, `overall`, `finding_ids`, `replay`) before the tamper check runs. A gutted manifest is rejected as incomplete, naming the first missing field |
+| **−** | same lesson as T-024, one layer up: the round-1 check required only the fields it happened to think of. The list now comes from the schema's own `required`, so it cannot fall behind it silently |
+
+Regression: `a_manifest_missing_a_required_top_level_field_is_rejected` in
+`tests/unit/test_evidence_bundle.cpp`. Verified by hand: mixed bundle → no
+bundle, exit 65; stripped manifest → `rs-replay` 65; a good bundle still
+replays 0. 15/15 CTest, 19 guards.
+
+### What to do next
+
+Only **T-026** remains before the next re-test: the README "60 seconds" claim
+(209 s on Windows), the "Only Linux" MCP/probe help text against a shipped
+Windows probe, the `set -e`-unreachable `docs/integrations.md` CI snippet, an
+honest rewrite of the review doc, and getting CI to actually run on the branch
+(`d42fe30`+ has no run). Do NOT report ready until the matrix is green in CI.
+
 ## 2026-08-02 — the re-test: a false-green class the first fixes never reached (T-024)
 
 **Changed.** Every CLI input reader now rejects a wrong TYPE instead of reading

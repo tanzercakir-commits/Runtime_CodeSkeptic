@@ -240,4 +240,27 @@ RS_TEST(a_directory_that_is_not_a_bundle_is_refused_not_crashed) {
     RS_CHECK(!error.empty());
 }
 
+RS_TEST(a_manifest_missing_a_required_top_level_field_is_rejected) {
+    // Independent re-test 2026-08-02, A3/A4: the round-1 fix required only the
+    // inputs/outputs hash nodes, so a manifest stripped of tool_version, host,
+    // analysis_options and replay still "reproduced" with exit 0. replay must
+    // require every field analysis-bundle.v1 lists as required. One stands for
+    // all: drop tool_version from an otherwise valid, self-certified bundle.
+    TempDir tmp("stripped");
+    std::string error;
+    RS_CHECK(bundle::write_bundle(tmp.dir(), inputs_that_produce_a_finding(), {},
+                                  error));
+
+    json::Value m = read_manifest(tmp.dir());
+    m.object_ref().erase("tool_version");
+    RS_CHECK(io::write_file((tmp.path / "manifest.json").string(),
+                            json::serialize_pretty(m), error));
+
+    auto outcome = bundle::replay_bundle(tmp.dir(), error);
+    RS_CHECK_MESSAGE(!outcome.has_value(),
+                     "a manifest missing a required field was replayed");
+    RS_CHECK_MESSAGE(error.find("tool_version") != std::string::npos,
+                     "the rejection did not name the missing field");
+}
+
 RS_TEST_MAIN("evidence bundle")

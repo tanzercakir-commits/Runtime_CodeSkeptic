@@ -301,6 +301,22 @@ std::optional<ReplayOutcome> replay_bundle(const std::string& dir,
         return std::nullopt;
     }
 
+    // analysis-bundle.v1 lists these fields as REQUIRED on the manifest. The
+    // round-1 fix required only inputs/outputs, so a manifest stripped of
+    // tool_version, host, analysis_options and replay still "reproduced" - the
+    // tamper check never noticed fields it did not look for. Require every one
+    // the schema does, so an incomplete manifest is rejected, not replayed.
+    for (const char* key :
+         {"tool_version", "schema_versions", "host", "process_architecture",
+          "analysis_options", "inputs", "outputs", "overall", "finding_ids",
+          "replay"}) {
+        if (m.find(key) == nullptr) {
+            error = "incomplete bundle: manifest is missing required field '" +
+                    std::string(key) + "', which analysis-bundle.v1 requires";
+            return std::nullopt;
+        }
+    }
+
     // A bundle is only replayable if its manifest is COMPLETE. analysis-bundle.v1
     // requires inputs{requirement,profile} and outputs{findings,report}, each
     // naming a file and its sha256 - and those hash sections are the ones the

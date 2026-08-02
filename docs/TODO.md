@@ -130,24 +130,11 @@ accepted, 16 invalid profiles accepted, 22 valid requirements rejected, 52 valid
 profiles rejected, plus surviving negative/overflow and bundle-replay
 false-greens. **T-024 is now closed** — the boundary matrix
 (`tools/audit/boundary_matrix.py`, wired as a guard) reports 0 disagreements
-across 249 cases and its account is in `docs/PROGRESS.md`. The two items below
-remain, and status follows the matrix and CI, not a feeling. The full account is
-in `docs/reviews/2026-08-02-independent-review.md`.
-
-### T-025 — The evidence bundle is all-or-nothing and replay proves completeness `[now]`
-
-**Serves:** the bundle's one promise — a verdict that survives leaving the
-machine is real proof, not a clean-looking shell around an incomplete run.
-**Plan:** `docs/PLAN.md` Phase 3 — the replayable evidence bundle (§17).
-**Done when:** a mixed valid+invalid bundle produces **no** clean replay (today
-`rs-check` exits 65 yet still writes a self-certified bundle that `rs-replay`
-then reports `reproduced / 0`); and a manifest missing any section
-`analysis-bundle.v1` requires makes `rs-replay` exit non-zero (today six sections
-can be stripped and it still says `reproduced`).
-**First step:** stop writing a bundle when `bundle->rejected` is non-empty
-(`tools/rs-check/main.cpp`); validate the full manifest schema and the
-presence+hash of every required file in `replay_bundle`
-(`src/reports/bundle.cpp:304`), not the narrow node set it checks now.
+across 249 cases and its account is in `docs/PROGRESS.md`. **T-025 is also
+closed** — a mixed bundle now writes nothing and exits 65, and `rs-replay`
+rejects a manifest missing any field `analysis-bundle.v1` requires. The one item
+below remains, and status follows the matrix and CI, not a feeling. The full
+account is in `docs/reviews/2026-08-02-independent-review.md`.
 
 ### T-026 — Honest docs, help text, and real CI evidence for the fix `[now]`
 
