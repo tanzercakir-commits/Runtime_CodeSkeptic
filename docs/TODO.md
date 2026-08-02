@@ -134,6 +134,47 @@ its Phase 3 promise is measured and kept.)*
 
 ## Later
 
+### T-023 — Open the second runtime domain: Filesystem first `[later]`
+
+**Serves:** the "other layers" this project has always named — filesystem,
+loader, time, networking (`docs/scenarios/`, and the public pitch). Virtual
+memory is one domain of many; the thesis is general and this is where it widens.
+**Plan:** `docs/PLAN.md` Phase 8 — additional runtime domains
+**Done when:** ONE new domain is fully through **Gate D** (ROADMAP §20) — ≥10
+real documented incidents, a bounded operation model, a probe that MEASURES the
+host's behaviour, a false-positive campaign reporting its rate on a named
+population (target 0), and 2–3 reproduce-exact diagnosis cards — and
+`docs/PLAN.md` Phase 8 moves `[open]` → `[partial]` with the domain named.
+
+**The guardrails, before any code — this is what the tool's credibility rests
+on:** Gate D gates every domain, so the corpus comes FIRST and code after. One
+domain at a time (ROADMAP §18). Never add an extractor and never modify
+CodeSkeptic (`docs/non_goals.md` §18; `tools/guards/check_non_goals.py` fails the
+build the moment one reappears). The false-positive rate is the north star,
+measured the way VM's was — a rule that fires on a request that actually
+succeeded is a bug, not a finding.
+
+**First step — VM's proven playbook, in order.** Start with **Filesystem
+Semantics** (ROADMAP §18 Candidate A: independently *measurable* the way VM was,
+and an abundant real-incident record — case-collision on case-insensitive hosts,
+non-atomic cross-filesystem rename, fsync-durability drift):
+
+```
+1  corpus        >=10 real incidents in corpus/runtime_failures/<domain>/  (Gate D-1)
+2  operation     docs/domains/<domain>/operation-model.md - a CLOSED operation
+                 set every incident maps to                               (Gate D-2)
+3  probe         rs-env-probe <domain>: MEASURE real host behaviour, facts carry
+                 evidence classes, unmeasured stays `unknown`             (Gate D-3)
+4  schema+rules  version the schema under schemas/, RS-<DOMAIN>-xxxx ids in the
+                 registry, every finding through clamp_confidence
+5  campaign      tools/campaign/ observe-and-replay, rate in docs/campaigns/ (Gate D-4)
+6  cards         2-3 reproduce-exact diagnosis cards + Gate D sign-off in PROGRESS
+```
+
+Dynamic Loader/ABI (Candidate B) is the strong second choice and the most
+VM-adjacent, but its behaviour is harder to *measure* and leans on cited specs —
+pick it only with a concrete loader-incident corpus already in hand.
+
 ### T-021 — The synthetic-only backlog: argued with, never shown a kernel `[later]`
 
 **Serves:** the same standard T-020 served, one bucket further in — a rule that
@@ -254,11 +295,12 @@ worth investigating when T-004 brings a Windows runner into scope.
 
 Each needs a reason, so this cannot quietly become a way to empty the list.
 
-- **ROADMAP Phases 6–10** (counterfactual, temporal, further domains, learned
-  invariants, productization) — ROADMAP §19 Risk 1 is *excessive scope*,
-  mitigated by "remain virtual-memory-only through the first useful releases".
-  Opening any of them before T-002 and T-003 close would be that risk
-  materialising. Gate D gates Phase 8 and no new domain is proposed.
+- **ROADMAP Phases 6, 7, 9, 10** (counterfactual, temporal, learned invariants,
+  productization) — ROADMAP §19 Risk 1 is *excessive scope*, mitigated by
+  "remain virtual-memory-only through the first useful releases". Opening any of
+  them while the first domain is still the only one measured would be that risk
+  materialising. (Phase 8 — further runtime domains — is now on the compass as
+  **T-023**, still gated on Gate D and deliberately in `Later`, not `Now`.)
 - **Documentation accuracy** (`docs/PLAN.md`, `[partial]`) — permanently
   partial by nature. Only paths and a fixed list of phrases are mechanical;
   prose is not compiled and never will be. `tools/guards/check_docs.py` covers

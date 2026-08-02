@@ -280,8 +280,11 @@ have to rediscover them.
 
 ## Phases 6-10
 
-`[open]` All. Phase 6 (counterfactual), 7 (temporal), 8 (further domains,
-gated on Gate D: ten real incidents per domain), 9 (learned invariants),
+`[open]` Phase 8 — additional runtime domains, gated on Gate D (ten real
+incidents per domain, a bounded operation model, measurable behaviour,
+actionable output). (T-023)
+
+`[open]` Phases 6 (counterfactual), 7 (temporal), 9 (learned invariants),
 10 (productization). (untracked)
 
 ROADMAP §19 Risk 1 is *excessive scope*, mitigated by "remain
