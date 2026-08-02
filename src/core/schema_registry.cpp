@@ -8,8 +8,10 @@
 namespace rs::schema {
 namespace {
 
-// The two requirement shapes rs-check accepts, keyed by their `schema` const.
-constexpr const char* kRequirementConst = "runtime-skeptic.application-requirements.v1";
+// A requirement input is a bundle when it declares this `schema` const; anything
+// else is validated against the single-requirement schema (which itself requires
+// the requirement const), so an absent or wrong `schema` is refused there with
+// the precise violation.
 constexpr const char* kBundleConst = "runtime-skeptic.application-requirements-bundle.v1";
 
 // Parsed once, on first use. The embedded strings are our own valid JSON; a

@@ -101,27 +101,32 @@ SCHEMA_OF = {
     "manifest": "analysis-bundle.v1.json",
 }
 
-# A registry so the bundle's cross-file $ref ("application-requirements.v1.json")
-# resolves to the requirement schema - the exact resolution the C++ Store does,
-# so the two validators are compared on equal footing.
-from referencing import Registry, Resource  # noqa: E402
-from referencing.jsonschema import DRAFT202012  # noqa: E402
-
-
-def _resource(s):
-    return Resource.from_contents(s, default_specification=DRAFT202012)
-
-
-_registry = Registry().with_resources([
-    ("application-requirements.v1.json", _resource(REQ_SCHEMA)),
-    (REQ_SCHEMA["$id"], _resource(REQ_SCHEMA)),
-])
+# The three schemas the matrix exercises - requirement, profile, manifest - are
+# self-contained (their only $ref is local #/$defs), so jsonschema resolves them
+# with no registry and no `referencing` module. That keeps this guard runnable on
+# a CI box whose jsonschema predates `referencing` (the 2026-08-02 push found one
+# that did). The bundle schema is the sole one with a cross-file $ref; it is not
+# in any run below (a bundle item IS a requirement doc, already proven by the
+# `req` sweep, and the C++ Store is proven in tests/unit/test_schema.cpp), so its
+# oracle is built lazily and only if `referencing` happens to be present.
 _VALIDATORS = {
-    "application-requirements.v1.json": Draft202012Validator(REQ_SCHEMA, registry=_registry),
-    "application-requirements-bundle.v1.json": Draft202012Validator(BUNDLE_SCHEMA, registry=_registry),
-    "environment-profile.v1.json": Draft202012Validator(PROF_SCHEMA, registry=_registry),
-    "analysis-bundle.v1.json": Draft202012Validator(MANIFEST_SCHEMA, registry=_registry),
+    "application-requirements.v1.json": Draft202012Validator(REQ_SCHEMA),
+    "environment-profile.v1.json": Draft202012Validator(PROF_SCHEMA),
+    "analysis-bundle.v1.json": Draft202012Validator(MANIFEST_SCHEMA),
 }
+try:
+    from referencing import Registry, Resource
+    from referencing.jsonschema import DRAFT202012
+    _registry = Registry().with_resources([
+        ("application-requirements.v1.json",
+         Resource.from_contents(REQ_SCHEMA, default_specification=DRAFT202012)),
+        (REQ_SCHEMA["$id"],
+         Resource.from_contents(REQ_SCHEMA, default_specification=DRAFT202012)),
+    ])
+    _VALIDATORS["application-requirements-bundle.v1.json"] = \
+        Draft202012Validator(BUNDLE_SCHEMA, registry=_registry)
+except ImportError:
+    pass  # bundle oracle unavailable here; no run needs it
 
 
 def schema_valid(doc, which):
