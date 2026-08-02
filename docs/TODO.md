@@ -122,6 +122,68 @@ it cannot push.
 
 ## Now
 
+An independent re-test on 2026-08-02 (branch `fix/review-hardening`, `d42fe30`)
+found that the first round of review fixes patched the named examples but not
+the underlying class of bug: the input readers still treat a wrong type as an
+absent field. A 300-case boundary matrix caught 54 schema-invalid requirements
+accepted, 16 invalid profiles accepted, 22 valid requirements rejected, 52 valid
+profiles rejected, plus surviving negative/overflow and bundle-replay
+false-greens. These three items close it at the root, and NONE is done until the
+boundary matrix (T-024's first step) is clean — status follows the matrix, not a
+feeling. The full account is in `docs/reviews/2026-08-02-independent-review.md`.
+
+### T-024 — Enforce the published schemas on every input, both directions `[now]`
+
+**Serves:** the whole promise — a tool that is trustworthy as a CI gate. A
+requirement that needs a 16 KiB page, written `"16384"` (a string), must not be
+read as "no page-size requirement" and pass.
+**Plan:** `docs/PLAN.md` Phase 3 exit criterion — "no unsupported platform fact
+is described as guaranteed"; the reviewer's fix order #1 (enforce the schemas on
+ALL inputs).
+**Done when:** a checked-in boundary matrix reports **0 schema-invalid inputs
+accepted and 0 schema-valid inputs rejected** (semantic constraints that reject
+a schema-valid doc must be encoded in the published schema so the two agree);
+every one of the nine numeric fields rejects a negative with the field named;
+and an `address + size` that overflows `uint64` changes the verdict rather than
+being filed only as a limitation.
+**First step:** build the matrix harness (generate valid/invalid type + boundary
+variants, run through `rs-check`/`rs-profile`, print the confusion matrix). Then
+add a schema validator run against `schemas/*.json` BEFORE each hand-parser, so
+no field can be missed — the root cause is `read_optional_uint`
+(`src/vm/requirement.cpp:67`) returning "absent" for a wrong type.
+
+### T-025 — The evidence bundle is all-or-nothing and replay proves completeness `[now]`
+
+**Serves:** the bundle's one promise — a verdict that survives leaving the
+machine is real proof, not a clean-looking shell around an incomplete run.
+**Plan:** `docs/PLAN.md` Phase 3 — the replayable evidence bundle (§17).
+**Done when:** a mixed valid+invalid bundle produces **no** clean replay (today
+`rs-check` exits 65 yet still writes a self-certified bundle that `rs-replay`
+then reports `reproduced / 0`); and a manifest missing any section
+`analysis-bundle.v1` requires makes `rs-replay` exit non-zero (today six sections
+can be stripped and it still says `reproduced`).
+**First step:** stop writing a bundle when `bundle->rejected` is non-empty
+(`tools/rs-check/main.cpp`); validate the full manifest schema and the
+presence+hash of every required file in `replay_bundle`
+(`src/reports/bundle.cpp:304`), not the narrow node set it checks now.
+
+### T-026 — Honest docs, help text, and real CI evidence for the fix `[now]`
+
+**Serves:** the project's own rule — a repository that has started lying about
+itself passes every test right up until someone trusts a document.
+**Plan:** `docs/PLAN.md` Documentation accuracy; the "make CI the instrument"
+method at the top of this file.
+**Done when:** the README timing claim holds on Windows (~209 s measured, not
+60); the MCP and probe help text no longer say "Only Linux is implemented" /
+`fork` / `MAP_FIXED_NOREPLACE` against a shipped Windows probe; the
+`docs/integrations.md` CI snippet works under Actions' default `set -e`; the
+review doc reflects the matrix, not "all FIXED"; and CI has actually run green on
+the fixed SHA across GCC/Clang/AppleClang/MSVC (`refs/status/<sha>/*`), which it
+has not — `d42fe30` was pushed to a branch and `ci.yml` triggers only on `main`
+and pull requests.
+**First step:** correct the four documents; then open a PR (no merge) or add the
+branch to `on.push` so CI runs, and read back `refs/status/*`.
+
 ---
 
 ## Next
