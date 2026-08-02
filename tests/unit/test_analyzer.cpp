@@ -946,4 +946,50 @@ RS_TEST(a_program_using_a_comfortable_share_is_not_warned) {
     RS_CHECK(!has_finding(result, ids::kAddressBoundIsTight));
 }
 
+// ---------------------------------------------------------------------------
+// Independent review 2026-08-02, findings A1 and A5: schema-typed fields were
+// coerced in silence, so a wrong type or a negative number analyzed on and
+// still returned a verdict. from_json must REJECT them. Each case fails on
+// demand: remove the guard in requirement.cpp and the document parses again.
+// ---------------------------------------------------------------------------
+RS_TEST(a_non_string_name_is_rejected) {
+    auto parsed = json::parse(R"({
+        "schema": "runtime-skeptic.application-requirements.v1",
+        "name": 123,
+        "operation": "virtual_memory_map",
+        "assumption_evidence": "specified_guarantee",
+        "request": {"size": 4096}
+    })");
+    RS_CHECK(parsed.ok());
+    std::string error;
+    RS_CHECK_MESSAGE(!Requirement::from_json(*parsed.value, error).has_value(),
+                     "name:123 must be rejected, not coerced to \"\"");
+}
+
+RS_TEST(protection_as_a_string_is_rejected) {
+    auto parsed = json::parse(R"({
+        "schema": "runtime-skeptic.application-requirements.v1",
+        "operation": "virtual_memory_map",
+        "assumption_evidence": "specified_guarantee",
+        "request": {"size": 4096, "protection": "rwx"}
+    })");
+    RS_CHECK(parsed.ok());
+    std::string error;
+    RS_CHECK_MESSAGE(!Requirement::from_json(*parsed.value, error).has_value(),
+                     "protection:\"rwx\" must be rejected, not read as no-protection");
+}
+
+RS_TEST(a_negative_page_size_is_rejected) {
+    auto parsed = json::parse(R"({
+        "schema": "runtime-skeptic.application-requirements.v1",
+        "operation": "virtual_memory_map",
+        "assumption_evidence": "specified_guarantee",
+        "request": {"size": 4096, "required_page_size": -1}
+    })");
+    RS_CHECK(parsed.ok());
+    std::string error;
+    RS_CHECK_MESSAGE(!Requirement::from_json(*parsed.value, error).has_value(),
+                     "required_page_size:-1 must be rejected, not coerced to 0");
+}
+
 RS_TEST_MAIN("analyzer")

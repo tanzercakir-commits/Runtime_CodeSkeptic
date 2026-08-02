@@ -72,6 +72,22 @@ std::optional<std::uint64_t> read_optional_uint(const json::Value* node) {
     return node->as_uint();
 }
 
+// A negative integer in a size / count / address / page-size field is not a
+// smaller value to accept - as_uint() would turn -1 into a fabricated 0 or a
+// giant unsigned, and the report would then present a number the document never
+// gave as a PROVEN fact. Reject it with the field named. Returns false on a
+// negative, true otherwise (including absent or non-integer, which other checks
+// handle).
+bool reject_negative(const json::Value* node, const char* key,
+                     std::string& error) {
+    if (node != nullptr && node->type() == json::Type::Int &&
+        node->as_int() < 0) {
+        error = std::string(key) + " must not be negative";
+        return false;
+    }
+    return true;
+}
+
 bool read_flag(const json::Value* parent, const char* key, bool& out,
                std::string& error) {
     if (parent == nullptr) return true;
@@ -341,8 +357,22 @@ std::optional<Requirement> Requirement::from_json(const json::Value& v,
 
     Requirement r;
     r.schema = schema->as_string();
-    if (const json::Value* n = v.find("name"); n != nullptr) r.name = n->as_string();
-    if (const json::Value* n = v.find("component"); n != nullptr) {
+    // The published schema types `name` and `component` as strings. A number or
+    // object here is a schema violation, not something to coerce to "" in
+    // silence - which let a malformed document analyze on with the field gone
+    // and still return a verdict.
+    if (const json::Value* n = v.find("name"); n != nullptr && !n->is_null()) {
+        if (!n->is_string()) {
+            error = "name must be a string";
+            return std::nullopt;
+        }
+        r.name = n->as_string();
+    }
+    if (const json::Value* n = v.find("component"); n != nullptr && !n->is_null()) {
+        if (!n->is_string()) {
+            error = "component must be a string";
+            return std::nullopt;
+        }
         r.component = n->as_string();
     }
 
@@ -374,6 +404,9 @@ std::optional<Requirement> Requirement::from_json(const json::Value& v,
             r.request.address = *parsed;
         } else if (addr->type() == json::Type::UInt ||
                    addr->type() == json::Type::Int) {
+            if (!reject_negative(addr, "request.address", error)) {
+                return std::nullopt;
+            }
             r.request.address = addr->as_uint();
         } else {
             error = "request.address must be a hex string";
@@ -387,6 +420,7 @@ std::optional<Requirement> Requirement::from_json(const json::Value& v,
         error = "request.size is required and must be an integer";
         return std::nullopt;
     }
+    if (!reject_negative(size, "request.size", error)) return std::nullopt;
     r.request.size = size->as_uint();
     if (r.request.size == 0) {
         error = "request.size must be greater than zero";
@@ -402,6 +436,10 @@ std::optional<Requirement> Requirement::from_json(const json::Value& v,
         return std::nullopt;
     }
 
+    if (!reject_negative(req->find("required_alignment"),
+                         "request.required_alignment", error)) {
+        return std::nullopt;
+    }
     r.request.required_alignment = read_optional_uint(req->find("required_alignment"));
 
     auto read_optional_address = [&](const char* key,
@@ -437,6 +475,10 @@ std::optional<Requirement> Requirement::from_json(const json::Value& v,
         ref != nullptr && ref->is_string()) {
         r.request.displacement_reference = ref->as_string();
     }
+    if (!reject_negative(req->find("required_page_size"),
+                         "request.required_page_size", error)) {
+        return std::nullopt;
+    }
     r.request.required_page_size = read_optional_uint(req->find("required_page_size"));
     if (const json::Value* rel = req->find("required_page_size_relation");
         rel != nullptr && !rel->is_null()) {
@@ -449,7 +491,17 @@ std::optional<Requirement> Requirement::from_json(const json::Value& v,
         }
     }
 
-    if (const json::Value* prot = req->find("protection"); prot != nullptr) {
+    if (const json::Value* prot = req->find("protection");
+        prot != nullptr && !prot->is_null()) {
+        // The schema types protection as an object of read/write/execute
+        // booleans. A string like "rwx" is a schema violation; left to
+        // read_flag it silently found none of the keys and the request became
+        // no-protection, so a program needing RWX read as needing nothing.
+        if (!prot->is_object()) {
+            error = "request.protection must be an object with read/write/"
+                    "execute booleans";
+            return std::nullopt;
+        }
         if (!read_flag(prot, "read", r.request.protection.read, error)) {
             return std::nullopt;
         }
