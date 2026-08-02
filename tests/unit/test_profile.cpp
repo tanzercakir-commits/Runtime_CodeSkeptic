@@ -619,4 +619,92 @@ RS_TEST(a_range_start_must_be_a_hex_string_not_a_number) {
     RS_CHECK(!EnvironmentProfile::from_json(*parsed.value, error).has_value());
 }
 
+// ---------------------------------------------------------------------------
+// Independent RE-TEST round 3, 2026-08-02: the accept/reject matrix was clean
+// and CI green, but it never checked verdict correctness, the nested/container
+// fields, or the bundle's file integrity. These pin the parser half of what the
+// third round found.
+// ---------------------------------------------------------------------------
+
+RS_TEST(a_zero_page_size_is_rejected_as_impossible) {
+    auto parsed = json::parse(R"({
+        "schema": "runtime-skeptic.environment-profile.v1",
+        "origin": "measured",
+        "platform": {"os": "linux", "process_arch": "x86_64"},
+        "virtual_memory": {"page_size":
+            {"value": 0, "evidence": "measured_capability"}}
+    })");
+    RS_CHECK(parsed.ok());
+    std::string error;
+    RS_CHECK(!EnvironmentProfile::from_json(*parsed.value, error).has_value());
+}
+
+RS_TEST(a_non_object_protection_is_rejected) {
+    // "rwx" made every prot->find(key) return null, so all protection facts read
+    // unknown and a JIT's W^X need was silently lost.
+    auto parsed = json::parse(R"({
+        "schema": "runtime-skeptic.environment-profile.v1",
+        "origin": "measured",
+        "platform": {"os": "linux", "process_arch": "x86_64"},
+        "virtual_memory": {"protection": "rwx"}
+    })");
+    RS_CHECK(parsed.ok());
+    std::string error;
+    RS_CHECK(!EnvironmentProfile::from_json(*parsed.value, error).has_value());
+}
+
+RS_TEST(a_non_object_source_location_entry_is_rejected) {
+    auto parsed = json::parse(R"({
+        "schema": "runtime-skeptic.application-requirements.v1",
+        "operation": "virtual_memory_map",
+        "assumption_evidence": "specified_guarantee",
+        "request": {"size": 4096},
+        "source_locations": ["notanobject"]
+    })");
+    RS_CHECK(parsed.ok());
+    std::string error;
+    RS_CHECK(!Requirement::from_json(*parsed.value, error).has_value());
+}
+
+RS_TEST(a_non_string_failure_sink_description_is_rejected) {
+    auto parsed = json::parse(R"({
+        "schema": "runtime-skeptic.application-requirements.v1",
+        "operation": "virtual_memory_map",
+        "assumption_evidence": "specified_guarantee",
+        "request": {"size": 4096},
+        "failure_sink": {"kind": "fatal_assert", "description": 12345}
+    })");
+    RS_CHECK(parsed.ok());
+    std::string error;
+    RS_CHECK(!Requirement::from_json(*parsed.value, error).has_value());
+}
+
+RS_TEST(a_file_offset_that_overflows_is_unsupported_not_supported) {
+    // file_offset+size overflows uint64: the mapping is entirely past a
+    // one-byte file. On a host that faults past EOF this is UNSUPPORTED, exactly
+    // as file_offset=0 is - it was coming out SUPPORTED via a skipped rule.
+    auto parsed = json::parse(R"({
+        "schema": "runtime-skeptic.application-requirements.v1",
+        "operation": "virtual_memory_map",
+        "assumption_evidence": "specified_guarantee",
+        "request": {"size": 4096, "file_backed": true, "file_length": 1,
+                    "accesses_beyond_eof": true,
+                    "file_offset": 18446744073709551615},
+        "failure_sink": {"kind": "fatal_assert"}
+    })");
+    RS_CHECK(parsed.ok());
+    std::string error;
+    auto req = Requirement::from_json(*parsed.value, error);
+    RS_CHECK_MESSAGE(req.has_value(), error);
+    if (!req) return;
+    auto pp = json::parse(R"({"schema":"runtime-skeptic.environment-profile.v1",
+        "origin":"measured","platform":{"os":"linux","process_arch":"x86_64"},
+        "virtual_memory":{"file_map_beyond_eof":
+            {"value":"sigbus","evidence":"measured_capability"}}})");
+    auto prof = EnvironmentProfile::from_json(*pp.value, error);
+    RS_CHECK(prof.has_value());
+    if (!prof) return;
+    RS_CHECK(analyze(*req, *prof, {}).overall == SupportLevel::Unsupported);
+}
+
 RS_TEST_MAIN("profile")

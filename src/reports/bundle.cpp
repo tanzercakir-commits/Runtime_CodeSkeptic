@@ -301,20 +301,40 @@ std::optional<ReplayOutcome> replay_bundle(const std::string& dir,
         return std::nullopt;
     }
 
-    // analysis-bundle.v1 lists these fields as REQUIRED on the manifest. The
-    // round-1 fix required only inputs/outputs, so a manifest stripped of
-    // tool_version, host, analysis_options and replay still "reproduced" - the
-    // tamper check never noticed fields it did not look for. Require every one
-    // the schema does, so an incomplete manifest is rejected, not replayed.
-    for (const char* key :
-         {"tool_version", "schema_versions", "host", "process_architecture",
-          "analysis_options", "inputs", "outputs", "overall", "finding_ids",
-          "replay"}) {
-        if (m.find(key) == nullptr) {
+    // analysis-bundle.v1 lists these fields as REQUIRED, each with a type. The
+    // round-1 fix required only inputs/outputs; the round-2 fix added presence
+    // of the rest; but a manifest that kept the keys and changed their SHAPES
+    // (host: 5, overall: true, finding_ids: {}) still replayed, because nothing
+    // checked the types. Require presence AND type, so a malformed manifest is
+    // rejected rather than reproduced.
+    auto require_field = [&](const char* key, char t) -> bool {
+        const json::Value* n = m.find(key);
+        if (n == nullptr) {
             error = "incomplete bundle: manifest is missing required field '" +
                     std::string(key) + "', which analysis-bundle.v1 requires";
-            return std::nullopt;
+            return false;
         }
+        const bool ok = (t == 's') ? n->is_string()
+                        : (t == 'o') ? n->is_object()
+                                     : n->is_array();
+        if (!ok) {
+            error = "malformed bundle: manifest field '" + std::string(key) +
+                    "' has the wrong type for analysis-bundle.v1";
+            return false;
+        }
+        return true;
+    };
+    if (!require_field("tool_version", 's') ||
+        !require_field("schema_versions", 'o') ||
+        !require_field("host", 'o') ||
+        !require_field("process_architecture", 's') ||
+        !require_field("analysis_options", 'o') ||
+        !require_field("inputs", 'o') ||
+        !require_field("outputs", 'o') ||
+        !require_field("overall", 's') ||
+        !require_field("finding_ids", 'a') ||
+        !require_field("replay", 'o')) {
+        return std::nullopt;
     }
 
     // A bundle is only replayable if its manifest is COMPLETE. analysis-bundle.v1
@@ -334,10 +354,19 @@ std::optional<ReplayOutcome> replay_bundle(const std::string& dir,
             return false;
         }
         const json::Value* n = section->find(key);
-        if (n == nullptr || !n->is_object() || n->find("file") == nullptr ||
-            n->find("sha256") == nullptr) {
+        const json::Value* file = n == nullptr ? nullptr : n->find("file");
+        const json::Value* sha = n == nullptr ? nullptr : n->find("sha256");
+        if (n == nullptr || !n->is_object() || file == nullptr ||
+            !file->is_string() || sha == nullptr || !sha->is_string()) {
             error = "incomplete bundle: manifest '" + std::string(sname) + "." +
                     key + "' must name a file and its sha256";
+            return false;
+        }
+        const std::string& h = sha->as_string();
+        if (h.size() != 64 ||
+            h.find_first_not_of("0123456789abcdef") != std::string::npos) {
+            error = "malformed bundle: manifest '" + std::string(sname) + "." +
+                    key + "'.sha256 must be 64 lowercase hex digits";
             return false;
         }
         return true;
@@ -371,28 +400,45 @@ std::optional<ReplayOutcome> replay_bundle(const std::string& dir,
         }
     }
 
-    // Tamper check: every hashed file must still hash to what the manifest says.
-    // A bundle edited after sealing is not the bundle whose verdict was recorded,
-    // and a replay that ignored that would certify the edit.
-    auto check_hash = [&](const json::Value* node) {
-        if (node == nullptr) return;
+    // Tamper check. The hash MUST be verified on the SAME file the replay
+    // analyses, and that file MUST be the bundle's own canonical one. The old
+    // code hashed whatever path the manifest NAMED while the analysis always
+    // read the fixed application_requirements.json / environment_profile.json -
+    // so a tampered requirement passed when the manifest pointed the hash at a
+    // pristine copy, and a `file` of "../outside_req.json" escaped the bundle
+    // entirely. Hash the fixed name; refuse a manifest that names anything else.
+    auto check_hash = [&](const json::Value* node, const char* expected) {
+        if (node == nullptr) {
+            out.tampered_files.push_back(expected);
+            return;
+        }
         const json::Value* file = node->find("file");
         const json::Value* want = node->find("sha256");
-        if (file == nullptr || want == nullptr) return;
-        std::string read_error;
-        auto text = io::read_file(join(dir, file->as_string().c_str()),
-                                  read_error);
-        if (!text || hex_of(*text) != want->as_string()) {
+        if (file == nullptr || !file->is_string() || want == nullptr ||
+            !want->is_string()) {
+            out.tampered_files.push_back(expected);
+            return;
+        }
+        // A manifest whose `file` is not exactly the bundle's canonical name is
+        // redirecting the hash (indirection) or escaping the directory (../).
+        // It is not this bundle; do not follow it, report it as tampered.
+        if (file->as_string() != expected) {
             out.tampered_files.push_back(file->as_string());
+            return;
+        }
+        std::string read_error;
+        auto text = io::read_file(join(dir, expected), read_error);
+        if (!text || hex_of(*text) != want->as_string()) {
+            out.tampered_files.push_back(expected);
         }
     };
     if (const json::Value* in = m.find("inputs")) {
-        check_hash(in->find("requirement"));
-        check_hash(in->find("profile"));
+        check_hash(in->find("requirement"), kRequirementFile);
+        check_hash(in->find("profile"), kProfileFile);
     }
     if (const json::Value* outs = m.find("outputs")) {
-        check_hash(outs->find("findings"));
-        check_hash(outs->find("report"));
+        check_hash(outs->find("findings"), kFindingsFile);
+        check_hash(outs->find("report"), kReportFile);
     }
 
     auto profile_text = io::read_file(join(dir, kProfileFile), error);

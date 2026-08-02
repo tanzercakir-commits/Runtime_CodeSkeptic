@@ -55,6 +55,12 @@ req["properties"]["operation"]["enum"] = [
     "virtual_memory_map", "virtual_memory_protect",
     "virtual_memory_reserve", "virtual_memory_commit",
 ]
+# permitted_fallbacks entries are a fixed vocabulary the parser enforces; the
+# schema typed them as any string, so a bogus fallback was schema-valid but
+# tool-rejected. Type them as the enum so the two agree.
+req["properties"]["permitted_fallbacks"]["items"] = {
+    "enum": ["relocate", "smaller_size", "weaker_protection", "non_executable",
+             "none", "unknown"]}
 # sourceLocation.line: a line number fits uint64 and is never negative.
 req["$defs"]["sourceLocation"]["properties"]["line"] = {
     "type": "integer", "minimum": 0, "maximum": U64}
@@ -92,11 +98,16 @@ if "range" in prof["$defs"]:
 
 # Typed fact values, so a wrong-typed value is a schema violation rather than
 # something the loose `value: {}` waved through while the reader rejected it.
-INT_FACTS = ["page_size", "allocation_granularity", "max_single_reservation",
-             "max_single_reservation_hinted"]
+# A page size or allocation granularity of 0 is impossible - minimum 1.
+POSITIVE_INT_FACTS = ["page_size", "allocation_granularity"]
+INT_FACTS = ["max_single_reservation", "max_single_reservation_hinted"]
 ADDR_FACTS = ["min_map_address", "max_user_address"]
 BOOL_FACTS = ["anonymous_mapping_supported", "hinted_mapping_may_relocate",
               "fixed_noreplace_available"]
+for k in POSITIVE_INT_FACTS:
+    if k in vm:
+        vm[k]["properties"]["value"] = {"type": ["integer", "null"],
+                                        "minimum": 1, "maximum": U64}
 for k in INT_FACTS:
     if k in vm:
         vm[k]["properties"]["value"] = {"type": ["integer", "null"],

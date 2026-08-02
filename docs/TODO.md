@@ -122,60 +122,18 @@ it cannot push.
 
 ## Now
 
-A THIRD re-test (2026-08-02, `d5fa167`, CI green 6/6) confirmed round 2's fixes
-held, then found what round 2's matrix could not see: the matrix measured only
-"did the schema and the parser agree on ACCEPT/REJECT?", never whether the
-VERDICT was right, never the nested/container fields, and never the bundle's
-file-integrity semantics. Real holes remain there. Status follows the EXPANDED
-harness, not the old one. Full account:
-`docs/reviews/2026-08-02-independent-review.md`.
-
-### T-027 — The verdict is correct, not just the accept/reject `[now]`
-
-**Serves:** the whole promise — a green run must mean the RIGHT answer, not
-merely a well-typed one. A file mapping at `file_offset = UINT64_MAX` must not
-come out SUPPORTED when the same contract at offset 0 is PROVEN UNSUPPORTED.
-**Plan:** `docs/PLAN.md` Phase 3 exit — "the motivating incident is diagnosed
-correctly"; findings are byte-reproducible.
-**Done when:** a golden-verdict harness (known contract × profile → expected
-verdict) passes, and it includes: `file_offset+size` overflow reaches the
-beyond-EOF finding (not a bare `return`, `analyzer.cpp:1687`); a `page_size` or
-`allocation_granularity` of 0 is refused as the impossible value it is, rather
-than silently masking a guard-page contract to SUPPORTED.
-**First step:** add the golden-verdict cases to `tools/audit/boundary_matrix.py`
-(or a sibling), red first; then the saturating `mapping_end` and the zero-value
-rejection.
-
-### T-028 — The boundary matrix reaches the nested and container fields `[now]`
-
-**Serves:** the same trust as T-024, one layer deeper — the re-test's extended
-run found 26 disagreements (14 invalid docs accepted, 12 valid rejected) in the
-fields the top-level matrix never touched.
-**Plan:** `docs/PLAN.md` Phase 3 exit — "no unsupported platform fact is
-described as guaranteed".
-**Done when:** the matrix mutates nested/container fields too (`source_locations`
-items, `failure_sink.location`, `protection` sub-facts, `probe_run` sub-fields,
-deeper range/fact structure) and reports **0** disagreements there as well.
-**First step:** extend the matrix's field list into the nested paths, run it red,
-then fix each reader/schema until it is 0.
-
-### T-029 — The evidence bundle's file integrity actually holds `[now]`
-
-**Serves:** the bundle's one promise — proof that survives leaving the machine.
-Today it does not: the hash is checked on the file NAMED IN THE MANIFEST while
-the analysis reads the fixed `application_requirements.json`, so a tampered
-requirement passes when the manifest points the hash at a pristine copy (proven:
-`rs-replay` exit 0), and `../outside_req.json` escapes the bundle entirely.
-**Plan:** `docs/PLAN.md` Phase 3 — the replayable evidence bundle (§17).
-**Done when:** `rs-replay` hashes the SAME fixed files it analyses (no
-manifest-path indirection); any manifest `file` that is not the exact canonical
-basename is refused (closing indirection AND `../` traversal); and the full
-`analysis-bundle.v1` manifest schema is enforced, not just the presence of
-top-level keys. A metadata-only tamper of the analysed file makes `rs-replay`
-exit non-zero.
-**First step:** in `replay_bundle` (`src/reports/bundle.cpp:377`) hash the fixed
-names and reject a `file` field that differs from them; add the traversal and
-silent-tamper cases as regressions.
+*(empty — round 3 is done and awaiting the reviewer's re-test. The third re-test
+confirmed round 2 held (CI green 6/6) but found what its matrix could not see:
+it measured only accept/reject, never verdict correctness, the nested/container
+fields, or the bundle's file integrity. T-027 (verdict correctness — file_offset
+overflow, zero page/granularity), T-028 (the matrix reaches nested fields — 22
+disagreements closed), and T-029 (bundle integrity — hash the fixed files, no
+`../` traversal, full manifest types) closed them. The harness now also checks
+GOLDEN VERDICTS, not just accept/reject: `tools/audit/boundary_matrix.py`, 0 of
+310 type cases + 0 verdict mismatches, wired as a guard. Accounts in
+`docs/PROGRESS.md`; record in `docs/reviews/2026-08-02-independent-review.md`.
+Nothing merged to `main`; the branch waits on the re-test, and the follow-up
+when it lands is to drop it from `ci.yml` `on.push`.)*
 
 ---
 

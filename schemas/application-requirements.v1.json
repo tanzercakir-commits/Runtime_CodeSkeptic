@@ -215,7 +215,14 @@
     "permitted_fallbacks": {
       "type": "array",
       "items": {
-        "type": "string"
+        "enum": [
+          "relocate",
+          "smaller_size",
+          "weaker_protection",
+          "non_executable",
+          "none",
+          "unknown"
+        ]
       }
     },
     "failure_sink": {

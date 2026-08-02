@@ -12,7 +12,26 @@ chains, the UNKNOWN discipline, remediation and "will not work" sections are
 not yet trustworthy as a production CI gate.** That framing is correct and is
 now the release posture.
 
-## Resolution status — two rounds, and why the first did not hold
+## Resolution status — three rounds, and what each check could not see
+
+**Round 3 (commit pending) — the matrix measured acceptance, not truth.** The
+third re-test confirmed round 2 held and CI was green 6/6, then found the
+round-2 matrix's blind spots: it asked only "schema accepted == parser
+accepted?", never whether the VERDICT was right, never the nested/container
+fields, never the bundle's file integrity. Real holes lived there:
+`file_offset+size` overflow came out SUPPORTED where offset 0 was UNSUPPORTED; a
+`page_size`/`allocation_granularity` of 0 masked a guard-page contract to
+SUPPORTED; 22 nested-field type disagreements; and — the serious one — the
+bundle hash was verified on the file NAMED IN THE MANIFEST while the analysis
+read the fixed `application_requirements.json`, so a tampered requirement passed
+when the manifest pointed the hash at a pristine copy, and `../outside_req.json`
+escaped the bundle. All closed under **T-027/T-028/T-029**: the harness now
+checks GOLDEN VERDICTS and the nested fields (0 of 310 type cases + 0 verdict
+mismatches); the file_offset overflow reaches the finding; zero page/granularity
+is refused; `rs-replay` hashes the SAME fixed files it analyses, refuses a
+non-canonical `file` (closing indirection AND traversal), and enforces the full
+manifest by type. Accounts in `docs/PROGRESS.md`. The lesson, a third time: a
+check is only as good as the dimension it measures.
 
 **Round 1 (commits `861f6af`…`82d5d58`) was marked "all FIXED" and it was not.**
 A second independent re-test on 2026-08-02 ran a **300-case boundary matrix** and

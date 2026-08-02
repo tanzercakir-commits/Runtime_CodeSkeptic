@@ -171,6 +171,7 @@ FACT_BATTERY = [
     ("value-string", {"value": "notanumber", "evidence": "measured_capability"}),
     ("value-bool", {"value": True, "evidence": "measured_capability"}),
     ("value-negative", {"value": -1, "evidence": "measured_capability"}),
+    ("value-zero", {"value": 0, "evidence": "measured_capability"}),
     ("value-overflow", {"value": OVERFLOW, "evidence": "measured_capability"}),
     ("value-null-unknown", {"value": None, "evidence": "unknown"}),
     ("valid", FACT),
@@ -221,6 +222,69 @@ PROF_FIELDS = [
 ]
 
 
+# --- nested / container fields: the re-test found 26 disagreements here that
+# the top-level sweep never reached. A valid failure_sink is added to the base
+# so its sub-field mutations sit on an otherwise-valid document. ---
+BASE_REQ["failure_sink"] = {"kind": "fatal_assert"}
+
+SINK_LOC_CASES = [
+    ("valid", {"file": "x.c", "line": 5}),
+    ("line-string", {"file": "x.c", "line": "5"}),
+    ("line-negative", {"file": "x.c", "line": -1}),
+    ("file-number", {"file": 5, "line": 5}),
+    ("symbol-number", {"file": "x.c", "symbol": 5}),
+    ("null", None),
+]
+SRCLOC_CASES = [
+    ("valid", [{"file": "a.c", "line": 1}]),
+    ("item-not-object", ["notanobject"]),
+    ("line-string", [{"file": "a.c", "line": "1"}]),
+    ("file-number", [{"file": 5}]),
+    ("not-array", {"file": "a.c"}),
+]
+STR_ARRAY_CASES = [
+    ("valid", ["a", "b"]),
+    ("item-number", ["a", 5]),
+    ("not-array", "a"),
+    ("null", None),
+]
+FACT_ENUM = lambda v: [  # noqa: E731
+    ("valid", {"value": v, "evidence": "measured_capability"}),
+    ("bad-value", {"value": "nope", "evidence": "measured_capability"}),
+    ("value-number", {"value": 5, "evidence": "measured_capability"}),
+]
+REQ_FIELDS += [
+    (("failure_sink", "kind"), ENUM_BADS + [("valid", "process_exit")]),
+    (("failure_sink", "description"), STR_BATTERY + [("valid", "d")]),
+    (("failure_sink", "location"), SINK_LOC_CASES),
+    (("source_locations",), SRCLOC_CASES),
+    (("required_postconditions",), STR_ARRAY_CASES),
+    (("permitted_fallbacks",), [("valid", ["relocate"]), ("bad", ["nope"]),
+                                ("number", [5]), ("not-array", "relocate")]),
+    (("extraction_limitations",), STR_ARRAY_CASES),
+    (("assumptions", "guest_host_identity_required"), BOOL_BATTERY),
+    (("assumptions", "translation_layer_available"), BOOL_BATTERY),
+]
+PROF_FIELDS += [
+    (("virtual_memory", "reserve_commit_model"), FACT_ENUM("posix_lazy")),
+    (("virtual_memory", "file_map_beyond_eof"), FACT_ENUM("sigbus")),
+    (("virtual_memory", "anonymous_mapping_supported"),
+     [("valid", {"value": True, "evidence": "measured_capability"}),
+      ("value-string", {"value": "yes", "evidence": "measured_capability"}),
+      ("value-number", {"value": 1, "evidence": "measured_capability"})]),
+    (("virtual_memory", "exact_mapping_failure_codes"), STR_ARRAY_CASES),
+    (("virtual_memory", "protection"),
+     [("valid", {"write_execute_simultaneous":
+                 {"value": True, "evidence": "measured_capability"}}),
+      ("subfact-string", {"write_execute_simultaneous": "x"}),
+      ("subfact-no-value",
+       {"write_execute_simultaneous": {"evidence": "measured_capability"}}),
+      ("subfact-bad-evidence",
+       {"write_execute_simultaneous": {"value": True, "evidence": "nope"}}),
+      ("not-object", "rwx")]),
+]
+
+
 def run(which, base, fields):
     rows = []
     for path, battery in fields:
@@ -244,6 +308,69 @@ def report(which, rows):
     return len(fg), len(os_)
 
 
+# ---------------------------------------------------------------------------
+# Golden verdicts. The matrix above only asks "accepted or rejected?"; these ask
+# "is the ANSWER right?". The re-test found file_offset overflow coming out
+# SUPPORTED where offset 0 was UNSUPPORTED - a verdict bug no accept/reject check
+# can see. Each case is a document the tool ACCEPTS, with the exit it must give
+# (0 SUPPORTED, 1 UNSUPPORTED, 2 CONDITIONALLY, 3 UNKNOWN, 65 refused input).
+def _req(**request):
+    return {"schema": "runtime-skeptic.application-requirements.v1",
+            "operation": "virtual_memory_map",
+            "assumption_evidence": "specified_guarantee",
+            "request": request, "failure_sink": {"kind": "fatal_assert"}}
+
+
+PROF_EOF = {"schema": "runtime-skeptic.environment-profile.v1",
+            "origin": "measured",
+            "platform": {"os": "linux", "process_arch": "x86_64"},
+            "virtual_memory": {"file_map_beyond_eof":
+                               {"value": "sigbus",
+                                "evidence": "measured_capability"}}}
+PROF_4K = {"schema": "runtime-skeptic.environment-profile.v1",
+           "origin": "measured",
+           "platform": {"os": "linux", "process_arch": "x86_64"},
+           "virtual_memory": {"page_size":
+                              {"value": 4096, "evidence": "measured_capability"}}}
+
+GOLDEN = [
+    ("eof-offset-0",
+     _req(size=4096, file_backed=True, file_length=1, accesses_beyond_eof=True,
+          file_offset=0), PROF_EOF, 1),
+    ("eof-offset-UINT64_MAX",
+     _req(size=4096, file_backed=True, file_length=1, accesses_beyond_eof=True,
+          file_offset=U64_MAX), PROF_EOF, 1),
+    ("address+size overflow",
+     _req(address="0xffffffffffff0000", size=131072, exact_address_required=True),
+     BASE_PROF, 1),
+    ("required 16K page on a 4K host",
+     _req(size=65536, required_page_size=16384, required_page_size_relation="equal"),
+     PROF_4K, 1),
+    ("size 0 refused", _req(size=0), PROF_4K, 65),
+    ("string page size refused",
+     _req(size=65536, required_page_size="16384"), PROF_4K, 65),
+]
+
+
+def run_golden():
+    print("\n=== GOLDEN VERDICTS ===")
+    bad = 0
+    for label, req, prof, want in GOLDEN:
+        rp = _write(req)
+        pp = os.path.join("/tmp", "bm_golden_prof.json")
+        json.dump(prof, open(pp, "w"))
+        r = subprocess.run([RS_CHECK, rp, "--profile", pp, "--quiet"],
+                           capture_output=True, text=True)
+        ok = r.returncode == want
+        if not ok:
+            bad += 1
+            print(f"  WRONG  {label:34} want exit {want}, got {r.returncode}")
+        else:
+            print(f"  ok     {label:34} exit {r.returncode}")
+    print(f"  golden verdict mismatches: {bad}")
+    return bad
+
+
 def main():
     if RS_CHECK is None or RS_PROFILE is None:
         print("rs-check / rs-profile not built; skipping boundary matrix "
@@ -255,7 +382,8 @@ def main():
         rows = run(which, base, fields)
         fg, os_ = report(which, rows)
         total += fg + os_
-    print(f"\nTOTAL disagreements: {total}")
+    total += run_golden()
+    print(f"\nTOTAL disagreements + verdict mismatches: {total}")
     return 0 if total == 0 else 1
 
 

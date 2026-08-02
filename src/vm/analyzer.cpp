@@ -1684,8 +1684,15 @@ void Analysis::rule_file_mapping_beyond_eof() {
 
     const std::uint64_t file_length = *req_.request.file_length;
     const std::uint64_t offset = req_.request.file_offset;
-    if (offset > UINT64_MAX - req_.request.size) return;  // caught elsewhere
-    const std::uint64_t mapping_end = offset + req_.request.size;
+    // offset + size can overflow uint64. When it does, the mapping runs
+    // astronomically past the file - the offset alone dwarfs any file_length -
+    // so it is beyond EOF by definition. A bare `return` here (the "caught
+    // elsewhere" was untrue for a file mapping) left file_offset=UINT64_MAX
+    // SUPPORTED while offset 0 on the same contract was UNSUPPORTED. Saturate
+    // the end so the beyond-EOF logic below still fires.
+    const std::uint64_t mapping_end =
+        (offset > UINT64_MAX - req_.request.size) ? UINT64_MAX
+                                                  : offset + req_.request.size;
     if (mapping_end <= file_length) return;
 
     const std::uint64_t overhang = mapping_end - file_length;

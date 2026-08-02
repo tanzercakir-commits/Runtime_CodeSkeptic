@@ -147,6 +147,61 @@ bool read_eof_access_extent(const json::Value* parent,
     return false;
 }
 
+// A string array where the schema types it so. Present-but-not-an-array, or a
+// non-string entry, is a schema violation - the old readers skipped bad entries
+// and ignored a non-array whole, so `required_postconditions: "x"` and
+// `["a", 5]` both passed.
+bool read_string_array_field(const json::Value* node, const char* label,
+                             std::vector<std::string>& out, std::string& error) {
+    if (node == nullptr) return true;  // absent is fine; null is a wrong type
+    if (!node->is_array()) {
+        error = std::string(label) + " must be an array of strings";
+        return false;
+    }
+    for (const auto& item : node->as_array()) {
+        if (!item.is_string()) {
+            error = std::string(label) + " entries must all be strings";
+            return false;
+        }
+        out.push_back(item.as_string());
+    }
+    return true;
+}
+
+// A source location: file/symbol are strings, line a non-negative integer. The
+// old reader coerced each - a number `file`, a string `line`, a negative `line`
+// all slipped through as_string()/as_uint().
+bool read_source_location(const json::Value& v, const std::string& label,
+                          SourceLocation& out, std::string& error) {
+    if (!v.is_object()) {
+        error = label + " must be an object";
+        return false;
+    }
+    if (const json::Value* f = v.find("file"); f != nullptr && !f->is_null()) {
+        if (!f->is_string()) {
+            error = label + ".file must be a string";
+            return false;
+        }
+        out.file = f->as_string();
+    }
+    if (const json::Value* l = v.find("line"); l != nullptr && !l->is_null()) {
+        if ((l->type() != json::Type::UInt && l->type() != json::Type::Int) ||
+            (l->type() == json::Type::Int && l->as_int() < 0)) {
+            error = label + ".line must be a non-negative integer";
+            return false;
+        }
+        out.line = l->as_uint();
+    }
+    if (const json::Value* s = v.find("symbol"); s != nullptr && !s->is_null()) {
+        if (!s->is_string()) {
+            error = label + ".symbol must be a string";
+            return false;
+        }
+        out.symbol = s->as_string();
+    }
+    return true;
+}
+
 }  // namespace
 
 std::string_view to_string(OperationKind v) { return name_of(kOperation, v); }
@@ -589,15 +644,17 @@ std::optional<Requirement> Requirement::from_json(const json::Value& v,
         }
     }
 
-    if (const json::Value* posts = v.find("required_postconditions");
-        posts != nullptr && posts->is_array()) {
-        for (const auto& p : posts->as_array()) {
-            if (p.is_string()) r.required_postconditions.push_back(p.as_string());
-        }
+    if (!read_string_array_field(v.find("required_postconditions"),
+                                 "required_postconditions",
+                                 r.required_postconditions, error)) {
+        return std::nullopt;
     }
 
-    if (const json::Value* fbs = v.find("permitted_fallbacks");
-        fbs != nullptr && fbs->is_array()) {
+    if (const json::Value* fbs = v.find("permitted_fallbacks"); fbs != nullptr) {
+        if (!fbs->is_array()) {
+            error = "permitted_fallbacks must be an array";
+            return std::nullopt;
+        }
         for (const auto& f : fbs->as_array()) {
             FallbackKind kind = FallbackKind::Unknown;
             if (!f.is_string() || !fallback_from_string(f.as_string(), kind)) {
@@ -616,39 +673,39 @@ std::optional<Requirement> Requirement::from_json(const json::Value& v,
             return std::nullopt;
         }
         if (const json::Value* d = sink->find("description"); d != nullptr) {
+            if (!d->is_string()) {
+                error = "failure_sink.description must be a string";
+                return std::nullopt;
+            }
             r.failure_sink.description = d->as_string();
         }
+        // location is anyOf[sourceLocation, null]: null ("producer could not
+        // determine one") is fine; a present non-null one must be well-typed.
         if (const json::Value* loc = sink->find("location");
-            loc != nullptr && loc->is_object()) {
+            loc != nullptr && !loc->is_null()) {
             SourceLocation sl;
-            if (const json::Value* f = loc->find("file"); f != nullptr) {
-                sl.file = f->as_string();
-            }
-            if (const json::Value* l = loc->find("line"); l != nullptr) {
-                sl.line = l->as_uint();
-            }
-            if (const json::Value* s = loc->find("symbol"); s != nullptr) {
-                sl.symbol = s->as_string();
+            if (!read_source_location(*loc, "failure_sink.location", sl, error)) {
+                return std::nullopt;
             }
             r.failure_sink.location = sl;
         }
     }
 
-    if (const json::Value* locs = v.find("source_locations");
-        locs != nullptr && locs->is_array()) {
+    if (const json::Value* locs = v.find("source_locations"); locs != nullptr) {
+        if (!locs->is_array()) {
+            error = "source_locations must be an array";
+            return std::nullopt;
+        }
+        std::size_t i = 0;
         for (const auto& item : locs->as_array()) {
-            if (!item.is_object()) continue;
             SourceLocation sl;
-            if (const json::Value* f = item.find("file"); f != nullptr) {
-                sl.file = f->as_string();
-            }
-            if (const json::Value* l = item.find("line"); l != nullptr) {
-                sl.line = l->as_uint();
-            }
-            if (const json::Value* s = item.find("symbol"); s != nullptr) {
-                sl.symbol = s->as_string();
+            if (!read_source_location(
+                    item, "source_locations[" + std::to_string(i) + "]", sl,
+                    error)) {
+                return std::nullopt;
             }
             r.source_locations.push_back(sl);
+            ++i;
         }
     }
 
@@ -661,13 +718,10 @@ std::optional<Requirement> Requirement::from_json(const json::Value& v,
         return std::nullopt;
     }
 
-    if (const json::Value* limitations = v.find("extraction_limitations");
-        limitations != nullptr && limitations->is_array()) {
-        for (const auto& item : limitations->as_array()) {
-            if (item.is_string()) {
-                r.extraction_limitations.push_back(item.as_string());
-            }
-        }
+    if (!read_string_array_field(v.find("extraction_limitations"),
+                                 "extraction_limitations",
+                                 r.extraction_limitations, error)) {
+        return std::nullopt;
     }
 
     collect_unrecognized(v, kKnownTopLevel, "", r.unrecognized_fields);

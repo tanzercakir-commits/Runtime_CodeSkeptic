@@ -263,4 +263,43 @@ RS_TEST(a_manifest_missing_a_required_top_level_field_is_rejected) {
                      "the rejection did not name the missing field");
 }
 
+RS_TEST(a_manifest_field_of_the_wrong_type_is_refused) {
+    // Round-3 re-test: the round-2 fix required the manifest's fields to be
+    // PRESENT but not to have the right type, so a manifest with overall:5 or
+    // host:5 still replayed. replay now enforces the type analysis-bundle.v1
+    // gives each field.
+    TempDir tmp("mtype");
+    std::string error;
+    RS_CHECK(bundle::write_bundle(tmp.dir(), inputs_that_produce_a_finding(), {},
+                                  error));
+    json::Value m = read_manifest(tmp.dir());
+    m["overall"] = static_cast<unsigned long long>(5);  // schema types it string
+    RS_CHECK(io::write_file((tmp.path / "manifest.json").string(),
+                            json::serialize_pretty(m), error));
+    auto outcome = bundle::replay_bundle(tmp.dir(), error);
+    RS_CHECK_MESSAGE(!outcome.has_value(),
+                     "a wrong-typed manifest field was replayed");
+}
+
+RS_TEST(a_manifest_that_redirects_a_hash_to_another_file_is_refused) {
+    // The serious one. The hash was verified on the file NAMED IN THE MANIFEST
+    // while the analysis read the fixed application_requirements.json - so a
+    // tampered requirement passed when the manifest pointed the hash at a
+    // pristine copy, and "../outside_req.json" escaped the bundle. The manifest
+    // may now name only the bundle's own canonical file.
+    TempDir tmp("redirect");
+    std::string error;
+    RS_CHECK(bundle::write_bundle(tmp.dir(), inputs_that_produce_a_finding(), {},
+                                  error));
+    json::Value m = read_manifest(tmp.dir());
+    m["inputs"]["requirement"]["file"] = std::string("../outside_req.json");
+    RS_CHECK(io::write_file((tmp.path / "manifest.json").string(),
+                            json::serialize_pretty(m), error));
+    auto outcome = bundle::replay_bundle(tmp.dir(), error);
+    // Either refused outright, or reported not-reproduced (tampered) - never a
+    // clean reproduction.
+    RS_CHECK_MESSAGE(!outcome.has_value() || !outcome->reproduced,
+                     "a hash redirected to another file was accepted");
+}
+
 RS_TEST_MAIN("evidence bundle")

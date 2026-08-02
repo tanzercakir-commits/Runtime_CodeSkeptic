@@ -16,6 +16,53 @@ re-litigated; a mistake recorded here does not need to be re-made.
 
 ---
 
+## 2026-08-02 — round 3: the matrix measured acceptance, not truth (T-027/T-028/T-029)
+
+**Changed.** The third re-test confirmed round 2 held and CI was green 6/6, then
+found the round-2 matrix's blind spots: it checked only "schema accepted ==
+parser accepted", never the VERDICT, never the nested fields, never the bundle's
+file integrity. All three closed, and the harness expanded so the blind spots
+are now measured.
+
+### What was wrong
+
+- **Verdict (T-027).** `file_offset + size` overflowing uint64 bare-`return`ed in
+  `rule_file_mapping_beyond_eof` ("caught elsewhere" - it was not), so
+  `file_offset=UINT64_MAX` came out SUPPORTED while offset 0 on the same
+  contract was PROVEN UNSUPPORTED. And `allocation_granularity`/`page_size` of 0
+  was schema-valid and accepted, silently masking a guard-page contract to
+  SUPPORTED.
+- **Nested fields (T-028).** The matrix reached only top-level fields. Extended
+  into the containers it found 22 disagreements: `failure_sink.description`,
+  `failure_sink.location` sub-fields, `source_locations` items,
+  `required_postconditions` / `permitted_fallbacks` / `extraction_limitations`,
+  `exact_mapping_failure_codes`, and a non-object `protection` - all skipped or
+  coerced wrong types instead of rejecting.
+- **Bundle integrity (T-029), the serious one.** `check_hash` hashed the file
+  NAMED IN THE MANIFEST while the analysis read the fixed
+  `application_requirements.json`. So a tampered requirement passed when the
+  manifest pointed the hash at a pristine copy (proven: a metadata-only edit
+  replayed `reproduced / 0`), and `../outside_req.json` escaped the bundle.
+
+### The fix, measured
+
+| | |
+|---|---|
+| **+** | the harness now checks GOLDEN VERDICTS (contract × profile → expected exit), not just accept/reject, and mutates the nested/container fields. `tools/audit/boundary_matrix.py`: 0 of 310 type cases + 0 verdict mismatches (was 22 + the verdict bugs). Still a guard |
+| **+** | T-027: `mapping_end` saturates on overflow so the beyond-EOF finding fires; a `page_size`/`allocation_granularity` of 0 is refused at parse and the schema types them `minimum: 1` |
+| **+** | T-028: strict readers - `read_string_array_field` and `read_source_location` - and non-object `protection` rejected; the schema types `permitted_fallbacks` items and `operation` as enums so the two agree |
+| **+** | T-029: `rs-replay` hashes the SAME fixed files it analyses and refuses any manifest `file` that is not the canonical basename (closes indirection AND `../`); the full `analysis-bundle.v1` manifest is enforced by type, and sha256 must be 64 hex |
+| **−** | the lesson, a third time: a check is only as good as the dimension it measures. Round 1 trusted named examples; round 2 trusted a type matrix; both were systematic about the WRONG thing. The harness now spans type, verdict, nesting and bundle integrity - and will still miss a dimension nobody has thought to add |
+
+Regressions in `test_profile.cpp` (41 cases) and `test_evidence_bundle.cpp` (11).
+15/15 CTest, 19 guards, clean `/WX` build.
+
+### What to do next
+
+Round 3 is complete and awaiting the reviewer's re-test. Push, get CI green on
+the SHA, then notify - not before. When the branch lands, drop it from `ci.yml`
+`on.push`. Nothing merged to `main`.
+
 ## 2026-08-02 — honest docs, and CI green on the fixed SHA (T-026)
 
 **Changed.** The re-test's secondary findings, one drift the re-test exposed in

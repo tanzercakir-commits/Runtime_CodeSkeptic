@@ -96,7 +96,7 @@
                 "integer",
                 "null"
               ],
-              "minimum": 0,
+              "minimum": 1,
               "maximum": 18446744073709551615
             },
             "evidence": {
@@ -124,7 +124,7 @@
                 "integer",
                 "null"
               ],
-              "minimum": 0,
+              "minimum": 1,
               "maximum": 18446744073709551615
             },
             "evidence": {

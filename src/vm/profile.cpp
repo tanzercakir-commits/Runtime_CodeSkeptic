@@ -415,6 +415,20 @@ std::optional<EnvironmentProfile> EnvironmentProfile::from_json(
         error = "virtual_memory.allocation_granularity: " + local_error;
         return std::nullopt;
     }
+    // A page size or allocation granularity of 0 is not a measurement, it is an
+    // impossibility: nothing aligns to 0, and a `size % 0` in the rules that use
+    // it silently skipped, masking a guard-page contract to SUPPORTED. Refuse it
+    // (the schema types these `minimum: 1` to match).
+    if (p.vm.page_size.is_known() && p.vm.page_size.value() == 0) {
+        error = "virtual_memory.page_size: a page size of 0 is impossible";
+        return std::nullopt;
+    }
+    if (p.vm.allocation_granularity.is_known() &&
+        p.vm.allocation_granularity.value() == 0) {
+        error = "virtual_memory.allocation_granularity: an allocation "
+                "granularity of 0 is impossible";
+        return std::nullopt;
+    }
     p.vm.min_map_address = fact_from_json<Address>(mem->find("min_map_address"),
                                                    read_address, local_error);
     if (!local_error.empty()) {
@@ -457,8 +471,23 @@ std::optional<EnvironmentProfile> EnvironmentProfile::from_json(
         error = "virtual_memory.exact_mapping: " + local_error;
         return std::nullopt;
     }
-    p.vm.exact_mapping_failure_codes =
-        read_string_array(mem->find("exact_mapping_failure_codes"));
+    // Schema-typed as an array of strings: a bare string or a non-string entry
+    // is a violation, not something read_string_array should quietly absorb.
+    if (const json::Value* codes = mem->find("exact_mapping_failure_codes");
+        codes != nullptr) {
+        if (!codes->is_array()) {
+            error = "virtual_memory.exact_mapping_failure_codes must be an array";
+            return std::nullopt;
+        }
+        for (const auto& item : codes->as_array()) {
+            if (!item.is_string()) {
+                error = "virtual_memory.exact_mapping_failure_codes entries "
+                        "must all be strings";
+                return std::nullopt;
+            }
+            p.vm.exact_mapping_failure_codes.push_back(item.as_string());
+        }
+    }
 
     p.vm.hinted_mapping_may_relocate = fact_from_json<bool>(
         mem->find("hinted_mapping_may_relocate"), read_bool, local_error);
@@ -505,7 +534,16 @@ std::optional<EnvironmentProfile> EnvironmentProfile::from_json(
         return std::nullopt;
     }
 
-    if (const json::Value* prot = mem->find("protection"); prot != nullptr) {
+    if (const json::Value* prot = mem->find("protection");
+        prot != nullptr && !prot->is_null()) {
+        // The schema types protection as an object of facts. A string like
+        // "rwx" made every prot->find(key) return null - so all protection
+        // facts read unknown and the document was accepted, a JIT's W^X needs
+        // silently lost.
+        if (!prot->is_object()) {
+            error = "virtual_memory.protection must be an object";
+            return std::nullopt;
+        }
         auto read_prot_bool = [&](const char* key, Fact<bool>& out) -> bool {
             out = fact_from_json<bool>(prot->find(key), read_bool, local_error);
             if (!local_error.empty()) {
