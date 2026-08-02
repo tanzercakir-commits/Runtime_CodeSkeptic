@@ -35,3 +35,7 @@ build/false-positive/
 # was staged once by `git add -A` before being noticed.
 __pycache__/
 *.pyc
+
+# release artifacts (binaries ship as GitHub Release assets, not in git)
+dist/*.tar.gz
+dist/runtimeskeptic-v*/
