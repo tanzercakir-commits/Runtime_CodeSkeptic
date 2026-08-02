@@ -151,6 +151,31 @@ RS_TEST(editing_a_stored_file_is_caught_as_tampering) {
                      "the edit was not reported as tampering");
 }
 
+RS_TEST(an_incomplete_manifest_is_rejected_not_replayed_vacuously) {
+    TempDir tmp("incomplete");
+    std::string error;
+    RS_CHECK(bundle::write_bundle(tmp.dir(), inputs_that_produce_a_finding(), {},
+                                  error));
+
+    // Independent review 2026-08-02, A3: a manifest stripped of its inputs/
+    // outputs hash sections gave the tamper check no nodes, so tampered_files
+    // stayed empty and a three-file bundle "reproduced" its own verdict with
+    // exit 0. Overwrite the manifest with exactly the reviewer's shape - schema,
+    // overall, empty finding_ids, and nothing else - and replay must REJECT it.
+    {
+        std::ofstream out(tmp.path / "manifest.json",
+                          std::ios::binary | std::ios::trunc);
+        out << R"({"schema":"runtime-skeptic.analysis-bundle.v1",)"
+               R"("overall":"SUPPORTED","finding_ids":[]})";
+    }
+
+    auto outcome = bundle::replay_bundle(tmp.dir(), error);
+    RS_CHECK_MESSAGE(!outcome.has_value(),
+                     "an incomplete bundle was replayed instead of rejected");
+    RS_CHECK_MESSAGE(error.find("incomplete") != std::string::npos,
+                     "the rejection did not name the bundle as incomplete");
+}
+
 RS_TEST(a_manifest_that_lies_about_its_verdict_is_caught) {
     TempDir tmp("liar");
     std::string error;

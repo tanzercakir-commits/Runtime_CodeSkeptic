@@ -301,6 +301,40 @@ std::optional<ReplayOutcome> replay_bundle(const std::string& dir,
         return std::nullopt;
     }
 
+    // A bundle is only replayable if its manifest is COMPLETE. analysis-bundle.v1
+    // requires inputs{requirement,profile} and outputs{findings,report}, each
+    // naming a file and its sha256 - and those hash sections are the ones the
+    // tamper check runs on. A stripped manifest that omitted them was passing
+    // replay vacuously: check_hash found no nodes, tampered_files stayed empty,
+    // and a three-file bundle "reproduced" its own (often empty) verdict with
+    // exit 0. Require them, so an incomplete bundle is rejected rather than
+    // certified. (check_hash then verifies each; a named file that is missing
+    // reads as tampered, which is the honest outcome for a gutted bundle.)
+    auto require_hash_node = [&](const json::Value* section, const char* sname,
+                                 const char* key) -> bool {
+        if (section == nullptr || !section->is_object()) {
+            error = "incomplete bundle: manifest has no '" + std::string(sname) +
+                    "' section, which analysis-bundle.v1 requires";
+            return false;
+        }
+        const json::Value* n = section->find(key);
+        if (n == nullptr || !n->is_object() || n->find("file") == nullptr ||
+            n->find("sha256") == nullptr) {
+            error = "incomplete bundle: manifest '" + std::string(sname) + "." +
+                    key + "' must name a file and its sha256";
+            return false;
+        }
+        return true;
+    };
+    const json::Value* in_sec = m.find("inputs");
+    const json::Value* out_sec = m.find("outputs");
+    if (!require_hash_node(in_sec, "inputs", "requirement") ||
+        !require_hash_node(in_sec, "inputs", "profile") ||
+        !require_hash_node(out_sec, "outputs", "findings") ||
+        !require_hash_node(out_sec, "outputs", "report")) {
+        return std::nullopt;
+    }
+
     ReplayOutcome out;
     if (const json::Value* rec = m.find("overall")) {
         out.recorded_overall = rec->as_string();

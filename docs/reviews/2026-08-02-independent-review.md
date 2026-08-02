@@ -86,9 +86,10 @@ required file or hash.
   continuation are not PowerShell 5.1; the default VS generator writes to
   `build/bin/Debug/`, not `build/bin/`. Give a PowerShell-correct path and note
   the Debug/Release subdir.
-- **B2 — problem_statement.md drift** · TRACKED. README links it as the "Full
-  pitch"; it still says there is no probe/CLI/build and that Windows is a stub —
-  the opposite of the current product. Serious drift; rewrite or relink.
+- **B2 — problem_statement.md drift** · TRACKED. <!-- checked: 2026-08-02 -->
+  README links it as the "Full pitch"; that document still describes a state
+  with no probe, no CLI and a stub Windows build — the opposite of the current
+  product. Serious drift; rewrite or relink.
 - **B3 — profile provenance** · TRACKED. README lists five *measured*
   environments including Linux, but `profiles/measured/` has **no Linux profile**
   (Linux lives under `profiles/generated/`); the provenance table in
