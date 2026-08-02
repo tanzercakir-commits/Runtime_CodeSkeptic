@@ -64,12 +64,28 @@ constexpr std::array<std::pair<std::string_view, FallbackKind>, 6> kFallback{{
     {"unknown", FallbackKind::Unknown},
 }};
 
-std::optional<std::uint64_t> read_optional_uint(const json::Value* node) {
-    if (node == nullptr || node->is_null()) return std::nullopt;
-    if (node->type() != json::Type::UInt && node->type() != json::Type::Int) {
-        return std::nullopt;
+// Reads an optional unsigned integer. Absent or null means "not given" and is
+// fine. A value of the WRONG TYPE is a schema violation, not an absent field:
+// the old version returned nullopt for it, which silently dropped
+// `required_page_size:"16384"` (a string) and let the analysis proceed as if no
+// page size were required and pass. A negative is rejected here too, in one
+// place, so as_uint() can never fabricate a 0 or a giant unsigned from a -1.
+bool read_optional_uint(const json::Value* node, const char* label,
+                        std::optional<std::uint64_t>& out, std::string& error) {
+    if (node == nullptr || node->is_null()) {
+        out = std::nullopt;
+        return true;
     }
-    return node->as_uint();
+    if (node->type() != json::Type::UInt && node->type() != json::Type::Int) {
+        error = std::string(label) + " must be an integer";
+        return false;
+    }
+    if (node->type() == json::Type::Int && node->as_int() < 0) {
+        error = std::string(label) + " must not be negative";
+        return false;
+    }
+    out = node->as_uint();
+    return true;
 }
 
 // A negative integer in a size / count / address / page-size field is not a
@@ -92,7 +108,11 @@ bool read_flag(const json::Value* parent, const char* key, bool& out,
                std::string& error) {
     if (parent == nullptr) return true;
     const json::Value* node = parent->find(key);
-    if (node == nullptr || node->is_null()) return true;
+    if (node == nullptr) return true;  // absent keeps the default
+    // The schema types these flags `boolean`, not nullable: `null` is not a way
+    // to say "absent", it is a wrong type. as_bool() on a null would coerce to
+    // false, so a program that declared it needs write+execute could read as
+    // needing neither. is_bool() is false for null, so this catches it.
     if (!node->is_bool()) {
         error = std::string(key) + " must be a boolean";
         return false;
@@ -361,14 +381,14 @@ std::optional<Requirement> Requirement::from_json(const json::Value& v,
     // object here is a schema violation, not something to coerce to "" in
     // silence - which let a malformed document analyze on with the field gone
     // and still return a verdict.
-    if (const json::Value* n = v.find("name"); n != nullptr && !n->is_null()) {
+    if (const json::Value* n = v.find("name"); n != nullptr) {
         if (!n->is_string()) {
             error = "name must be a string";
             return std::nullopt;
         }
         r.name = n->as_string();
     }
-    if (const json::Value* n = v.find("component"); n != nullptr && !n->is_null()) {
+    if (const json::Value* n = v.find("component"); n != nullptr) {
         if (!n->is_string()) {
             error = "component must be a string";
             return std::nullopt;
@@ -436,11 +456,11 @@ std::optional<Requirement> Requirement::from_json(const json::Value& v,
         return std::nullopt;
     }
 
-    if (!reject_negative(req->find("required_alignment"),
-                         "request.required_alignment", error)) {
+    if (!read_optional_uint(req->find("required_alignment"),
+                            "request.required_alignment",
+                            r.request.required_alignment, error)) {
         return std::nullopt;
     }
-    r.request.required_alignment = read_optional_uint(req->find("required_alignment"));
 
     auto read_optional_address = [&](const char* key,
                                      std::optional<std::uint64_t>& out) -> bool {
@@ -457,6 +477,10 @@ std::optional<Requirement> Requirement::from_json(const json::Value& v,
             return true;
         }
         if (node->type() == json::Type::UInt || node->type() == json::Type::Int) {
+            if (node->type() == json::Type::Int && node->as_int() < 0) {
+                error = std::string("request.") + key + " must not be negative";
+                return false;
+            }
             out = node->as_uint();
             return true;
         }
@@ -469,17 +493,20 @@ std::optional<Requirement> Requirement::from_json(const json::Value& v,
     if (!read_optional_address("address_max", r.request.address_max)) {
         return std::nullopt;
     }
-    r.request.max_displacement_bytes =
-        read_optional_uint(req->find("max_displacement_bytes"));
+    if (!read_optional_uint(req->find("max_displacement_bytes"),
+                            "request.max_displacement_bytes",
+                            r.request.max_displacement_bytes, error)) {
+        return std::nullopt;
+    }
     if (const json::Value* ref = req->find("displacement_reference");
         ref != nullptr && ref->is_string()) {
         r.request.displacement_reference = ref->as_string();
     }
-    if (!reject_negative(req->find("required_page_size"),
-                         "request.required_page_size", error)) {
+    if (!read_optional_uint(req->find("required_page_size"),
+                            "request.required_page_size",
+                            r.request.required_page_size, error)) {
         return std::nullopt;
     }
-    r.request.required_page_size = read_optional_uint(req->find("required_page_size"));
     if (const json::Value* rel = req->find("required_page_size_relation");
         rel != nullptr && !rel->is_null()) {
         if (!rel->is_string() ||
@@ -530,8 +557,16 @@ std::optional<Requirement> Requirement::from_json(const json::Value& v,
                    error)) {
         return std::nullopt;
     }
-    r.request.file_length = read_optional_uint(req->find("file_length"));
-    r.request.file_offset = read_optional_uint(req->find("file_offset")).value_or(0);
+    if (!read_optional_uint(req->find("file_length"), "request.file_length",
+                            r.request.file_length, error)) {
+        return std::nullopt;
+    }
+    std::optional<std::uint64_t> file_offset;
+    if (!read_optional_uint(req->find("file_offset"), "request.file_offset",
+                            file_offset, error)) {
+        return std::nullopt;
+    }
+    r.request.file_offset = file_offset.value_or(0);
 
     if (const json::Value* a = v.find("assumptions"); a != nullptr) {
         if (!read_flag(a, "guest_host_identity_required",
@@ -542,9 +577,16 @@ std::optional<Requirement> Requirement::from_json(const json::Value& v,
                        error)) {
             return std::nullopt;
         }
-        r.assumptions.pointer_storage_width_bits =
-            read_optional_uint(a->find("pointer_storage_width_bits"));
-        r.assumptions.max_retries = read_optional_uint(a->find("max_retries"));
+        if (!read_optional_uint(a->find("pointer_storage_width_bits"),
+                                "assumptions.pointer_storage_width_bits",
+                                r.assumptions.pointer_storage_width_bits,
+                                error)) {
+            return std::nullopt;
+        }
+        if (!read_optional_uint(a->find("max_retries"), "assumptions.max_retries",
+                                r.assumptions.max_retries, error)) {
+            return std::nullopt;
+        }
     }
 
     if (const json::Value* posts = v.find("required_postconditions");

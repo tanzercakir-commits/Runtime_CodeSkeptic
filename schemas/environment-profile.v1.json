@@ -50,7 +50,12 @@
           "type": "string"
         },
         "pointer_width_bits": {
-          "type": "integer"
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0,
+          "maximum": 18446744073709551615
         },
         "translation_mode": {
           "enum": [
@@ -86,7 +91,14 @@
             "evidence"
           ],
           "properties": {
-            "value": {},
+            "value": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "minimum": 0,
+              "maximum": 18446744073709551615
+            },
             "evidence": {
               "$ref": "#/$defs/evidenceClass"
             },
@@ -107,7 +119,14 @@
             "evidence"
           ],
           "properties": {
-            "value": {},
+            "value": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "minimum": 0,
+              "maximum": 18446744073709551615
+            },
             "evidence": {
               "$ref": "#/$defs/evidenceClass"
             },
@@ -128,7 +147,16 @@
             "evidence"
           ],
           "properties": {
-            "value": {},
+            "value": {
+              "type": [
+                "string",
+                "integer",
+                "null"
+              ],
+              "pattern": "^0x[0-9a-fA-F]+$",
+              "minimum": 0,
+              "maximum": 18446744073709551615
+            },
             "evidence": {
               "$ref": "#/$defs/evidenceClass"
             },
@@ -149,7 +177,16 @@
             "evidence"
           ],
           "properties": {
-            "value": {},
+            "value": {
+              "type": [
+                "string",
+                "integer",
+                "null"
+              ],
+              "pattern": "^0x[0-9a-fA-F]+$",
+              "minimum": 0,
+              "maximum": 18446744073709551615
+            },
             "evidence": {
               "$ref": "#/$defs/evidenceClass"
             },
@@ -170,7 +207,14 @@
             "evidence"
           ],
           "properties": {
-            "value": {},
+            "value": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "minimum": 0,
+              "maximum": 18446744073709551615
+            },
             "evidence": {
               "$ref": "#/$defs/evidenceClass"
             },
@@ -191,7 +235,15 @@
             "evidence"
           ],
           "properties": {
-            "value": {},
+            "value": {
+              "enum": [
+                "SUPPORTED",
+                "UNSUPPORTED",
+                "CONDITIONALLY_SUPPORTED",
+                "UNKNOWN",
+                null
+              ]
+            },
             "evidence": {
               "$ref": "#/$defs/evidenceClass"
             },
@@ -212,7 +264,12 @@
             "evidence"
           ],
           "properties": {
-            "value": {},
+            "value": {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
             "evidence": {
               "$ref": "#/$defs/evidenceClass"
             },
@@ -233,7 +290,12 @@
             "evidence"
           ],
           "properties": {
-            "value": {},
+            "value": {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
             "evidence": {
               "$ref": "#/$defs/evidenceClass"
             },
@@ -254,7 +316,12 @@
             "evidence"
           ],
           "properties": {
-            "value": {},
+            "value": {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
             "evidence": {
               "$ref": "#/$defs/evidenceClass"
             },
@@ -275,7 +342,15 @@
             "evidence"
           ],
           "properties": {
-            "value": {},
+            "value": {
+              "enum": [
+                "sigbus",
+                "error",
+                "zero_fill",
+                "unknown",
+                null
+              ]
+            },
             "evidence": {
               "$ref": "#/$defs/evidenceClass"
             },
@@ -296,7 +371,14 @@
             "evidence"
           ],
           "properties": {
-            "value": {},
+            "value": {
+              "enum": [
+                "posix_lazy",
+                "windows_reserve_commit",
+                "unknown",
+                null
+              ]
+            },
             "evidence": {
               "$ref": "#/$defs/evidenceClass"
             },
@@ -319,7 +401,12 @@
               "evidence"
             ],
             "properties": {
-              "value": {},
+              "value": {
+                "type": [
+                  "boolean",
+                  "null"
+                ]
+              },
               "evidence": {
                 "$ref": "#/$defs/evidenceClass"
               },
@@ -345,14 +432,14 @@
             "properties": {
               "start": {
                 "type": "string",
-                "pattern": "^0x[0-9a-f]+$"
+                "pattern": "^0x[0-9a-fA-F]+$"
               },
               "end": {
                 "type": "string",
-                "pattern": "^0x[0-9a-f]+$"
+                "pattern": "^0x[0-9a-fA-F]+$"
               },
               "evidence": {
-                "$ref": "#/$defs/evidenceClass"
+                "$ref": "#/$defs/rangeEvidenceClass"
               },
               "note": {
                 "type": "string"
@@ -378,14 +465,14 @@
             "properties": {
               "start": {
                 "type": "string",
-                "pattern": "^0x[0-9a-f]+$"
+                "pattern": "^0x[0-9a-fA-F]+$"
               },
               "end": {
                 "type": "string",
-                "pattern": "^0x[0-9a-f]+$"
+                "pattern": "^0x[0-9a-fA-F]+$"
               },
               "evidence": {
-                "$ref": "#/$defs/evidenceClass"
+                "$ref": "#/$defs/rangeEvidenceClass"
               },
               "note": {
                 "type": "string"
@@ -413,7 +500,14 @@
             "evidence"
           ],
           "properties": {
-            "value": {},
+            "value": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "minimum": 0,
+              "maximum": 18446744073709551615
+            },
             "evidence": {
               "$ref": "#/$defs/evidenceClass"
             },
@@ -474,14 +568,14 @@
       "properties": {
         "start": {
           "type": "string",
-          "pattern": "^0x[0-9a-f]+$"
+          "pattern": "^0x[0-9a-fA-F]+$"
         },
         "end": {
           "type": "string",
-          "pattern": "^0x[0-9a-f]+$"
+          "pattern": "^0x[0-9a-fA-F]+$"
         },
         "evidence": {
-          "$ref": "#/$defs/evidenceClass"
+          "$ref": "#/$defs/rangeEvidenceClass"
         },
         "note": {
           "type": "string"
@@ -493,6 +587,16 @@
       },
       "additionalProperties": false,
       "description": "Half-open [start, end). `evidence: unknown` is forbidden here by the reader: absence of observation is not evidence of impossibility."
+    },
+    "rangeEvidenceClass": {
+      "enum": [
+        "specified_guarantee",
+        "measured_capability",
+        "statically_inferred",
+        "bounded_counterexample",
+        "observed_invariant",
+        "heuristic_risk"
+      ]
     }
   }
 }

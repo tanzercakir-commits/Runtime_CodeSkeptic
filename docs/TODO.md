@@ -128,29 +128,11 @@ the underlying class of bug: the input readers still treat a wrong type as an
 absent field. A 300-case boundary matrix caught 54 schema-invalid requirements
 accepted, 16 invalid profiles accepted, 22 valid requirements rejected, 52 valid
 profiles rejected, plus surviving negative/overflow and bundle-replay
-false-greens. These three items close it at the root, and NONE is done until the
-boundary matrix (T-024's first step) is clean — status follows the matrix, not a
-feeling. The full account is in `docs/reviews/2026-08-02-independent-review.md`.
-
-### T-024 — Enforce the published schemas on every input, both directions `[now]`
-
-**Serves:** the whole promise — a tool that is trustworthy as a CI gate. A
-requirement that needs a 16 KiB page, written `"16384"` (a string), must not be
-read as "no page-size requirement" and pass.
-**Plan:** `docs/PLAN.md` Phase 3 exit criterion — "no unsupported platform fact
-is described as guaranteed"; the reviewer's fix order #1 (enforce the schemas on
-ALL inputs).
-**Done when:** a checked-in boundary matrix reports **0 schema-invalid inputs
-accepted and 0 schema-valid inputs rejected** (semantic constraints that reject
-a schema-valid doc must be encoded in the published schema so the two agree);
-every one of the nine numeric fields rejects a negative with the field named;
-and an `address + size` that overflows `uint64` changes the verdict rather than
-being filed only as a limitation.
-**First step:** build the matrix harness (generate valid/invalid type + boundary
-variants, run through `rs-check`/`rs-profile`, print the confusion matrix). Then
-add a schema validator run against `schemas/*.json` BEFORE each hand-parser, so
-no field can be missed — the root cause is `read_optional_uint`
-(`src/vm/requirement.cpp:67`) returning "absent" for a wrong type.
+false-greens. **T-024 is now closed** — the boundary matrix
+(`tools/audit/boundary_matrix.py`, wired as a guard) reports 0 disagreements
+across 249 cases and its account is in `docs/PROGRESS.md`. The two items below
+remain, and status follows the matrix and CI, not a feeling. The full account is
+in `docs/reviews/2026-08-02-independent-review.md`.
 
 ### T-025 — The evidence bundle is all-or-nothing and replay proves completeness `[now]`
 

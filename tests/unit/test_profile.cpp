@@ -4,6 +4,7 @@
 #include <string>
 
 #include "fixtures.hpp"
+#include "runtimeskeptic/vm/analyzer.hpp"
 #include "runtimeskeptic/vm/requirement.hpp"
 #include "test_support.hpp"
 
@@ -503,6 +504,119 @@ RS_TEST(an_extra_field_in_a_range_is_rejected) {
     std::string error;
     RS_CHECK(!EnvironmentProfile::from_json(*parsed.value, error).has_value());
     RS_CHECK(error.find("reigon") != std::string::npos);
+}
+
+// ---------------------------------------------------------------------------
+// Independent RE-TEST, 2026-08-02: the first round of A1/A2/A5 fixes patched the
+// named examples but not the class of bug - the readers still treated a wrong
+// TYPE as an absent field. A 300-case boundary matrix (tools/audit/
+// boundary_matrix.py) drove these out; the cases below pin the ones a unit test
+// can hold, in both parsers. The matrix is the exhaustive check; this is the
+// fast one.
+// ---------------------------------------------------------------------------
+
+RS_TEST(a_string_typed_numeric_requirement_field_is_rejected_not_dropped) {
+    // required_page_size:"16384" (a string) was read as "no page size required",
+    // so a 16 KiB-page program passed on a 4 KiB host. A wrong type is a schema
+    // violation, not an absent field.
+    auto parsed = json::parse(R"({
+        "schema": "runtime-skeptic.application-requirements.v1",
+        "operation": "virtual_memory_map",
+        "assumption_evidence": "specified_guarantee",
+        "request": {"size": 65536, "required_page_size": "16384"}
+    })");
+    RS_CHECK(parsed.ok());
+    std::string error;
+    RS_CHECK(!Requirement::from_json(*parsed.value, error).has_value());
+}
+
+RS_TEST(a_null_boolean_requirement_flag_is_rejected) {
+    // The schema types these flags boolean, not nullable; null coerced to false.
+    auto parsed = json::parse(R"({
+        "schema": "runtime-skeptic.application-requirements.v1",
+        "operation": "virtual_memory_map",
+        "assumption_evidence": "specified_guarantee",
+        "request": {"size": 65536, "simultaneous_write_execute": null}
+    })");
+    RS_CHECK(parsed.ok());
+    std::string error;
+    RS_CHECK(!Requirement::from_json(*parsed.value, error).has_value());
+}
+
+RS_TEST(a_negative_optional_uint_is_rejected_on_every_field) {
+    for (const char* field :
+         {"required_alignment", "required_page_size", "file_length",
+          "max_displacement_bytes"}) {
+        const std::string text = std::string(R"({
+            "schema": "runtime-skeptic.application-requirements.v1",
+            "operation": "virtual_memory_map",
+            "assumption_evidence": "specified_guarantee",
+            "request": {"size": 65536, ")") + field + R"(": -1}})";
+        auto parsed = json::parse(text);
+        RS_CHECK(parsed.ok());
+        std::string error;
+        RS_CHECK_MESSAGE(!Requirement::from_json(*parsed.value, error).has_value(),
+                         std::string("a negative ") + field + " was accepted");
+    }
+}
+
+RS_TEST(a_mapping_that_wraps_the_address_space_is_unsupported_not_supported) {
+    // address + size overflows uint64: the region wraps past the end of the
+    // 64-bit space and cannot exist. It was recorded only as an analyzer
+    // limitation, leaving the verdict SUPPORTED; it must be a proven UNSUPPORTED.
+    auto parsed = json::parse(R"({
+        "schema": "runtime-skeptic.application-requirements.v1",
+        "operation": "virtual_memory_map",
+        "assumption_evidence": "specified_guarantee",
+        "request": {"address": "0xffffffffffff0000", "size": 131072,
+                    "exact_address_required": true}
+    })");
+    RS_CHECK(parsed.ok());
+    std::string error;
+    auto req = Requirement::from_json(*parsed.value, error);
+    RS_CHECK_MESSAGE(req.has_value(), error);
+    if (!req) return;
+    const AnalysisResult result = analyze(*req, permissive_host(), {});
+    RS_CHECK(result.overall == SupportLevel::Unsupported);
+}
+
+RS_TEST(a_non_string_os_version_is_rejected) {
+    auto parsed = json::parse(R"({
+        "schema": "runtime-skeptic.environment-profile.v1",
+        "origin": "measured",
+        "platform": {"os": "linux", "process_arch": "x86_64", "os_version": 12345}
+    })");
+    RS_CHECK(parsed.ok());
+    std::string error;
+    RS_CHECK(!EnvironmentProfile::from_json(*parsed.value, error).has_value());
+}
+
+RS_TEST(a_fact_without_a_value_key_is_rejected) {
+    // The schema requires 'value' on every fact; a value-less object used to
+    // read as an honest "unknown" fact, so a truncated profile passed.
+    auto parsed = json::parse(R"({
+        "schema": "runtime-skeptic.environment-profile.v1",
+        "origin": "measured",
+        "platform": {"os": "linux", "process_arch": "x86_64"},
+        "virtual_memory": {"page_size": {"evidence": "measured_capability"}}
+    })");
+    RS_CHECK(parsed.ok());
+    std::string error;
+    RS_CHECK(!EnvironmentProfile::from_json(*parsed.value, error).has_value());
+}
+
+RS_TEST(a_range_start_must_be_a_hex_string_not_a_number) {
+    auto parsed = json::parse(R"({
+        "schema": "runtime-skeptic.environment-profile.v1",
+        "origin": "measured",
+        "platform": {"os": "linux", "process_arch": "x86_64"},
+        "virtual_memory": {"unavailable_ranges": [
+            {"start": 4096, "end": "0x2000", "evidence": "measured_capability"}
+        ]}
+    })");
+    RS_CHECK(parsed.ok());
+    std::string error;
+    RS_CHECK(!EnvironmentProfile::from_json(*parsed.value, error).has_value());
 }
 
 RS_TEST_MAIN("profile")

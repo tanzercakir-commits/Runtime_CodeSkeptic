@@ -175,8 +175,17 @@ Fact<T> fact_from_json(const json::Value* node, Reader read_value,
     }
 
     const json::Value* value_node = node->find("value");
-    if (evidence == EvidenceClass::Unknown || value_node == nullptr ||
-        value_node->is_null()) {
+    // The schema lists 'value' as required on every fact. An absent key is a
+    // malformed fact, distinct from an explicit `value: null` (which, with
+    // evidence 'unknown', is the sanctioned way to write "not established").
+    // Reading a value-less object as an unknown fact let a truncated profile
+    // pass as though it had honestly declared the fact unknown.
+    if (value_node == nullptr) {
+        error = "fact requires a 'value' key (null with evidence 'unknown' "
+                "means not established)";
+        return Fact<T>::unknown("malformed");
+    }
+    if (evidence == EvidenceClass::Unknown || value_node->is_null()) {
         // Pass `note` through EXACTLY as the document had it, including empty.
         //
         // This used to substitute "declared unknown" for an absent note, which
@@ -243,6 +252,10 @@ inline bool read_address(const json::Value& v, Address& out,
         return true;
     }
     if (v.type() == json::Type::UInt || v.type() == json::Type::Int) {
+        if (v.type() == json::Type::Int && v.as_int() < 0) {
+            error = "address must not be negative";
+            return false;
+        }
         out.value = v.as_uint();
         return true;
     }

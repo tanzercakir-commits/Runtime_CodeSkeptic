@@ -358,10 +358,32 @@ std::optional<EnvironmentProfile> EnvironmentProfile::from_json(
         return std::nullopt;
     }
     if (const json::Value* n = platform->find("os_version"); n != nullptr) {
+        if (!n->is_string()) {
+            error = "platform.os_version must be a string";
+            return std::nullopt;
+        }
         p.platform.os_version = n->as_string();
     }
     if (const json::Value* n = platform->find("kernel_version"); n != nullptr) {
+        if (!n->is_string()) {
+            error = "platform.kernel_version must be a string";
+            return std::nullopt;
+        }
         p.platform.kernel_version = n->as_string();
+    }
+    // pointer_width_bits is DERIVED from process_arch, not stored - but the
+    // schema types it (nullable) integer, so a wrong type is a schema violation
+    // to reject rather than ignore. null is how the writer records "unknown".
+    if (const json::Value* n = platform->find("pointer_width_bits");
+        n != nullptr && !n->is_null()) {
+        if (n->type() != json::Type::UInt && n->type() != json::Type::Int) {
+            error = "platform.pointer_width_bits must be an integer";
+            return std::nullopt;
+        }
+        if (n->type() == json::Type::Int && n->as_int() < 0) {
+            error = "platform.pointer_width_bits must not be negative";
+            return std::nullopt;
+        }
     }
 
     // -- virtual memory (optional in the schema) --------------------------
@@ -522,6 +544,10 @@ std::optional<EnvironmentProfile> EnvironmentProfile::from_json(
 
     // -- run metadata (optional) ------------------------------------------
     if (const json::Value* run = v.find("probe_run"); run != nullptr) {
+        if (!run->is_object()) {
+            error = "profile 'probe_run' must be an object";
+            return std::nullopt;
+        }
         auto str = [&](const char* key) -> std::string {
             const json::Value* n = run->find(key);
             return n == nullptr ? std::string() : n->as_string();
@@ -536,7 +562,22 @@ std::optional<EnvironmentProfile> EnvironmentProfile::from_json(
         }
         p.run.warnings = read_string_array(run->find("warnings"));
     }
-    p.notes = read_string_array(v.find("notes"));
+    // The schema types notes as an array of strings. read_string_array would
+    // quietly accept a bare string or drop non-string entries; here a wrong
+    // shape is a schema violation, named.
+    if (const json::Value* notes = v.find("notes"); notes != nullptr) {
+        if (!notes->is_array()) {
+            error = "profile 'notes' must be an array of strings";
+            return std::nullopt;
+        }
+        for (const auto& item : notes->as_array()) {
+            if (!item.is_string()) {
+                error = "profile 'notes' entries must all be strings";
+                return std::nullopt;
+            }
+            p.notes.push_back(item.as_string());
+        }
+    }
 
     return p;
 }

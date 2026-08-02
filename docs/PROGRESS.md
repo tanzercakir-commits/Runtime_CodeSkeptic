@@ -16,6 +16,48 @@ re-litigated; a mistake recorded here does not need to be re-made.
 
 ---
 
+## 2026-08-02 — the re-test: a false-green class the first fixes never reached (T-024)
+
+**Changed.** Every CLI input reader now rejects a wrong TYPE instead of reading
+it as an absent field, the published schemas were tightened to forbid exactly
+what the tool's uint64 model cannot hold, and an address+size overflow now
+changes the verdict. A checked-in boundary matrix proves it, and runs as a
+guard. The false-green blockers A1/A2/A5 are, this time, closed at the root.
+
+### What was wrong, and how the first round missed it
+
+The 2026-08-02 independent re-test (branch `fix/review-hardening`, `d42fe30`)
+ran a **300-case boundary matrix** and found the first round of review fixes had
+patched the *named examples* and nothing else. `required_page_size: "16384"` (a
+string) was read as "no page-size requirement" and a 16 KiB-page program passed
+on a 4 KiB host — `SUPPORTED / 0`. The root cause was one shape repeated across
+~20 fields: `read_optional_uint` (and the profile's `os_version`, `notes`,
+`probe_run`, fact-value readers) returned "absent" for a wrong type instead of
+an error. Localized patches for `name`/`protection`/one `reject_negative` could
+never cover it; only a check driven by the schema could.
+
+### The fix, measured not guessed
+
+| | |
+|---|---|
+| **+** | `tools/audit/boundary_matrix.py`: mutates a base requirement and profile against every field, asks jsonschema "valid?" and the tool "accepted?", and reports the two disagreements — schema-invalid ACCEPTED (false-green) and schema-valid REJECTED (over-strict). Baseline **89**; now **0** across 249 cases. Wired into `run_all.sh` (skips if unbuilt) |
+| **+** | readers reject wrong types: `read_optional_uint` errors on a non-integer and folds in the negative check; `read_flag` rejects `null`; `read_address`/`read_uint` reject negatives; a fact requires its `value` key; a range start/end must be a hex string; the profile rejects non-string `os_version`/`kernel_version`, non-object `probe_run`, non-array `notes`, wrong-typed `pointer_width_bits` |
+| **+** | schemas tightened so the OVER-STRICT rejections become agreement, not divergence: every integer field gains `minimum: 0` (size keeps 1) and `maximum: 2⁶⁴-1`; address fields gain the hex `pattern`; `operation` drops `"unknown"`; a range's evidence may not be `unknown`; fact values are typed. `tools/audit/tighten_schemas.py` records exactly what changed. All 65 shipped artifacts still validate |
+| **+** | `address + size` overflow is a **proven UNSUPPORTED** finding, not an analyzer limitation — it was leaving the verdict SUPPORTED for a region that wraps the 64-bit space (`src/vm/analyzer.cpp`) |
+| **−** | the lesson, again: a systematic defect needs a systematic check. The first round trusted the named examples; the matrix is now the instrument, and status follows it. It also caught two of its OWN bad cases (an inverted range, a value past a default `end`) — a check that is not itself checked lies too |
+
+### What to do next
+
+T-024 is done (matrix 0, 36 profile cases, 15/15 ctest, 19 guards). Still open
+before the next re-test can be asked for: **T-025** — the evidence bundle is
+still written for an incomplete run and `rs-replay` still certifies a
+manifest with six sections stripped (`rs-check` main + `replay_bundle`).
+**T-026** — the README "60 seconds" (209 s on Windows), the "Only Linux"
+help text against a shipped Windows probe, the `set -e`-unreachable
+integrations snippet, the review doc's premature "all FIXED", and getting CI to
+actually run on the branch (`d42fe30` has no run — `ci.yml` triggers on `main`
+and PRs only). Do NOT tell the user it is ready until the matrix is green in CI.
+
 ## 2026-08-01 — a committed measurement outlived its instrument (found by an external run)
 
 **Changed.** Both committed macOS profiles regenerated from the current CI

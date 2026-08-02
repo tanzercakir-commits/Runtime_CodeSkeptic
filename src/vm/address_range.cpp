@@ -84,24 +84,23 @@ std::optional<ClassifiedRange> ClassifiedRange::from_json(const json::Value& v,
         return std::nullopt;
     }
 
+    // The schema types a range's start/end as a hex STRING ("^0x[0-9a-fA-F]+$"),
+    // not a number: a bare integer here is a schema violation. Accepting one let
+    // an out-of-shape range through as if it had been written correctly.
     auto read_addr = [&](const json::Value& value,
                          std::uint64_t& out) -> bool {
-        if (value.is_string()) {
-            auto parsed = json::from_hex(value.as_string());
-            if (!parsed) {
-                error = "address must be a hex string like \"0x1000\": got \"" +
-                        value.as_string() + "\"";
-                return false;
-            }
-            out = *parsed;
-            return true;
+        if (!value.is_string()) {
+            error = "range address must be a hex string like \"0x1000\"";
+            return false;
         }
-        if (value.type() == json::Type::UInt || value.type() == json::Type::Int) {
-            out = value.as_uint();
-            return true;
+        auto parsed = json::from_hex(value.as_string());
+        if (!parsed) {
+            error = "range address must be a hex string like \"0x1000\": got \"" +
+                    value.as_string() + "\"";
+            return false;
         }
-        error = "address must be a hex string";
-        return false;
+        out = *parsed;
+        return true;
     };
 
     ClassifiedRange out;
