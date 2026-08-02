@@ -280,7 +280,7 @@ The Phase 1 exit criterion is *repeated runs on the same stable host produce equ
 
 The split has a second effect that is worth as much: it makes `rs-profile diff` meaningful. Two profiles with the same `profile_id` differ only in metadata; two with different ids differ in a fact, and the diff is guaranteed to show something that matters.
 
-The exclusion is directional. Run metadata is still *recorded* — `to_json()` emits it, evidence bundles keep it, and `probe_binary_hash` remains the record of which probe produced the facts. It is simply not part of the identity.
+The exclusion is directional. Run metadata is still *recorded* — `to_json()` emits it and evidence bundles keep it; `run_id` and `probe_binary_hash` are reserved to record which run, and which probe binary, produced the facts. In v0.1 that link is only partly populated: `run_id` appears on some lanes and `probe_binary_hash` on none, because the probe does not yet hash its own image. None of it is part of the identity — that is the point — so its absence changes no `profile_id` and no verdict. <!-- checked: 2026-08-02 -->
 
 ### 5.4 Evidence classes are inside the hash
 

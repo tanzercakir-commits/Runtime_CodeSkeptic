@@ -23,6 +23,19 @@ $ git clone https://github.com/tanzercakir-commits/Runtime_CodeSkeptic && cd Run
 $ cmake -S . -B build && cmake --build build -j
 ```
 
+> **On Windows (PowerShell):** `&&` and the trailing `\` line-continuation below
+> are POSIX shell, not PowerShell 5.1. Run each command on its own line, build a
+> named configuration, and note that the Visual Studio generator writes to a
+> per-configuration subdirectory — `build\bin\Release\`, or `build\bin\Debug\`
+> when no `--config` is given:
+>
+> ```powershell
+> git clone https://github.com/tanzercakir-commits/Runtime_CodeSkeptic; cd Runtime_CodeSkeptic
+> cmake -S . -B build
+> cmake --build build --config Release
+> build\bin\Release\rs-check.exe contracts\campaign\redis-jemalloc-page-size-lg12.json --profile profiles\measured\macos-14-arm64-native.measured.json
+> ```
+
 Now ask a real question — *why does Redis refuse to start on an Apple Silicon
 Mac?* You do not need a Mac; the repository ships that host's measured profile.
 
@@ -98,16 +111,20 @@ a range the probe never tested answers `UNKNOWN` rather than
 
 ## Measured environments
 
-| OS | CPU | Translation |
-|---|---|---|
-| Linux | x86-64 | — |
-| macOS | ARM64 (Apple Silicon) | — |
-| macOS | x86-64 | Rosetta 2 |
-| Windows | x86-64 | — |
-| Windows (Wine on Linux) | x86-64 | Wine |
+| OS | CPU | Translation | Where the profile is |
+|---|---|---|---|
+| macOS | ARM64 (Apple Silicon) | — | [`profiles/measured/`](profiles/measured/) |
+| macOS | x86-64 | Rosetta 2 | [`profiles/measured/`](profiles/measured/) |
+| Windows | x86-64 | — | [`profiles/measured/`](profiles/measured/) |
+| Windows (Wine on Linux) | x86-64 | Wine | [`profiles/measured/`](profiles/measured/) |
+| Linux | x86-64 | — | measured by CI each run, not checked in |
 
-Profiles live in [profiles/measured/](profiles/measured/); each fact records
-how it was measured.
+The four macOS and Windows profiles are checked in under
+[profiles/measured/](profiles/measured/), each fact recording how it was
+measured. The Linux profile is *not* shipped: the CI probe measures the runner
+on every run and publishes the result to `refs/measurements/*` (the working copy
+lands in the git-ignored `profiles/generated/`), so it is always fresh rather
+than a snapshot. Measure your own with `rs-env-probe`, as above.
 
 ## System architecture
 
