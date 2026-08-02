@@ -12,7 +12,36 @@ chains, the UNKNOWN discipline, remediation and "will not work" sections are
 not yet trustworthy as a production CI gate.** That framing is correct and is
 now the release posture.
 
-## Resolution status — three rounds, and what each check could not see
+## Resolution status — four rounds, and what each check could not see
+
+**Round 4 (commit pending) — stop hand-checking, read the schema.** The fourth
+re-test confirmed round 3 held (CI green 6/6 on `58f6851`) and then found the
+class four rounds of hand-written type checks kept leaking: an independent
+null/container matrix accepted **36/36** schema-invalid documents
+(`assumptions:null`, a null `page_size` fact, `source_locations[].line:null`); a
+replay matrix accepted **28/111** manifests with wrong or missing NESTED fields
+(`host.os`, `schema_versions.*`, `analysis_options.report_unknowns`, `replay.*`);
+two verdicts were wrong at the edges (`min_map_address >= max_user_address` and a
+tampered `profile_id` both verified 0); and the matrix guard itself was
+fail-OPEN (returned 0 when its binary or `jsonschema` was missing, `_bin` never
+looked in `build/bin/Release`, exit 70 counted as accepted, CI install ended in
+`|| true`). All closed under **T-030/T-031/T-032**. The decisive change: inputs
+are no longer hand-checked field by field — a real C++ JSON Schema validator
+(`src/core/schema.cpp`, the subset the schemas use, embedded at build) validates
+every document against the published schema at the two domain entry points
+(`Requirement::from_json`, `EnvironmentProfile::from_json`) and at the
+`rs-replay` manifest, so rs-check, rs-profile, rs-mcp and rs-replay are all
+gated. A new dev tool `rs-validate` lets the boundary matrix compare the C++
+validator to Python's `jsonschema` for every mutation: **639 mutations, 0
+divergences, 0 false-greens, 0 over-strict**, golden and verify-integrity 0. The
+one cross-field rule the parser enforced (an exact-address request must carry an
+address) is now IN the schema as `if/then`, so `jsonschema == validator == tool`.
+The guard now fails CLOSED (`RS_MATRIX_REQUIRE=1` in CI). The lesson, a fifth
+time and why this fix differs: rounds 1-4 were each systematic about a DIMENSION
+and the schema always had one more field; a validator that READS the schema is
+complete by construction, and the matrix proves it equals the oracle. What it
+does not close — a bug in the schema itself — is why the semantic golden and
+verify-integrity checks stay. Accounts in `docs/PROGRESS.md`.
 
 **Round 3 (commit pending) — the matrix measured acceptance, not truth.** The
 third re-test confirmed round 2 held and CI was green 6/6, then found the

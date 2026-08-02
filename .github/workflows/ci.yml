@@ -101,9 +101,20 @@ jobs:
       # tools/guards/run_all.sh records what each guard caught.
       - name: Project guards
         id: guards
+        env:
+          # The boundary matrix is the schema-conformance check, and this is the
+          # one place it runs authoritatively: jsonschema (its oracle) and the
+          # freshly built binaries are both present here. RS_MATRIX_REQUIRE=1
+          # turns a missing oracle or a missing binary into a FAILURE, not the
+          # silent skip that would let a false-green regression through - the very
+          # fail-open the 2026-08-02 re-test found in the guard itself.
+          RS_MATRIX_REQUIRE: "1"
         run: |
+          # jsonschema is required here (see RS_MATRIX_REQUIRE above), so NO
+          # `|| true` on the install: if neither attempt succeeds the matrix
+          # cannot run, and that must fail the step rather than pass as a skip.
           python3 -m pip install --quiet --break-system-packages jsonschema \
-            || python3 -m pip install --quiet jsonschema || true
+            || python3 -m pip install --quiet jsonschema
           # A 1x Linux second standing in for a 2x Windows minute:
           # check_windows_compiles.py builds the Windows-only translation units
           # with the project's own flags. Without this it SKIPS - loudly, but it

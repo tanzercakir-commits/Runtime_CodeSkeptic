@@ -8,6 +8,7 @@
 
 #include "runtimeskeptic/core/io.hpp"
 #include "runtimeskeptic/core/json.hpp"
+#include "runtimeskeptic/core/schema_registry.hpp"
 #include "runtimeskeptic/core/sha256.hpp"
 #include "runtimeskeptic/reports/report.hpp"
 #include "runtimeskeptic/version.hpp"
@@ -298,6 +299,24 @@ std::optional<ReplayOutcome> replay_bundle(const std::string& dir,
     if (!m.is_object() || m.find("schema") == nullptr ||
         m.find("schema")->as_string() != "runtime-skeptic.analysis-bundle.v1") {
         error = "'" + dir + "' does not contain a v1 analysis bundle manifest";
+        return std::nullopt;
+    }
+
+    // The WHOLE manifest against analysis-bundle.v1, nested fields included. The
+    // per-field checks below were hand-written across rounds 1-2 and still let
+    // 28/111 nested mutations (host.os, schema_versions.*, analysis_options.
+    // report_unknowns, replay.*) replay on the 2026-08-02 re-test, because a
+    // hand check only guards the fields someone listed. The schema lists every
+    // field, so this is the complete gate; the checks that follow are kept only
+    // for their replay-specific wording.
+    if (std::string schema_error;
+        !rs::schema::validate_analysis_manifest(m, schema_error)) {
+        // A missing required field is incompleteness; a wrong-typed or unknown
+        // field is malformation. The schema catches both, so the message names
+        // both, and the reproduced-vacuously case the reviewer found (a manifest
+        // stripped to schema/overall/finding_ids) is rejected here as incomplete.
+        error = "incomplete or malformed bundle: manifest does not satisfy "
+                "analysis-bundle.v1 (" + schema_error + ")";
         return std::nullopt;
     }
 

@@ -14,6 +14,7 @@ endfunction()
 
 # -- unit -------------------------------------------------------------------
 rs_add_test(test_json          SOURCES unit/test_json.cpp          LIBRARIES rs_core)
+rs_add_test(test_schema        SOURCES unit/test_schema.cpp        LIBRARIES rs_core)
 rs_add_test(test_sha256        SOURCES unit/test_sha256.cpp        LIBRARIES rs_core)
 rs_add_test(test_evidence      SOURCES unit/test_evidence.cpp      LIBRARIES rs_core)
 rs_add_test(test_address_range SOURCES unit/test_address_range.cpp LIBRARIES rs_vm)

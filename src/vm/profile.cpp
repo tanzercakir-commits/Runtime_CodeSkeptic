@@ -5,6 +5,7 @@
 #include <array>
 #include <utility>
 
+#include "runtimeskeptic/core/schema_registry.hpp"
 #include "runtimeskeptic/core/sha256.hpp"
 
 namespace rs::vm {
@@ -272,6 +273,15 @@ std::optional<EnvironmentProfile> EnvironmentProfile::from_json(
         error = "profile document must be a JSON object";
         return std::nullopt;
     }
+    // Gate the whole document against the published profile schema before
+    // reading any fact. A fact with a null container or a wrong-typed value used
+    // to be read as "absent", and absent is silently tolerated - so a malformed
+    // profile analysed on. The schema refuses it here, once, for every field.
+    if (std::string schema_error;
+        !rs::schema::validate_profile(v, schema_error)) {
+        error = schema_error;
+        return std::nullopt;
+    }
     const json::Value* schema = v.find("schema");
     if (schema == nullptr || !schema->is_string()) {
         error = "profile requires a 'schema' string";
@@ -439,6 +449,22 @@ std::optional<EnvironmentProfile> EnvironmentProfile::from_json(
                                                     read_address, local_error);
     if (!local_error.empty()) {
         error = "virtual_memory.max_user_address: " + local_error;
+        return std::nullopt;
+    }
+    // A cross-field invariant the schema cannot state: when both bounds are
+    // measured, the lowest mappable address must lie below the exclusive upper
+    // bound of user space. A profile with min_map_address >= max_user_address
+    // describes an address space with no room in it; every reservation verdict
+    // derived from it would be an artefact of contradictory data, so the profile
+    // is refused here rather than analysed. (2026-08-02 re-test, verdict group.)
+    if (p.vm.min_map_address.is_known() && p.vm.max_user_address.is_known() &&
+        p.vm.min_map_address.value().value >=
+            p.vm.max_user_address.value().value) {
+        error = "virtual_memory: min_map_address (" +
+                json::to_hex(p.vm.min_map_address.value().value) +
+                ") must be below max_user_address (" +
+                json::to_hex(p.vm.max_user_address.value().value) +
+                "); the profile describes an impossible address space";
         return std::nullopt;
     }
     // Absent means UNKNOWN, which is why every hand-authored fixture predating

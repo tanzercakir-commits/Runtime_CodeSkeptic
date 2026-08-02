@@ -16,6 +16,56 @@ re-litigated; a mistake recorded here does not need to be re-made.
 
 ---
 
+## 2026-08-02 — round 4: stop hand-checking, read the schema (T-030/T-031/T-032)
+
+**Changed.** The fourth re-test confirmed round 3 held (CI green 6/6 on `58f6851`)
+and then found the class four rounds of hand-written checks kept leaking: a
+null/container matrix accepted **36/36** schema-invalid documents
+(`assumptions:null`, a null `page_size` fact, `source_locations[].line:null`), a
+replay matrix accepted **28/111** manifests with wrong or missing NESTED fields,
+more verdict false-greens, and the guard itself was fail-OPEN. The decisive move
+was to stop hand-checking types field by field and validate every input against
+the published schema itself — code that reads `schemas/*.json` cannot forget a
+field, a null, or a nested one.
+
+### What was wrong
+
+- **The parsers checked the fields someone remembered (T-030).** Every round
+  fixed the named examples and the next re-test found the next unguarded field.
+  It is not a sequence of oversights; it is the method. A hand check enforces a
+  list, and the list is always shorter than the schema.
+- **Two verdicts were wrong at the edges (T-031).** A profile with
+  `min_map_address >= max_user_address` — an address space with no room in it —
+  loaded and `verify`ed with exit 0. A profile whose stored `profile_id` no
+  longer matched its own facts (edited after signing) also verified 0.
+- **The guard could pass by not running (T-032).** `boundary_matrix.py` returned
+  0 when its binary or `jsonschema` was missing, `_bin` never looked in
+  `build/bin/Release`, exit 70 / a crash counted as "accepted", and the CI
+  `jsonschema` install ended in `|| true`. Every one of those is a way for the
+  contract check to be green without having checked anything.
+
+### The fix, measured
+
+| | |
+|---|---|
+| **+** | **T-030: a real JSON Schema validator** — `src/core/schema.{hpp,cpp}`, the subset our schemas use (type incl arrays+`null`+`integer`, required, properties, additionalProperties, enum, const, items, local AND cross-file `$ref`, pattern, min/max, anyOf, allOf, if/then/else). Schemas embedded at build by `configure_file` (no runtime file, no Python). It gates the two DOMAIN entry points — `Requirement::from_json` and `EnvironmentProfile::from_json` — so rs-check, rs-profile and rs-mcp are covered at once, and the `rs-replay` manifest through `validate_analysis_manifest`. A bundle still validates each item through the same path, so one bad entry is dropped, not the batch |
+| **+** | **the proof it is faithful** — a new dev tool `rs-validate` exposes the validator so `boundary_matrix.py` compares it to Python's `jsonschema` for EVERY mutation. Extended with a null/container sweep on every field and a manifest matrix: **639 mutations, 0 divergences** (C++ validator == jsonschema), **0 false-greens, 0 over-strict, 0 crashes**, golden verdicts 0, verify-integrity 0 |
+| **+** | **T-031** — `min_map_address >= max_user_address` refused in `from_json` (every consumer, not just verify); a stored `profile_id` that does not match the recompute refused by `rs-profile verify`. Locked by a golden `VERIFY INTEGRITY` section and `test_profile.cpp` |
+| **+** | **T-032** — `RS_MATRIX_REQUIRE=1` makes a missing binary or oracle a FAILURE, not a skip (wired into `ci.yml`, which also drops the `jsonschema` install's `|| true`); `_bin` finds every CI config; exit 70 / a crash counts as NOT accepted |
+| **+** | the one cross-field rule the parser always enforced — a request that demands an exact address must carry one — is now IN the schema as `if/then`, so `jsonschema == validator == tool` instead of the tool being silently stricter than its own contract |
+| **−** | the lesson, a fifth time, and the reason this fix is different: rounds 1-4 were each systematic about a DIMENSION (named examples, types, verdict, nesting) and the schema always had one more. This validator is complete BY CONSTRUCTION — it reads the schema — and the matrix PROVES it equals the oracle, so "gate the tools through it" is a guarantee, not another list. What it does NOT close: a bug in the schema itself. The validator faithfully enforces whatever the schema says, right or wrong — which is exactly why the golden verdicts and the verify-integrity checks (semantic, cross-field, un-expressible in the schema) stay, and why the `if/then` rule had to be added rather than assumed |
+
+New `tests/unit/test_schema.cpp` (validator, keyword by keyword + the exact
+round-4 findings, no external oracle). 16/16 CTest, all guards pass, clean `/WX`
+build, clean from-scratch configure+build.
+
+### What to do next
+
+Round 4 is complete and awaiting the reviewer's re-test. Push, get CI green on
+the SHA over all six jobs, then notify — not before. Nothing merged to `main`;
+LinkedIn still on hold by the owner's standing NO-GO. When the branch eventually
+lands, drop it from `ci.yml` `on.push`.
+
 ## 2026-08-02 — round 3: the matrix measured acceptance, not truth (T-027/T-028/T-029)
 
 **Changed.** The third re-test confirmed round 2 held and CI was green 6/6, then

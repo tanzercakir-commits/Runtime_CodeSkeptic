@@ -5,6 +5,7 @@
 #include <array>
 #include <utility>
 
+#include "runtimeskeptic/core/schema_registry.hpp"
 #include "runtimeskeptic/core/sha256.hpp"
 
 namespace rs::vm {
@@ -417,6 +418,17 @@ std::optional<Requirement> Requirement::from_json(const json::Value& v,
                                                    std::string& error) {
     if (!v.is_object()) {
         error = "requirement document must be a JSON object";
+        return std::nullopt;
+    }
+    // The published schema IS the contract; the whole document is validated
+    // against it here, before a single field is read. Four rounds of per-field
+    // checks below each missed a different case (a wrong type read as absent, a
+    // null container, a nested field); the schema lists every field once, so
+    // none is forgotten. A bundle validates each item through this same path, so
+    // one malformed entry is dropped, not the whole batch.
+    if (std::string schema_error;
+        !rs::schema::validate_requirement_input(v, schema_error)) {
+        error = schema_error;
         return std::nullopt;
     }
     const json::Value* schema = v.find("schema");

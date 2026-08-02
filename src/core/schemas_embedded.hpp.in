@@ -1,0 +1,27 @@
+// SPDX-License-Identifier: Apache-2.0
+//
+// GENERATED - do not edit. CMake's configure_file substitutes the contents of
+// schemas/*.json into the raw string literals below (see src/CMakeLists.txt),
+// so the validated contract ships inside the binary and cannot drift from a
+// file that happens to be on disk at run time. The delimiter RSJSONSCHEMA never
+// appears in JSON, so the literals are safe whatever the schema contains.
+#ifndef RUNTIMESKEPTIC_CORE_SCHEMAS_EMBEDDED_HPP
+#define RUNTIMESKEPTIC_CORE_SCHEMAS_EMBEDDED_HPP
+
+namespace rs::schema::embedded {
+
+inline constexpr const char* kApplicationRequirements =
+    R"RSJSONSCHEMA(@RS_SCHEMA_APPREQ@)RSJSONSCHEMA";
+
+inline constexpr const char* kApplicationRequirementsBundle =
+    R"RSJSONSCHEMA(@RS_SCHEMA_APPREQ_BUNDLE@)RSJSONSCHEMA";
+
+inline constexpr const char* kEnvironmentProfile =
+    R"RSJSONSCHEMA(@RS_SCHEMA_ENVPROFILE@)RSJSONSCHEMA";
+
+inline constexpr const char* kAnalysisBundle =
+    R"RSJSONSCHEMA(@RS_SCHEMA_ANALYSIS_BUNDLE@)RSJSONSCHEMA";
+
+}  // namespace rs::schema::embedded
+
+#endif  // RUNTIMESKEPTIC_CORE_SCHEMAS_EMBEDDED_HPP

@@ -37,6 +37,21 @@
       "required": [
         "size"
       ],
+      "if": {
+        "required": [
+          "exact_address_required"
+        ],
+        "properties": {
+          "exact_address_required": {
+            "const": true
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "address"
+        ]
+      },
       "properties": {
         "address": {
           "type": [

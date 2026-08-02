@@ -122,59 +122,14 @@ it cannot push.
 
 ## Now
 
-A FOURTH re-test (2026-08-02, `58f6851`, CI green 6/6) confirmed round 3 held —
-verdict, nested and canonical-hash fixes all work — then found the class the
-hand-parsers keep leaking: an independent null/container matrix accepted **36/36
-schema-invalid documents** (`assumptions:null`, a null `page_size` fact,
-`source_locations[].line:null`), a replay matrix accepted **28/111** manifests
-with wrong/missing NESTED fields, more verdict false-greens, and the guard
-itself is fail-OPEN. Four rounds of hand-fixing have each missed a different
-part of the schema. The decisive move is to stop hand-checking and validate
-against the schema itself. Full account:
-`docs/reviews/2026-08-02-independent-review.md`.
-
-### T-030 — A real schema validator gates every input `[now]`
-
-**Serves:** the whole promise — "trustworthy CI gate" cannot mean "the fields I
-remembered to check". A validator that reads `schemas/*.json` cannot forget a
-field, a null, or a nested one.
-**Plan:** `docs/PLAN.md` Phase 3 exit; the reviewer's fix order #1 (enforce the
-published schemas on ALL inputs) — properly, this time.
-**Done when:** a C++ subset validator (type incl arrays+null, required,
-properties, additionalProperties, enum, const, items, `$ref`, pattern,
-min/max, anyOf) gates rs-check (requirement+profile), rs-profile, rs-mcp and the
-rs-replay manifest; and the boundary matrix — extended to null/container and a
-manifest matrix — reports **0** with `jsonschema` as the oracle, which is the
-proof the C++ validator matches it. Schemas embedded at build via CMake, no
-Python dependency.
-**First step:** `include/runtimeskeptic/core/schema.hpp` + `src/core/schema.cpp`;
-embed via `configure_file`; run the matrix red, then gate until it is 0.
-
-### T-031 — The verdict is correct at the analyzer's edges `[now]`
-
-**Serves:** a green run must mean the right answer at the boundaries too.
-**Plan:** `docs/PLAN.md` Phase 3 exit — the incident is diagnosed correctly.
-**Done when:** golden verdicts cover and pass: `min_map_address >=
-max_user_address` is refused (contradictory bounds, not a giant SUPPORTED
-reservation); `file_length` at the uint64 boundary does not overflow to
-SUPPORTED; a missing `file_length` or `allocation_granularity = 3` does not turn
-an UNSUPPORTED into clean success; a Windows profile that rejects beyond-EOF is
-never SUPPORTED for an EOF mapping; and a stored `profile_id` that does not match
-the recomputed hash is refused by `rs-profile verify`.
-**First step:** reproduce each as a golden case (red), then fix the analyzer /
-profile parser.
-
-### T-032 — The guards fail closed, not open `[now]`
-
-**Serves:** the project's own rule — a guard that is skipped everywhere is a
-comment. CI green must PROVE the matrix ran.
-**Plan:** the "make CI the instrument" method at the top of this file.
-**Done when:** the matrix guard is an ERROR, not a skip, when its binary or
-`jsonschema` is missing in CI; `_bin` also finds `build/bin/Release`; the matrix
-counts exit 70 / a crash as NOT accepted; and the CI `jsonschema` install drops
-its `|| true`.
-**First step:** a `--require` mode on the matrix (fail if it cannot run), wired
-into `run_all.sh`; fix `_bin`; fix `tool_accepts`.
+*(empty. The fourth re-test's findings — T-030/T-031/T-032 — are closed and in
+`docs/PROGRESS.md`. The decisive one: inputs are no longer hand-checked field by
+field; they are validated against the published schema by a real C++ validator
+(`src/core/schema.cpp`, embedded at build) that gates the two domain entry
+points, and the boundary matrix PROVES that validator equals Python's
+`jsonschema` across 639 mutations — 0 divergences, 0 false-greens. Awaiting the
+reviewer's fifth re-test; nothing merged to `main`, LinkedIn still NO-GO by the
+owner. Full account: `docs/reviews/2026-08-02-independent-review.md`.)*
 
 ---
 

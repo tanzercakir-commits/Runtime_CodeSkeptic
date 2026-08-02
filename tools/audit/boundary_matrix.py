@@ -24,6 +24,12 @@ import os
 try:
     from jsonschema import Draft202012Validator
 except ImportError:
+    # Fail closed under CI (RS_MATRIX_REQUIRE=1): a missing oracle must not let
+    # the contract check pass by default. Locally it stays a convenience skip.
+    if os.environ.get("RS_MATRIX_REQUIRE") == "1":
+        print("jsonschema not installed but RS_MATRIX_REQUIRE=1; the boundary "
+              "matrix cannot run without its oracle", file=sys.stderr)
+        raise SystemExit(2)
     print("jsonschema not installed; skipping boundary matrix", file=sys.stderr)
     raise SystemExit(0)
 
@@ -31,20 +37,40 @@ REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)
 
 
 def _bin(name):
-    for c in (os.path.join(REPO, "build", "bin", name),
-              os.path.join(REPO, "build", "bin", "RelWithDebInfo", name),
-              os.path.join(REPO, "build", "bin", name + ".exe"),
-              os.path.join(REPO, "build", "bin", "RelWithDebInfo", name + ".exe")):
-        if os.path.exists(c):
-            return c
+    # Single-config generators put binaries in build/bin; multi-config ones
+    # (MSVC, Xcode) nest them under the configuration. Missing the config
+    # subdirs let the matrix "pass" by finding nothing - a fail-open the
+    # 2026-08-02 re-test caught. Every config CI builds is listed here.
+    roots = [os.path.join(REPO, "build", "bin")]
+    for cfg in ("Release", "RelWithDebInfo", "Debug", "MinSizeRel"):
+        roots.append(os.path.join(REPO, "build", "bin", cfg))
+    for root in roots:
+        for leaf in (name, name + ".exe"):
+            c = os.path.join(root, leaf)
+            if os.path.exists(c):
+                return c
     return None
 
 
 RS_CHECK = _bin("rs-check")
 RS_PROFILE = _bin("rs-profile")
+RS_REPLAY = _bin("rs-replay")
+RS_VALIDATE = _bin("rs-validate")
 
-REQ_SCHEMA = json.load(open(os.path.join(REPO, "schemas/application-requirements.v1.json")))
-PROF_SCHEMA = json.load(open(os.path.join(REPO, "schemas/environment-profile.v1.json")))
+# CI sets RS_MATRIX_REQUIRE=1: then a missing tool or missing jsonschema is a
+# hard FAILURE, not a silent skip. Locally it stays unset so a dev without
+# jsonschema can still build. The guard must fail closed exactly where it is
+# meant to catch regressions - CI.
+REQUIRE = os.environ.get("RS_MATRIX_REQUIRE") == "1"
+
+def _schema(name):
+    return json.load(open(os.path.join(REPO, "schemas", name)))
+
+
+REQ_SCHEMA = _schema("application-requirements.v1.json")
+BUNDLE_SCHEMA = _schema("application-requirements-bundle.v1.json")
+PROF_SCHEMA = _schema("environment-profile.v1.json")
+MANIFEST_SCHEMA = _schema("analysis-bundle.v1.json")
 
 # A known-good, schema-valid AND tool-valid pair to mutate from.
 BASE_REQ = {
@@ -67,12 +93,40 @@ FIXED_PROFILE = os.path.join(REPO, "profiles/measured/macos-14-arm64-native.meas
 U64_MAX = (1 << 64) - 1
 OVERFLOW = 1 << 64
 
-_req_validator = Draft202012Validator(REQ_SCHEMA)
-_prof_validator = Draft202012Validator(PROF_SCHEMA)
+# Which schema file each `which` key validates against.
+SCHEMA_OF = {
+    "req": "application-requirements.v1.json",
+    "prof": "environment-profile.v1.json",
+    "bundle": "application-requirements-bundle.v1.json",
+    "manifest": "analysis-bundle.v1.json",
+}
+
+# A registry so the bundle's cross-file $ref ("application-requirements.v1.json")
+# resolves to the requirement schema - the exact resolution the C++ Store does,
+# so the two validators are compared on equal footing.
+from referencing import Registry, Resource  # noqa: E402
+from referencing.jsonschema import DRAFT202012  # noqa: E402
+
+
+def _resource(s):
+    return Resource.from_contents(s, default_specification=DRAFT202012)
+
+
+_registry = Registry().with_resources([
+    ("application-requirements.v1.json", _resource(REQ_SCHEMA)),
+    (REQ_SCHEMA["$id"], _resource(REQ_SCHEMA)),
+])
+_VALIDATORS = {
+    "application-requirements.v1.json": Draft202012Validator(REQ_SCHEMA, registry=_registry),
+    "application-requirements-bundle.v1.json": Draft202012Validator(BUNDLE_SCHEMA, registry=_registry),
+    "environment-profile.v1.json": Draft202012Validator(PROF_SCHEMA, registry=_registry),
+    "analysis-bundle.v1.json": Draft202012Validator(MANIFEST_SCHEMA, registry=_registry),
+}
 
 
 def schema_valid(doc, which):
-    v = _req_validator if which == "req" else _prof_validator
+    """The oracle: does jsonschema accept `doc` against `which`'s schema?"""
+    v = _VALIDATORS[SCHEMA_OF[which]]
     return next(v.iter_errors(doc), None) is None
 
 
@@ -82,17 +136,45 @@ def _write(doc):
     return path
 
 
+def cpp_valid(doc, which):
+    """The C++ rs::schema validator's verdict, via the rs-validate dev tool.
+    Comparing this to schema_valid() for every mutation is the direct proof the
+    embedded validator that gates the tools agrees with jsonschema - independent
+    of any tool's hand-parser. Raises on an unexpected exit so a crash in the
+    validator cannot be mistaken for 'invalid'."""
+    path = _write(doc)
+    r = subprocess.run([RS_VALIDATE, SCHEMA_OF[which], path],
+                       capture_output=True, text=True)
+    if r.returncode == 0:
+        return True
+    if r.returncode == 65:
+        return False
+    raise RuntimeError(f"rs-validate {SCHEMA_OF[which]} exit {r.returncode}: "
+                       f"{r.stderr.strip()}")
+
+
 def tool_accepts(doc, which):
-    """True if the tool ANALYSED the doc (any verdict), False if it refused it
-    as invalid input. Exit 65 = input/schema-invalid; 64 = usage. Anything else
-    (0/1/2/3 verdict, or 0 valid for verify) means the doc was accepted."""
+    """Returns (accepted, exit_code, crashed).
+
+    ACCEPTED means the tool actually analysed the document: a verdict from
+    rs-check (0/1/2/3), or a clean verify (0) from rs-profile. 64 (usage) and 65
+    (input/schema-invalid) are a clean refusal. 70 (internal) or a signal crash
+    is neither accept nor clean-refusal - it is a defect, returned as `crashed`
+    so the caller fails on it rather than, as the old check did, folding exit 70
+    into 'accepted'."""
     path = _write(doc)
     if which == "req":
         cmd = [RS_CHECK, path, "--profile", FIXED_PROFILE, "--quiet"]
-    else:
+        accept_codes = (0, 1, 2, 3)
+    elif which == "prof":
         cmd = [RS_PROFILE, "verify", path]
+        accept_codes = (0,)
+    else:
+        raise ValueError(f"no tool wired for {which}")
     r = subprocess.run(cmd, capture_output=True, text=True)
-    return r.returncode not in (64, 65), r.returncode
+    code = r.returncode
+    crashed = code == 70 or code < 0 or code >= 128
+    return (code in accept_codes), code, crashed
 
 
 def set_path(doc, path, value):
@@ -285,27 +367,64 @@ PROF_FIELDS += [
 ]
 
 
+# Applied to EVERY field path on top of its typed battery, so the null-and-
+# container class the 2026-08-02 re-test found (36/36 accepted) is exercised on
+# each field, not only the ones someone thought to list.
+CONTAINER_VALUES = [
+    ("sweep-null", None), ("sweep-object", {}),
+    ("sweep-array", []), ("sweep-true", True),
+]
+
+
 def run(which, base, fields):
+    """Row = (path, label, schema_valid, cpp_valid, tool_accepts, exit, crashed)."""
     rows = []
     for path, battery in fields:
-        for label, value in battery:
+        for label, value in list(battery) + CONTAINER_VALUES:
             doc = set_path(base, path, value)
             sv = schema_valid(doc, which)
-            ta, code = tool_accepts(doc, which)
-            rows.append((".".join(path), label, sv, ta, code))
+            cv = cpp_valid(doc, which)
+            ta, code, crashed = tool_accepts(doc, which)
+            rows.append((".".join(path), label, sv, cv, ta, code, crashed))
     return rows
 
 
 def report(which, rows):
-    fg = [r for r in rows if not r[2] and r[3]]      # schema-invalid, accepted
-    os_ = [r for r in rows if r[2] and not r[3]]     # schema-valid, rejected
+    div = [r for r in rows if r[2] != r[3]]           # jsonschema vs C++ validator
+    fg = [r for r in rows if not r[2] and r[4]]       # schema-invalid, tool accepted
+    os_ = [r for r in rows if r[2] and not r[4]]      # schema-valid, tool rejected
+    cr = [r for r in rows if r[6]]                     # tool crashed (exit 70/signal)
     print(f"\n=== {which.upper()} : {len(rows)} cases ===")
-    print(f"  schema-invalid ACCEPTED (false-green): {len(fg)}")
-    print(f"  schema-valid   REJECTED (over-strict): {len(os_)}")
-    for tag, group in (("FALSE-GREEN", fg), ("OVER-STRICT", os_)):
-        for path, label, sv, ta, code in group:
-            print(f"    {tag:11} {path}={label:14} schema_valid={sv} tool_exit={code}")
-    return len(fg), len(os_)
+    print(f"  validator != jsonschema (divergence):  {len(div)}")
+    print(f"  schema-invalid ACCEPTED (false-green):  {len(fg)}")
+    print(f"  schema-valid   REJECTED (over-strict):  {len(os_)}")
+    print(f"  tool crashed on input:                  {len(cr)}")
+    for tag, group in (("DIVERGENCE", div), ("FALSE-GREEN", fg),
+                       ("OVER-STRICT", os_), ("CRASH", cr)):
+        for path, label, sv, cv, ta, code, crashed in group:
+            print(f"    {tag:11} {path}={label:16} "
+                  f"jsonschema={sv} cpp={cv} tool_exit={code}")
+    return len(div) + len(fg) + len(os_) + len(cr)
+
+
+def run_validator_only(which, base, fields):
+    """Prove the C++ validator == jsonschema for a schema whose tool path is
+    driven elsewhere (the manifest: rs-replay also recomputes hashes, so a
+    mutated manifest cannot isolate a schema rejection here). Compares cpp_valid
+    to schema_valid for each mutation; reports the divergences."""
+    rows = []
+    for path, battery in fields:
+        for label, value in list(battery) + CONTAINER_VALUES:
+            doc = set_path(base, path, value)
+            sv = schema_valid(doc, which)
+            cv = cpp_valid(doc, which)
+            rows.append((".".join(path), label, sv, cv))
+    div = [r for r in rows if r[2] != r[3]]
+    print(f"\n=== {which.upper()} (validator vs jsonschema) : {len(rows)} cases ===")
+    print(f"  validator != jsonschema (divergence):  {len(div)}")
+    for path, label, sv, cv in div:
+        print(f"    DIVERGENCE  {path}={label:16} jsonschema={sv} cpp={cv}")
+    return len(div)
 
 
 # ---------------------------------------------------------------------------
@@ -371,19 +490,129 @@ def run_golden():
     return bad
 
 
+# --- manifest (analysis-bundle.v1): the document rs-replay reads back. The
+# re-test found 28/111 nested-field mutations accepted (host.os, schema_versions
+# .*, analysis_options.report_unknowns, replay.*). A real, valid manifest is
+# generated from the tool and mutated field by field; the C++ validator must
+# match jsonschema on every one. ---
+def make_base_manifest():
+    bdir = os.path.join("/tmp", "bm_manifest_bundle")
+    subprocess.run(["rm", "-rf", bdir])
+    req = _write(BASE_REQ)
+    r = subprocess.run([RS_CHECK, req, "--profile", FIXED_PROFILE,
+                        "--bundle", bdir, "--quiet", "-o", "/tmp/bm_rep.txt"],
+                       capture_output=True, text=True)
+    mpath = os.path.join(bdir, "manifest.json")
+    if r.returncode not in (0, 1, 2, 3) or not os.path.exists(mpath):
+        raise RuntimeError(f"could not generate a base manifest (exit "
+                           f"{r.returncode}): {r.stderr.strip()}")
+    return json.load(open(mpath))
+
+
+MANIFEST_FIELDS = [
+    (("tool_version",), STR_BATTERY + [("valid", "1.2.3")]),
+    (("overall",), ENUM_BADS + [("valid", "SUPPORTED")]),
+    (("host", "os"), STR_BATTERY + [("valid", "linux")]),
+    (("host", "process_arch"), STR_BATTERY + [("valid", "x86_64")]),
+    (("host", "profile_id"),
+     [("no-prefix", "abc"), ("number", 5), ("null", None),
+      ("valid", "sha256:" + "0" * 64)]),
+    (("host", "translation_mode"), STR_BATTERY + [("valid", "none")]),
+    (("schema_versions", "profile"), STR_BATTERY + [("valid", "x")]),
+    (("schema_versions", "requirement"), STR_BATTERY + [("valid", "x")]),
+    (("schema_versions", "result"), STR_BATTERY + [("valid", "x")]),
+    (("analysis_options", "report_unknowns"), BOOL_BATTERY + [("valid", True)]),
+    (("replay", "status"),
+     [("bad", "frobnicate"), ("number", 5), ("valid", "reproduced")]),
+    (("replay", "finding_ids_match"), BOOL_BATTERY + [("valid", True)]),
+    (("replay", "recorded_overall"), STR_BATTERY + [("valid", "SUPPORTED")]),
+    (("finding_ids",),
+     [("valid", ["RS-VM-0001"]), ("bad-pattern", ["nope"]),
+      ("item-number", [5]), ("not-array", "RS-VM-0001")]),
+]
+
+
+def run_verify_integrity():
+    """Profile-level semantic rejections the schema cannot state: a contradictory
+    address space, and a stored profile_id that no longer matches the facts. Both
+    verified with exit 0 on the 2026-08-02 re-test; both must now refuse (exit 65).
+    A real, self-consistent profile must still verify (exit 0)."""
+    print("\n=== VERIFY INTEGRITY ===")
+    base = json.load(open(FIXED_PROFILE))
+    real_id = base.get("profile_id")
+
+    contradictory = copy.deepcopy(base)
+    contradictory.setdefault("virtual_memory", {})
+    contradictory["virtual_memory"]["min_map_address"] = {
+        "value": "0xffff000000000000", "evidence": "measured_capability"}
+    contradictory["virtual_memory"]["max_user_address"] = {
+        "value": "0x1000", "evidence": "measured_capability"}
+    contradictory.pop("profile_id", None)  # id would also mismatch; isolate the bound
+
+    tampered = copy.deepcopy(base)
+    tampered["profile_id"] = "sha256:" + "0" * 64
+
+    cases = [
+        ("contradictory min>=max refused", contradictory, 65),
+        ("tampered profile_id refused", tampered, 65),
+        ("a self-consistent profile still verifies", base, 0),
+    ]
+    bad = 0
+    for label, prof, want in cases:
+        pp = os.path.join("/tmp", "bm_verify.json")
+        json.dump(prof, open(pp, "w"))
+        r = subprocess.run([RS_PROFILE, "verify", pp], capture_output=True, text=True)
+        ok = r.returncode == want
+        if not ok:
+            bad += 1
+            print(f"  WRONG  {label:44} want exit {want}, got {r.returncode}")
+        else:
+            print(f"  ok     {label:44} exit {r.returncode}")
+    if real_id is None:
+        print("  note: fixed profile carries no profile_id; tamper case still valid")
+    print(f"  verify integrity mismatches: {bad}")
+    return bad
+
+
+def _require_binaries():
+    """Under RS_MATRIX_REQUIRE=1 a missing tool is a hard failure; the whole
+    point of the guard is to catch a regression in CI, where the tools are
+    always built. Returns an exit code to fail with, or None to proceed."""
+    missing = [n for n, b in (("rs-check", RS_CHECK), ("rs-profile", RS_PROFILE),
+                              ("rs-replay", RS_REPLAY), ("rs-validate", RS_VALIDATE))
+               if b is None]
+    if not missing:
+        return None
+    msg = "boundary matrix: missing built binaries: " + ", ".join(missing)
+    if REQUIRE:
+        print(msg + " (RS_MATRIX_REQUIRE=1 -> failing, not skipping)",
+              file=sys.stderr)
+        return 2
+    print(msg + " (build the tools to run it; skipping)", file=sys.stderr)
+    return 0
+
+
 def main():
-    if RS_CHECK is None or RS_PROFILE is None:
-        print("rs-check / rs-profile not built; skipping boundary matrix "
-              "(build the tools to run it)", file=sys.stderr)
-        return 0
+    guard = _require_binaries()
+    if guard is not None:
+        return guard
+
     total = 0
     for which, base, fields in (("req", BASE_REQ, REQ_FIELDS),
                                 ("prof", BASE_PROF, PROF_FIELDS)):
-        rows = run(which, base, fields)
-        fg, os_ = report(which, rows)
-        total += fg + os_
+        total += report(which, run(which, base, fields))
+
+    # Manifest: prove the validator matches jsonschema across the nested fields.
+    try:
+        base_manifest = make_base_manifest()
+        total += run_validator_only("manifest", base_manifest, MANIFEST_FIELDS)
+    except RuntimeError as e:
+        print(f"\n=== MANIFEST : could not run ({e}) ===", file=sys.stderr)
+        total += 1  # fail closed: an un-runnable manifest check is not a pass
+
     total += run_golden()
-    print(f"\nTOTAL disagreements + verdict mismatches: {total}")
+    total += run_verify_integrity()
+    print(f"\nTOTAL disagreements + divergences + verdict mismatches: {total}")
     return 0 if total == 0 else 1
 
 

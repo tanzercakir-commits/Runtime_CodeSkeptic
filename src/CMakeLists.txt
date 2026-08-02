@@ -1,16 +1,42 @@
 # SPDX-License-Identifier: Apache-2.0
 
 # ---------------------------------------------------------------------------
+# Embedded schemas. The published contract ships INSIDE the binary: the tools
+# validate every input against these before any hand-parser runs, and an
+# installed binary must not depend on schemas/*.json being on disk. configure_
+# file substitutes each schema's bytes into a raw string literal; re-running
+# when a schema changes is forced by CONFIGURE_DEPENDS below.
+# ---------------------------------------------------------------------------
+set(RS_SCHEMA_DIR ${CMAKE_SOURCE_DIR}/schemas)
+file(READ ${RS_SCHEMA_DIR}/application-requirements.v1.json RS_SCHEMA_APPREQ)
+file(READ ${RS_SCHEMA_DIR}/application-requirements-bundle.v1.json RS_SCHEMA_APPREQ_BUNDLE)
+file(READ ${RS_SCHEMA_DIR}/environment-profile.v1.json RS_SCHEMA_ENVPROFILE)
+file(READ ${RS_SCHEMA_DIR}/analysis-bundle.v1.json RS_SCHEMA_ANALYSIS_BUNDLE)
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
+    ${RS_SCHEMA_DIR}/application-requirements.v1.json
+    ${RS_SCHEMA_DIR}/application-requirements-bundle.v1.json
+    ${RS_SCHEMA_DIR}/environment-profile.v1.json
+    ${RS_SCHEMA_DIR}/analysis-bundle.v1.json)
+set(RS_GENERATED_DIR ${CMAKE_BINARY_DIR}/generated)
+configure_file(
+    ${CMAKE_CURRENT_SOURCE_DIR}/core/schemas_embedded.hpp.in
+    ${RS_GENERATED_DIR}/runtimeskeptic/core/schemas_embedded.hpp
+    @ONLY)
+
+# ---------------------------------------------------------------------------
 # rs_core - JSON, hashing, evidence model. No platform dependencies.
 # ---------------------------------------------------------------------------
 add_library(rs_core STATIC
     core/json.cpp
     core/sha256.cpp
     core/evidence.cpp
-    core/io.cpp)
+    core/io.cpp
+    core/schema.cpp
+    core/schema_registry.cpp)
 
 target_include_directories(rs_core PUBLIC
-    $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include>)
+    $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include>
+    $<BUILD_INTERFACE:${RS_GENERATED_DIR}>)
 target_link_libraries(rs_core PRIVATE rs_warnings PUBLIC rs_platform)
 add_library(RuntimeSkeptic::core ALIAS rs_core)
 

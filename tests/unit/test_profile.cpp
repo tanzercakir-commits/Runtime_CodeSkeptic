@@ -707,4 +707,39 @@ RS_TEST(a_file_offset_that_overflows_is_unsupported_not_supported) {
     RS_CHECK(analyze(*req, *prof, {}).overall == SupportLevel::Unsupported);
 }
 
+RS_TEST(a_profile_with_min_map_at_or_above_max_user_is_refused) {
+    // 2026-08-02 re-test, verdict group: a profile whose lowest mappable address
+    // sits at or above the exclusive upper bound of user space describes an
+    // impossible address space, yet it loaded and verified with exit 0. from_json
+    // must refuse it, so no verdict is ever derived from contradictory bounds.
+    std::string error;
+    auto bad = json::parse(R"({"schema":"runtime-skeptic.environment-profile.v1",
+        "origin":"measured","platform":{"os":"linux","process_arch":"x86_64"},
+        "virtual_memory":{
+            "min_map_address":{"value":"0xffff000000000000","evidence":"measured_capability"},
+            "max_user_address":{"value":"0x1000","evidence":"measured_capability"}}})");
+    RS_CHECK(bad.ok());
+    auto prof = EnvironmentProfile::from_json(*bad.value, error);
+    RS_CHECK_MESSAGE(!prof.has_value(),
+                     "a contradictory address space was accepted");
+    RS_CHECK(error.find("max_user_address") != std::string::npos);
+
+    // The boundary case min == max is still empty space, so it is refused too.
+    auto edge = json::parse(R"({"schema":"runtime-skeptic.environment-profile.v1",
+        "origin":"measured","platform":{"os":"linux","process_arch":"x86_64"},
+        "virtual_memory":{
+            "min_map_address":{"value":"0x1000","evidence":"measured_capability"},
+            "max_user_address":{"value":"0x1000","evidence":"measured_capability"}}})");
+    RS_CHECK(!EnvironmentProfile::from_json(*edge.value, error).has_value());
+
+    // A normal ordering (min below max) still loads.
+    auto good = json::parse(R"({"schema":"runtime-skeptic.environment-profile.v1",
+        "origin":"measured","platform":{"os":"linux","process_arch":"x86_64"},
+        "virtual_memory":{
+            "min_map_address":{"value":"0x1000","evidence":"measured_capability"},
+            "max_user_address":{"value":"0x7ffffffff000","evidence":"measured_capability"}}})");
+    RS_CHECK_MESSAGE(EnvironmentProfile::from_json(*good.value, error).has_value(),
+                     error);
+}
+
 RS_TEST_MAIN("profile")
