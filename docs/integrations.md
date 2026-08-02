@@ -9,10 +9,54 @@ Everything on this page is optional.
 
 | | State |
 |---|---|
-| MCP server (`rs-mcp`) | implemented, 17 protocol tests |
-| Bundle consumption (`rs-check`) | implemented, 11 tests, fixture checked in |
+| MCP server (`rs-mcp`) | implemented, 25 protocol tests |
+| Evidence bundles (`rs-check --bundle`, `rs-replay`) | implemented, round-trip tested across a process boundary in CI, fixture checked in |
 | CodeSkeptic producer side | **written but not merged upstream** - see below |
 | SARIF, GitHub Action, runtime monitor | later phases |
+
+---
+
+## Command-line tools
+
+Five executables, each doing one thing. `--help` on any of them prints its full
+flag list; this table is the map, and it is what the README means by "all tools
+and flags".
+
+| Tool | Does | Key invocation |
+|---|---|---|
+| `rs-check` | evaluate a requirement, or a whole bundle, against a host profile | `rs-check REQUIREMENT.json --profile PROFILE.json [--format text\|json\|markdown] [--output FILE] [--bundle DIR] [--no-unknowns] [--quiet] [--color]` |
+| `rs-env-probe` | measure this host's virtual-memory behaviour into a profile | `rs-env-probe vm [--name NAME] [--output FILE] [--no-scan] [--no-faulting-tests] [--canonical]` |
+| `rs-profile` | inspect and compare profiles | `rs-profile verify\|id\|diff\|impact PROFILE.json …` |
+| `rs-replay` | re-derive a verdict from an evidence bundle and confirm it reproduces | `rs-replay BUNDLE_DIR` |
+| `rs-mcp` | the same capabilities as a Model Context Protocol server | `rs-mcp --serve` |
+
+Exit codes are uniform where they can be: `rs-check`, `rs-profile impact` and
+`rs-replay` all use `1` for a substantive negative (UNSUPPORTED / a regression /
+a bundle that did not reproduce), `65` for input that could not be read or did
+not satisfy its schema, and `64` for a usage error. `rs-replay` returns `0` only
+when the bundle re-derives its own verdict and finding IDs from its own bytes.
+
+### Evidence bundles: `rs-check --bundle`, then `rs-replay`
+
+`rs-check --bundle DIR` writes a self-contained, hash-sealed record of one
+analysis — the requirement, the profile, the findings, a rendered report, and a
+`manifest.json` of SHA-256 hashes — and re-runs the analysis from the written
+files to certify it reproduces *before* the bundle is trusted. `rs-replay DIR`
+then reads only that directory and re-derives the verdict, so a result can be
+checked on a machine that never saw the original inputs:
+
+```console
+$ rs-check contract.json --profile host.json --bundle ./evidence
+rs-check: wrote evidence bundle to './evidence' (replay: reproduced)
+
+$ rs-replay ./evidence          # exit 0 = reproduced
+```
+
+`rs-replay` refuses the bundle — exit 1 or 65, never a silent pass — if a stored
+file was edited after sealing (its hash no longer matches), if the manifest's
+recorded verdict disagrees with the re-derived one, or if the bundle is missing
+a file or hash the schema requires. An incomplete bundle is rejected, not
+accepted as vacuously verified.
 
 ---
 
