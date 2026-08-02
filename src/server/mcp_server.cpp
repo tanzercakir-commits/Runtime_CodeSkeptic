@@ -75,10 +75,37 @@ const std::string* string_arg(const Value* args, const char* key) {
     return &node->as_string();
 }
 
-bool bool_arg(const Value* args, const char* key, bool fallback) {
-    const std::string* raw = string_arg(args, key);
-    if (raw == nullptr) return fallback;
-    return *raw == "true" || *raw == "1" || *raw == "yes";
+// A tri-state read of a boolean argument. The tool schemas type every property
+// as a string (the CodeSkeptic convention), so "true"/"false" arrive as text;
+// a real JSON boolean is honoured too. Anything else - crucially a typo like
+// "treu" - is NOT silently coerced to false: that silence hid a findings
+// suppression in the independent review (B4d), where report_unknowns:"treu"
+// quietly turned into report_unknowns=false.
+bool read_bool_arg(const Value* args, const char* key, bool fallback, bool& out,
+                   std::string& error) {
+    const Value* node = args == nullptr ? nullptr : args->find(key);
+    if (node == nullptr || node->is_null()) {
+        out = fallback;
+        return true;
+    }
+    if (node->is_bool()) {
+        out = node->as_bool();
+        return true;
+    }
+    if (node->is_string()) {
+        const std::string& s = node->as_string();
+        if (s == "true" || s == "1" || s == "yes") {
+            out = true;
+            return true;
+        }
+        if (s == "false" || s == "0" || s == "no") {
+            out = false;
+            return true;
+        }
+    }
+    error = std::string("argument '") + key +
+            "' must be a boolean (\"true\" or \"false\")";
+    return false;
 }
 
 // Documents may arrive either as a path or inline. Inline matters for agents
@@ -268,8 +295,13 @@ Value handle_tools_list(const Value& id) {
 
 Value run_probe_host(const Value& id, const Value* args) {
     probe::Options options;
-    options.scan_address_space = bool_arg(args, "scan_address_space", true);
-    options.run_faulting_tests = bool_arg(args, "faulting_tests", true);
+    std::string arg_error;
+    if (!read_bool_arg(args, "scan_address_space", true,
+                       options.scan_address_space, arg_error) ||
+        !read_bool_arg(args, "faulting_tests", true, options.run_faulting_tests,
+                       arg_error)) {
+        return make_error(id, -32602, arg_error);
+    }
 
     probe::Result result = probe::probe_virtual_memory(options);
     result.profile.run.tool_version = kToolVersion;
@@ -335,12 +367,21 @@ Value run_check_requirement(const Value& id, const Value* args) {
     }
 
     vm::AnalysisOptions options;
-    options.report_unknowns = bool_arg(args, "report_unknowns", true);
-    const vm::AnalysisResult analysis =
-        vm::analyze(*requirement, *profile, options);
+    std::string arg_error;
+    if (!read_bool_arg(args, "report_unknowns", true, options.report_unknowns,
+                       arg_error)) {
+        return make_error(id, -32602, arg_error);
+    }
 
     const std::string* format = string_arg(args, "format");
     const std::string chosen = format == nullptr ? "json" : *format;
+    if (chosen != "json" && chosen != "markdown" && chosen != "text") {
+        return make_error(id, -32602,
+                          "format must be \"json\", \"markdown\", or \"text\"");
+    }
+
+    const vm::AnalysisResult analysis =
+        vm::analyze(*requirement, *profile, options);
 
     Value payload = Value::object();
     payload["verdict"] = std::string(rs::to_string(analysis.overall));
@@ -638,6 +679,28 @@ std::string handle_mcp_message(const std::string& line) {
     // get no response at all - not even an error.
     const bool is_notification = id_node == nullptr;
     const Value id = id_node != nullptr ? *id_node : Value();
+
+    // JSON-RPC 2.0 §4: an id, when present, MUST be a string, a number, or
+    // null. An object/array/boolean id is a malformed request, and the reply
+    // carries a null id because the client's id cannot be echoed. Accepting
+    // any id type was part of what the independent review flagged (B4d).
+    if (!is_notification &&
+        !(id.is_string() || id.is_number() || id.is_null())) {
+        return serialize(make_error(Value(), -32600,
+                                    "id must be a string, number, or null"));
+    }
+
+    // JSON-RPC 2.0 §4: every request object MUST carry "jsonrpc": "2.0". A
+    // missing or wrong version was previously accepted (B4d). A notification
+    // still gets no reply, even when its version is wrong.
+    const Value* version = message.find("jsonrpc");
+    const bool version_ok = version != nullptr && version->is_string() &&
+                            version->as_string() == "2.0";
+    if (!version_ok) {
+        if (is_notification) return {};
+        return serialize(
+            make_error(id, -32600, "jsonrpc version must be \"2.0\""));
+    }
 
     const Value* method_node = message.find("method");
     if (method_node == nullptr || !method_node->is_string()) {

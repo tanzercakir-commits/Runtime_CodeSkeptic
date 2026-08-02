@@ -135,10 +135,19 @@ in `tests/unit/test_evidence_bundle.cpp`.
   same `/WX` config fails to compile on VS2022/MSVC 19.44 at
   `tests/unit/test_arena_walk.cpp:639` (C4127). State a minimum MSVC or add
   VS2022 to the matrix.
-- **B4d — MCP over-tolerant** · TRACKED. Invalid JSON-RPC versions / id types and
-  bad tool arguments are accepted; e.g. `report_unknowns: "treu"` silently hides
-  findings. Does not meet JSON-RPC 2.0 / MCP lifecycle. Apply the same input
-  strictness to the MCP surface.
+- **B4d — MCP over-tolerant** · FIXED. Invalid JSON-RPC versions / id types and
+  bad tool arguments were accepted; `report_unknowns: "treu"` silently became
+  false and suppressed the findings an agent asked to see. Fixed in
+  `src/server/mcp_server.cpp` on three fronts: (1) every request must carry
+  `"jsonrpc": "2.0"` or it is rejected -32600 (a notification still gets no
+  reply); (2) an `id`, when present, must be a string, number, or null, else
+  -32600 with a null id echoed back; (3) a boolean argument must be a recognized
+  spelling - a typo like `"treu"` is now -32602 naming the argument, not a silent
+  `false` - and an unknown `format` is rejected rather than defaulted. Unknown
+  argument KEYS are still tolerated on the MCP surface (unlike profile facts,
+  whose schema is `additionalProperties:false`): MCP clients legitimately attach
+  metadata, so the fix validates argument VALUES, not the presence of extra keys.
+  Six regressions in `tests/unit/test_mcp.cpp` cover both directions.
 
 ## Discovered while fixing (not in the original review)
 
@@ -166,7 +175,7 @@ warn when a stored `profile_id` disagrees with the recompute. Adjacent to B4b
 ## Fix order (the reviewer's, and it is right)
 
 1. Enforce the published JSON Schemas on ALL CLI and MCP inputs — A1 (requirement
-   parser) and A2 (profile parser) DONE; the MCP surface (B4d) remains.
+   parser), A2 (profile parser) and the MCP surface (B4d) all DONE.
 2. Bundle all-or-nothing; one rejected entry ⇒ non-clean exit (A4). DONE.
 3. `rs-replay` rejects missing manifest/hash/output files (A3). DONE.
 4. Then Windows quickstart, stale docs, profile provenance (B group).
