@@ -206,10 +206,23 @@ Two honest cautions before anyone treats this as a number to drive down:
   compares a prediction against what the kernel actually did; a case constructed
   so the prediction is trivially right adds a green row and no information.
 
-**First step:** take the four rules whose ground-truth case is most obviously
-constructible (`RS-VM-0005`, `RS-VM-0006`, `RS-VM-0009`, `RS-VM-0010` are
-plain-mapping properties) and write one case each. Then re-read the bucket and
-decide whether the rest are backlog or reasons.
+**First step, corrected by measurement (2026-08-02).** The old first step named
+`RS-VM-0005/0006/0009/0010` as "obviously constructible". Running the coverage
+tool across ALL measured profiles rather than one Linux host showed three of
+those four were already covered — `0005` fires on macOS/Windows/Wine, `0006` and
+`0009` on native macOS arm64 — because a rule that fires only on a host unlike
+this one is not synthetic-only, the single-profile run just could not see it.
+`RS-VM-0010` was the honest gap and it turned out to be a *reason*, not a case:
+it fires only when `anonymous_executable_mapping` is false (a host that forbids
+executable anonymous memory outright), and all five profiles measure it true, so
+no runner here can make it fire. It now sits in the "not checkable by execution"
+list with that reason. The remaining synthetic-only backlog is `RS-VM-0016,
+0019, 0020, 0022, 0023, 0025, 0026`. `0016` and `0025` already have their
+reasons written (T-020) and likely belong beside `0010`; `0026` is executed in
+the `RLIMIT_AS` constrained lane (`reservation-above-granted-1tib`), so it is
+covered in CI though not in an unconstrained profile. The genuine remaining work
+is `0019/0020/0022/0023`: read each, and for each decide a constructible case or
+a written reason — the same fork this step just walked for `0010`.
 
 ### T-008 — Fleet aggregation `[later]`
 

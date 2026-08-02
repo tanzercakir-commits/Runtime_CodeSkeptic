@@ -16,6 +16,41 @@ re-litigated; a mistake recorded here does not need to be re-made.
 
 ---
 
+## 2026-08-02 — T-021: the synthetic-only bucket was smaller than it looked, and RS-VM-0010 was a reason not a case
+
+On branch `t-021-groundtruth-coverage` (not merged; work in progress).
+
+**What changed.** `tools/campaign/groundtruth_coverage.py` now lists `RS-VM-0010`
+in the "not checkable by execution" bucket with its reason, moving it off the
+synthetic-only backlog. `docs/TODO.md` T-021's first step is corrected to match.
+
+**What was learned, and it corrects a stale premise.** T-021's first step named
+`RS-VM-0005/0006/0009/0010` as "obviously constructible" ground-truth cases.
+Running the coverage tool the way it is written to be run — across *all* measured
+profiles, not the single Linux host — showed the premise was wrong three times
+over. `0005` is already executed on macOS/Windows/Wine, `0006` and `0009` on
+native macOS arm64. A rule that fires only on a host unlike this one is not
+"never shown a kernel"; a one-profile run simply cannot see it. The true
+synthetic-only backlog was 8, not the larger number a Linux-only run reports (it
+had said 14).
+
+`RS-VM-0010` was the one genuine gap among the four, and it is a *reason*, not a
+missing case. It fires only when `anonymous_executable_mapping` is false — a host
+that forbids executable anonymous memory outright (SELinux `deny_execmem`, PaX
+MPROTECT, a seccomp `PROT_EXEC` denial). This is a different fact from W^X:
+macOS grants R-X anonymous memory and still measures the field true. All five
+profiles (Linux, macOS native + Rosetta, Windows, Wine) measure it true, so no
+runner this project reaches can make the rule fire. Same shape as `RS-VM-0016`:
+the reason is the host, not the case. A constructed case that cannot fail would
+be worse than none, which is precisely what T-021 warns against.
+
+**What to do next.** Backlog is now `RS-VM-0016, 0019, 0020, 0022, 0023, 0025,
+0026`. `0016`/`0025` already have written reasons (T-020) and likely belong in
+the not-checkable list beside `0010`; `0026` is executed in the `RLIMIT_AS`
+constrained lane. The genuine remaining fork-per-rule is `0019/0020/0022/0023`:
+a constructible case or a written reason for each. Do it the way `0010` was done
+— measure across all profiles first, then decide.
+
 ## 2026-08-01 — a committed measurement outlived its instrument (found by an external run)
 
 **Changed.** Both committed macOS profiles regenerated from the current CI

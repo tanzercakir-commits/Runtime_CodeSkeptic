@@ -59,6 +59,20 @@ NOT_EXECUTABLE = {
                   "host response",
     "RS-VM-0024": "fires precisely because the constraint is not evaluable "
                   "from a profile; an execution cannot settle it either",
+    # RS-VM-0010 fires only when anonymous_executable_mapping is FALSE - a host
+    # that refuses executable anonymous memory outright (SELinux deny_execmem,
+    # PaX MPROTECT, a seccomp policy denying PROT_EXEC on anon). That is a
+    # different fact from W^X: macOS grants R-X anon and still measures true.
+    # Every profile this project can reach - Linux, macOS native and Rosetta,
+    # Windows, Wine - measures it TRUE, so no execution here can make the rule
+    # fire. Same shape as RS-VM-0016: the reason is the host, not the case, and
+    # once written down it belongs here rather than in the backlog. A hardened
+    # lane could move it back; until one exists, this is the honest bucket.
+    "RS-VM-0010": "fires only when anonymous_executable_mapping is false - a "
+                  "host that forbids executable anonymous memory entirely "
+                  "(SELinux deny_execmem / PaX MPROTECT / seccomp). Every "
+                  "runner this project reaches grants it; measured true on all "
+                  "five profiles, so a measurement cannot produce the case",
 }
 
 
