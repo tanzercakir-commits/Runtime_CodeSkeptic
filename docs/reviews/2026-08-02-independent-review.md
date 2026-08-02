@@ -12,6 +12,18 @@ chains, the UNKNOWN discipline, remediation and "will not work" sections are
 not yet trustworthy as a production CI gate.** That framing is correct and is
 now the release posture.
 
+## Resolution status — all findings fixed, awaiting re-test
+
+Every finding below is **FIXED**: the five false-green / trust blockers
+(A1, A2, A3, A4, A5), all seven documentation/build/MCP items (B1, B2, B3, B4a,
+B4b, B4c, B4d), and one defect discovered while fixing (D1, a stale `profile_id`
+on the tracked Wine profile). The work spans commits `861f6af` (A1/A5) through
+`82d5d58` (B4a) on the `fix/review-hardening` branch, each with regression tests
+where a test could pin the behaviour. Nothing is merged to `main`: the branch is
+waiting on the reviewer's re-test, per the standing rule that nothing reaches
+`main` until it is confirmed to work. Every finding's own entry below carries the
+specific fix and commit.
+
 ## Confirmed working (recorded so the fixes do not regress them)
 
 - Clean clone + default VS2022/MSVC build succeeds; 15/15 CTest.
@@ -112,29 +124,34 @@ in `tests/unit/test_evidence_bundle.cpp`.
 
 ## B — documentation, provenance, build, MCP (real, not false-green)
 
-- **B1 — Windows quickstart** · TRACKED. README's `&&` and `\` line
-  continuation are not PowerShell 5.1; the default VS generator writes to
-  `build/bin/Debug/`, not `build/bin/`. Give a PowerShell-correct path and note
-  the Debug/Release subdir.
-- **B2 — problem_statement.md drift** · TRACKED. <!-- checked: 2026-08-02 -->
-  README links it as the "Full pitch"; that document still describes a state
-  with no probe, no CLI and a stub Windows build — the opposite of the current
-  product. Serious drift; rewrite or relink.
-- **B3 — profile provenance** · TRACKED. README lists five *measured*
-  environments including Linux, but `profiles/measured/` has **no Linux profile**
-  (Linux lives under `profiles/generated/`); the provenance table in
-  `profiles/measured/README.md` omits the Windows and Wine files. Correct the
-  README claim (measured vs generated) and complete the table.
-- **B4a — integrations.md** · TRACKED. Linked as "All tools and flags" but does
-  not document `rs-replay` or many CLI options.
-- **B4b — empty provenance fields** · TRACKED. `probe_binary_hash` is empty on
-  new and shipped profiles; `run_id` is empty on Windows/Wine, though
-  `docs/architecture/determinism.md` (line 283) says the binary hash records
-  which probe took the measurement.
-- **B4c — MSVC minimum** · TRACKED. CI passes on floating VS2026/MSVC 19.51; the
-  same `/WX` config fails to compile on VS2022/MSVC 19.44 at
-  `tests/unit/test_arena_walk.cpp:639` (C4127). State a minimum MSVC or add
-  VS2022 to the matrix.
+- **B1 — Windows quickstart** · FIXED. `&&` and the `\` continuation are POSIX,
+  not PowerShell 5.1, and the VS generator writes to a per-config subdir. README
+  now carries a PowerShell block: one command per line, a named `--config`, and
+  the `build\bin\Release\` (or `Debug`) path. Commit `944a907`.
+- **B2 — problem_statement.md drift** · FIXED. <!-- checked: 2026-08-02 --> The
+  "Full pitch" still described a state with no probe, no CLI and an unwired
+  build. Corrected: Status is now "v0.1 built and shipping"; the out-of-scope
+  `rs-env-probe` row and the false "the build is not wired up" gap are gone; the
+  stale "8-entry" corpus claim now defers to the guard-computed figure. Commit
+  `3c38ecc`.
+- **B3 — profile provenance** · FIXED. README no longer lists Linux as a shipped
+  measured profile (it is CI-measured to `refs/measurements/*`, not checked in),
+  and `profiles/measured/README.md` gained the Windows and Wine provenance rows.
+  Commit `944a907`.
+- **B4a — integrations.md** · FIXED. Added a Command-line tools reference (all
+  five executables and their flags) and an Evidence-bundles section documenting
+  `rs-replay` and exactly when it refuses a bundle. Commit `82d5d58`.
+- **B4b — empty provenance fields** · FIXED. `determinism.md` and the profiles
+  README now state the truth instead of overclaiming: `run_id` on the macOS
+  lanes only, `probe_binary_hash` empty everywhere (the probe does not hash its
+  own image yet), none of it part of `profile_id`. Commit `944a907`. See also D1.
+- **B4c — MSVC minimum** · FIXED. Rather than pin a minimum, the actual C4127
+  false positive is suppressed at the `RS_CHECK`/`RS_CHECK_MESSAGE` macros
+  (`tests/test_support.hpp`), so the `/WX` build is portable across MSVC versions
+  and the whole class is covered, not just line 639. `_MSC_VER`-guarded, a no-op
+  on GCC/Clang. Commit `4fae159`. Follow-up worth doing once a Windows runner can
+  confirm it: add a pinned `windows-2022` lane so CI exercises 19.44 directly —
+  left out here because it cannot be verified from this environment.
 - **B4d — MCP over-tolerant** · FIXED. Invalid JSON-RPC versions / id types and
   bad tool arguments were accepted; `report_unknowns: "treu"` silently became
   false and suppressed the findings an agent asked to see. Fixed in
