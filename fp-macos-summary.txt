@@ -1,0 +1,34 @@
+observed: python3
+observed: perl
+observed: ruby
+skipped: php (no php on this host)
+observed: git
+observed: openssl
+observed: jq
+skipped: redis (no redis-server on this host)
+observed: gzip
+observed: xz
+skipped: ffmpeg (no ffmpeg on this host)
+observed: node-jit
+observed: java-jit
+========================================================================
+FALSE-POSITIVE RATE against observed, successful requests
+========================================================================
+
+SHAPE  (10 program(s), 17 requirement(s) evaluated, 0 rejected before evaluation)
+   SUPPORTED                     17  100.0%
+   CONDITIONALLY_SUPPORTED        0    0.0%
+   UNKNOWN                        0    0.0%
+   UNSUPPORTED                    0    0.0%
+   -------------------------- -----
+   FALSE POSITIVES                0    0.0%   <- every UNSUPPORTED here contradicts an observation
+   answered nothing (UNKNOWN)     0    0.0%   <- read this before believing the line above
+
+========================================================================
+
+wrote /tmp/fp-macos/false-positive-rate.json
+
+NOT COVERED on this host:
+  skipped: php (no php on this host)
+  skipped: redis (no redis-server on this host)
+  skipped: ffmpeg (no ffmpeg on this host)
