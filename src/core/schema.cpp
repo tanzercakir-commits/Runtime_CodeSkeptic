@@ -213,14 +213,38 @@ bool check(const Value& v, const Value& sub, const Context& ctx,
     if (!check_object(v, sub, ctx, path, error)) return false;
 
     if (v.is_array()) {
+        const auto& array = v.as_array();
         if (const Value* items = sub.find("items"); items != nullptr) {
             std::size_t i = 0;
-            for (const auto& item : v.as_array()) {
+            for (const auto& item : array) {
                 if (!check(item, *items, ctx,
                            join(path, std::to_string(i)), error)) {
                     return false;
                 }
                 ++i;
+            }
+        }
+        if (const Value* minimum = sub.find("minItems");
+            minimum != nullptr && minimum->is_number() &&
+            array.size() < minimum->as_uint()) {
+            error = where(path) + ": has fewer items than minItems";
+            return false;
+        }
+        if (const Value* maximum = sub.find("maxItems");
+            maximum != nullptr && maximum->is_number() &&
+            array.size() > maximum->as_uint()) {
+            error = where(path) + ": has more items than maxItems";
+            return false;
+        }
+        if (const Value* unique = sub.find("uniqueItems");
+            unique != nullptr && unique->as_bool()) {
+            for (std::size_t i = 0; i < array.size(); ++i) {
+                for (std::size_t j = i + 1; j < array.size(); ++j) {
+                    if (array[i] == array[j]) {
+                        error = where(path) + ": array items are not unique";
+                        return false;
+                    }
+                }
             }
         }
     }
@@ -282,6 +306,18 @@ bool check(const Value& v, const Value& sub, const Context& ctx,
         }
         if (!ok) {
             error = where(path) + ": does not match any allowed alternative";
+            return false;
+        }
+    }
+
+    if (const Value* one = sub.find("oneOf"); one != nullptr && one->is_array()) {
+        std::size_t matches = 0;
+        for (const auto& option : one->as_array()) {
+            std::string ignored;
+            if (check(v, option, ctx, path, ignored)) ++matches;
+        }
+        if (matches != 1) {
+            error = where(path) + ": must match exactly one allowed alternative";
             return false;
         }
     }

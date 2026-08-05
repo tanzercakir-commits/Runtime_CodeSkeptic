@@ -22,6 +22,12 @@ inline constexpr const char* kEnvironmentProfile =
 inline constexpr const char* kAnalysisBundle =
     @RS_SCHEMA_ANALYSIS_BUNDLE_LITERAL@;
 
+inline constexpr const char* kRuntimeTraceRecord =
+    @RS_SCHEMA_RUNTIME_TRACE_LITERAL@;
+
+inline constexpr const char* kRuntimeOverhead =
+    @RS_SCHEMA_RUNTIME_OVERHEAD_LITERAL@;
+
 }  // namespace rs::schema::embedded
 
 #endif  // RUNTIMESKEPTIC_CORE_SCHEMAS_EMBEDDED_HPP

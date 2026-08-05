@@ -12,6 +12,8 @@ file(READ ${RS_SCHEMA_DIR}/application-requirements.v1.json RS_SCHEMA_APPREQ)
 file(READ ${RS_SCHEMA_DIR}/application-requirements-bundle.v1.json RS_SCHEMA_APPREQ_BUNDLE)
 file(READ ${RS_SCHEMA_DIR}/environment-profile.v1.json RS_SCHEMA_ENVPROFILE)
 file(READ ${RS_SCHEMA_DIR}/analysis-bundle.v1.json RS_SCHEMA_ANALYSIS_BUNDLE)
+file(READ ${RS_SCHEMA_DIR}/runtime-trace-record.v1.json RS_SCHEMA_RUNTIME_TRACE)
+file(READ ${RS_SCHEMA_DIR}/runtime-overhead.v1.json RS_SCHEMA_RUNTIME_OVERHEAD)
 # MSVC rejects a single string literal longer than 16,380 bytes (C2026). The
 # requirement and profile schemas are already larger than that. Emit adjacent
 # raw literals in conservative 8 KiB chunks; C++ concatenates them at compile
@@ -40,11 +42,15 @@ rs_make_schema_literal(RS_SCHEMA_APPREQ RS_SCHEMA_APPREQ_LITERAL)
 rs_make_schema_literal(RS_SCHEMA_APPREQ_BUNDLE RS_SCHEMA_APPREQ_BUNDLE_LITERAL)
 rs_make_schema_literal(RS_SCHEMA_ENVPROFILE RS_SCHEMA_ENVPROFILE_LITERAL)
 rs_make_schema_literal(RS_SCHEMA_ANALYSIS_BUNDLE RS_SCHEMA_ANALYSIS_BUNDLE_LITERAL)
+rs_make_schema_literal(RS_SCHEMA_RUNTIME_TRACE RS_SCHEMA_RUNTIME_TRACE_LITERAL)
+rs_make_schema_literal(RS_SCHEMA_RUNTIME_OVERHEAD RS_SCHEMA_RUNTIME_OVERHEAD_LITERAL)
 set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
     ${RS_SCHEMA_DIR}/application-requirements.v1.json
     ${RS_SCHEMA_DIR}/application-requirements-bundle.v1.json
     ${RS_SCHEMA_DIR}/environment-profile.v1.json
-    ${RS_SCHEMA_DIR}/analysis-bundle.v1.json)
+    ${RS_SCHEMA_DIR}/analysis-bundle.v1.json
+    ${RS_SCHEMA_DIR}/runtime-trace-record.v1.json
+    ${RS_SCHEMA_DIR}/runtime-overhead.v1.json)
 set(RS_GENERATED_DIR ${CMAKE_BINARY_DIR}/generated)
 configure_file(
     ${CMAKE_CURRENT_SOURCE_DIR}/core/schemas_embedded.hpp.in
@@ -66,7 +72,42 @@ target_include_directories(rs_core PUBLIC
     $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include>
     $<BUILD_INTERFACE:${RS_GENERATED_DIR}>)
 target_link_libraries(rs_core PRIVATE rs_warnings PUBLIC rs_platform)
+set_target_properties(rs_core PROPERTIES POSITION_INDEPENDENT_CODE ON)
 add_library(RuntimeSkeptic::core ALIAS rs_core)
+
+# ---------------------------------------------------------------------------
+# libruntimeskeptic - stable C ABI wrappers and fixed-capacity event recorder.
+# The wrapper path is allocation-free; JSONL serialization happens only when
+# the caller explicitly flushes after the observed operations are quiescent.
+# ---------------------------------------------------------------------------
+add_library(runtimeskeptic SHARED
+    runtime/runtime.cpp
+    runtime/posix.cpp
+    runtime/windows.cpp)
+set_target_properties(runtimeskeptic PROPERTIES
+    OUTPUT_NAME runtimeskeptic
+    CXX_VISIBILITY_PRESET hidden
+    VISIBILITY_INLINES_HIDDEN YES)
+target_compile_definitions(runtimeskeptic PRIVATE RS_RUNTIME_BUILDING_LIBRARY=1)
+target_include_directories(runtimeskeptic PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include>
+    $<INSTALL_INTERFACE:include>)
+target_link_libraries(runtimeskeptic PRIVATE rs_core rs_warnings PUBLIC rs_platform)
+add_library(RuntimeSkeptic::runtime ALIAS runtimeskeptic)
+
+add_library(rs_trace STATIC runtime/trace.cpp)
+target_include_directories(rs_trace PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include>
+    $<INSTALL_INTERFACE:include>)
+target_link_libraries(rs_trace PUBLIC rs_core rs_platform PRIVATE rs_warnings)
+add_library(RuntimeSkeptic::trace ALIAS rs_trace)
+
+install(TARGETS runtimeskeptic
+        RUNTIME DESTINATION bin
+        LIBRARY DESTINATION lib
+        ARCHIVE DESTINATION lib)
+install(DIRECTORY ${CMAKE_SOURCE_DIR}/include/runtimeskeptic/runtime
+        DESTINATION include/runtimeskeptic)
 
 # ---------------------------------------------------------------------------
 # rs_vm - the virtual-memory domain: profiles, requirements, rules, findings.

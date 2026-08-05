@@ -260,7 +260,71 @@ REGISTRY_FILES = {
     "docs/findings/registry.md": REGISTRY_OK,
 }
 
+RUNTIME_COMMON = """rs_runtime_initialize_v1 rs_runtime_set_enabled_v1
+rs_runtime_snapshot_v1 rs_runtime_flush_trace_v1
+rs_runtime_after_fork_child_v1 rs_runtime_shutdown_v1
+"""
+RUNTIME_POSIX_H = """RS_MONITOR_COMPILE_DISABLED
+#define rs_mmap_v1 mmap
+#define rs_mprotect_v1 mprotect
+#define rs_munmap_v1 munmap
+"""
+RUNTIME_WINDOWS_H = """RS_MONITOR_COMPILE_DISABLED
+#define rs_virtual_alloc_v1 VirtualAlloc
+#define rs_virtual_protect_v1 VirtualProtect
+#define rs_virtual_free_v1 VirtualFree
+"""
+RUNTIME_RECORDER = """std::array<Slot, RS_RUNTIME_EVENT_CAPACITY_MAX_V1> slots;
+void record_event() { g_inside_recorder; fetch_add(); published.store(); }
+"""
+RUNTIME_POSIX = """void* mmap_once() { auto result=mmap(); auto native_error=errno;
+record_event(); errno = native_error; return result; }
+int rs_mprotect_v1() { auto result=mprotect(); auto native_error=errno;
+record_event(); errno = native_error; return result; }
+int rs_munmap_v1() { auto result=munmap(); auto native_error=errno;
+record_event(); errno = native_error; return result; }
+"""
+RUNTIME_WINDOWS = """void* virtual_alloc_once() { auto result=VirtualAlloc(); auto native_error=GetLastError();
+record_event(); SetLastError(native_error); return result; }
+int rs_virtual_protect_v1() { auto result=VirtualProtect(); auto native_error=GetLastError();
+record_event(); SetLastError(native_error); return result; }
+int rs_virtual_free_v1() { auto result=VirtualFree(); auto native_error=GetLastError();
+record_event(); SetLastError(native_error); return result; }
+"""
+RUNTIME_TRACE = """// missing its header or footer
+// sequence gap or reordering
+// digest mismatch
+// incomplete runtime trace
+void replay() {}
+"""
+RUNTIME_FILES = {
+    "include/runtimeskeptic/runtime/runtime.h": RUNTIME_COMMON,
+    "include/runtimeskeptic/runtime/runtime_posix.h": RUNTIME_POSIX_H,
+    "include/runtimeskeptic/runtime/runtime_windows.h": RUNTIME_WINDOWS_H,
+    "src/runtime/runtime.cpp": RUNTIME_RECORDER,
+    "src/runtime/posix.cpp": RUNTIME_POSIX,
+    "src/runtime/windows.cpp": RUNTIME_WINDOWS,
+    "src/runtime/trace.cpp": RUNTIME_TRACE,
+}
+
 CASES = [
+    # ---- runtime safety: wrapper transparency and pure replay ------------
+    Case("check_runtime_safety.py", "the bounded one-call boundary passes",
+         RUNTIME_FILES, expect_fail=False),
+    Case("check_runtime_safety.py", "allocation in record_event fails",
+         {**RUNTIME_FILES,
+          "src/runtime/runtime.cpp": RUNTIME_RECORDER.replace(
+              "published.store();", "published.store(); malloc();")},
+         expect_fail=True, expect_text="allocation/locking token"),
+    Case("check_runtime_safety.py", "replay issuing mmap fails",
+         {**RUNTIME_FILES,
+          "src/runtime/trace.cpp": RUNTIME_TRACE + "void bad() { mmap(); }\n"},
+         expect_fail=True, expect_text="reissues an OS call"),
+    Case("check_runtime_safety.py", "a wrapper making two native calls fails",
+         {**RUNTIME_FILES,
+          "src/runtime/posix.cpp": RUNTIME_POSIX.replace(
+              "auto result=mmap();", "auto result=mmap(); mmap();")},
+         expect_fail=True, expect_text="exactly once"),
     # ---- check_registry: code, tables, and prose are one interface ------
     Case("check_registry.py", "a complete one-ID registry passes",
          REGISTRY_FILES,
@@ -1009,13 +1073,15 @@ CASES = [
     # they are the real thing.
     Case("check_windows_compiles.py", "the real bug: a shadowed local, C4456",
          {"CMakeLists.txt": CMAKE_WARNINGS,
-          "src/probe/vm_probe_windows.cpp": WINDOWS_TU_SHADOWED},
+          "src/probe/vm_probe_windows.cpp": WINDOWS_TU_SHADOWED,
+          "src/runtime/windows.cpp": WINDOWS_TU_OK},
          expect_fail=SHADOW_IS_CHECKABLE,
          expect_text="shadows" if SHADOW_IS_CHECKABLE else "windows cross-compile"),
 
     Case("check_windows_compiles.py", "the corrected translation unit passes",
          {"CMakeLists.txt": CMAKE_WARNINGS,
-          "src/probe/vm_probe_windows.cpp": WINDOWS_TU_OK},
+          "src/probe/vm_probe_windows.cpp": WINDOWS_TU_OK,
+          "src/runtime/windows.cpp": WINDOWS_TU_OK},
          expect_fail=False),
 
     # THE POINT OF THE GUARD, not an incidental feature. The push that provoked

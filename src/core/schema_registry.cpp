@@ -21,6 +21,8 @@ struct Parsed {
     json::Value bundle;
     json::Value profile;
     json::Value analysis;
+    json::Value runtime_trace;
+    json::Value runtime_overhead;
     Store bundle_store;  // lets the bundle's cross-file $ref reach `requirement`
     bool ok = false;
     std::string error;
@@ -45,7 +47,11 @@ const Parsed& schemas() {
                   "application-requirements-bundle") ||
             !load(embedded::kEnvironmentProfile, out.profile,
                   "environment-profile") ||
-            !load(embedded::kAnalysisBundle, out.analysis, "analysis-bundle")) {
+            !load(embedded::kAnalysisBundle, out.analysis, "analysis-bundle") ||
+            !load(embedded::kRuntimeTraceRecord, out.runtime_trace,
+                  "runtime-trace-record") ||
+            !load(embedded::kRuntimeOverhead, out.runtime_overhead,
+                  "runtime-overhead")) {
             return out;
         }
         // The bundle schema refers to the requirement schema by file name.
@@ -88,6 +94,19 @@ bool validate_analysis_manifest(const json::Value& doc, std::string& error) {
     return validate(doc, s.analysis, error);
 }
 
+bool validate_runtime_trace_record(const json::Value& doc,
+                                   std::string& error) {
+    const Parsed& s = schemas();
+    if (!s.ok) { error = s.error; return false; }
+    return validate(doc, s.runtime_trace, error);
+}
+
+bool validate_runtime_overhead(const json::Value& doc, std::string& error) {
+    const Parsed& s = schemas();
+    if (!s.ok) { error = s.error; return false; }
+    return validate(doc, s.runtime_overhead, error);
+}
+
 bool validate_by_schema_name(const std::string& schema_basename,
                              const json::Value& doc, std::string& error) {
     const Parsed& s = schemas();
@@ -103,6 +122,12 @@ bool validate_by_schema_name(const std::string& schema_basename,
     }
     if (schema_basename == "analysis-bundle.v1.json") {
         return validate(doc, s.analysis, error);
+    }
+    if (schema_basename == "runtime-trace-record.v1.json") {
+        return validate(doc, s.runtime_trace, error);
+    }
+    if (schema_basename == "runtime-overhead.v1.json") {
+        return validate(doc, s.runtime_overhead, error);
     }
     error = "unknown schema " + schema_basename;
     return false;

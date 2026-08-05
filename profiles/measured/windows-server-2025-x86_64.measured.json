@@ -1,7 +1,7 @@
 {
   "notes": [
-    "VirtualQuery walk: 31 free, 17 reserved, 90 committed region(s); largest free run 139005943140352 bytes. Recorded as a note and NOT as available_ranges: which regions are free is a property of this process's ASLR layout, and a profile that hashed it would differ between two runs on one machine.",
-    "VirtualQuery occupancy (NOT a fact about the host - this process's own layout, for designing an arena's bounds): occupied [0x7ffe0000, 0x7ffafe149000), 4350083072 bytes total, in 3 TiB bucket(s): 0x0=6299648 0x10000000000=2641920 0x7f0000000000=4341141504"
+    "VirtualQuery walk: 31 free, 17 reserved, 90 committed region(s); largest free run 138202732875776 bytes. Recorded as a note and NOT as available_ranges: which regions are free is a property of this process's ASLR layout, and a profile that hashed it would differ between two runs on one machine.",
+    "VirtualQuery occupancy (NOT a fact about the host - this process's own layout, for designing an arena's bounds): occupied [0x7ffe0000, 0x7ffda9549000), 4350083072 bytes total, in 3 TiB bucket(s): 0x0=6299648 0x20000000000=2641920 0x7f0000000000=4341141504"
   ],
   "origin": "measured",
   "platform": {
@@ -14,11 +14,11 @@
     "translation_mode": "none"
   },
   "probe_run": {
-    "duration_ms": 187,
+    "duration_ms": 172,
     "probe_binary_hash": "",
     "probe_version": "rs-env-probe/vm/0.1.0",
     "run_id": "",
-    "timestamp_utc": "2026-08-05T18:11:57Z",
+    "timestamp_utc": "2026-08-05T21:26:03Z",
     "tool_version": "runtimeskeptic/0.1.0",
     "warnings": [
       "lpMaximumApplicationAddress is INCLUSIVE: VirtualQuery(0x7ffffffef000) succeeded reporting MEM_FREE over 4096 bytes, so the address is part of this process's space, and a one-page reservation there failed with error 0 - consistent with the system's top-of-space guard region, which is why the reservation is not what decides this",

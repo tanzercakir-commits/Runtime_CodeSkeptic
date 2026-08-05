@@ -9,7 +9,7 @@
 // Supported keywords: type (string or array, incl "null"/"integer"), required,
 // properties, additionalProperties (bool or schema), enum, const, items, $ref
 // (local #/$defs/... and cross-file, resolved through a Store), pattern,
-// minimum, maximum, anyOf, allOf. "integer" means an Int or UInt value (this
+// minimum, maximum, minItems, maxItems, uniqueItems, anyOf, oneOf, allOf. "integer" means an Int or UInt value (this
 // project's schemas never use doubles; the canonical writer rejects them). It
 // is validated against Python's jsonschema as an oracle by
 // tools/audit/boundary_matrix.py - if that reports 0 disagreements, this agrees

@@ -15,6 +15,10 @@ inline constexpr const char* kRequirementSchemaVersion =
     "runtime-skeptic.application-requirements.v1";
 inline constexpr const char* kResultSchemaVersion =
     "runtime-skeptic.compatibility-result.v1";
+inline constexpr const char* kRuntimeTraceSchemaVersion =
+    "runtime-skeptic.runtime-trace-record.v1";
+inline constexpr const char* kRuntimeOverheadSchemaVersion =
+    "runtime-skeptic.runtime-overhead.v1";
 
 }  // namespace rs
 

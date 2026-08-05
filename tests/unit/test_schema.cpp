@@ -175,6 +175,44 @@ RS_TEST(if_then_enforces_the_address_dependency) {
     RS_CHECK(ok(R"({})", s));                          // exact absent
 }
 
+RS_TEST(one_of_requires_exactly_one_matching_branch) {
+    const char* schema_text = R"({"oneOf":[
+        {"type":"integer"},{"type":"integer","minimum":0}]})";
+    RS_CHECK(ok("-1", schema_text));
+    RS_CHECK(!ok("1", schema_text));
+    RS_CHECK(!ok("\"x\"", schema_text));
+}
+
+RS_TEST(array_bounds_and_uniqueness_are_enforced) {
+    const char* schema_text = R"({"type":"array","minItems":1,
+        "maxItems":2,"uniqueItems":true})";
+    RS_CHECK(!ok("[]", schema_text));
+    RS_CHECK(ok("[1]", schema_text));
+    RS_CHECK(ok("[1,2]", schema_text));
+    RS_CHECK(!ok("[1,1]", schema_text));
+    RS_CHECK(!ok("[1,2,3]", schema_text));
+}
+
+RS_TEST(runtime_trace_schema_rejects_duplicates_and_unknown_fields) {
+    std::string error;
+    const json::Value valid = J(R"({
+        "schema":"runtime-skeptic.runtime-trace-record.v1",
+        "record_type":"header","abi_version":1,"platform":"posix",
+        "monitor_mode":"record","buffer_capacity":8,
+        "instrumented_apis":["mmap","mprotect","munmap"]})");
+    RS_CHECK_MESSAGE(schema::validate_runtime_trace_record(valid, error), error);
+    RS_CHECK(!schema::validate_runtime_trace_record(J(R"({
+        "schema":"runtime-skeptic.runtime-trace-record.v1",
+        "record_type":"header","abi_version":1,"platform":"posix",
+        "monitor_mode":"record","buffer_capacity":8,
+        "instrumented_apis":["mmap","mmap"]})"), error));
+    RS_CHECK(!schema::validate_runtime_trace_record(J(R"({
+        "schema":"runtime-skeptic.runtime-trace-record.v1",
+        "record_type":"header","abi_version":1,"platform":"posix",
+        "monitor_mode":"record","buffer_capacity":8,
+        "instrumented_apis":["mmap"],"unexpected":true})"), error));
+}
+
 // --- the embedded contract, through the registry: the exact re-test findings.
 
 RS_TEST(registry_accepts_the_real_base_documents) {

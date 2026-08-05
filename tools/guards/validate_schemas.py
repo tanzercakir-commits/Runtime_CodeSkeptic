@@ -35,6 +35,8 @@ BY_SCHEMA_ID = {
     "runtime-skeptic.application-requirements-bundle.v1":
         "application-requirements-bundle.v1.json",
     "runtime-skeptic.analysis-bundle.v1": "analysis-bundle.v1.json",
+    "runtime-skeptic.runtime-trace-record.v1": "runtime-trace-record.v1.json",
+    "runtime-skeptic.runtime-overhead.v1": "runtime-overhead.v1.json",
 }
 
 
@@ -48,12 +50,14 @@ def load_schemas():
 
 
 def _find_binary(name: str):
-    binary_root = ROOT / "build" / "bin"
-    roots = [binary_root]
-    roots.extend(binary_root / config for config in
-                 ("Release", "RelWithDebInfo", "Debug", "MinSizeRel"))
-    for root in roots:
-        for suffix in ("", ".exe"):
+    roots = []
+    for binary_root in sorted(ROOT.glob("build*/bin")):
+        roots.append(binary_root)
+        roots.extend(binary_root / config for config in
+                     ("Release", "RelWithDebInfo", "Debug", "MinSizeRel"))
+    # Prefer a native no-suffix binary across every build tree before a PE file.
+    for suffix in ("", ".exe"):
+        for root in roots:
             candidate = root / (name + suffix)
             if candidate.exists():
                 return candidate
@@ -85,6 +89,36 @@ def _emit_bundle_manifest(rs_check: Path):
         return json.loads(manifest.read_text(encoding="utf-8"))
 
 
+
+def _emit_runtime_trace(sample: Path):
+    with tempfile.TemporaryDirectory() as tmp:
+        trace = Path(tmp) / "runtime-trace.jsonl"
+        proc = subprocess.run([str(sample), str(trace)], capture_output=True,
+                              encoding="utf-8", errors="replace")
+        if proc.returncode != 0 or not trace.exists():
+            return None, proc.stderr or proc.stdout or "sample failed"
+        records = []
+        try:
+            for line in trace.read_text(encoding="utf-8").splitlines():
+                records.append(json.loads(line))
+        except (OSError, json.JSONDecodeError) as exc:
+            return None, str(exc)
+        return records, ""
+
+
+def _emit_runtime_overhead(benchmark: Path):
+    with tempfile.TemporaryDirectory() as tmp:
+        output = Path(tmp) / "runtime-overhead.json"
+        proc = subprocess.run(
+            [str(benchmark), "--iterations", "8", "--output", str(output)],
+            capture_output=True, encoding="utf-8", errors="replace")
+        if proc.returncode != 0 or not output.exists():
+            return None, proc.stderr or proc.stdout or "benchmark failed"
+        try:
+            return json.loads(output.read_text(encoding="utf-8")), ""
+        except (OSError, json.JSONDecodeError) as exc:
+            return None, str(exc)
+
 def main() -> int:
     store = load_schemas()
     if not store:
@@ -101,9 +135,14 @@ def main() -> int:
 
     def validate(doc, label):
         nonlocal checked
-        name = BY_SCHEMA_ID.get(doc.get("schema"))
+        declared = doc.get("schema")
+        name = BY_SCHEMA_ID.get(declared)
         if name is None:
-            return  # not a document these schemas describe
+            if isinstance(declared, str) and declared.startswith("runtime-skeptic."):
+                failures.append(
+                    f"{label}: declares {declared!r}, but validate_schemas.py "
+                    "has no schema mapping; unknown product artifacts fail closed")
+            return
         schema = store[name]
         resolver = RefResolver(base_uri=schema["$id"], referrer=schema,
                                store=store)
@@ -134,6 +173,27 @@ def main() -> int:
     elif rs_check is None:
         print("  (analysis-bundle: SKIPPED - rs-check not built; the manifest "
               "schema is only checked against a real emitted manifest)")
+
+    sample = _find_binary("rs-runtime-sample")
+    if sample is not None:
+        records, emission_error = _emit_runtime_trace(sample)
+        if records is None:
+            failures.append(f"fresh runtime trace emission failed: {emission_error}")
+        else:
+            for index, record in enumerate(records, 1):
+                validate(record, f"fresh runtime trace line {index}")
+    else:
+        print("  (runtime trace: SKIPPED - rs-runtime-sample not built)")
+
+    benchmark = _find_binary("rs-runtime-benchmark")
+    if benchmark is not None:
+        artifact, emission_error = _emit_runtime_overhead(benchmark)
+        if artifact is None:
+            failures.append(f"fresh runtime benchmark emission failed: {emission_error}")
+        else:
+            validate(artifact, "fresh runtime-overhead benchmark")
+    else:
+        print("  (runtime overhead: SKIPPED - rs-runtime-benchmark not built)")
 
     schema_count = len(list(SCHEMAS.glob("*.json")))
     print(f"validated {checked} artifact(s) against {schema_count} schema(s)")

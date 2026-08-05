@@ -27,6 +27,12 @@ bool validate_profile(const json::Value& doc, std::string& error);
 // document rs-replay reads back.
 bool validate_analysis_manifest(const json::Value& doc, std::string& error);
 
+// One header, event or footer record from runtime-trace-record.v1 JSONL.
+bool validate_runtime_trace_record(const json::Value& doc, std::string& error);
+
+// A runtime-overhead.v1 benchmark artifact.
+bool validate_runtime_overhead(const json::Value& doc, std::string& error);
+
 // Validate against a schema named by its file basename (e.g.
 // "environment-profile.v1.json"). Used by the dev tool rs-validate so the
 // boundary matrix can compare this validator to Python's jsonschema directly.

@@ -124,9 +124,15 @@ def main() -> int:
                 f"profile cannot drift unwatched")
             continue
 
+        # A valid replacement staged or modified in this working tree will be
+        # committed after the source by construction. The clean CI checkout is
+        # the authoritative timestamp check; locally, do not condemn the old
+        # blob while the freshly validated replacement is waiting to commit.
+        if git("status", "--porcelain", "--", rel):
+            print(f"  pending: {profile.name} - replacement will be dated by its commit")
+            continue
         profile_ts = last_commit_ts(rel)
         if profile_ts is None:
-            # Uncommitted (e.g. staged in a working tree). Nothing to compare.
             continue
 
         checked += 1

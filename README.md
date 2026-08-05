@@ -5,7 +5,7 @@
 RuntimeSkeptic compares what a program *assumes* about its execution
 environment against what that environment *measurably provides*, and answers
 with an evidence chain: supported here, refused here, or conditionally — before
-the program runs there. v0.1 covers virtual memory.
+the program runs there. The shipped compatibility analyzer and runtime monitor cover virtual memory.
 
 Full pitch: [docs/problem_statement.md](docs/problem_statement.md) ·
 what this deliberately is not: [docs/non_goals.md](docs/non_goals.md) ·
@@ -74,6 +74,25 @@ Exit codes are CI-ready: `0` SUPPORTED · `1` UNSUPPORTED ·
 `2` CONDITIONALLY_SUPPORTED · `3` UNKNOWN. All tools and flags:
 [docs/integrations.md](docs/integrations.md). More one-command cases:
 [docs/diagnosis-cards.md](docs/diagnosis-cards.md).
+
+## Observe a real call
+
+Phase 4 adds `libruntimeskeptic`, a stable C ABI around selected POSIX and
+Windows virtual-memory calls. The wrapper preserves the native result and
+post-call error state, records into a fixed allocation-free buffer, and emits a
+sealed canonical JSONL trace:
+
+```console
+$ build/bin/rs-runtime-sample runtime_trace.jsonl
+$ build/bin/rs-replay trace runtime_trace.jsonl
+$ build/bin/rs-runtime-benchmark --iterations 128 --output overhead.json
+```
+
+On Visual Studio generators use `build\bin\Release\`. Raw wrappers are
+native-compatible; checked allocation wrappers accept an explicit caller
+expectation and detect successful relocation at the call boundary. Monitoring
+can be removed at compile time or disabled at runtime. API, safety guarantees,
+trace rejection rules and limitations: [docs/runtime-monitor.md](docs/runtime-monitor.md).
 
 ## The full output
 
@@ -165,7 +184,7 @@ than a snapshot. Measure your own with `rs-env-probe`, as above.
 
 The full architecture, component by component: [ROADMAP.md](ROADMAP.md)
 sections 9–10. Not every box exists yet — v0.1 ships the probes, the contracts,
-the analysis engine and the evidence reports; the static extractor is a later
+the analysis engine, the evidence reports, runtime wrappers and pure trace replay; the static extractor is a later
 phase and belongs to CodeSkeptic
 ([docs/non_goals.md](docs/non_goals.md)). Project docs — compass, map, history,
 campaigns — start at [docs/TODO.md](docs/TODO.md).

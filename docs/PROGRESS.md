@@ -16,6 +16,58 @@ re-litigated; a mistake recorded here does not need to be re-made.
 
 ---
 
+## 2026-08-05 - Phase 4 gained a transparent runtime boundary and pure replay
+
+**Changed.** This commit implements T-009's first complete cut:
+`libruntimeskeptic` exposes a versioned pure-C ABI for selected POSIX and
+Windows VM calls; checked allocation variants carry explicit exact-address
+intent; a fixed preallocated recorder preserves the native result and
+post-call error state; canonical JSONL writer, bounded reader and pure
+lifecycle replay keep POSIX and Windows state models distinct. Compile-time and
+runtime disable modes, report/assert behavior, C samples, install rules and a
+five-mode versioned overhead benchmark are executable.
+
+The trace and benchmark schemas are embedded. The internal schema validator now
+implements `oneOf`, array bounds and uniqueness rather than ignoring those
+keywords. `validate_schemas.py` fails on unknown RuntimeSkeptic schema ids and
+validates freshly emitted trace and benchmark artifacts. A new structural
+guard proves one native call per wrapper, capture/record/restore ordering, a
+bounded allocation-free recorder and replay code with no native VM calls; four
+adversarial fixtures make those protections fail on demand, taking guard
+selftests to 114/114.
+
+**Evidence.** Linux/GCC with warnings as errors builds the shared library,
+trace library, C headers, sample, replay tool and benchmark. Runtime
+conformance covers native success/failure parity, `errno` preservation,
+compile/runtime disable, exact relocation, report callbacks, assertion abort,
+recursion, overflow, concurrency and fork-child safety. Trace tests cover
+deterministic double flush, both lifecycle models, boundary-violation
+recomputation, truncation, unknown versions, noncanonical input, reordering,
+digest tamper, incomplete evidence and size limits. The POSIX C sample wrote
+three events and `rs-replay trace` reproduced them without OS calls; the fresh
+benchmark artifact validated against `runtime-overhead.v1`.
+
+CI run 31048456187 closed the earlier clang bottleneck: Linux/Clang, macOS,
+Windows and determinism passed. Linux/GCC failed only because a comment update
+to the Windows probe correctly made its committed measurement older than its
+instrument. The path-triggered physical Windows workflow passed and published
+`refs/measurements/a7d7f533.../windows-x86_64`; that fresh measured profile is
+committed here instead of weakening the freshness rule.
+
+**Learned.** Transparent observation needs two truth channels: application
+semantics fail open, while incomplete evidence fails closed. Raw allocation
+APIs cannot reveal caller intent, so intent belongs in a checked variant rather
+than an inference. A runtime event is an observation, not an invariant. Schema
+keywords and safety properties that the validator or tests silently ignore are
+the same false-green class as an unexecuted rule.
+
+**Next.** Push this implementation through Linux/GCC, Linux/Clang, physical
+macOS/Apple-Clang and Windows/MSVC. Fix every disagreement from its log, then
+consume T-009 and mark Phase 4 complete only after the exact-head matrix and
+full guard suite are green.
+
+---
+
 ## 2026-08-05 - Phase 3 closeout survived an independent fail-open audit
 
 **Changed.** Commit `05670f3` replaced finding-count coverage with 24

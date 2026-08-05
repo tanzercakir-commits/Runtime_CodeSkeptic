@@ -54,7 +54,7 @@ Everything here is measured or enforced, not remembered.
 ```
 Phase 0-3   DONE. Gate B, all seven demonstrations, T-012 bounded pressure,
             and strict rule-execution coverage are green.
-Phase 4     NOW: runtime wrapper library (T-009).
+Phase 4     NOW: implementation green on Linux/GCC; cross-platform CI pending (T-009).
 Phase 5     BLOCKED by the owner's standing CodeSkeptic instruction (T-011).
 Phase 6-10  dependency-ordered behind Phase 5 / Gate C; Phase 8 also needs
             its own Gate D evidence.
@@ -133,9 +133,16 @@ call boundary; monitoring can be disabled at compile time and runtime; sample
 integrations and a reproducible overhead benchmark are committed; conformance,
 replay, recursion/allocator-safety and malformed-trace tests pass on Linux,
 macOS and Windows.
-**First step:** freeze the C ABI and event schema with rejection tests before
-implementing wrappers; the wrapper must be a transparent call when monitoring
-is disabled.
+**Current evidence:** the ABI/schema are frozen; native/disabled/checked
+wrappers, canonical trace writer, bounded reader, pure replay, sample,
+benchmark and structural safety guard pass locally under Linux/GCC with
+warnings as errors. The refreshed physical Windows measurement from
+`refs/measurements/a7d7f533.../windows-x86_64` is committed with this work so
+the profile-freshness gate measures the current probe rather than a comment
+revision.
+**First step:** obtain one exact-head green CI matrix on Linux/GCC,
+Linux/Clang, physical macOS/Apple-Clang and Windows/MSVC. Fix evidence, not the
+gate, if any lane disagrees; consume T-009 only after all are green.
 
 ---
 

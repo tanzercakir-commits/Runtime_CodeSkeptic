@@ -12,13 +12,14 @@ Everything on this page is optional.
 | MCP server (`rs-mcp`) | implemented, 25 protocol tests |
 | Evidence bundles (`rs-check --bundle`, `rs-replay`) | implemented, round-trip tested across a process boundary in CI, fixture checked in |
 | CodeSkeptic producer side | **written but not merged upstream** - see below |
-| SARIF, GitHub Action, runtime monitor | later phases |
+| Runtime monitor (`libruntimeskeptic`, trace replay) | implemented; multi-platform CI gated |
+| SARIF, GitHub Action | later phases |
 
 ---
 
 ## Command-line tools
 
-Five executables, each doing one thing. `--help` on any of them prints its full
+Seven executables, each doing one thing. `--help` on any of them prints its full
 flag list; this table is the map, and it is what the README means by "all tools
 and flags".
 
@@ -27,14 +28,26 @@ and flags".
 | `rs-check` | evaluate a requirement, or a whole bundle, against a host profile | `rs-check REQUIREMENT.json --profile PROFILE.json [--format text\|json\|markdown] [--output FILE] [--bundle DIR] [--no-unknowns] [--quiet] [--color]` |
 | `rs-env-probe` | measure this host's virtual-memory behaviour into a profile | `rs-env-probe vm [--name NAME] [--output FILE] [--no-scan] [--no-faulting-tests] [--canonical]` |
 | `rs-profile` | inspect and compare profiles | `rs-profile verify\|id\|diff\|impact PROFILE.json …` |
-| `rs-replay` | re-derive a verdict from an evidence bundle and confirm it reproduces | `rs-replay BUNDLE_DIR` |
+| `rs-replay` | re-derive a verdict from an evidence bundle, or purely replay a sealed runtime trace | `rs-replay BUNDLE_DIR` or `rs-replay trace TRACE.jsonl` |
 | `rs-mcp` | the same capabilities as a Model Context Protocol server | `rs-mcp --serve` |
+| `rs-runtime-sample` | record one selected VM lifecycle through the C ABI | `rs-runtime-sample TRACE.jsonl` |
+| `rs-runtime-benchmark` | measure native, disabled, buffered and flush overhead | `rs-runtime-benchmark --iterations N --output FILE` |
 
 Exit codes are uniform where they can be: `rs-check`, `rs-profile impact` and
 `rs-replay` all use `1` for a substantive negative (UNSUPPORTED / a regression /
 a bundle that did not reproduce), `65` for input that could not be read or did
 not satisfy its schema, and `64` for a usage error. `rs-replay` returns `0` only
 when the bundle re-derives its own verdict and finding IDs from its own bytes.
+
+### Runtime calls: `libruntimeskeptic`, then `rs-replay trace`
+
+The C ABI wraps selected POSIX and Windows virtual-memory APIs, preserves the
+native result and post-call error state, and records into a fixed-capacity POD
+buffer. `rs_runtime_flush_trace_v1` seals canonical JSONL; `rs-replay trace`
+checks its schema, sequence, completeness and digest before reducing its
+lifecycle without issuing OS calls. See `docs/runtime-monitor.md` for the ABI,
+compile/runtime disable modes, checked exact-address expectations and safety
+contract.
 
 ### Evidence bundles: `rs-check --bundle`, then `rs-replay`
 

@@ -3,11 +3,15 @@ cmake_minimum_required(VERSION 3.20)
 project(RuntimeSkeptic
     VERSION 0.1.0
     DESCRIPTION "Cross-layer runtime compatibility analyzer"
-    LANGUAGES CXX)
+    LANGUAGES C CXX)
 
 # ---------------------------------------------------------------------------
 # Global settings
 # ---------------------------------------------------------------------------
+
+set(CMAKE_C_STANDARD 11)
+set(CMAKE_C_STANDARD_REQUIRED ON)
+set(CMAKE_C_EXTENSIONS OFF)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -65,6 +69,7 @@ endif()
 
 add_subdirectory(src)
 add_subdirectory(tools)
+add_subdirectory(samples)
 
 if(RS_BUILD_TESTS)
     enable_testing()

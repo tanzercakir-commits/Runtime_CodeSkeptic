@@ -22,7 +22,8 @@ must name a test, a tool invocation, or a committed artifact.
 ## Where the project actually is
 
 **Phases 0-3 are complete and their executable gates are green. Phase 4 is
-the next implementation surface; Phase 5 remains decision-blocked.**
+implemented locally and awaits authoritative multi-platform CI; Phase 5 remains
+decision-blocked.**
 
 ```
 Phase 0  taxonomy + corpus        DONE      corpus 44/30, vm 35/10
@@ -30,7 +31,7 @@ Phase 1  environment probe        DONE      Linux + macOS x2 + Windows measured
 Phase 2  semantic IR + evaluator  DONE
 Phase 3  VM analyzer MVP          DONE      Gate B passed; all seven demonstrations
                                             and strict execution coverage green
-Phase 4  runtime wrapper          OPEN      next active item (T-009)
+Phase 4  runtime wrapper          PARTIAL   implementation green locally; CI pending (T-009)
 Phase 5  CodeSkeptic integration  BLOCKED   owner's instruction: do not modify it
 Phase 6  counterfactual           OPEN      gated by Phase 5 / Gate C
 Phase 7  temporal contracts       OPEN      dependency-ordered after earlier gates
@@ -241,11 +242,61 @@ negatives are graded independently by the ground-truth execution oracle.
 
 ## Phase 4 — Runtime wrapper library
 
-`[open]` Not started. No libruntimeskeptic, no src/monitor, no tools/rs-replay.
-ROADMAP §21 lists all three; none exists. (T-009)
 
-This is the phase that would produce `observed_invariant` evidence, which
-today nothing in the project can generate.
+`[partial]` The ABI, wrappers, trace/replay path, samples, benchmark and safety
+guards are implemented and pass a warnings-as-errors Linux build. The same
+commit still needs Linux/GCC, Linux/Clang, Apple Clang and MSVC evidence before
+T-009 can be consumed. (T-009)
+
+### Deliverables
+
+- `[done]` `libruntimeskeptic` and install rules - `src/CMakeLists.txt`, with
+  fixed-capacity recorder in `src/runtime/runtime.cpp`
+- `[done]` stable pure-C ABI - `include/runtimeskeptic/runtime/runtime.h`,
+  `runtime_posix.h`, `runtime_windows.h`; compiled as C by
+  `tests/conformance/test_runtime_c_api.c`
+- `[done]` event schema - `schemas/runtime-trace-record.v1.json`, embedded and
+  rejected adversarially by `tests/unit/test_schema.cpp`
+- `[done]` deterministic writer, bounded reader and pure lifecycle replay -
+  `src/runtime/runtime.cpp`, `src/runtime/trace.cpp`, `rs-replay trace`, and
+  `tests/unit/test_trace.cpp`
+- `[done]` sample integrations - `tools/guards/validate_schemas.py` executes
+  and validates a fresh trace from `samples/runtime_monitor_posix.c`; the
+  POSIX sample/replay round trip was also run from `build-wsl-phase4/bin/`,
+  and `samples/runtime_monitor_windows.c` is compiled in MSVC CI
+- `[done]` overhead benchmark - `rs-runtime-benchmark` emits
+  `runtime-skeptic.runtime-overhead.v1`; CTest and
+  `tools/guards/validate_schemas.py` execute and validate a fresh artifact
+
+### Exit criteria
+
+- `[partial]` wrapper behavior matches native calls and does not alter native
+  error state - `tests/conformance/test_runtime.cpp` passes on Linux/GCC;
+  Apple Clang and MSVC CI evidence is pending (T-009)
+- `[done]` `tests/unit/test_trace.cpp` proves trace order is contiguous and
+  byte-stable for deterministic recorded
+  execution - concurrency and double-flush tests in `test_runtime` and
+  `test_trace`
+- `[done]` semantic violations are detected at the call boundary without
+  replacing successful results - checked-relocation and replay-recomputation
+  tests in `tests/conformance/test_runtime.cpp` and `tests/unit/test_trace.cpp`
+- `[done]` `tests/conformance/test_runtime_compile_disabled.c` proves monitoring
+  disables at build; runtime disable is covered by the
+  runtime-off snapshot test in `tests/conformance/test_runtime.cpp`
+- `[done]` recursion, buffer overflow, fork-child and assertion modes are
+  fail-closed for evidence - `tests/conformance/test_runtime.cpp` and
+  `tests/conformance/test_runtime_assert.cpp`
+- `[done]` overhead is measured and documented - `benchmarks/README.md` and
+  the schema-valid `rs-runtime-benchmark` artifact; CI checks execution, not a
+  noisy hosted-runner timing threshold
+- `[done]` the structural safety contract is guarded -
+  `tools/guards/check_runtime_safety.py` proves one native call, error-state
+  ordering, allocation-free fixed recorder and OS-call-free replay; four
+  adversarial guard selftests make each protection fail on demand
+
+A single runtime event is an observation, not an `observed_invariant`.
+Promotion to an invariant requires repeated traces and belongs to the later
+invariant phase.
 
 ---
 
@@ -361,7 +412,7 @@ that risk materialising.
   match the filesystem, and a named path must exist. Still `[partial]` because
   only paths and a fixed list of phrases are mechanical; the rest of the prose
   is unchecked and always will be.
-- `[done]` the guards are tested — `tools/guards/selftest.py`, 110 cases, each
+- `[done]` the guards are tested — `tools/guards/selftest.py`, 114 cases, each
   requiring a check to fail against a deliberately wrong throwaway repository
   before it is trusted on this one; first in `tools/guards/run_all.sh`. This
   number read `25` while there were 58, surviving two earlier increases, so
