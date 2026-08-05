@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 # Proves the POSIX half of RS-VM-0012 without pressuring the runner.
-# Only a transient systemd service enters a 64 MiB cgroup-v2 MemoryMax leaf.
+# Only the pressure worker enters a 64 MiB cgroup-v2 memory.max leaf.
 # mmap(PROT_NONE) and mprotect(RW) must succeed; first touch must be the first
 # failure point, and memory.events.local must attribute the OOM kill locally.
 set -uo pipefail
@@ -25,20 +25,27 @@ fi
 [ "$(uname -s)" = "Linux" ] || { echo "$0: Linux only" >&2; exit 64; }
 [ "$(stat -fc %T /sys/fs/cgroup)" = "cgroup2fs" ] || {
     echo "$0: unified cgroup v2 is required" >&2; exit 65; }
-command -v systemd-run >/dev/null || { echo "$0: systemd-run missing" >&2; exit 65; }
 if ! sudo -n true; then
-    echo "$0: passwordless sudo is required to create the transient scope" >&2
+    echo "$0: passwordless sudo is required to create the bounded cgroup" >&2
     exit 65
 fi
 
 work="$(mktemp -d)"
 worker="$work/reserve-commit-pressure"
 status_file="$work/worker.status"
-unit="rs-reserve-commit-${GITHUB_RUN_ID:-local}-${GITHUB_RUN_ATTEMPT:-0}-$$.service"
+cgroup="/sys/fs/cgroup/rs-reserve-commit-$$"
 
 cleanup() {
-    sudo systemctl stop "$unit" >/dev/null 2>&1 || true
-    sudo systemctl reset-failed "$unit" >/dev/null 2>&1 || true
+    case "$cgroup" in
+        /sys/fs/cgroup/rs-reserve-commit-[0-9]*)
+            if [ -d "$cgroup" ]; then
+                if [ -f "$cgroup/cgroup.kill" ]; then
+                    printf '1\n' | sudo tee "$cgroup/cgroup.kill" >/dev/null 2>&1 || true
+                fi
+                sudo rmdir "$cgroup" >/dev/null 2>&1 || true
+            fi
+            ;;
+    esac
     rm -rf "$work"
 }
 trap cleanup EXIT INT TERM
@@ -46,40 +53,49 @@ trap cleanup EXIT INT TERM
 cc -std=c11 -O1 -Wall -Wextra -Werror -o "$worker" "$SOURCE" || {
     echo "$0: pressure worker did not compile" >&2; exit 70; }
 
-uid="$(id -u)"
-gid="$(id -g)"
-if ! sudo systemd-run --quiet --unit="$unit" --service-type=exec \
-        --uid="$uid" --gid="$gid" \
-        --property="MemoryMax=$LIMIT_BYTES" \
-        --property="MemorySwapMax=0" \
-        --property="OOMPolicy=stop" \
-        --property="KillMode=control-group" \
-        --property="RuntimeMaxSec=15s" \
-        "$worker" "$status_file"; then
-    echo "$0: could not start the bounded transient service" >&2
+if ! sudo mkdir "$cgroup"; then
+    echo "$0: could not create the bounded cgroup leaf" >&2
     exit 70
 fi
 
-control_group="$(sudo systemctl show "$unit" -p ControlGroup --value)"
-events="/sys/fs/cgroup${control_group}/memory.events.local"
-if [ -z "$control_group" ] || [ ! -r "$events" ]; then
-    echo "$0: transient service exposes no readable memory.events.local" >&2
+for control in cgroup.procs cgroup.kill memory.max memory.swap.max memory.events.local; do
+    if [ ! -e "$cgroup/$control" ]; then
+        echo "$0: cgroup v2 memory controller does not expose $control" >&2
+        exit 70
+    fi
+done
+if ! printf '%s\n' "$LIMIT_BYTES" | sudo tee "$cgroup/memory.max" >/dev/null; then
+    echo "$0: could not set the cgroup memory.max limit" >&2
     exit 70
 fi
+if ! printf '0\n' | sudo tee "$cgroup/memory.swap.max" >/dev/null; then
+    echo "$0: could not disable cgroup swap" >&2
+    exit 70
+fi
+if [ -e "$cgroup/memory.oom.group" ]; then
+    printf '1\n' | sudo tee "$cgroup/memory.oom.group" >/dev/null || {
+        echo "$0: could not make cgroup OOM termination atomic" >&2; exit 70; }
+fi
+
+events="$cgroup/memory.events.local"
+sudo sh -c 'printf "%s\n" "$$" > "$1/cgroup.procs"; exec "$2" "$3"' \
+    rs-cgroup-launch "$cgroup" "$worker" "$status_file" &
+launcher_pid=$!
 
 ticks=0
-while sudo systemctl is-active --quiet "$unit"; do
+timed_out=0
+while kill -0 "$launcher_pid" >/dev/null 2>&1; do
     ticks=$((ticks + 1))
     if [ "$ticks" -ge 150 ]; then
-        echo "$0: worker did not terminate within 15 seconds" >&2
-        exit 70
+        timed_out=1
+        printf '1\n' | sudo tee "$cgroup/cgroup.kill" >/dev/null 2>&1 || true
+        break
     fi
     sleep 0.1
 done
 
-result="$(sudo systemctl show "$unit" -p Result --value)"
-main_code="$(sudo systemctl show "$unit" -p ExecMainCode --value)"
-main_status="$(sudo systemctl show "$unit" -p ExecMainStatus --value)"
+wait "$launcher_pid"
+worker_status=$?
 oom_kill="$(awk '$1 == "oom_kill" {print $2}' "$events")"
 oom_kill="${oom_kill:-0}"
 
@@ -92,12 +108,12 @@ if [ "$observed" != "$expected" ]; then
     echo "  worker phase record mismatch: '$observed'" >&2
     problems=$((problems + 1))
 fi
-if [ "$result" != "oom-kill" ]; then
-    echo "  service result was '$result', not oom-kill" >&2
+if [ "$timed_out" -ne 0 ]; then
+    echo "  worker exceeded the 15-second deadline" >&2
     problems=$((problems + 1))
 fi
-if [ "$main_code" != "2" ] || [ "$main_status" != "9" ]; then
-    echo "  worker termination was code=$main_code status=$main_status, not SIGKILL" >&2
+if [ "$worker_status" -ne 137 ]; then
+    echo "  bounded worker status was $worker_status, not SIGKILL (137)" >&2
     problems=$((problems + 1))
 fi
 if [ "$oom_kill" -lt 1 ]; then
@@ -106,7 +122,6 @@ if [ "$oom_kill" -lt 1 ]; then
 fi
 if [ "$problems" -ne 0 ]; then
     echo "$0: containment evidence did not hold" >&2
-    sudo systemctl status "$unit" --no-pager >&2 || true
     cat "$events" >&2 || true
     exit 1
 fi
@@ -145,5 +160,5 @@ with open(ledger_path, "w", encoding="utf-8") as out:
 PY
 
 echo "bounded reserve/commit mismatch held:"
-echo "  MemoryMax=$LIMIT_BYTES; reserve=268435456; mprotect=success"
-echo "  first touch: SIGKILL; service result=$result; local oom_kill=$oom_kill"
+echo "  memory.max=$LIMIT_BYTES; reserve=268435456; mprotect=success"
+echo "  first touch: SIGKILL; status=$worker_status; local oom_kill=$oom_kill"
