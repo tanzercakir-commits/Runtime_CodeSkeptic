@@ -49,6 +49,9 @@ on Apple Silicon, and QEMU's i386 loader hitting Windows' 64 KiB granularity.
 - Prebuilt binaries: **Linux x86-64** (static) and **macOS arm64** (build it with
   the included script on an Apple Silicon Mac). Any other platform builds from
   source — a C++20 compiler and CMake 3.20, no external dependencies.
+- Release archives are rebuilt with `./dist/build-linux-release.sh` or
+  `./dist/build-macos-release.sh`; both run the same fail-closed packaged demo
+  before emitting a SHA-256.
 - The tool **predicts**; it does not scan your binaries. Requirements are written
   by hand in v0.1.
 

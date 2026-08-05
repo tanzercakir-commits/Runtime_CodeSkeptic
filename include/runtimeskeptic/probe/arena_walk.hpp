@@ -84,6 +84,8 @@ struct ArenaWalk {
 
     // These move with the probe's own layout, so a caller must keep them OUT of
     // the facts subtree - they belong in notes, outside profile_id.
+    std::size_t attempts = 0;
+    bool budget_exhausted = false;
     std::size_t placed = 0;
     std::size_t held_by_probe = 0;
     std::size_t refused = 0;      // structural: recorded as a limitation
@@ -113,6 +115,26 @@ struct ArenaWalk {
 ArenaWalk walk_arena(const std::string& what, std::uint64_t bottom,
                      std::uint64_t top, std::uint64_t page_size,
                      std::uint64_t window_size, const ArenaProbe& probe);
+
+// Walks every page in `[bottom, top)` without treating a large reservation
+// failure as evidence about all addresses it spans. Each tile is attempted at
+// up to `max_window_size`; held or refused tiles are recursively divided until
+// the result is established at page granularity. Adjacent leaves with the same
+// verdict are merged, so process-local occupancy changes counts but not facts.
+//
+// Unlike `walk_arena`, this routine may use very large initial tiles: neither
+// EEXIST nor a size-sensitive ENOMEM is generalized to the tile. The hard
+// `max_attempts` budget leaves the unvisited remainder unknown instead of
+// allowing a global size refusal to expand into billions of page probes. If the
+// budget is exhausted, ALL partial facts from this walk are discarded so their
+// prefix cannot depend on process-local occupancy or recursion order.
+// Bounds and sizes must be page-aligned. Invalid input fails closed.
+ArenaWalk walk_arena_adaptive(const std::string& what,
+                              std::uint64_t bottom, std::uint64_t top,
+                              std::uint64_t page_size,
+                              std::uint64_t max_window_size,
+                              std::size_t max_attempts,
+                              const ArenaProbe& probe);
 
 // The ceiling an arena at the TOP of the user address space should use, given a
 // measured `max_user_address`. `granularity` is what the result is rounded up to.

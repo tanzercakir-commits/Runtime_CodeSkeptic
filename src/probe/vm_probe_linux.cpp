@@ -481,185 +481,114 @@ struct ScanOutcome {
 //      Treating it as a distinct outcome would make the recorded set depend on
 //      where our own libc landed - the very dependency rule 1 prevents.
 //
-// Only a structural refusal - ENOMEM, EINVAL, EPERM - says the kernel will not
-// place a mapping here for anybody, and only that is recorded as a limitation.
+// A multi-page placement failure is ambiguous: ENOMEM can describe the
+// requested size (not the address), and EEXIST proves only that some part of a
+// request overlaps a VMA. The adaptive walk below subdivides both outcomes and
+// records a limitation only after an exact page placement is refused.
 constexpr std::uint64_t kTiB = 1ull << 40;
+constexpr std::uint64_t kArenaMaxWindow = 1ull << 30;
+constexpr std::size_t kArenaAttemptBudget = 262144;
 
-// How far below the top of the user address space the arena reaches.
-// mmap_base randomization spans 1 TiB on x86-64; four leaves room for a larger
-// `mmap_rnd_bits` and the stack gap. Fixed, so the bounds never depend on this
-// process.
-constexpr std::uint64_t kArenaSpan = 4 * kTiB;
-
-// 64 GiB across 4 TiB is 64 probes: enough to catch a structural hole of any
-// consequential size, few enough to stay cheap.
-constexpr std::uint64_t kArenaStride = 64ull << 30;
-
-// Adds the arena's samples to `outcome`. Contiguous non-structural runs are
-// merged into ONE range rather than recorded per sample, so that the number of
-// entries - and therefore `profile_id` - cannot move with the probe's layout.
 void scan_one_arena(const char* what, std::uint64_t bottom, std::uint64_t top,
-                    std::uint64_t page_size, std::uint64_t probe_length,
+                    std::uint64_t page_size, std::uint64_t max_window_size,
                     ScanOutcome& outcome) {
-    if (bottom >= top || top - bottom < probe_length) return;
-
-    std::uint64_t run_start = 0;
-    std::uint64_t last_sample_end = 0;
-    bool in_run = false;
-    std::size_t granted = 0, occupied = 0, refused = 0;
-
-    auto close_run = [&](std::uint64_t end) {
-        if (!in_run) return;
-        ClassifiedRange cr;
-        cr.range = AddressRange{run_start, end};
-        cr.evidence = EvidenceClass::MeasuredCapability;
-        cr.note =
-            std::string("inside the ") + what +
-            ", sampled on a fixed ladder derived from max_user_address; every "
-            "sample was either granted or already held by the probe process "
-            "(EEXIST), and none was structurally refused. Which samples were "
-            "which depends on the probe's own ASLR slide and is deliberately "
-            "not recorded";
-        outcome.available.push_back(cr);
-        in_run = false;
-    };
-
-    auto visit = [&](std::uint64_t base) {
-        if (base % page_size != 0) return;
+    std::string refusal_text;
+    ArenaProbe platform_probe;
+    platform_probe.place = [&](std::uint64_t base, std::uint64_t size) {
         MapAttempt attempt = try_map(
-            reinterpret_cast<void*>(base), static_cast<std::size_t>(probe_length),
+            reinterpret_cast<void*>(base), static_cast<std::size_t>(size),
             PROT_NONE,
             MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED_NOREPLACE | MAP_NORESERVE);
-
-        bool usable = false;
         if (attempt.ok()) {
-            usable = reinterpret_cast<std::uint64_t>(attempt.address) == base;
-            unmap(attempt, static_cast<std::size_t>(probe_length));
-            if (usable) ++granted;
-        } else if (attempt.error == EEXIST) {
-            usable = true;   // held by us; see rule 2 above
-            ++occupied;
-        } else {
-            ++refused;
+            const bool exact =
+                reinterpret_cast<std::uint64_t>(attempt.address) == base;
+            unmap(attempt, static_cast<std::size_t>(size));
+            if (exact) return ArenaPlacement::Placed;
+            refusal_text = "mmap(MAP_FIXED_NOREPLACE) relocated the request";
+            return ArenaPlacement::Refused;
         }
-
-        if (usable) {
-            if (!in_run) {
-                run_start = base;
-                in_run = true;
-            }
-            last_sample_end = base + probe_length;
-            return;
-        }
-
-        close_run(base);
-        ClassifiedRange cr;
-        cr.range = AddressRange{base, base + probe_length};
-        cr.evidence = EvidenceClass::MeasuredCapability;
-        cr.note = "exact mapping refused with " + errno_name(attempt.error) +
-                  " inside the " + what;
-        outcome.unavailable.push_back(cr);
+        if (attempt.error == EEXIST) return ArenaPlacement::HeldByProbe;
+        refusal_text = "mmap(MAP_FIXED_NOREPLACE) failed with " +
+                       errno_name(attempt.error);
+        return ArenaPlacement::Refused;
+    };
+    platform_probe.describe = [&](std::uint64_t) {
+        ArenaEntry entry;
+        entry.text = refusal_text;
+        return entry;
     };
 
-    std::uint64_t highest_visited = 0;
-    bool visited_any = false;
-    for (std::uint64_t base = bottom; base + probe_length <= top;
-         base += kArenaStride) {
-        visit(base);
-        highest_visited = base;
-        visited_any = true;
-    }
+    ArenaWalk walk = walk_arena_adaptive(
+        what, bottom, top, page_size, max_window_size, kArenaAttemptBudget,
+        platform_probe);
+    outcome.available.insert(outcome.available.end(), walk.available.begin(),
+                             walk.available.end());
+    outcome.unavailable.insert(outcome.unavailable.end(),
+                               walk.unavailable.begin(),
+                               walk.unavailable.end());
 
-    // THE TOP WINDOW, PROBED EXPLICITLY.
-    //
-    // The strided walk stops up to one full stride - 64 GiB - short of `top`, and
-    // that stride is the single most important part of this arena: `mmap_base` is
-    // near the TOP of the map window, not in the middle of it.
-    //
-    // On a 4-level host it did not matter, because `mmap_base` randomization put
-    // the heap around 0x7f3… , comfortably inside. An LA57 runner showed the
-    // difference: there `mmap_base` derives from DEFAULT_MAP_WINDOW rather than
-    // TASK_SIZE, so randomization is subtracted from 2^47 and the heap landed at
-    // 0x7ffa6bcff000 - 41.7 GiB above the arena's recorded top of 0x7ff000400000,
-    // inside exactly the stride the walk never reached.
-    //
-    // This is a probe, not an extrapolation, which is the distinction the comment
-    // below draws. Closing the run AT `top` on the strength of a sample that ended
-    // 64 GiB earlier was a real bug once - it claimed availability up to
-    // max_user_address and overlapped the structurally unavailable band at the very
-    // top, so the profile asserted one range both available and not. Placing a
-    // window that ENDS at `top` and reporting what happened is the opposite of
-    // that: the edge is measured.
-    //
-    // It changes the sample set on every host, so it moves `profile_id` and the
-    // false-positive campaign was re-measured in the same commit.
-    if (top >= probe_length) {
-        const std::uint64_t aligned_top =
-            ((top - probe_length) / page_size) * page_size;
-        if (aligned_top >= bottom && (!visited_any || aligned_top > highest_visited)) {
-            visit(aligned_top);
-        }
-    }
-
-    // Close at the last window actually probed, never at `top` on its own.
-    close_run(last_sample_end);
-
-    // The split between granted and occupied is the probe's own layout, so it
-    // goes to the notes - which are outside the facts subtree and outside
-    // profile_id - rather than into any recorded fact.
-    outcome.occupied_notes.push_back(
+    // Counts may move with this process's ASLR layout, so they stay outside the
+    // facts subtree and therefore outside profile_id.
+    std::string note =
         std::string(what) + " [" + json::to_hex(bottom) + ", " +
-        json::to_hex(top) + ") sampled every " +
-        json::to_hex(kArenaStride) + " bytes: " + std::to_string(granted) +
-        " granted, " + std::to_string(occupied) +
-        " already held by the probe process, " + std::to_string(refused) +
-        " structurally refused. The first two are treated identically on "
-        "purpose; only the third is a host limitation");
+        json::to_hex(top) + ") walked with adaptive windows no larger than " +
+        json::to_hex(max_window_size) + " bytes: " +
+        std::to_string(walk.attempts) + " placement attempts, " +
+        std::to_string(walk.placed) + " exact placements granted, " +
+        std::to_string(walk.held_by_probe) +
+        " pages already held by this process, " +
+        std::to_string(walk.held_no_access) +
+        " no-access pages treated as held, " +
+        std::to_string(walk.refused) +
+        " exact pages structurally refused. Multi-page refusals and collisions "
+        "were subdivided and never generalized";
+    if (walk.budget_exhausted) {
+        note += "; the placement-attempt budget was exhausted, so the unvisited "
+                "remainder was deliberately left unknown";
+    }
+    outcome.occupied_notes.push_back(std::move(note));
 }
 
-// The two regions a Linux process is actually made of, both derived from
-// TASK_SIZE and neither from this process's own layout.
+// The allocation corridor a Linux process is actually made of, derived from
+// TASK_SIZE and neither endpoint from this process's own layout.
 //
-//   mmap arena       the top of the user space, where the loader puts every
-//                    shared library and where a large malloc lands
-//   ET_DYN base      ELF_ET_DYN_BASE = TASK_SIZE / 3 * 2, where the kernel
-//                    puts a position-independent executable's own text
+//   lower endpoint   ELF_ET_DYN_BASE = TASK_SIZE / 3 * 2, where the kernel
+//                    puts a position-independent executable's text
+//   upper endpoint   the default map-window ceiling, below which the loader
+//                    puts shared libraries and anonymous mappings
 //
-// The second was found by a test rather than by reasoning: the coverage test
-// asked the profile about the address it was executing from, and the profile
-// had nothing to say, because the test binary is PIE and lives at 0x55... -
-// four TiB below the mmap arena and nowhere near the emulator landmarks.
+// One continuous corridor is required because mmap_rnd_bits is runtime-tunable:
+// WSL2 and hardened hosts can place anonymous mappings between the older fixed
+// ET_DYN and mmap arenas. Initial tiles are capped at 1 GiB and at the largest
+// reservation this probe actually measured. Adaptive subdivision makes a size
+// limit or one occupied page local; a hard attempt budget leaves any unvisited
+// remainder unknown rather than risking unbounded work.
 void scan_allocation_arenas(std::uint64_t page_size,
-                            std::uint64_t probe_length,
                             std::uint64_t max_user_address,
+                            std::uint64_t max_window_size,
                             ScanOutcome& outcome) {
-    if (max_user_address <= kArenaSpan) return;
-
-    // See `arena_ceiling_for()` in probe/arena_walk.hpp. It is there rather than
-    // here so that the LA57 case can be tested on a host that does not have
-    // LA57 - which is the whole lesson of the two days this cost.
-    const std::uint64_t ceiling = arena_ceiling_for(max_user_address, kTiB);
-    // Probing stops at whichever is lower: the measured top of the space, or the
-    // default map window the kernel actually allocates in.
-    const std::uint64_t probe_top =
-        max_user_address < ceiling ? max_user_address : ceiling;
-    if (ceiling > kArenaSpan) {
-        scan_one_arena("kernel's mmap allocation arena", ceiling - kArenaSpan,
-                       probe_top, page_size, probe_length, outcome);
+    if (page_size == 0 || max_window_size == 0 ||
+        max_user_address <= max_window_size) {
+        return;
     }
 
+    const std::uint64_t ceiling = arena_ceiling_for(max_user_address, kTiB);
+    const std::uint64_t raw_top =
+        max_user_address < ceiling ? max_user_address : ceiling;
+    const std::uint64_t probe_top = (raw_top / page_size) * page_size;
     const std::uint64_t dyn_base = (ceiling / 3) * 2;
     const std::uint64_t dyn_bottom = (dyn_base / kTiB) * kTiB;
-    if (dyn_bottom > 0 && dyn_bottom + kArenaSpan < ceiling - kArenaSpan) {
-        scan_one_arena("ET_DYN base region, where a position-independent "
-                       "executable is placed",
-                       dyn_bottom, dyn_bottom + kArenaSpan, page_size,
-                       probe_length, outcome);
+    if (dyn_bottom > 0 && dyn_bottom < probe_top) {
+        scan_one_arena(
+            "Linux default allocation corridor from ET_DYN base through the "
+            "kernel's mmap arena",
+            dyn_bottom, probe_top, page_size, max_window_size, outcome);
     }
 }
 
 ScanOutcome scan_address_space(std::size_t page_size, std::uint64_t probe_length,
-                               std::uint64_t max_user_address) {
+                               std::uint64_t max_user_address,
+                               std::uint64_t arena_window_size) {
     ScanOutcome outcome;
 
     std::vector<std::uint64_t> candidates;
@@ -783,7 +712,8 @@ ScanOutcome scan_address_space(std::size_t page_size, std::uint64_t probe_length
         outcome.unavailable.push_back(cr);
     }
 
-    scan_allocation_arenas(page_size, probe_length, max_user_address, outcome);
+    scan_allocation_arenas(page_size, max_user_address, arena_window_size,
+                            outcome);
 
     collapse_contained_ranges(outcome.unavailable);
     collapse_contained_ranges(outcome.available);
@@ -960,7 +890,8 @@ Result probe_virtual_memory(const Options& options) {
     }
 
     // -- largest single reservation ----------------------------------------
-    if (const std::uint64_t biggest = find_max_single_reservation(); biggest != 0) {
+    const std::uint64_t biggest = find_max_single_reservation();
+    if (biggest != 0) {
         profile.vm.max_single_reservation = Fact<std::uint64_t>::known(
             biggest, EvidenceClass::MeasuredCapability,
             std::string(kSourceProbe) +
@@ -1119,7 +1050,12 @@ Result probe_virtual_memory(const Options& options) {
             options.max_test_mapping_bytes < page_size
                 ? page_size
                 : options.max_test_mapping_bytes;
-        ScanOutcome scan = scan_address_space(page_size, probe_length, max_user);
+        const std::uint64_t arena_window =
+            biggest == 0 ? page_size
+                         : (biggest < kArenaMaxWindow ? biggest
+                                                     : kArenaMaxWindow);
+        ScanOutcome scan = scan_address_space(page_size, probe_length, max_user,
+                                               arena_window);
         profile.vm.available_ranges = std::move(scan.available);
         profile.vm.unavailable_ranges = std::move(scan.unavailable);
         for (auto& note : scan.occupied_notes) {

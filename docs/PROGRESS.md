@@ -16,6 +16,58 @@ re-litigated; a mistake recorded here does not need to be re-made.
 
 ---
 
+## 2026-08-05 - WSL2 closes the static Linux release lane
+
+**Changed.** `dist/build-linux-release.sh` now builds the five shipped tools
+with a static link, rejects any ELF carrying an `INTERP` segment, verifies the
+packaged Redis verdict, and normalizes archive timestamps, ownership, modes,
+and gzip metadata. The Linux probe now walks the deterministic ET_DYN-to-mmap
+allocation corridor with initial windows capped at 1 GiB and at the largest
+reservation the host actually granted. Any collision or refusal is recursively
+subdivided to page granularity before it becomes a fact. If a hard
+262,144-attempt budget is exhausted, all partial arena facts are discarded and
+the arena remains UNKNOWN. The conformance test requires a
+successful direct `mmap(NULL, ...)` to query as SUPPORTED.
+
+The first WSL2 static run found a product bug rather than a packaging bug: the
+probe assumed a 28-bit mmap-randomization neighbourhood and left a large gap
+between two fixed 4 TiB arenas. A static process allocated at
+`0x78386f0f4000`, inside that gap, so the profile honestly returned UNKNOWN.
+An initial contiguous 64 GiB-window fix made the regression green, but an
+independent audit rejected it: ENOMEM can describe the requested size rather
+than every address in the window, and EEXIST proves only that some part of a
+large request overlaps a VMA. Adaptive subdivision removes both invalid
+generalizations and tiles the final short window without overlap.
+
+**Evidence.** On Ubuntu 24.04 under WSL2, GCC 13.3 built every target with
+warnings-as-errors and a static link; `file` reported statically linked and
+`ldd` reported no dynamic executable. CTest passed 16/16, and `test_probe`
+passed 15/15 under both 4 GiB and 1 GiB `RLIMIT_AS`; the latter reduced the
+measured single reservation to 512 MiB and still passed the direct-mmap
+SUPPORTED assertion. Five separate probe processes agreed on profile id
+`sha256:26330ed2cd12e4cb6fe7414e4b632bbf371455a101e25b9663856d2008beeb61`.
+The 1 GiB constrained campaign held 13 asserted pairings with zero
+contradictions; three conditional cases were correctly not asserted.
+The complete guard gate passed: 101/101 guard selftests and all 639 boundary
+cases with zero disagreement. Release builds started under `umask 077` and
+`umask 002` produced byte-identical archives with SHA-256
+`759711cc5d4a904a0699df09ba5e5a745e0d96dc09b6a814c512f9aee965e384`.
+
+**Learned.** WSL2 is a valid Linux release instrument and a useful independent
+host. A large reservation failure is not an address-range fact, and a large
+collision is not proof about bytes outside the colliding page. Adaptive work
+must also be bounded: if measurement cannot finish within its explicit budget,
+UNKNOWN is the only deterministic result for the entire partially walked arena.
+Measuring the deterministic
+corridor this way removes the guessed ASLR bound without deriving facts from
+this process's layout. `.gitattributes` pins shell tooling to LF so a Windows
+clone remains directly runnable from WSL.
+
+**Next.** Push the branch and let the final GitHub Actions matrix gate a draft
+PR. The Linux and macOS archives remain local evidence artifacts until release
+publication is explicitly approved.
+
+
 ## 2026-08-05 - physical Apple Silicon package verified (T-033)
 
 **Changed.** Commit 29d3b13 was cloned from `codex/presentation-ready` into a
