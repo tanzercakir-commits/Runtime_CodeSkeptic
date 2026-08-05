@@ -1,0 +1,37 @@
+{
+  "build": {
+    "outputs": {},
+    "outcome": "success",
+    "conclusion": "success"
+  },
+  "test": {
+    "outputs": {},
+    "outcome": "failure",
+    "conclusion": "failure"
+  },
+  "measure": {
+    "outputs": {},
+    "outcome": "skipped",
+    "conclusion": "skipped"
+  },
+  "reproducible": {
+    "outputs": {},
+    "outcome": "skipped",
+    "conclusion": "skipped"
+  },
+  "report": {
+    "outputs": {},
+    "outcome": "skipped",
+    "conclusion": "skipped"
+  },
+  "refuse_wine": {
+    "outputs": {},
+    "outcome": "skipped",
+    "conclusion": "skipped"
+  },
+  "campaign": {
+    "outputs": {},
+    "outcome": "skipped",
+    "conclusion": "skipped"
+  }
+}
