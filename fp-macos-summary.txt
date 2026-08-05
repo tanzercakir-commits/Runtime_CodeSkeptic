@@ -1,0 +1,20 @@
+observed: python3
+observed: perl
+observed: ruby
+skipped: php (no php on this host)
+observed: git
+observed: openssl
+observed: jq
+skipped: redis (no redis-server on this host)
+observed: gzip
+FAILED   : xz (see /tmp/fp-macos/observe.log)
+skipped: ffmpeg (no ffmpeg on this host)
+observed: node-jit
+observed: java-jit
+python3 (shape): rs-check produced nothing: rs-check: '/tmp/fp-macos/python3.shape.json' contains no usable requirements. An empty bundle is not a clean result.
+
+NOT COVERED on this host:
+  skipped: php (no php on this host)
+  skipped: redis (no redis-server on this host)
+  FAILED   : xz (see /tmp/fp-macos/observe.log)
+  skipped: ffmpeg (no ffmpeg on this host)
