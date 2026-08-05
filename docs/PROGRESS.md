@@ -16,6 +16,38 @@ re-litigated; a mistake recorded here does not need to be re-made.
 
 ---
 
+## 2026-08-05 - macOS release drift became attributable evidence
+
+**Changed.** CI now preserves both independently built release archives before
+the second build overwrites the package path, then invokes a member-level
+comparator on mismatch. The comparator has explicit compressed-size, logical
+payload, member-count, text-field, pax-field and output-count limits. Its
+adversarial selftest proves valid equal archives pass; content and metadata
+drift are attributed; corrupt input fails closed; byte-identical archives
+cannot bypass member, logical-size, text or pax limits; and a 150-difference
+input cannot exceed the 100-line report boundary.
+
+**Evidence.** Exact-head CI run 31056411069 passed all 23 CTest cases on Apple
+Clang and MSVC, with Linux/GCC and Linux/Clang also green. The macOS package
+passed its install-name, ABI-version, out-of-tree SDK consumer, analyzer,
+runtime replay and benchmark checks twice; only its final archive hashes
+differed. That isolates the remaining failure to packaged bytes, but the run
+did not preserve both archives and therefore cannot identify a responsible
+member. Linux's two clean release builds remain byte-identical at SHA-256
+`3b8ef599dfe404612de885d5eefc9728186079d56060b278f7193aab3422432a`.
+
+**Learned.** A whole-archive hash proves disagreement, not cause. Apple's
+linker uses a content-derived build UUID by default, so removing `LC_UUID`
+would discard crash/debug identity without evidence that it caused this
+mismatch. The next run must measure member content and metadata before any
+build flag is changed.
+
+**Next.** Run this exact head on physical Apple Silicon and read the emitted
+member/field attribution. Fix only the measured nondeterministic input, rerun
+the full matrix, then consume T-009 when every job is green.
+
+---
+
 ## 2026-08-05 - Mach-O loader versions preserve the ABI-v1 ordering invariant
 
 **Changed.** The final second-agent audit found that generic CMake `VERSION

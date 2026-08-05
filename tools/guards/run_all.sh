@@ -111,6 +111,8 @@ run "schemas vs code"       python3 "$HERE/validate_schemas.py"
 run "runtime boundary safety" python3 "$HERE/check_runtime_safety.py"
 run "release version consistency" python3 "$HERE/check_release_consistency.py"
 run "package verifier fail-closed" python3 "$HERE/../../dist/verify_package_selftest.py"
+run "archive reproducibility diagnosis" \
+    python3 "$HERE/../../dist/compare_release_archives_selftest.py"
 run "execution coverage ledger" \
     python3 "$HERE/../campaign/groundtruth_execution_coverage_selftest.py"
 run "cgroup launcher fail-closed" \

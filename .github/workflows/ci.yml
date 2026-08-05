@@ -99,12 +99,17 @@ jobs:
           RS_SDK_BUILD_DIR="$PWD/build-release-sdk" \
           RS_JOBS=2 ./dist/build-linux-release.sh
           first_sha="$(sha256sum dist/runtimeskeptic-v0.2.0-linux-x86_64.tar.gz | awk '{print $1}')"
+          cp dist/runtimeskeptic-v0.2.0-linux-x86_64.tar.gz \
+            "$RUNNER_TEMP/runtimeskeptic-linux-first.tar.gz"
           RS_BUILD_DIR="$PWD/build-release-static-2" \
           RS_SDK_BUILD_DIR="$PWD/build-release-sdk-2" \
           RS_JOBS=2 ./dist/build-linux-release.sh
           second_sha="$(sha256sum dist/runtimeskeptic-v0.2.0-linux-x86_64.tar.gz | awk '{print $1}')"
           test "$first_sha" = "$second_sha" || {
             echo "::error::v0.2 Linux package is not byte-reproducible"
+            python3 dist/compare_release_archives.py \
+              "$RUNNER_TEMP/runtimeskeptic-linux-first.tar.gz" \
+              dist/runtimeskeptic-v0.2.0-linux-x86_64.tar.gz || true
             exit 1
           }
           echo "reproducible package sha256: $second_sha"
@@ -512,10 +517,15 @@ jobs:
         run: |
           ./dist/build-macos-release.sh
           first_sha="$(shasum -a 256 dist/runtimeskeptic-v0.2.0-macos-arm64.tar.gz | awk '{print $1}')"
+          cp dist/runtimeskeptic-v0.2.0-macos-arm64.tar.gz \
+            "$RUNNER_TEMP/runtimeskeptic-macos-first.tar.gz"
           RS_BUILD_DIR="$PWD/build-release-macos-2" ./dist/build-macos-release.sh
           second_sha="$(shasum -a 256 dist/runtimeskeptic-v0.2.0-macos-arm64.tar.gz | awk '{print $1}')"
           test "$first_sha" = "$second_sha" || {
             echo "::error::v0.2 macOS package is not byte-reproducible"
+            python3 dist/compare_release_archives.py \
+              "$RUNNER_TEMP/runtimeskeptic-macos-first.tar.gz" \
+              dist/runtimeskeptic-v0.2.0-macos-arm64.tar.gz || true
             exit 1
           }
           echo "reproducible package sha256: $second_sha"
