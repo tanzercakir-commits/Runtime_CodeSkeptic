@@ -16,6 +16,26 @@ re-litigated; a mistake recorded here does not need to be re-made.
 
 ---
 
+## 2026-08-05 - physical Apple Silicon package verified (T-033)
+
+**Changed.** Commit 29d3b13 was cloned from `codex/presentation-ready` into a
+fresh checkout on a physical Apple M1 MacBook Air. Running
+`./dist/build-macos-release.sh` passed the packaged Redis verdict check and
+produced `dist/runtimeskeptic-v0.1.0-macos-arm64.tar.gz`.
+
+**Evidence.** The package verifier reported `UNSUPPORTED` via `RS-VM-0006`, then
+the builder emitted SHA-256
+`990c1d9787168dfb5b5bbea92358e9b51f919bb4161e72d7936d537f75a5bdd6`.
+This closes the physical Apple Silicon release-evidence gap.
+
+**Learned.** The native-architecture guard, complete package manifest, and
+fail-closed demo check all held in a fresh clone rather than only in the Windows
+fixture used during development.
+
+**Next.** Add a reproducible Linux static-package builder, then open a draft PR
+and let the final GitHub Actions matrix gate merge. The macOS archive remains a
+local evidence artifact until release publication is explicitly approved.
+
 
 ## 2026-08-05 - presentation integration becomes fail-closed (T-033)
 
