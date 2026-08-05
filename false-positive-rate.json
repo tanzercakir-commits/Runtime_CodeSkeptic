@@ -1,0 +1,19 @@
+{
+  "populations": {
+    "shape": {
+      "programs": 11,
+      "evaluated": 246,
+      "rejected": 0,
+      "verdicts": {
+        "SUPPORTED": 246
+      },
+      "false_positive_count": 0,
+      "false_positive_rate_percent": 0.0,
+      "unknown_share_percent": 0.0,
+      "findings": {
+        "RS-VM-0005": 174
+      },
+      "false_positives": []
+    }
+  }
+}
