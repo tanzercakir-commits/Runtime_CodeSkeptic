@@ -46,9 +46,9 @@ SEVEN CHECKS.
 4. EVERY ITEM SAYS WHAT WOULD PROVE IT DONE. "Done when" must name something
    that runs. An item that cannot be finished is a mood.
 
-5. FINISHED WORK LEAVES A TRACE. An item marked `[done]` in TODO.md must be
-   mentioned in docs/PROGRESS.md, so that what was learned survives the item
-   being crossed off. Work that completes silently gets redone.
+5. FINISHED WORK IS CONSUMED. A `[done]` item may not remain in TODO.md.
+   Completion removes it from the queue; check_progress_history.py separately
+   requires the same change to append its evidence to docs/PROGRESS.md.
 
 6. THE MARKER AND THE SECTION MUST AGREE. An item carrying `[now]` has to sit
    under `## Now`. This was missing and the compass contradicted itself in three
@@ -164,6 +164,11 @@ def main() -> int:
         if v["state"] not in STATES:
             problems.append(f"{ident}: unknown state `[{v['state']}]` "
                             f"(expected one of {', '.join(sorted(STATES))})")
+        if v["state"] == "done":
+            problems.append(
+                f"{ident} is `[done]` but remains in docs/TODO.md. Finished "
+                "items must be consumed from the queue; their evidence belongs "
+                "in append-only docs/PROGRESS.md.")
         if v["state"] != "done" and "**Done when:**" not in v["body"]:
             problems.append(
                 f"{ident} ({v['title']}) has no **Done when:** - name "
@@ -191,14 +196,6 @@ def main() -> int:
                 f"{ident} is `[blocked]` with no **Blocker:** named. A "
                 f"blocker nobody wrote down is an excuse.")
 
-    # --- check 5: finished work leaves a trace ---------------------------
-    progress_text = PROGRESS.read_text(encoding="utf-8") if PROGRESS.exists() else ""
-    for ident, v in items.items():
-        if v["state"] == "done" and ident not in progress_text:
-            problems.append(
-                f"{ident} is `[done]` but docs/PROGRESS.md never mentions it. "
-                f"Crossing an item off is not the same as recording what it "
-                f"taught.")
 
     # --- checks 1 and 2: the plan and the compass agree ------------------
     plan_tagged = set()

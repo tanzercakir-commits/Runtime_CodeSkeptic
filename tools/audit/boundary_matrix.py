@@ -38,19 +38,53 @@ except ImportError:
 REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 
+def _host_native_binary(path):
+    """Reject a PE executable when this guard is running under POSIX.
+
+    WSL can launch Windows binaries, but a Windows process cannot open the
+    guard's POSIX /tmp paths. Accepting that interop path made every
+    schema-valid input look over-strict instead of reporting a setup error.
+    """
+    try:
+        magic = open(path, "rb").read(4)
+    except OSError:
+        return False
+    is_pe = magic[:2] == b"MZ" or path.lower().endswith(".exe")
+    return is_pe if os.name == "nt" else not is_pe
+
+
 def _bin(name):
-    # Single-config generators put binaries in build/bin; multi-config ones
-    # (MSVC, Xcode) nest them under the configuration. Missing the config
-    # subdirs let the matrix "pass" by finding nothing - a fail-open the
-    # 2026-08-02 re-test caught. Every config CI builds is listed here.
-    roots = [os.path.join(REPO, "build", "bin")]
-    for cfg in ("Release", "RelWithDebInfo", "Debug", "MinSizeRel"):
-        roots.append(os.path.join(REPO, "build", "bin", cfg))
+    # Single-config generators put binaries in <build>/bin; multi-config ones
+    # (MSVC, Xcode) nest them under the configuration. Search the canonical
+    # build first, then named local build trees, but accept only the current
+    # host's executable format.
+    roots = []
+    override = os.environ.get("RS_BOUNDARY_BUILD_DIR")
+    if override:
+        roots.extend((override, os.path.join(override, "bin")))
+
+    build_roots = [os.path.join(REPO, "build")]
+    build_roots.extend(
+        os.path.join(REPO, leaf)
+        for leaf in sorted(os.listdir(REPO))
+        if leaf.startswith("build") and
+        os.path.isdir(os.path.join(REPO, leaf)) and
+        leaf != "build"
+    )
+    for build_root in build_roots:
+        roots.append(os.path.join(build_root, "bin"))
+        for cfg in ("Release", "RelWithDebInfo", "Debug", "MinSizeRel"):
+            roots.append(os.path.join(build_root, "bin", cfg))
+
+    seen = set()
     for root in roots:
+        if root in seen:
+            continue
+        seen.add(root)
         for leaf in (name, name + ".exe"):
-            c = os.path.join(root, leaf)
-            if os.path.exists(c):
-                return c
+            candidate = os.path.join(root, leaf)
+            if os.path.isfile(candidate) and _host_native_binary(candidate):
+                return candidate
     return None
 
 

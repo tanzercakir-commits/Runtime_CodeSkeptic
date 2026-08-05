@@ -47,7 +47,13 @@
 #define GT_FAULTED   "faulted"
 #define GT_SKIPPED   "skipped"
 #define GT_LOST      "lost"
+#define GT_SATISFIED_RELOCATED "satisfied-relocated"
+#define GT_TAIL_ADDRESSABLE    "tail-addressable"
+#define GT_MISALIGNED          "misaligned"
+#define GT_MISALIGNED_EINVAL   "misaligned-einval"
+#define GT_REPEATED_PERMANENT_REFUSAL "repeated-permanent-refusal"
 
+#define GT_BELOW_BOUND_UNAVAILABLE "below-bound-unavailable"
 __attribute__((unused))
 static void gt_json_escape(const char* s, char* out, size_t cap) {
     size_t o = 0;

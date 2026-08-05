@@ -107,6 +107,8 @@ run "finding registry"      python3 "$HERE/check_registry.py"
 run "schemas vs code"       python3 "$HERE/validate_schemas.py"
 run "execution coverage ledger" \
     python3 "$HERE/../campaign/groundtruth_execution_coverage_selftest.py"
+run "cgroup launcher fail-closed" \
+    bash "$HERE/../../tests/groundtruth/cgroup_launcher_selftest.sh"
 run "input boundary matrix" python3 "$HERE/../audit/boundary_matrix.py"
 run "normative non-goals"   python3 "$HERE/check_non_goals.py"
 run "dates against git"     python3 "$HERE/check_dates.py"

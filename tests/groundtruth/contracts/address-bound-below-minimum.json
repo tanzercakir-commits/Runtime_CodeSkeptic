@@ -1,0 +1,36 @@
+{
+  "schema": "runtime-skeptic.application-requirements.v1",
+  "name": "Writable anonymous mapping below exclusive bound 0x10000",
+  "component": "ground-truth pairing for RS-VM-0023",
+  "operation": "virtual_memory_map",
+  "request": {
+    "size": 4096,
+    "address_max": "0x10000",
+    "exact_address_required": false,
+    "protection": {"read": true, "write": true, "execute": false},
+    "file_backed": false
+  },
+  "assumptions": {
+    "guest_host_identity_required": false,
+    "translation_layer_available": false,
+    "retries_on_failure": false
+  },
+  "required_postconditions": [
+    "a writable anonymous mapping succeeds entirely below exclusive bound 0x10000"
+  ],
+  "permitted_fallbacks": [],
+  "failure_sink": {
+    "kind": "fatal_assert",
+    "location": {
+      "file": "tests/groundtruth/cases/bounded_mapping_below.c",
+      "line": 1,
+      "symbol": "attempt"
+    },
+    "description": "every page-aligned placement below the measured bound is refused even though the same call succeeds at the bound"
+  },
+  "assumption_evidence": "specified_guarantee",
+  "extraction_limitations": [
+    "Linux-only executable oracle. The runner derives address_max from this run's measured min_map_address and passes the identical value to the case."
+  ],
+  "x_groundtruth": "The case first maps and touches a positive control exactly at the measured floor, then boundedly enumerates every page-aligned mapping start below the exclusive bound with MAP_FIXED_NOREPLACE. Only policy refusals for every candidate produce below-bound-unavailable."
+}

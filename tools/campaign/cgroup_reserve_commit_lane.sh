@@ -14,6 +14,7 @@ LEDGER="${2:-}"
 RS_CHECK="${RS_CHECK:-$ROOT/build/bin/rs-check}"
 SOURCE="$ROOT/tests/groundtruth/linux/reserve_commit_pressure.c"
 CONTRACT="$ROOT/tests/groundtruth/contracts/reserve-then-touch-cgroup.json"
+LAUNCHER="$ROOT/tests/groundtruth/linux/cgroup_exec.sh"
 LIMIT_BYTES=67108864
 
 if [ -z "$PROFILE" ] || [ -z "$LEDGER" ]; then
@@ -22,6 +23,7 @@ if [ -z "$PROFILE" ] || [ -z "$LEDGER" ]; then
 fi
 [ -f "$PROFILE" ] || { echo "$0: profile not found: $PROFILE" >&2; exit 64; }
 [ -x "$RS_CHECK" ] || { echo "$0: rs-check not found: $RS_CHECK" >&2; exit 64; }
+[ -f "$LAUNCHER" ] || { echo "$0: cgroup launcher not found: $LAUNCHER" >&2; exit 64; }
 [ "$(uname -s)" = "Linux" ] || { echo "$0: Linux only" >&2; exit 64; }
 [ "$(stat -fc %T /sys/fs/cgroup)" = "cgroup2fs" ] || {
     echo "$0: unified cgroup v2 is required" >&2; exit 65; }
@@ -96,12 +98,7 @@ expected_membership="${cgroup#/sys/fs/cgroup}"
 original_uid="$(id -u)"
 original_gid="$(id -g)"
 setpriv_bin="$(command -v setpriv)"
-sudo sh -c '
-    printf "%s\n" "$$" > "$1/cgroup.procs" || exit 70
-    actual="$(cut -d: -f3 /proc/self/cgroup)"
-    [ "$actual" = "$4" ] || exit 71
-    exec "$5" --reuid "$6" --regid "$7" --clear-groups -- "$2" "$3"
-' rs-cgroup-launch "$cgroup" "$worker" "$status_file" "$expected_membership" \
+sudo sh "$LAUNCHER" "$cgroup" "$worker" "$status_file" "$expected_membership" \
     "$setpriv_bin" "$original_uid" "$original_gid" &
 launcher_pid=$!
 
@@ -178,7 +175,7 @@ ledger = {
     "contract": "contracts/reserve-then-touch-cgroup.json",
     "analyzer_verdict": "CONDITIONAL",
     "outcome": "oom-killed-after-touch",
-    "pairing": "held",
+    "pairing": "not asserted",
     "finding_ids": findings,
 }
 with open(ledger_path, "w", encoding="utf-8") as out:

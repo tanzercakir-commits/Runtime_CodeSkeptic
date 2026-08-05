@@ -36,7 +36,7 @@ on Apple Silicon, and QEMU's i386 loader hitting Windows' 64 KiB granularity.
   Windows and macOS — each traced by that OS's native instrument (strace / ETW /
   dtrace). When it says "runs here," that is trustworthy, which is why "refused
   here" is worth listening to.
-- 28 cross-layer rules; every verdict seals into a tamper-evident, replayable
+- 27 registered cross-layer finding IDs; every verdict seals into a tamper-evident, replayable
   bundle.
 - Statically-linked Linux binaries (run on any x86-64 Linux, no dependencies)
   and a macOS arm64 package linked only to Apple's system libraries. Both use

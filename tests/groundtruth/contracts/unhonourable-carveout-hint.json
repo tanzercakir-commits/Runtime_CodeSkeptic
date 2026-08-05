@@ -1,0 +1,36 @@
+{
+  "schema": "runtime-skeptic.application-requirements.v1",
+  "name": "Relocatable mapping hinted inside the measured Apple carveout",
+  "component": "macOS ground-truth pairing for RS-VM-0020",
+  "operation": "virtual_memory_map",
+  "request": {
+    "address": "0x1307200000",
+    "size": 131072,
+    "exact_address_required": false,
+    "protection": {"read": true, "write": true, "execute": false},
+    "file_backed": false
+  },
+  "assumptions": {
+    "guest_host_identity_required": false,
+    "translation_layer_available": false,
+    "retries_on_failure": false
+  },
+  "required_postconditions": [
+    "a writable anonymous mapping succeeds; relocation is acceptable"
+  ],
+  "permitted_fallbacks": ["relocate"],
+  "failure_sink": {
+    "kind": "error_return",
+    "location": {
+      "file": "tests/groundtruth/cases/hinted_mapping_at.c",
+      "line": 1,
+      "symbol": "attempt"
+    },
+    "description": "the mapping remains valid when the host ignores the unavailable hint and chooses another address"
+  },
+  "assumption_evidence": "specified_guarantee",
+  "extraction_limitations": [
+    "The address is aligned and comes from the measured Apple Silicon/Rosetta no-access carveout; Linux may honour it and then contributes no RS-VM-0020 witness."
+  ],
+  "x_groundtruth": "On measured macOS profiles the hint lies inside an unavailable range, yet mmap without MAP_FIXED must succeed elsewhere. satisfied-relocated simultaneously proves contract success and the ignored hint."
+}

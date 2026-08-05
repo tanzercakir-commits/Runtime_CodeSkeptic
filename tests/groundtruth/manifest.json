@@ -165,6 +165,87 @@
       "verifies_all_postconditions": true
     },
     {
+      "case": "exact-mapping-misaligned",
+      "contract": "contracts/exact-mapping-misaligned.json",
+      "program": "exact_mapping_alignment",
+      "args": [
+        "7000000800",
+        "131072"
+      ],
+      "why": "RS-VM-0004. The dedicated program first maps and touches the aligned neighbouring page, then sends the otherwise-identical 0x800-offset base to MAP_FIXED and requires EINVAL. A range or policy refusal cannot satisfy this oracle.",
+      "verifies_all_postconditions": true
+    },
+    {
+      "case": "size-tail-must-stay-unmapped",
+      "contract": "contracts/size-tail-must-stay-unmapped.json",
+      "program": "mapping_tail",
+      "args": [
+        "4097"
+      ],
+      "why": "RS-VM-0005's load-bearing form. The caller explicitly relies on the tail staying unmapped; the case derives this host's page-rounded length and writes both the first surplus byte and the final byte of that rounded mapping.",
+      "verifies_all_postconditions": true
+    },
+    {
+      "case": "retry-permanent-exact-mapping",
+      "contract": "contracts/retry-permanent-exact-mapping.json",
+      "program": "exact_mapping_retry",
+      "args": [
+        "800",
+        "131072",
+        "3"
+      ],
+      "why": "RS-VM-0015. This is an executed retry loop, not a contract-only flag: all three exact mappings are attempted and must return the same structural EINVAL before the oracle reports repeated-permanent-refusal.",
+      "verifies_all_postconditions": true
+    },
+    {
+      "case": "unhonourable-address-hint",
+      "contract": "contracts/unhonourable-address-hint.json",
+      "program": "hinted_mapping_at",
+      "args": [
+        "800",
+        "131072"
+      ],
+      "why": "RS-VM-0020. The program passes the contract's literal low address as an advisory hint and accepts relocation. satisfied-relocated therefore means the whole request worked while directly proving the hint had no effect.",
+      "verifies_all_postconditions": true
+    },
+    {
+      "case": "unhonourable-carveout-hint",
+      "contract": "contracts/unhonourable-carveout-hint.json",
+      "program": "hinted_mapping_at",
+      "args": [
+        "1307200000",
+        "131072"
+      ],
+      "why": "RS-VM-0020 macOS witness. The aligned hint lies inside the probe-measured Apple no-access carveout. Relocation is explicitly permitted, so satisfied-relocated confirms both whole-contract success and the ignored hint.",
+      "verifies_all_postconditions": true
+    },
+    {
+      "case": "strong-reservation-alignment",
+      "contract": "contracts/strong-reservation-alignment.json",
+      "program": "mapping_alignment",
+      "args": [
+        "65536",
+        "1073741824",
+        "64"
+      ],
+      "why": "RS-VM-0022. Up to 64 ordinary mappings stay live until one legal return address lacks the required one-GiB alignment. One misaligned success is enough to refute a platform guarantee; no over-allocation or trimming is smuggled into the case.",
+      "verifies_all_postconditions": true
+    },
+    {
+      "case": "address-bound-below-minimum",
+      "contract": "contracts/address-bound-below-minimum.json",
+      "program": "bounded_mapping_below",
+      "args": [
+        "10000",
+        "4096"
+      ],
+      "derive_address_from": "min_map_address",
+      "derive_request_field": "address_max",
+      "derive_arg_index": 0,
+      "why": "RS-VM-0023. The exclusive bound is derived from this run's measured minimum address and passed to both analyzer and case. A positive control maps at the bound; every page-aligned start below it must be policy-denied.",
+      "verifies_all_postconditions": true
+    },
+    {
       "case": "reserve-then-touch-cgroup",
       "contract": "contracts/reserve-then-touch-cgroup.json",
       "program": "linux/reserve_commit_pressure",

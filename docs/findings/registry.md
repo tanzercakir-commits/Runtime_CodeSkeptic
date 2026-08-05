@@ -2,7 +2,7 @@
 
 The 27 registered `RS-VM-*` finding IDs, their default severities, taxonomy categories and typical confidence, plus the policy that makes an ID permanent once published.
 
-**Status:** ROADMAP Phase 0 deliverable ("initial finding-ID registry"), consumed by the Phase 3 analyzer. **Implemented and fully reachable.** All 25 IDs are declared in `include/runtimeskeptic/vm/finding.hpp` (`namespace rs::vm::ids`), defined in `src/vm/finding.cpp` (`registry_storage()`), and every one is emitted by a rule in `src/vm/analyzer.cpp`. `tools/guards/check_registry.py` fails CI if those three ever disagree — they did, for months, while this line said 18.
+**Status:** ROADMAP Phase 0 deliverable ("initial finding-ID registry"), consumed by the Phase 3 analyzer. **Implemented and fully reachable.** All 27 IDs are declared in `include/runtimeskeptic/vm/finding.hpp` (`namespace rs::vm::ids`), defined in `src/vm/finding.cpp` (`registry_storage()`), and every one is emitted by a rule in `src/vm/analyzer.cpp`. `tools/guards/check_registry.py` fails CI if those three ever disagree — they did, for months, while this line said 18.
 
 ---
 
@@ -44,7 +44,16 @@ Numbers are allocated in registration order, not in severity or category order. 
 | RS-VM-0015 | Retry loop targets a permanently impossible operation | `high` | permanent error treated as retryable | `PROVEN` | `UNSUPPORTED` | The program retries after failure, but the failure is structural on this host: no number of attempts can succeed. |
 | RS-VM-0016 | No non-destructive exact-mapping primitive is available | `high` | semantic success violation | `PROVEN` | `CONDITIONALLY_SUPPORTED` | The host has no way to request an exact address without either overwriting an existing mapping or silently relocating. |
 | RS-VM-0017 | Availability of the requested range was never established | `info` | platform-observed behavior treated as guaranteed behavior | `HYPOTHESIS` | `UNKNOWN` | The profile contains no observation covering the requested range. Reported as `UNKNOWN` rather than as support. |
-| RS-VM-0018 | File-backed mapping extends beyond end of file | `high` | temporal contract violation | *(not emitted)* | *(not emitted)* | Accessing the portion of a file mapping past end-of-file has host-specific behavior the program does not handle. |
+| RS-VM-0018 | File-backed mapping extends beyond end of file | `high` | temporal contract violation | `PROVEN` | `UNSUPPORTED` / `CONDITIONALLY_SUPPORTED` | Accessing whole pages past end-of-file faults or fails on some hosts; the analyzer distinguishes that from the specified zero-filled final partial page. |
+| RS-VM-0019 | Anonymous memory mapping is unavailable on this host | `critical` | unsupported exact capability | `PROVEN` | `UNSUPPORTED` | The host cannot create an ordinary anonymous mapping, so no placement or protection strategy can succeed. |
+| RS-VM-0020 | Address hint points into a range the host cannot provide | `low` | platform-observed behavior treated as guaranteed behavior | `PROVEN` | `SUPPORTED` | Relocation keeps the request supportable, but the caller's requested hint has no effect. |
+| RS-VM-0021 | Requested size does not fit in the usable address space | `critical` | resource-topology contradiction | `PROVEN` | `UNSUPPORTED` | The reservation is larger than the host's entire usable user-mode address space. |
+| RS-VM-0022 | Reservation alignment exceeds what the mapping API guarantees | `high` | capability present but required property absent | `PROVEN` | `CONDITIONALLY_SUPPORTED` | The API does not guarantee the stronger alignment; the caller needs an explicit over-allocation/alignment strategy. |
+| RS-VM-0023 | The host cannot place the mapping inside the program's address bound | `critical` | resource-topology contradiction | `PROVEN` | `UNSUPPORTED` | The required address window does not intersect any address the measured host can provide. |
+| RS-VM-0024 | A relative-displacement constraint was carried but not evaluated | `info` | platform-observed behavior treated as guaranteed behavior | `HYPOTHESIS` | `UNKNOWN` | v0.1 records the displacement constraint but cannot decide it, so the verdict remains unknown. |
+| RS-VM-0025 | The program can use only a small part of this host's address space | `low` | resource-topology contradiction | `PREDICTIVE` | `CONDITIONALLY_SUPPORTED` | The bound is reachable now but exposes the program to fragmentation and ASLR sensitivity. |
+| RS-VM-0026 | Requested reservation is larger than any this host granted | `critical` | resource-topology contradiction | `PROVEN` / `HYPOTHESIS` | `UNSUPPORTED` / `CONDITIONALLY_SUPPORTED` | Fitting in the address space is insufficient when the measured host refuses smaller contiguous reservations. |
+| RS-VM-0027 | Whether a reservation of this size is grantable was never established | `medium` | platform-observed behavior treated as guaranteed behavior | `HYPOTHESIS` | `UNKNOWN` | The request exceeds observed real workloads and the profile contains no measured reservation ceiling. |
 
 ### 2.1 Which rule emits which ID
 
@@ -65,9 +74,18 @@ Numbers are allocated in registration order, not in severity or category order. 
 | RS-VM-0013 | `rule_pointer_truncation()` | `platform.process_arch` (or the requirement's `pointer_storage_width_bits`) |
 | RS-VM-0014 | `rule_internal_fallback_contradiction()` | none — the profile is not consulted |
 | RS-VM-0015 | `rule_retry_of_permanent_error()` | none — fires behind another `PROVEN` + `UNSUPPORTED` finding |
+| RS-VM-0019 | `rule_baseline_mapping_capability()` | `anonymous_mapping_supported` |
+| RS-VM-0020 | `rule_range_availability()` | `available_ranges` / `unavailable_ranges` |
+| RS-VM-0021 | `rule_size_feasibility()` | `min_map_address`, `max_user_address` |
+| RS-VM-0022 | `rule_reservation_alignment()` | `allocation_granularity` (plus the requirement's `required_alignment`) |
+| RS-VM-0023 | `rule_address_bounds()` | `min_map_address`, `max_user_address`, measured ranges |
+| RS-VM-0024 | `rule_displacement_constraint()` | none ? v0.1 explicitly cannot evaluate the requirement's displacement |
+| RS-VM-0025 | `rule_address_bounds()` | `available_ranges`, `max_user_address` |
+| RS-VM-0026 | `rule_reservation_grantable()` | `max_single_reservation` |
+| RS-VM-0027 | `rule_reservation_grantable()` | absence of `max_single_reservation` |
 | RS-VM-0016 | `rule_non_destructive_exact_mapping()` | `fixed_noreplace_available` |
 | RS-VM-0017 | `rule_range_availability()`, `rule_page_size()` | absence of any covering fact |
-| RS-VM-0018 | *none* | `file_map_beyond_eof` (carried in the profile, never read by a rule) |
+| RS-VM-0018 | `rule_file_mapping_beyond_eof()` | `file_map_beyond_eof`, `page_size` (plus requirement `file_length` / access extent) |
 
 ### 2.2 Findings that do not consult the profile
 
@@ -219,10 +237,9 @@ Consumers should treat an unrecognized ID as a finding they do not have local kn
 
 ## Added after the July 2026 real-world campaign
 
-These seven ids did not exist when the registry was first written. Each was
+These nine IDs did not exist when the registry was first written. Each was
 added because running real projects through the analyzer showed something it
-could not say - and in five of the seven cases, something it was saying
-*wrongly*.
+could not say; several also replaced earlier overconfident verdicts.
 
 | ID | Title | Severity | Why it exists |
 |---|---|---|---|

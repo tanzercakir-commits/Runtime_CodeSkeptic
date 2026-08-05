@@ -48,7 +48,13 @@ A case prints one JSON object to stdout:
 | outcome | meaning |
 |---|---|
 | `satisfied` | the request succeeded *as specified*, including any exactness the contract requires |
+| `satisfied-relocated` | the mapping succeeded at another address and this caller explicitly accepts relocation |
+| `tail-addressable` | bytes past the requested size were accessible inside the host-rounded mapping |
+| `misaligned` | a successful mapping lacked the stronger alignment the caller requires |
+| `misaligned-einval` | an aligned-neighbour control succeeded, then the otherwise-identical misaligned exact request failed with EINVAL |
+| `repeated-permanent-refusal` | every executed attempt failed with the same structural EINVAL refusal |
 | `refused` | the call failed |
+| `below-bound-unavailable` | an aligned control at the exclusive bound succeeded, while every page-aligned start below it was policy-denied |
 | `relocated` | the call succeeded but not where it was asked to |
 | `faulted` | the process took a signal performing the operation |
 | `skipped` | the case does not apply to this host, with a reason |

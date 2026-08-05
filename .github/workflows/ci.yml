@@ -366,6 +366,9 @@ jobs:
           cp /tmp/meas/coverage.txt /tmp/diag/coverage.txt 2>/dev/null \
             || echo "(the coverage step did not run)" \
                  > /tmp/diag/coverage.txt
+          cp /tmp/meas/gt_commit_pressure.txt /tmp/diag/gt_commit_pressure.txt 2>/dev/null \
+            || echo "(the cgroup pressure step did not run)" \
+                 > /tmp/diag/gt_commit_pressure.txt
           # The PROFILE, which the diagnostics did not carry - on a project whose
           # subject is what a probe measured, that is an odd thing to omit. When
           # ctest fails before the ground-truth step there is no profile in
@@ -672,13 +675,22 @@ jobs:
         run: |
           set -euo pipefail
           shopt -s nullglob
-          ledgers=(coverage-ledgers/*/*.jsonl)
-          if [ "${#ledgers[@]}" -lt 3 ]; then
-            echo "::error::expected Linux and macOS execution ledgers"
-            exit 1
-          fi
+          required=(
+            groundtruth-ledger-ubuntu-latest-gcc
+            groundtruth-ledger-ubuntu-latest-clang
+            groundtruth-ledger-macos-apple-clang
+          )
+          ledgers=()
+          for artifact in "${required[@]}"; do
+            files=("coverage-ledgers/$artifact"/*.jsonl)
+            if [ "${#files[@]}" -eq 0 ]; then
+              echo "::error::missing execution ledger artifact: $artifact"
+              exit 1
+            fi
+            ledgers+=("${files[@]}")
+          done
           python3 tools/campaign/groundtruth_execution_coverage.py \
-            "${ledgers[@]}" | tee execution-coverage.txt
+            --require-complete "${ledgers[@]}" | tee execution-coverage.txt
 
       - uses: actions/upload-artifact@v4
         with:

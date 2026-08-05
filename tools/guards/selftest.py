@@ -207,7 +207,78 @@ PROCESS_PIN_V2 = _sha(PROCESS_PLAN_V2) + "  plan.md\n"
 TODO_WITH_ITEM = "# TODO\n\n## Now\n\n### T-001 - ship\n"
 TODO_EMPTY = "# TODO\n\n## Now\n"
 
+REGISTRY_HEADER = 'inline constexpr const char* kOne = "RS-VM-0001";\n'
+REGISTRY_IMPL = "auto definition = ids::kOne;\n"
+REGISTRY_ANALYZER = "auto emitted = ids::kOne;\n"
+REGISTRY_OK = """# Registry
+
+The 1 registered `RS-VM-*` finding IDs are documented here.
+
+**Status:** All 1 IDs are declared, defined, and emitted.
+
+## 2. The registry
+
+| ID | Title | Default severity | Taxonomy category | Typical confidence | Support impact | Summary |
+| --- | --- | --- | --- | --- | --- | --- |
+| RS-VM-0001 | One | high | category | PROVEN | UNSUPPORTED | Summary. |
+
+### 2.1 Which rule emits which ID
+
+| ID | Emitting rule | Deciding profile fact |
+| --- | --- | --- |
+| RS-VM-0001 | `rule_one()` | `fact` |
+
+### 2.2 Findings that do not consult the profile
+
+## Added after the July 2026 real-world campaign
+
+These zero IDs were added by the campaign.
+
+| ID | Title | Severity | Why it exists |
+| --- | --- | --- | --- |
+
+### Two ids whose meaning changed
+"""
+
+REGISTRY_FILES = {
+    "include/runtimeskeptic/vm/finding.hpp": REGISTRY_HEADER,
+    "src/vm/finding.cpp": REGISTRY_IMPL,
+    "src/vm/analyzer.cpp": REGISTRY_ANALYZER,
+    "docs/findings/registry.md": REGISTRY_OK,
+}
+
 CASES = [
+    # ---- check_registry: code, tables, and prose are one interface ------
+    Case("check_registry.py", "a complete one-ID registry passes",
+         REGISTRY_FILES,
+         expect_fail=False),
+
+    Case("check_registry.py", "the status count must match declarations",
+         {**REGISTRY_FILES,
+          "docs/findings/registry.md": REGISTRY_OK.replace(
+              "All 1 IDs", "All 2 IDs")},
+         expect_fail=True, expect_text="registry status says"),
+
+    Case("check_registry.py", "the main table must contain every declared ID",
+         {**REGISTRY_FILES,
+          "docs/findings/registry.md": REGISTRY_OK.replace(
+              "| RS-VM-0001 | One | high | category | PROVEN | "
+              "UNSUPPORTED | Summary. |\n",
+              "")},
+         expect_fail=True, expect_text="registry table ID drift"),
+
+    Case("check_registry.py", "an emitted ID must name its emitting rule",
+         {**REGISTRY_FILES,
+          "docs/findings/registry.md": REGISTRY_OK.replace(
+              "`rule_one()`", "none")},
+         expect_fail=True, expect_text="emitting-rule table has no rule"),
+
+    Case("check_registry.py", "campaign prose count must match its table",
+         {**REGISTRY_FILES,
+          "docs/findings/registry.md": REGISTRY_OK.replace(
+              "These zero IDs", "These 2 IDs")},
+         expect_fail=True, expect_text="campaign prose says"),
+
     # ---- check_docs: check 3, named paths must exist -------------------
     Case("check_docs.py", "a doc naming a path that is not there fails",
          {"docs/x.md": "The extractor lives in `tools/rs-extract` and works.\n",
@@ -659,20 +730,20 @@ CASES = [
           "docs/PLAN.md": "# Plan\n\n## Phase 1\n\n- `[done]` nothing\n"},
          expect_fail=True, expect_text="is an excuse"),
 
-    Case("check_todo.py", "a done item the progress log never mentions fails",
+    Case("check_todo.py", "a done item must be consumed from the queue",
          {"docs/TODO.md": "# TODO\n\n## Done\n\n### T-001 — finished `[done]`\n\n"
                           "**Done when:** it ran\n",
           "docs/PLAN.md": "# Plan\n\n## Phase 1\n\n- `[done]` nothing\n",
           "docs/PROGRESS.md": "# Progress\n\nNothing about it.\n"},
-         expect_fail=True, expect_text="never mentions it"),
+         expect_fail=True, expect_text="must be consumed"),
 
-    Case("check_todo.py", "the same item, recorded in the log, passes",
+    Case("check_todo.py", "progress evidence does not excuse a stale done item",
          {"docs/TODO.md": "# TODO\n\n## Done\n\n### T-001 — finished `[done]`\n\n"
                           "**Done when:** it ran\n",
           "docs/PLAN.md": "# Plan\n\n## Phase 1\n\n- `[done]` nothing\n",
           "docs/PROGRESS.md": "# Progress\n\nT-001 shipped, and here is what "
                               "it taught.\n"},
-         expect_fail=False),
+         expect_fail=True, expect_text="must be consumed"),
 
     Case("check_todo.py", "a [now] item under ## Next fails",
          {"docs/TODO.md": "# TODO\n\n## Now\n\n## Next\n\n"

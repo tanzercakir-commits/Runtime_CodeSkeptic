@@ -34,13 +34,19 @@ import sys
 
 
 def main() -> int:
-    if len(sys.argv) != 5:
-        print("usage: derive_contract.py CONTRACT PROFILE FIELD OUT", file=sys.stderr)
+    if len(sys.argv) not in (5, 6):
+        print("usage: derive_contract.py CONTRACT PROFILE FACT OUT "
+              "[REQUEST_FIELD]", file=sys.stderr)
         return 64
-    contract_path, profile_path, field, out_path = sys.argv[1:]
+    contract_path, profile_path, fact_name, out_path = sys.argv[1:5]
+    request_field = sys.argv[5] if len(sys.argv) == 6 else "address"
+    if request_field not in {"address", "address_max"}:
+        print(f"unsupported derived request field: {request_field}",
+              file=sys.stderr)
+        return 64
 
     profile = json.load(open(profile_path))
-    fact = (profile.get("virtual_memory") or {}).get(field) or {}
+    fact = (profile.get("virtual_memory") or {}).get(fact_name) or {}
     value = fact.get("value")
     if value is None or fact.get("evidence") in (None, "unknown", "absent"):
         return 1          # nothing measured; the caller keeps the constant
@@ -53,18 +59,18 @@ def main() -> int:
         return 1
 
     contract = json.load(open(contract_path))
-    old = contract["request"]["address"]
+    old = contract["request"][request_field]
     new = hex(address)
-    contract["request"]["address"] = new
+    contract["request"][request_field] = new
     contract["required_postconditions"] = [
-        p.replace(old, new) for p in contract.get("required_postconditions", [])
+        text.replace(old, new)
+        for text in contract.get("required_postconditions", [])
     ]
     contract["name"] = contract["name"].replace(old, new)
-    note = (f"DERIVED at run time: the request address was rewritten from the "
-            f"committed constant {old} to {new}, the measured "
-            f"`{field}` of the host this ran on. A constant here is a claim "
-            f"about every host, and on a 5-level-paging kernel {old} is inside "
-            f"user space rather than above it.")
+    note = (f"DERIVED at run time: request.{request_field} was rewritten from "
+            f"the committed constant {old} to {new}, the measured "
+            f"`{fact_name}` of the host this ran on. The runtime case receives "
+            f"the same derived value, so analysis and execution stay bound.")
     contract["x_derivation"] = note
     json.dump(contract, open(out_path, "w"), indent=2)
     print(new[2:])        # bare hex, which is what the case program takes

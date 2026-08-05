@@ -1,0 +1,36 @@
+{
+  "schema": "runtime-skeptic.application-requirements.v1",
+  "name": "Ragged mapping whose caller relies on the rounded tail faulting",
+  "component": "ground-truth pairing for RS-VM-0005",
+  "operation": "virtual_memory_map",
+  "request": {
+    "size": 4097,
+    "exact_address_required": false,
+    "relies_on_unmapped_beyond_size": true,
+    "protection": {"read": true, "write": true, "execute": false},
+    "file_backed": false
+  },
+  "assumptions": {
+    "guest_host_identity_required": false,
+    "translation_layer_available": false,
+    "retries_on_failure": false
+  },
+  "required_postconditions": [
+    "every byte past the requested 4097 bytes stays unmapped and faults on access"
+  ],
+  "permitted_fallbacks": [],
+  "failure_sink": {
+    "kind": "unchecked",
+    "location": {
+      "file": "tests/groundtruth/cases/mapping_tail.c",
+      "line": 1,
+      "symbol": "attempt"
+    },
+    "description": "the case writes both the first surplus byte and the last byte of the host-rounded page"
+  },
+  "assumption_evidence": "specified_guarantee",
+  "extraction_limitations": [
+    "The case derives the rounded length from sysconf(_SC_PAGESIZE) on the executing host instead of assuming a 4 KiB page."
+  ],
+  "x_groundtruth": "mmap rounds 4097 bytes to 8192 on a 4 KiB host and 16384 on Apple Silicon. A successful write in that tail is the counterexample the declared guarantee requires."
+}

@@ -36,14 +36,38 @@
     "reservation-above-granted-1tib": [
       {"rule": "RS-VM-0026", "outcomes": ["refused"]}
     ],
+    "exact-mapping-misaligned": [
+      {"rule": "RS-VM-0004", "outcomes": ["misaligned-einval"]}
+    ],
+    "size-tail-must-stay-unmapped": [
+      {"rule": "RS-VM-0005", "outcomes": ["tail-addressable"]}
+    ],
+    "retry-permanent-exact-mapping": [
+      {"rule": "RS-VM-0015", "outcomes": ["repeated-permanent-refusal"]}
+    ],
+    "unhonourable-address-hint": [
+      {"rule": "RS-VM-0020", "outcomes": ["satisfied-relocated"]}
+    ],
+    "unhonourable-carveout-hint": [
+      {"rule": "RS-VM-0020", "outcomes": ["satisfied-relocated"]}
+    ],
+    "strong-reservation-alignment": [
+      {"rule": "RS-VM-0022", "outcomes": ["misaligned"]}
+    ],
+    "address-bound-below-minimum": [
+      {"rule": "RS-VM-0023", "outcomes": ["below-bound-unavailable"]}
+    ],
     "reserve-then-touch-cgroup": [
       {"rule": "RS-VM-0012", "outcomes": ["oom-killed-after-touch"]}
     ]
   },
   "not_checkable_by_current_method": {
     "RS-VM-0014": "internal contradiction in the requirement; no host operation can confirm it",
+    "RS-VM-0010": "all measured CI contexts report anonymous executable mapping available; the current harness cannot both produce a native profile and execute the case inside the same seccomp policy context needed to measure the false fact",
+    "RS-VM-0019": "all measured CI contexts report anonymous mapping available; installing a policy before the full probe would also block the loader/probe mappings, so the current method cannot produce and test a same-context native false profile",
     "RS-VM-0016": "every reachable measured host exposes a non-destructive exact-placement primitive; the absent-capability branch has no real host here",
     "RS-VM-0024": "one run can observe a displacement but cannot establish the future placement guarantee that this profile-level rule says is unevaluable",
+    "RS-VM-0017": "an epistemic absence: every runtime outcome is compatible with the finding; only incorporating a measurement into the analyzed profile removes the missing-fact precondition",
     "RS-VM-0025": "a predictive fragmentation heuristic; observing one layout cannot confirm the future-fragmentation claim",
     "RS-VM-0027": "fires only when reservation grantability was not measured; executing the measurement supplies the missing fact and makes the branch unreachable by construction"
   }

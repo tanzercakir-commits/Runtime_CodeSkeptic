@@ -103,7 +103,7 @@ The truncation variant adds a further platform property: whether a mapping's bac
 | --- | --- |
 | `RS-VM-0018` | file-backed mapping extends beyond end of file — the registered ID for this contradiction |
 
-> **`RS-VM-0018` is registered but not emitted.** It is declared in `include/runtimeskeptic/vm/finding.hpp` and defined in `src/vm/finding.cpp`; the profile carries `file_map_beyond_eof` and `MappingRequest` carries `file_backed`. No rule in `src/vm/analyzer.cpp` reads them together, so this entry currently has no implemented diagnosis. See `docs/findings/registry.md` section 4.
+> **`RS-VM-0018` is emitted and execution-paired.** `rule_file_mapping_beyond_eof()` reads `file_backed`, `file_length`, and `eof_access_extent` together with the profile's `file_map_beyond_eof` fact. Ground-truth cases prove the final partial page is addressable and pair a whole-page overrun with the analyzer verdict.
 
 ## Why this is not an ordinary memory bug
 
@@ -113,30 +113,15 @@ The access is in bounds of the mapping. The pointer is valid. The arithmetic is 
 
 The defect is a mismatch between two lengths that live in different subsystems: the length the program mapped, and the length the filesystem backs.
 
-## What RuntimeSkeptic would need
+## Implemented diagnosis
 
-<!-- checked: 2026-07-25 -->
-**From the requirement document:** `file_backed: true`, `size`, and **a field that does not exist yet** — the file length the program relies on, or a declaration that the program does not check it. Without that field the analyzer has nothing to compare `size` against. Adding it is a schema change (`runtime-skeptic.application-requirements.v1`), which is why this finding is not merely an unwritten rule.
+**Requirement facts:** `file_backed: true`, `size`, `file_length`, and `eof_access_extent`.
 
-**From the environment profile:** `virtual_memory.file_map_beyond_eof`.
+**Environment fact:** `virtual_memory.file_map_beyond_eof`.
 
-**The rule that would fire**, once both exist:
+The analyzer emits `RS-VM-0018` only when those inputs make the static extent contradiction decidable. The ground-truth harness executes the final-partial-page and whole-page-overrun boundaries against the host kernel, then checks the case-specific outcome/verdict oracle. If a source extractor supplies a `statically_inferred` length relation, the evidence ceiling still limits confidence to `COUNTEREXAMPLE`; a hand-authored guarantee can reach `PROVEN`.
 
-| Layer | Evidence class | Claim |
-| --- | --- | --- |
-| `application` | `specified_guarantee` | program maps `map_len` bytes of a file and reads the whole range |
-| `application` | `statically_inferred` | the mapped length is not derived from the file's actual size |
-| `operating_system` | `specified_guarantee` | access beyond end-of-file raises a fault on this host |
-
-```text
-weakest fact = statically_inferred
-ceiling      = COUNTEREXAMPLE
-emitted      = RS-VM-0018, COUNTEREXAMPLE, UNSUPPORTED, high
-```
-
-Note the ceiling. If the fact "the mapped length is not derived from the file size" comes from source analysis, the finding cannot reach `PROVEN` — `statically_inferred` ceilings at `COUNTEREXAMPLE`. It would reach `PROVEN` only from a hand-authored requirement that declares the mismatch explicitly, or from a runtime observation of both lengths. That is the ceiling rule working as intended: the strength of the conclusion follows the weakest input, and here the weakest input is an inference about what the program does.
-
-The truncation variant cannot be decided from two static documents at all. It requires reasoning about an event in another process during the mapping's lifetime, which is a temporal property and belongs to ROADMAP Phase 7 (`file-backed mapping lifecycle` is named there as one of the initial state machines).
+A different process truncating the file after mapping is intentionally not inferred from two static documents. That ordering-sensitive variant belongs to the Phase 7 file-backed mapping lifecycle monitor.
 
 ## Remediation classes
 
@@ -154,9 +139,6 @@ The closest existing class is `select_different_host_configuration`, which is un
 
 ## Open questions
 
-- Should the requirement schema carry the file length, or a flag meaning "the mapped length is not validated against the file"? The second is easier to extract statically and is what CodeSkeptic would most plausibly produce.
-- Should the three `BeyondEofBehavior` values produce different severities? `zero_fill` is arguably worse than `sigbus`, because it is silent, yet it is the one that never crashes.
-- Where does the truncation variant belong — a Phase 3 rule with a caveat, or a Phase 7 lifecycle contract? The static case is decidable now; the dynamic case is not decidable at all without observing the other process.
-<!-- checked: 2026-07-25 -->
-- What should the analyzer do when `file_map_beyond_eof` is `unknown`? Following the model, an `RS-VM-0017`-style unknown finding and an `UNKNOWN` verdict; today, nothing is emitted at all, because no rule exists.
-- **Unverified:** the storage-engine structure, the header field and the failure ordering are illustrative. This entry is a reconstruction, not a report.
+- Should the three `BeyondEofBehavior` values produce different severities? Silent zero-fill may be more dangerous than a synchronous fault.
+- Which Phase 7 event should establish post-map truncation without confusing it with the already-decided static extent case?
+- **Unverified:** the storage-engine structure, header field, and failure ordering are illustrative. This entry is a reconstruction, not a report.

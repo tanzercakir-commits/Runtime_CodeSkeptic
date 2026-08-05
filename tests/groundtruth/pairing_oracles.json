@@ -1,0 +1,173 @@
+{
+  "schema": "runtime-skeptic.groundtruth-pairing-oracles.v1",
+  "note": "Case-specific outcome domains prevent a typo or an unrelated failure mode from confirming an analyzer verdict. skipped remains a harness-wide unasserted result.",
+  "cases": {
+    "exact-mapping-in-carveout": {
+      "outcomes": ["satisfied", "refused", "faulted"],
+      "held_when": {
+        "SUPPORTED": ["satisfied"],
+        "UNSUPPORTED": ["refused", "faulted"]
+      }
+    },
+    "exact-mapping-at-a-free-address": {
+      "outcomes": ["satisfied", "refused", "faulted"],
+      "held_when": {
+        "SUPPORTED": ["satisfied"],
+        "UNSUPPORTED": ["refused", "faulted"]
+      }
+    },
+    "rwx-anonymous-2mib": {
+      "outcomes": ["satisfied", "refused", "faulted"],
+      "held_when": {
+        "SUPPORTED": ["satisfied"],
+        "UNSUPPORTED": ["refused", "faulted"]
+      }
+    },
+    "page-size-at-most-4kib": {
+      "outcomes": ["satisfied", "refused"],
+      "held_when": {
+        "SUPPORTED": ["satisfied"],
+        "UNSUPPORTED": ["refused"]
+      }
+    },
+    "page-size-at-most-64kib": {
+      "outcomes": ["satisfied", "refused"],
+      "held_when": {
+        "SUPPORTED": ["satisfied"],
+        "UNSUPPORTED": ["refused"]
+      }
+    },
+    "file-map-beyond-eof": {
+      "outcomes": ["satisfied", "refused", "faulted"],
+      "held_when": {
+        "SUPPORTED": ["satisfied"],
+        "UNSUPPORTED": ["refused", "faulted"]
+      }
+    },
+    "file-map-partial-page": {
+      "outcomes": ["satisfied", "refused", "faulted"],
+      "held_when": {
+        "SUPPORTED": ["satisfied"],
+        "UNSUPPORTED": ["refused", "faulted"]
+      }
+    },
+    "write-then-execute-2mib": {
+      "outcomes": ["satisfied", "refused", "faulted"],
+      "held_when": {
+        "SUPPORTED": ["satisfied"],
+        "UNSUPPORTED": ["refused", "faulted"]
+      }
+    },
+    "hinted-mapping-requires-identity": {
+      "outcomes": ["satisfied", "relocated", "refused", "faulted"],
+      "held_when": {
+        "SUPPORTED": ["satisfied"],
+        "UNSUPPORTED": ["relocated", "refused", "faulted"]
+      }
+    },
+    "oversized-reservation-4pib": {
+      "outcomes": ["satisfied", "refused", "faulted"],
+      "held_when": {
+        "SUPPORTED": ["satisfied"],
+        "UNSUPPORTED": ["refused", "faulted"]
+      }
+    },
+    "reserve-then-commit-1gib": {
+      "outcomes": ["satisfied", "refused", "faulted"],
+      "held_when": {
+        "SUPPORTED": ["satisfied"],
+        "UNSUPPORTED": ["refused", "faulted"]
+      }
+    },
+    "exact-mapping-below-minimum": {
+      "outcomes": ["satisfied", "refused", "faulted"],
+      "held_when": {
+        "SUPPORTED": ["satisfied"],
+        "UNSUPPORTED": ["refused", "faulted"]
+      }
+    },
+    "exact-mapping-above-user-space": {
+      "outcomes": ["satisfied", "refused", "faulted"],
+      "held_when": {
+        "SUPPORTED": ["satisfied"],
+        "UNSUPPORTED": ["refused", "faulted"]
+      }
+    },
+    "identity-without-translation": {
+      "outcomes": ["satisfied", "relocated", "refused", "faulted"],
+      "held_when": {
+        "SUPPORTED": ["satisfied"],
+        "UNSUPPORTED": ["relocated", "refused", "faulted"]
+      }
+    },
+    "pointer-truncation-32bit": {
+      "outcomes": ["satisfied", "lost"],
+      "held_when": {
+        "SUPPORTED": ["satisfied"],
+        "UNSUPPORTED": ["lost"]
+      }
+    },
+    "reservation-above-granted-1tib": {
+      "outcomes": ["satisfied", "refused", "faulted"],
+      "held_when": {
+        "SUPPORTED": ["satisfied"],
+        "UNSUPPORTED": ["refused", "faulted"]
+      }
+    },
+    "exact-mapping-misaligned": {
+      "outcomes": ["satisfied", "misaligned-einval"],
+      "held_when": {
+        "SUPPORTED": ["satisfied"],
+        "UNSUPPORTED": ["misaligned-einval"]
+      }
+    },
+    "size-tail-must-stay-unmapped": {
+      "outcomes": ["tail-addressable", "faulted"],
+      "held_when": {
+        "SUPPORTED": ["faulted"],
+        "UNSUPPORTED": ["tail-addressable"]
+      }
+    },
+    "retry-permanent-exact-mapping": {
+      "outcomes": ["satisfied", "repeated-permanent-refusal"],
+      "held_when": {
+        "SUPPORTED": ["satisfied"],
+        "UNSUPPORTED": ["repeated-permanent-refusal"]
+      }
+    },
+    "unhonourable-address-hint": {
+      "outcomes": ["satisfied", "satisfied-relocated", "refused", "faulted"],
+      "held_when": {
+        "SUPPORTED": ["satisfied", "satisfied-relocated"],
+        "UNSUPPORTED": ["refused", "faulted"]
+      }
+    },
+    "unhonourable-carveout-hint": {
+      "outcomes": ["satisfied", "satisfied-relocated", "refused", "faulted"],
+      "held_when": {
+        "SUPPORTED": ["satisfied", "satisfied-relocated"],
+        "UNSUPPORTED": ["refused", "faulted"]
+      }
+    },
+    "strong-reservation-alignment": {
+      "outcomes": ["satisfied", "misaligned"],
+      "held_when": {
+        "SUPPORTED": ["satisfied"],
+        "UNSUPPORTED": ["misaligned"]
+      }
+    },
+    "address-bound-below-minimum": {
+      "outcomes": ["satisfied", "below-bound-unavailable"],
+      "held_when": {
+        "SUPPORTED": ["satisfied"],
+        "UNSUPPORTED": ["below-bound-unavailable"]
+      }
+    },
+    "reserve-then-touch-cgroup": {
+      "outcomes": ["oom-killed-after-touch"],
+      "held_when": {
+        "UNSUPPORTED": ["oom-killed-after-touch"]
+      }
+    }
+  }
+}
