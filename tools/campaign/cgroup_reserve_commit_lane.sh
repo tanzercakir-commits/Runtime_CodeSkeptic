@@ -25,6 +25,8 @@ fi
 [ "$(uname -s)" = "Linux" ] || { echo "$0: Linux only" >&2; exit 64; }
 [ "$(stat -fc %T /sys/fs/cgroup)" = "cgroup2fs" ] || {
     echo "$0: unified cgroup v2 is required" >&2; exit 65; }
+command -v setpriv >/dev/null || {
+    echo "$0: setpriv is required to drop privilege inside the cgroup" >&2; exit 65; }
 if ! sudo -n true; then
     echo "$0: passwordless sudo is required to create the bounded cgroup" >&2
     exit 65
@@ -35,13 +37,25 @@ worker="$work/reserve-commit-pressure"
 status_file="$work/worker.status"
 cgroup="/sys/fs/cgroup/rs-reserve-commit-$$"
 
+terminate_cgroup() {
+    [ -d "$cgroup" ] || return 0
+    if printf '1\n' | sudo tee "$cgroup/cgroup.kill" >/dev/null 2>&1; then
+        return 0
+    fi
+    members="$(cat "$cgroup/cgroup.procs" 2>/dev/null)"
+    for member in $members; do
+        case "$member" in
+            *[!0-9]*|'') return 1 ;;
+            *) sudo kill -KILL "$member" >/dev/null 2>&1 || return 1 ;;
+        esac
+    done
+    return 0
+}
+
 cleanup() {
     case "$cgroup" in
         /sys/fs/cgroup/rs-reserve-commit-[0-9]*)
-            if [ -d "$cgroup" ]; then
-                if [ -f "$cgroup/cgroup.kill" ]; then
-                    printf '1\n' | sudo tee "$cgroup/cgroup.kill" >/dev/null 2>&1 || true
-                fi
+            if terminate_cgroup; then
                 sudo rmdir "$cgroup" >/dev/null 2>&1 || true
             fi
             ;;
@@ -78,8 +92,17 @@ if [ -e "$cgroup/memory.oom.group" ]; then
 fi
 
 events="$cgroup/memory.events.local"
-sudo sh -c 'printf "%s\n" "$$" > "$1/cgroup.procs"; exec "$2" "$3"' \
-    rs-cgroup-launch "$cgroup" "$worker" "$status_file" &
+expected_membership="${cgroup#/sys/fs/cgroup}"
+original_uid="$(id -u)"
+original_gid="$(id -g)"
+setpriv_bin="$(command -v setpriv)"
+sudo sh -c '
+    printf "%s\n" "$$" > "$1/cgroup.procs" || exit 70
+    actual="$(cut -d: -f3 /proc/self/cgroup)"
+    [ "$actual" = "$4" ] || exit 71
+    exec "$5" --reuid "$6" --regid "$7" --clear-groups -- "$2" "$3"
+' rs-cgroup-launch "$cgroup" "$worker" "$status_file" "$expected_membership" \
+    "$setpriv_bin" "$original_uid" "$original_gid" &
 launcher_pid=$!
 
 ticks=0
@@ -88,7 +111,10 @@ while kill -0 "$launcher_pid" >/dev/null 2>&1; do
     ticks=$((ticks + 1))
     if [ "$ticks" -ge 150 ]; then
         timed_out=1
-        printf '1\n' | sudo tee "$cgroup/cgroup.kill" >/dev/null 2>&1 || true
+        if ! terminate_cgroup; then
+            echo "$0: could not terminate the bounded cgroup" >&2
+            sudo kill -KILL "$launcher_pid" >/dev/null 2>&1 || true
+        fi
         break
     fi
     sleep 0.1
