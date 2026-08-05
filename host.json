@@ -1,0 +1,133 @@
+{
+  "notes": [
+    "VirtualQuery walk: 30 free, 16 reserved, 84 committed region(s); largest free run 137705224196096 bytes. Recorded as a note and NOT as available_ranges: which regions are free is a property of this process's ASLR layout, and a profile that hashed it would differ between two runs on one machine.",
+    "VirtualQuery occupancy (NOT a fact about the host - this process's own layout, for designing an arena's bounds): occupied [0x7ffe0000, 0x7ff98f569000), 4349427712 bytes total, in 3 TiB bucket(s): 0x0=6299648 0x20000000000=2641920 0x7f0000000000=4340486144"
+  ],
+  "origin": "measured",
+  "platform": {
+    "host_arch": "x86_64",
+    "kernel_version": "10.0.26100",
+    "os": "windows",
+    "os_version": "10.0.26100",
+    "pointer_width_bits": 64,
+    "process_arch": "x86_64",
+    "translation_mode": "none"
+  },
+  "probe_run": {
+    "duration_ms": 172,
+    "probe_binary_hash": "",
+    "probe_version": "rs-env-probe/vm/0.1.0",
+    "run_id": "",
+    "timestamp_utc": "2026-08-05T23:25:49Z",
+    "tool_version": "runtimeskeptic/0.2.0",
+    "warnings": [
+      "lpMaximumApplicationAddress is INCLUSIVE: VirtualQuery(0x7ffffffef000) succeeded reporting MEM_FREE over 4096 bytes, so the address is part of this process's space, and a one-page reservation there failed with error 0 - consistent with the system's top-of-space guard region, which is why the reservation is not what decides this",
+      "max_single_reservation_hinted is not measured on this platform and is left unknown: a VirtualAlloc base address is a requirement, not an advisory hint, so there is no second question to ask. On Linux that second number is what separates 'the largest the kernel grants' from 'the largest inside the default mmap window'",
+      "allocation arena [0x7f0000000000, 0x7ffffffeffff) walked in contiguous windows of 0x4000000 bytes: 16314 placed, 1 already held by this process at the window's own base, 0 structurally refused, 4 refused with a region of this process elsewhere in the window (treated as held; this arena's floor is 127 TiB above KUSER_SHARED_DATA at 0x7ffe0000, the only system-wide band this platform is known to place, so if this number rises while unavailable_ranges stays empty that assumption has broken), and 64 not probed because they lie inside a region already described. Only the structurally refused count is a host limitation, and a refusal is recorded at the resolution of one window - which over-claims for a hole smaller than that, and has measured zero so far. This split moves with ASLR, which is why it is a warning and not a fact",
+      "allocation arena [0x10000000000, 0x7f0000000000) walked in contiguous windows of 0x1000000000 bytes: 2015 placed, 0 already held by this process at the window's own base, 0 structurally refused, 1 refused with a region of this process elsewhere in the window (treated as held; this arena starts at 1 TiB, above KUSER_SHARED_DATA at 0x7ffe0000, so the only system-wide band this platform is known to place is outside it and [min_map_address, 1 TiB) is deliberately left to the landmark ladder, so if this number rises while unavailable_ranges stays empty that assumption has broken), and 0 not probed because they lie inside a region already described. Only the structurally refused count is a host limitation, and a refusal is recorded at the resolution of one window - which over-claims for a hole smaller than that, and has measured zero so far. This split moves with ASLR, which is why it is a warning and not a fact"
+    ]
+  },
+  "profile_id": "sha256:81852896cb15a45ac8cdd79044addc9181e957849d1eaad17b045b1fc12568bc",
+  "profile_name": "windows-x86_64",
+  "schema": "runtime-skeptic.environment-profile.v1",
+  "virtual_memory": {
+    "allocation_granularity": {
+      "evidence": "measured_capability",
+      "source": "rs-env-probe vm (windows): GetSystemInfo().dwAllocationGranularity",
+      "value": 65536
+    },
+    "anonymous_mapping_supported": {
+      "evidence": "measured_capability",
+      "source": "rs-env-probe vm (windows): VirtualAlloc(MEM_RESERVE|MEM_COMMIT)",
+      "value": true
+    },
+    "available_ranges": [
+      {
+        "end": "0x7f0000000000",
+        "evidence": "measured_capability",
+        "note": "inside the allocation arena between 1 TiB and the top-TiB arena, where an NT heap and an unhinted VirtualAlloc are placed, walked in contiguous windows of 0x1000000000 bytes. Every window in this range was placed at its exact address or was already held by the probe process, and none was structurally refused. The windows touch, so nothing between them is asserted without having been placed. Which windows were which depends on the probe's own layout and is deliberately not recorded",
+        "start": "0x10000000000"
+      },
+      {
+        "end": "0x7ffffc000000",
+        "evidence": "measured_capability",
+        "note": "inside the allocation arena in the top TiB of the user address space, where high-entropy ASLR places the image, every loaded DLL and the thread stacks, walked in contiguous windows of 0x4000000 bytes. Every window in this range was placed at its exact address or was already held by the probe process, and none was structurally refused. The windows touch, so nothing between them is asserted without having been placed. Which windows were which depends on the probe's own layout and is deliberately not recorded",
+        "start": "0x7f0000000000"
+      }
+    ],
+    "exact_mapping": {
+      "evidence": "measured_capability",
+      "source": "rs-env-probe vm (windows): VirtualAlloc at an explicit base succeeded on a free range and failed on an occupied one",
+      "value": "CONDITIONALLY_SUPPORTED"
+    },
+    "exact_mapping_failure_codes": [
+      "ERROR_INVALID_ADDRESS"
+    ],
+    "file_map_beyond_eof": {
+      "evidence": "measured_capability",
+      "source": "rs-env-probe vm (windows): CreateFileMapping sized past end of file was refused with ERROR_NOT_ENOUGH_MEMORY",
+      "value": "error"
+    },
+    "fixed_noreplace_available": {
+      "evidence": "measured_capability",
+      "source": "rs-env-probe vm (windows): a second VirtualAlloc over an occupied range was refused, so exact placement here cannot clobber an existing reservation",
+      "value": true
+    },
+    "hinted_mapping_may_relocate": {
+      "evidence": "measured_capability",
+      "source": "rs-env-probe vm (windows): a base address is a requirement on this platform, not a hint; a request at an occupied range was refused rather than relocated",
+      "value": false
+    },
+    "max_single_reservation": {
+      "evidence": "measured_capability",
+      "source": "rs-env-probe vm (windows): largest power-of-two MEM_RESERVE|PAGE_NOACCESS reservation granted. This is a bound on RESERVATION, not on commit - on Windows those are separate operations and it is the commit that charges the pagefile, so a request within this bound can still fail at commit time (RS-VM-0012 is the finding for that model difference)",
+      "value": 70368744177664
+    },
+    "max_single_reservation_hinted": {
+      "evidence": "unknown",
+      "value": null
+    },
+    "max_user_address": {
+      "evidence": "measured_capability",
+      "source": "rs-env-probe vm (windows): lpMaximumApplicationAddress + 1; VirtualQuery at the reported maximum succeeded, so that address is part of the process's address space and the field is inclusive. See probe_run.warnings for what the reservation attempt did and why it is not what decided this",
+      "value": "0x7fffffff0000"
+    },
+    "min_map_address": {
+      "evidence": "measured_capability",
+      "source": "rs-env-probe vm (windows): GetSystemInfo().lpMinimumApplicationAddress",
+      "value": "0x10000"
+    },
+    "page_size": {
+      "evidence": "measured_capability",
+      "source": "rs-env-probe vm (windows): GetSystemInfo().dwPageSize",
+      "value": 4096
+    },
+    "protection": {
+      "anonymous_executable_mapping": {
+        "evidence": "measured_capability",
+        "source": "rs-env-probe vm (windows): VirtualAlloc(PAGE_EXECUTE_READ)",
+        "value": true
+      },
+      "jit_entitlement_required": {
+        "evidence": "unknown",
+        "value": null
+      },
+      "write_execute_simultaneous": {
+        "evidence": "measured_capability",
+        "source": "rs-env-probe vm (windows): VirtualAlloc(PAGE_EXECUTE_READWRITE)",
+        "value": true
+      },
+      "write_then_execute_transition": {
+        "evidence": "measured_capability",
+        "source": "rs-env-probe vm (windows): VirtualProtect(PAGE_READWRITE -> PAGE_EXECUTE_READ)",
+        "value": true
+      }
+    },
+    "reserve_commit_model": {
+      "evidence": "measured_capability",
+      "source": "rs-env-probe vm (windows): MEM_RESERVE then MEM_COMMIT then write, both observed",
+      "value": "windows_reserve_commit"
+    },
+    "unavailable_ranges": []
+  }
+}
