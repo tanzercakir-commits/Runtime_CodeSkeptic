@@ -111,8 +111,8 @@ rs::json::Value header_json(uint32_t capacity) {
     rs::json::Value apis = rs::json::Value::array();
 #if defined(RS_PLATFORM_WINDOWS)
     apis.push_back("VirtualAlloc");
-    apis.push_back("VirtualFree");
     apis.push_back("VirtualProtect");
+    apis.push_back("VirtualFree");
 #else
     apis.push_back("mmap");
     apis.push_back("mprotect");

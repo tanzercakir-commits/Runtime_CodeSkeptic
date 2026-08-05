@@ -135,11 +135,14 @@ replay, recursion/allocator-safety and malformed-trace tests pass on Linux,
 macOS and Windows.
 **Current evidence:** the ABI/schema are frozen; native/disabled/checked
 wrappers, canonical trace writer, bounded reader, pure replay, sample,
-benchmark and structural safety guard pass locally under Linux/GCC with
-warnings as errors. The refreshed physical Windows measurement from
-`refs/measurements/a7d7f533.../windows-x86_64` is committed with this work so
-the profile-freshness gate measures the current probe rather than a comment
-revision.
+benchmark, installed out-of-tree SDK consumer and structural safety guard pass
+23/23 CTest cases locally under Linux/GCC with warnings as errors. CI run
+31053293069 proved the runtime suite on Apple Clang and exposed only missing
+transitive C++20 metadata in the installed consumer; on MSVC it exposed API
+header order, the same consumer metadata and an invalid reset-test protection.
+All three root causes are fixed locally. The v0.2 Linux package executes its
+analyzer demo, trace replay and benchmark, and two identical-source builds
+produce SHA-256 `54a0703352452e1f63c7e47e64bb2d3b461d5014bac9f5d8bd96fec8f6f5937e`.
 **First step:** obtain one exact-head green CI matrix on Linux/GCC,
 Linux/Clang, physical macOS/Apple-Clang and Windows/MSVC. Fix evidence, not the
 gate, if any lane disagrees; consume T-009 only after all are green.

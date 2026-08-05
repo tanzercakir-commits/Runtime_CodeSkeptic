@@ -180,7 +180,7 @@ RS_TEST(virtual_alloc_reset_is_recorded_without_commit_semantics) {
     initialize(8);
     void* memory = wrapped_allocate();
     RS_CHECK(memory != nullptr);
-    void* reset = rs_virtual_alloc_v1(memory, 1, MEM_RESET, PAGE_READWRITE);
+    void* reset = rs_virtual_alloc_v1(memory, 4096, MEM_RESET, PAGE_NOACCESS);
     RS_CHECK(reset != nullptr);
     std::array<rs_vm_event_v1, 8> events{};
     size_t written = 0;

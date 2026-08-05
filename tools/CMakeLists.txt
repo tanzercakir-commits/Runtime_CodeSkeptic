@@ -28,5 +28,18 @@ add_executable(rs-validate rs-validate/main.cpp)
 target_link_libraries(rs-validate PRIVATE rs_core rs_warnings)
 
 install(TARGETS rs-env-probe rs-check rs-replay rs-profile rs-mcp
-                rs-runtime-benchmark
         RUNTIME DESTINATION bin)
+install(TARGETS rs-runtime-benchmark
+        RUNTIME DESTINATION bin
+        COMPONENT RuntimeSDK)
+if(APPLE)
+    set_target_properties(rs-runtime-benchmark PROPERTIES
+        BUILD_RPATH "@loader_path/../src"
+        BUILD_WITH_INSTALL_RPATH YES
+        INSTALL_RPATH "@loader_path/../lib")
+elseif(UNIX)
+    set_target_properties(rs-runtime-benchmark PROPERTIES
+        BUILD_RPATH "$ORIGIN/../src"
+        BUILD_WITH_INSTALL_RPATH YES
+        INSTALL_RPATH "$ORIGIN/../lib")
+endif()

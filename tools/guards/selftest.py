@@ -308,6 +308,52 @@ RUNTIME_FILES = {
 }
 
 CASES = [
+    # ---- check_release_consistency: one public version, one package set ---
+    Case("check_release_consistency.py", "release declarations agree",
+         {"CMakeLists.txt": "project(RuntimeSkeptic\n    VERSION 0.2.0)\n",
+          "include/runtimeskeptic/version.hpp":
+              'constexpr auto kToolVersion = "runtimeskeptic/0.2.0";\n',
+          "dist/build-linux-release.sh":
+              'V=0.2.0\ncp "$ROOT/dist/RELEASE-v$V.md" "$D/RELEASE.md"\n',
+          "dist/build-macos-release.sh":
+              'V=0.2.0\ncp "dist/RELEASE-v$V.md" "$D/RELEASE.md"\n',
+          "dist/QUICKSTART.md": "# RuntimeSkeptic v0.2.0 - quickstart\n",
+          "dist/RELEASE-v0.2.0.md": "# RuntimeSkeptic v0.2.0\n",
+          ".github/workflows/ci.yml":
+              ("runtimeskeptic-v0.2.0-linux-x86_64.tar.gz\n" * 2
+               + "runtimeskeptic-v0.2.0-macos-arm64.tar.gz\n" * 2)},
+         expect_fail=False),
+
+    Case("check_release_consistency.py", "tool version drift fails",
+         {"CMakeLists.txt": "project(RuntimeSkeptic VERSION 0.2.0)\n",
+          "include/runtimeskeptic/version.hpp":
+              'constexpr auto kToolVersion = "runtimeskeptic/0.1.0";\n',
+          "dist/build-linux-release.sh":
+              'V=0.2.0\ncp "$ROOT/dist/RELEASE-v$V.md" "$D/RELEASE.md"\n',
+          "dist/build-macos-release.sh":
+              'V=0.2.0\ncp "dist/RELEASE-v$V.md" "$D/RELEASE.md"\n',
+          "dist/QUICKSTART.md": "# RuntimeSkeptic v0.2.0 - quickstart\n",
+          "dist/RELEASE-v0.2.0.md": "# RuntimeSkeptic v0.2.0\n",
+          ".github/workflows/ci.yml":
+              ("runtimeskeptic-v0.2.0-linux-x86_64.tar.gz\n" * 2
+               + "runtimeskeptic-v0.2.0-macos-arm64.tar.gz\n" * 2)},
+         expect_fail=True, expect_text="version.hpp has 0.1.0"),
+
+    Case("check_release_consistency.py", "missing exact CI archive fails",
+         {"CMakeLists.txt": "project(RuntimeSkeptic VERSION 0.2.0)\n",
+          "include/runtimeskeptic/version.hpp":
+              'constexpr auto kToolVersion = "runtimeskeptic/0.2.0";\n',
+          "dist/build-linux-release.sh":
+              'V=0.2.0\ncp "$ROOT/dist/RELEASE-v$V.md" "$D/RELEASE.md"\n',
+          "dist/build-macos-release.sh":
+              'V=0.2.0\ncp "dist/RELEASE-v$V.md" "$D/RELEASE.md"\n',
+          "dist/QUICKSTART.md": "# RuntimeSkeptic v0.2.0 - quickstart\n",
+          "dist/RELEASE-v0.2.0.md": "# RuntimeSkeptic v0.2.0\n",
+          ".github/workflows/ci.yml":
+              ("runtimeskeptic-v0.2.0-linux-x86_64.tar.gz\n" * 2
+               + "runtimeskeptic-v0.1.0-macos-arm64.tar.gz\n" * 2)},
+         expect_fail=True, expect_text="macos-arm64"),
+
     # ---- runtime safety: wrapper transparency and pure replay ------------
     Case("check_runtime_safety.py", "the bounded one-call boundary passes",
          RUNTIME_FILES, expect_fail=False),

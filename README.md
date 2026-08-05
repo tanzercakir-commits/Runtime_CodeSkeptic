@@ -183,7 +183,7 @@ than a snapshot. Measure your own with `rs-env-probe`, as above.
 ```
 
 The full architecture, component by component: [ROADMAP.md](ROADMAP.md)
-sections 9–10. Not every box exists yet — v0.1 ships the probes, the contracts,
+sections 9–10. Not every box exists yet — v0.2 ships the probes, the contracts,
 the analysis engine, the evidence reports, runtime wrappers and pure trace replay; the static extractor is a later
 phase and belongs to CodeSkeptic
 ([docs/non_goals.md](docs/non_goals.md)). Project docs — compass, map, history,

@@ -1,11 +1,12 @@
-# RuntimeSkeptic v0.1.0 — quickstart (prebuilt, no build needed)
+# RuntimeSkeptic v0.2.0 — quickstart (prebuilt, no build needed)
 
 RuntimeSkeptic predicts whether a program's virtual-memory requirements survive
 a given host — *before* it runs there — with a cross-layer evidence chain.
 
-The Linux x86-64 package is statically linked. The macOS arm64 package links
-only Apple's system libraries. Neither package needs a compiler, downloaded
-dependency, or network access at runtime.
+The five Linux analyzer executables are statically linked. The runtime monitor
+ships as a shared library with its C headers, pure replay library, sample and
+benchmark. The macOS arm64 package links only Apple's system libraries. Neither
+package needs a downloaded dependency or network access at runtime.
 
 ## See a real verdict in 10 seconds
 
@@ -59,12 +60,25 @@ $ ./bin/rs-check contracts/emulator-highmem-guest-mapping.json --profile host.js
 | `rs-profile` | verify a profile, diff two profiles, or re-check contracts across them |
 | `rs-replay` | re-derive a verdict from a sealed evidence bundle (`rs-check --bundle DIR`) |
 | `rs-mcp` | the same capabilities over the Model Context Protocol |
+| `rs-runtime-sample` | record a real VM lifecycle into canonical JSONL |
+| `rs-runtime-benchmark` | measure native, disabled, buffered and flush overhead |
+
+## Observe and replay a real call
+
+```console
+$ ./bin/rs-runtime-sample runtime_trace.jsonl
+$ ./bin/rs-replay trace runtime_trace.jsonl
+$ ./bin/rs-runtime-benchmark --iterations 128 --output overhead.json
+```
+
+Headers, libraries and `RuntimeSkepticConfig.cmake` are under `include/` and
+`lib/` for downstream C/C++ consumers.
 
 ## Full source, docs, and the honest limits
 
 Everything here is reproducible from the public repository, which also carries
 the measurement campaigns, the false-positive rate (0 across 1,576 kernel-
-observed requests on three OSes), and what v0.1 deliberately does *not* do yet:
+observed requests on three OSes), and what v0.2 deliberately does *not* do yet:
 
 **https://github.com/tanzercakir-commits/Runtime_CodeSkeptic**
 

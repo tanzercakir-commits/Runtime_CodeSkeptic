@@ -4,7 +4,7 @@
 
 namespace rs {
 
-inline constexpr const char* kToolVersion = "runtimeskeptic/0.1.0";
+inline constexpr const char* kToolVersion = "runtimeskeptic/0.2.0";
 
 // Schema versions are independent of the tool version on purpose: a tool
 // upgrade must not invalidate stored profiles, and a schema change must be

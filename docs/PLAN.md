@@ -243,10 +243,12 @@ negatives are graded independently by the ground-truth execution oracle.
 ## Phase 4 — Runtime wrapper library
 
 
-`[partial]` The ABI, wrappers, trace/replay path, samples, benchmark and safety
-guards are implemented and pass a warnings-as-errors Linux build. The same
-commit still needs Linux/GCC, Linux/Clang, Apple Clang and MSVC evidence before
-T-009 can be consumed. (T-009)
+`[partial]` The ABI, wrappers, trace/replay path, installed SDK, v0.2 packages,
+samples, benchmark and safety guards are implemented and pass a
+warnings-as-errors Linux build. CI run 31053293069 proved the runtime suite on
+Apple Clang and identified three packaging/Windows test defects now fixed
+locally; the fixed commit still needs exact-head Linux/GCC, Linux/Clang, Apple
+Clang and MSVC evidence before T-009 can be consumed. (T-009)
 
 ### Deliverables
 
@@ -273,8 +275,9 @@ T-009 can be consumed. (T-009)
 ### Exit criteria
 
 - `[partial]` wrapper behavior matches native calls and does not alter native
-  error state - `tests/conformance/test_runtime.cpp` passes on Linux/GCC;
-  Apple Clang and MSVC CI evidence is pending (T-009)
+  error state - `tests/conformance/test_runtime.cpp` passes on Linux/GCC and
+  CI run 31053293069 passed the runtime suite on Apple Clang; the corrected
+  Windows reset case still needs exact-head MSVC CI evidence (T-009)
 - `[done]` `tests/unit/test_trace.cpp` proves trace order is contiguous and
   byte-stable for deterministic recorded
   execution - concurrency and double-flush tests in `test_runtime` and
@@ -414,7 +417,7 @@ that risk materialising.
   match the filesystem, and a named path must exist. Still `[partial]` because
   only paths and a fixed list of phrases are mechanical; the rest of the prose
   is unchecked and always will be.
-- `[done]` the guards are tested — `tools/guards/selftest.py`, 114 cases, each
+- `[done]` the guards are tested — `tools/guards/selftest.py`, 117 cases, each
   requiring a check to fail against a deliberately wrong throwaway repository
   before it is trusted on this one; first in `tools/guards/run_all.sh`. This
   number read `25` while there were 58, surviving two earlier increases, so

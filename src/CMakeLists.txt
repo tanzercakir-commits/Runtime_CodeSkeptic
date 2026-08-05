@@ -88,6 +88,8 @@ add_library(runtimeskeptic SHARED
     runtime/windows.cpp)
 set_target_properties(runtimeskeptic PROPERTIES
     OUTPUT_NAME runtimeskeptic
+    VERSION ${PROJECT_VERSION}
+    SOVERSION 1
     CXX_VISIBILITY_PRESET hidden
     VISIBILITY_INLINES_HIDDEN YES)
 target_compile_definitions(runtimeskeptic PRIVATE RS_RUNTIME_BUILDING_LIBRARY=1)
@@ -107,6 +109,7 @@ target_include_directories(rs_trace PUBLIC
     $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include>
     $<INSTALL_INTERFACE:include>)
 target_link_libraries(rs_trace PRIVATE rs_core rs_platform rs_warnings)
+target_compile_features(rs_trace INTERFACE cxx_std_20)
 set_target_properties(rs_trace PROPERTIES EXPORT_NAME trace)
 set_target_properties(rs_platform PROPERTIES EXPORT_NAME platform)
 set_target_properties(rs_warnings PROPERTIES EXPORT_NAME warnings)
@@ -114,15 +117,17 @@ add_library(RuntimeSkeptic::trace ALIAS rs_trace)
 
 install(TARGETS runtimeskeptic rs_trace rs_core rs_platform rs_warnings
         EXPORT RuntimeSkepticTargets
-        RUNTIME DESTINATION bin
-        LIBRARY DESTINATION lib
-        ARCHIVE DESTINATION lib)
+        RUNTIME DESTINATION bin COMPONENT RuntimeSDK
+        LIBRARY DESTINATION lib COMPONENT RuntimeSDK
+        ARCHIVE DESTINATION lib COMPONENT RuntimeSDK)
 install(DIRECTORY ${CMAKE_SOURCE_DIR}/include/runtimeskeptic/runtime
-        DESTINATION include/runtimeskeptic)
+        DESTINATION include/runtimeskeptic
+        COMPONENT RuntimeSDK)
 install(EXPORT RuntimeSkepticTargets
         FILE RuntimeSkepticTargets.cmake
         NAMESPACE RuntimeSkeptic::
-        DESTINATION lib/cmake/RuntimeSkeptic)
+        DESTINATION lib/cmake/RuntimeSkeptic
+        COMPONENT RuntimeSDK)
 
 include(CMakePackageConfigHelpers)
 configure_package_config_file(
@@ -136,7 +141,8 @@ write_basic_package_version_file(
 install(FILES
     ${CMAKE_CURRENT_BINARY_DIR}/RuntimeSkepticConfig.cmake
     ${CMAKE_CURRENT_BINARY_DIR}/RuntimeSkepticConfigVersion.cmake
-    DESTINATION lib/cmake/RuntimeSkeptic)
+    DESTINATION lib/cmake/RuntimeSkeptic
+    COMPONENT RuntimeSDK)
 
 # ---------------------------------------------------------------------------
 # rs_vm - the virtual-memory domain: profiles, requirements, rules, findings.

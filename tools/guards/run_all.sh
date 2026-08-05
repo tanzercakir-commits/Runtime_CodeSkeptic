@@ -75,6 +75,9 @@
 #                    old lesson being edited or deleted. Newest-first means new
 #                    sessions are prepended after the header; every older byte
 #                    must survive unchanged
+#   check_release    v0.2 introduced four independent version declarations and
+#                    two CI archive names; a package built under one version and
+#                    documented under another is a false-green release
 #
 # `selftest` runs FIRST and is not one of them. Every other guard here passes on
 # a repository that has already been fixed - and so would a guard whose patterns
@@ -106,6 +109,8 @@ run "documentation drift"   python3 "$HERE/check_docs.py"
 run "finding registry"      python3 "$HERE/check_registry.py"
 run "schemas vs code"       python3 "$HERE/validate_schemas.py"
 run "runtime boundary safety" python3 "$HERE/check_runtime_safety.py"
+run "release version consistency" python3 "$HERE/check_release_consistency.py"
+run "package verifier fail-closed" python3 "$HERE/../../dist/verify_package_selftest.py"
 run "execution coverage ledger" \
     python3 "$HERE/../campaign/groundtruth_execution_coverage_selftest.py"
 run "cgroup launcher fail-closed" \

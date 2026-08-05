@@ -16,6 +16,43 @@ re-litigated; a mistake recorded here does not need to be re-made.
 
 ---
 
+## 2026-08-05 - v0.2 became an executable, reproducible presentation package
+
+**Changed.** The public version is now 0.2.0. Linux and Apple Silicon packages
+contain the five analyzer tools plus the installed runtime/trace SDK, headers,
+versioned CMake targets, C sample, benchmark, quickstart and release notes.
+Package verification executes the Redis contradiction demo, records and purely
+replays a real runtime trace, checks replay status, schema-validates the
+benchmark and links/runs an out-of-tree consumer against the exact RuntimeSDK
+component. Adversarial verifier tests reject success-looking/nonzero replay and
+malformed nonempty benchmark output. CI rebuilds each archive from two
+independent build directories and rejects a byte-level SHA-256 mismatch.
+
+CI run 31053293069 supplied the native evidence local Linux could not: Apple
+Clang passed the runtime suite before the installed consumer failed, and MSVC
+exposed Windows API-header ordering plus a reset case that supplied an invalid
+protection. The exported trace target now propagates C++20, the writer emits
+the exact platform API order, and the reset case uses a page-sized range with
+`PAGE_NOACCESS`.
+
+**Evidence.** The combined warnings-as-errors WSL build passes all 23 CTest
+cases, including a clean out-of-tree installed consumer. The packaged Linux
+binaries pass the analyzer, trace replay and benchmark verifier. Two successive
+builds from the same source produced identical SHA-256
+`54a0703352452e1f63c7e47e64bb2d3b461d5014bac9f5d8bd96fec8f6f5937e`.
+
+**Learned.** A library can pass its in-tree tests and still ship an unusable
+public header when transitive language requirements are absent. Cross-platform
+tests must obey the native API's validity preconditions, and a reproducible
+archive claim needs a repeated byte comparison rather than normalized-looking
+tar flags.
+
+**Next.** Push this exact tree through Linux/GCC, Linux/Clang, physical
+macOS/Apple-Clang and Windows/MSVC. Consume T-009 and mark Phase 4 done only
+after the fixed head and both presentation packages are green.
+
+---
+
 ## 2026-08-05 - Independent Phase 4 audit closed the evidence-model gaps
 
 **Changed.** A read-only second-agent audit found no P0 and nine P1 gaps in the

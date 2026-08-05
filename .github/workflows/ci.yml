@@ -92,6 +92,31 @@ jobs:
         id: test
         run: ctest --test-dir build --build-config RelWithDebInfo --output-on-failure
 
+      - name: Verify v0.2 Linux presentation package
+        if: matrix.cc == 'gcc'
+        run: |
+          RS_BUILD_DIR="$PWD/build-release-static" \
+          RS_SDK_BUILD_DIR="$PWD/build-release-sdk" \
+          RS_JOBS=2 ./dist/build-linux-release.sh
+          first_sha="$(sha256sum dist/runtimeskeptic-v0.2.0-linux-x86_64.tar.gz | awk '{print $1}')"
+          RS_BUILD_DIR="$PWD/build-release-static-2" \
+          RS_SDK_BUILD_DIR="$PWD/build-release-sdk-2" \
+          RS_JOBS=2 ./dist/build-linux-release.sh
+          second_sha="$(sha256sum dist/runtimeskeptic-v0.2.0-linux-x86_64.tar.gz | awk '{print $1}')"
+          test "$first_sha" = "$second_sha" || {
+            echo "::error::v0.2 Linux package is not byte-reproducible"
+            exit 1
+          }
+          echo "reproducible package sha256: $second_sha"
+
+      - name: Upload v0.2 Linux presentation package
+        if: matrix.cc == 'gcc'
+        uses: actions/upload-artifact@v4
+        with:
+          name: runtimeskeptic-v0.2.0-linux-x86_64
+          path: dist/runtimeskeptic-v0.2.0-linux-x86_64.tar.gz
+          if-no-files-found: error
+
       # Project rules that can be checked mechanically. These matter as much as
       # the behavioural tests: a repository that has started lying about itself
       # passes every test right up until someone trusts a document.
@@ -481,6 +506,27 @@ jobs:
       - name: Test
         id: test
         run: ctest --test-dir build --build-config RelWithDebInfo --output-on-failure
+
+      - name: Verify v0.2 macOS presentation package
+        if: runner.os == 'macOS'
+        run: |
+          ./dist/build-macos-release.sh
+          first_sha="$(shasum -a 256 dist/runtimeskeptic-v0.2.0-macos-arm64.tar.gz | awk '{print $1}')"
+          RS_BUILD_DIR="$PWD/build-release-macos-2" ./dist/build-macos-release.sh
+          second_sha="$(shasum -a 256 dist/runtimeskeptic-v0.2.0-macos-arm64.tar.gz | awk '{print $1}')"
+          test "$first_sha" = "$second_sha" || {
+            echo "::error::v0.2 macOS package is not byte-reproducible"
+            exit 1
+          }
+          echo "reproducible package sha256: $second_sha"
+
+      - name: Upload v0.2 macOS presentation package
+        if: runner.os == 'macOS'
+        uses: actions/upload-artifact@v4
+        with:
+          name: runtimeskeptic-v0.2.0-macos-arm64
+          path: dist/runtimeskeptic-v0.2.0-macos-arm64.tar.gz
+          if-no-files-found: error
 
       # T-014 named this as the gap its own completion did not close: the arena's
       # bounds are constants, so two processes SHOULD agree - and "should" is the

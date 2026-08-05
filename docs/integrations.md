@@ -1,6 +1,6 @@
 # Integrations
 
-Status: v0.1.
+Status: v0.2.
 
 **RuntimeSkeptic has no required integrations.** It builds, tests and runs
 against nothing but a C++20 compiler and CMake, and the whole vertical slice
@@ -19,9 +19,9 @@ Everything on this page is optional.
 
 ## Command-line tools
 
-Seven executables, each doing one thing. `--help` on any of them prints its full
-flag list; this table is the map, and it is what the README means by "all tools
-and flags".
+Seven executables each do one thing. This table is the canonical invocation
+map; the five general CLI tools also expose their full flag list through
+`--help`.
 
 | Tool | Does | Key invocation |
 |---|---|---|
