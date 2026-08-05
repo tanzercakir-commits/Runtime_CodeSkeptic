@@ -103,6 +103,10 @@ RS_TEST(c_abi_layout_is_fixed_for_v1) {
     RS_CHECK_EQ(offsetof(rs_vm_event_v1, sequence), static_cast<std::size_t>(8));
     RS_CHECK_EQ(offsetof(rs_vm_event_v1, requested_address),
                 static_cast<std::size_t>(40));
+    RS_CHECK_EQ(offsetof(rs_vm_event_v1, effective_address),
+                static_cast<std::size_t>(120));
+    RS_CHECK_EQ(offsetof(rs_vm_event_v1, effective_size),
+                static_cast<std::size_t>(128));
 }
 
 RS_TEST(configuration_rejects_unknown_abi_and_nonzero_reserved_fields) {
@@ -155,6 +159,43 @@ RS_TEST(wrapper_failure_matches_native_result_and_error) {
     rs_runtime_shutdown_v1();
 }
 
+RS_TEST(callback_is_invoked_only_in_report_mode) {
+    const std::array<uint32_t, 2> modes{
+        RS_MONITOR_MODE_RECORD_V1, RS_MONITOR_MODE_ASSERT_V1};
+    for (const uint32_t mode : modes) {
+        initialize(8, clobber_error_and_reenter, mode);
+        void* memory = wrapped_allocate();
+        RS_CHECK(memory != nullptr);
+        wrapped_release(memory);
+        rs_runtime_stats_v1 stats{};
+        RS_CHECK_EQ(rs_runtime_get_stats_v1(&stats), RS_RUNTIME_OK_V1);
+        RS_CHECK_EQ(stats.recorded_events, static_cast<uint64_t>(2));
+        RS_CHECK_EQ(stats.reentrant_events, static_cast<uint64_t>(0));
+        rs_runtime_shutdown_v1();
+    }
+}
+
+#if defined(_WIN32)
+RS_TEST(virtual_alloc_reset_is_recorded_without_commit_semantics) {
+    initialize(8);
+    void* memory = wrapped_allocate();
+    RS_CHECK(memory != nullptr);
+    void* reset = rs_virtual_alloc_v1(memory, 1, MEM_RESET, PAGE_READWRITE);
+    RS_CHECK(reset != nullptr);
+    std::array<rs_vm_event_v1, 8> events{};
+    size_t written = 0;
+    RS_CHECK_EQ(rs_runtime_snapshot_v1(events.data(), events.size(), &written),
+                RS_RUNTIME_OK_V1);
+    RS_CHECK_EQ(written, static_cast<size_t>(2));
+    RS_CHECK_EQ(events[1].operation,
+                static_cast<uint32_t>(RS_VM_OPERATION_WINDOWS_RESET_V1));
+    RS_CHECK_EQ(events[1].semantic_flags,
+                static_cast<uint32_t>(RS_VM_SEMANTIC_NONE_V1));
+    native_release(memory);
+    rs_runtime_shutdown_v1();
+}
+#endif
+
 RS_TEST(recorder_and_callback_cannot_change_native_error_state) {
 #if defined(_WIN32)
     SetLastError(ERROR_ALREADY_EXISTS);
@@ -172,7 +213,7 @@ RS_TEST(recorder_and_callback_cannot_change_native_error_state) {
     void* native_memory = native_allocate();
     const int native_post_error = errno;
     native_release(native_memory);
-    initialize(8, clobber_error_and_reenter);
+    initialize(8, clobber_error_and_reenter, RS_MONITOR_MODE_REPORT_V1);
     errno = E2BIG;
     void* memory = wrapped_allocate();
     const int observed = errno;

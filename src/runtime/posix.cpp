@@ -5,13 +5,27 @@
 
 #include <cerrno>
 #include <cstdint>
+#include <limits>
+
+#include <unistd.h>
 
 #include "runtime_internal.hpp"
 
 namespace {
 
+uint64_t g_page_size = 0;
+
 uint64_t address_of(const void* value) {
     return static_cast<uint64_t>(reinterpret_cast<uintptr_t>(value));
+}
+
+uint64_t effective_size(uint64_t requested_size) noexcept {
+    if (requested_size == 0 || g_page_size == 0 ||
+        requested_size > std::numeric_limits<uint64_t>::max() -
+                             (g_page_size - 1)) {
+        return 0;
+    }
+    return ((requested_size + g_page_size - 1) / g_page_size) * g_page_size;
 }
 
 void apply_expectation(rs_vm_event_v1& event,
@@ -47,7 +61,10 @@ void* mmap_once(void* address, size_t size, int protection, int flags,
     event.native_error_code = static_cast<int64_t>(native_error);
     event.requested_address = address_of(address);
     event.returned_address = event.success != 0 ? address_of(result) : 0;
+    event.effective_address = event.returned_address;
     event.size = static_cast<uint64_t>(size);
+    event.effective_size =
+        event.success != 0 ? effective_size(event.size) : 0;
     event.offset = static_cast<int64_t>(offset);
     event.native_flags = static_cast<uint32_t>(flags);
 #if defined(MAP_FIXED)
@@ -63,6 +80,20 @@ void* mmap_once(void* address, size_t size, int protection, int flags,
 }
 
 }  // namespace
+
+namespace rs::runtime::internal {
+
+bool initialize_platform_metrics() noexcept {
+    const long page_size = sysconf(_SC_PAGESIZE);
+    if (page_size <= 0) {
+        g_page_size = 0;
+        return false;
+    }
+    g_page_size = static_cast<uint64_t>(page_size);
+    return true;
+}
+
+}  // namespace rs::runtime::internal
 
 extern "C" {
 
@@ -91,7 +122,10 @@ int RS_RUNTIME_CALL rs_mprotect_v1(void* address, size_t size,
     event.native_error_code = static_cast<int64_t>(native_error);
     event.requested_address = address_of(address);
     event.returned_address = event.success != 0 ? address_of(address) : 0;
+    event.effective_address = event.returned_address;
     event.size = static_cast<uint64_t>(size);
+    event.effective_size =
+        event.success != 0 ? effective_size(event.size) : 0;
     event.requested_protection = static_cast<uint32_t>(protection);
     rs::runtime::internal::record_event(event);
     errno = native_error;
@@ -109,7 +143,10 @@ int RS_RUNTIME_CALL rs_munmap_v1(void* address, size_t size) {
     event.native_error_code = static_cast<int64_t>(native_error);
     event.requested_address = address_of(address);
     event.returned_address = event.success != 0 ? address_of(address) : 0;
+    event.effective_address = event.returned_address;
     event.size = static_cast<uint64_t>(size);
+    event.effective_size =
+        event.success != 0 ? effective_size(event.size) : 0;
     event.semantic_flags = RS_VM_SEMANTIC_RELEASE_V1;
     rs::runtime::internal::record_event(event);
     errno = native_error;

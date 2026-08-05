@@ -16,6 +16,41 @@ re-litigated; a mistake recorded here does not need to be re-made.
 
 ---
 
+## 2026-08-05 - Independent Phase 4 audit closed the evidence-model gaps
+
+**Changed.** A read-only second-agent audit found no P0 and nine P1 gaps in the
+first runtime cut. This follow-up gates callbacks strictly to report mode,
+records native page-rounded effective ranges separately from requested bytes,
+tracks Windows reservation identity, represents reset/reset-undo without
+inventing commit transitions, and rejects platform-incompatible API headers,
+declared-capacity lies, inconsistent semantic flags and narrowing overflow.
+The MinGW guard now compiles the Windows source with its real DLL-build
+definition, and the POSIX product target links its pthread dependency.
+
+The installed SDK now includes the runtime and trace libraries, versioned CMake
+targets and a package config. Its test installs to a clean prefix, configures an
+out-of-tree consumer and links both public APIs; release packaging can consume
+the same installation boundary.
+
+**Evidence.** The revised warnings-as-errors Linux/GCC build succeeds and all
+23 CTest cases pass. New adversarial tests exercise sub-page mappings followed
+by page-sized protection, adjacent Windows reservations, interior release,
+reset as a non-lifecycle operation, callback mode isolation, exact platform API
+sets, header capacity and 32-bit wire bounds. The external installed-package
+consumer configures and links from the staged prefix.
+
+**Learned.** Requested byte lengths are not native lifecycle extents. Windows
+reservations need an identity even when ranges are adjacent, and a public
+header is not shipped functionality unless an independent downstream consumer
+can link it. Cross-compile guards must reproduce target definitions, not merely
+the compiler and warning flags.
+
+**Next.** Run the full guard suite, commit and obtain an exact-head green
+Linux/GCC, Linux/Clang, physical macOS/Apple-Clang and Windows/MSVC matrix.
+Then consume T-009 and publish the v0.2 presentation package.
+
+---
+
 ## 2026-08-05 - Phase 4 gained a transparent runtime boundary and pure replay
 
 **Changed.** This commit implements T-009's first complete cut:

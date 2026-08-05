@@ -70,9 +70,11 @@ add_library(rs_core STATIC
 
 target_include_directories(rs_core PUBLIC
     $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include>
-    $<BUILD_INTERFACE:${RS_GENERATED_DIR}>)
+    $<BUILD_INTERFACE:${RS_GENERATED_DIR}>
+    $<INSTALL_INTERFACE:include>)
 target_link_libraries(rs_core PRIVATE rs_warnings PUBLIC rs_platform)
 set_target_properties(rs_core PROPERTIES POSITION_INDEPENDENT_CODE ON)
+set_target_properties(rs_core PROPERTIES EXPORT_NAME core)
 add_library(RuntimeSkeptic::core ALIAS rs_core)
 
 # ---------------------------------------------------------------------------
@@ -92,22 +94,49 @@ target_compile_definitions(runtimeskeptic PRIVATE RS_RUNTIME_BUILDING_LIBRARY=1)
 target_include_directories(runtimeskeptic PUBLIC
     $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include>
     $<INSTALL_INTERFACE:include>)
-target_link_libraries(runtimeskeptic PRIVATE rs_core rs_warnings PUBLIC rs_platform)
+target_link_libraries(runtimeskeptic PRIVATE rs_core rs_warnings rs_platform)
+if(NOT WIN32)
+    find_package(Threads REQUIRED)
+    target_link_libraries(runtimeskeptic PRIVATE Threads::Threads)
+endif()
+set_target_properties(runtimeskeptic PROPERTIES EXPORT_NAME runtime)
 add_library(RuntimeSkeptic::runtime ALIAS runtimeskeptic)
 
 add_library(rs_trace STATIC runtime/trace.cpp)
 target_include_directories(rs_trace PUBLIC
     $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include>
     $<INSTALL_INTERFACE:include>)
-target_link_libraries(rs_trace PUBLIC rs_core rs_platform PRIVATE rs_warnings)
+target_link_libraries(rs_trace PRIVATE rs_core rs_platform rs_warnings)
+set_target_properties(rs_trace PROPERTIES EXPORT_NAME trace)
+set_target_properties(rs_platform PROPERTIES EXPORT_NAME platform)
+set_target_properties(rs_warnings PROPERTIES EXPORT_NAME warnings)
 add_library(RuntimeSkeptic::trace ALIAS rs_trace)
 
-install(TARGETS runtimeskeptic
+install(TARGETS runtimeskeptic rs_trace rs_core rs_platform rs_warnings
+        EXPORT RuntimeSkepticTargets
         RUNTIME DESTINATION bin
         LIBRARY DESTINATION lib
         ARCHIVE DESTINATION lib)
 install(DIRECTORY ${CMAKE_SOURCE_DIR}/include/runtimeskeptic/runtime
         DESTINATION include/runtimeskeptic)
+install(EXPORT RuntimeSkepticTargets
+        FILE RuntimeSkepticTargets.cmake
+        NAMESPACE RuntimeSkeptic::
+        DESTINATION lib/cmake/RuntimeSkeptic)
+
+include(CMakePackageConfigHelpers)
+configure_package_config_file(
+    ${CMAKE_SOURCE_DIR}/cmake/RuntimeSkepticConfig.cmake.in
+    ${CMAKE_CURRENT_BINARY_DIR}/RuntimeSkepticConfig.cmake
+    INSTALL_DESTINATION lib/cmake/RuntimeSkeptic)
+write_basic_package_version_file(
+    ${CMAKE_CURRENT_BINARY_DIR}/RuntimeSkepticConfigVersion.cmake
+    VERSION ${PROJECT_VERSION}
+    COMPATIBILITY SameMajorVersion)
+install(FILES
+    ${CMAKE_CURRENT_BINARY_DIR}/RuntimeSkepticConfig.cmake
+    ${CMAKE_CURRENT_BINARY_DIR}/RuntimeSkepticConfigVersion.cmake
+    DESTINATION lib/cmake/RuntimeSkeptic)
 
 # ---------------------------------------------------------------------------
 # rs_vm - the virtual-memory domain: profiles, requirements, rules, findings.

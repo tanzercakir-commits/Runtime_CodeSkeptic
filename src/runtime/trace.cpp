@@ -2,6 +2,7 @@
 #include "runtimeskeptic/runtime/trace.hpp"
 
 #include <algorithm>
+#include <array>
 #include <fstream>
 #include <limits>
 #include <string_view>
@@ -22,6 +23,13 @@ uint32_t operation_id(std::string_view name) {
     if (name == "windows_protect") return RS_VM_OPERATION_WINDOWS_PROTECT_V1;
     if (name == "windows_decommit") return RS_VM_OPERATION_WINDOWS_DECOMMIT_V1;
     if (name == "windows_release") return RS_VM_OPERATION_WINDOWS_RELEASE_V1;
+    if (name == "windows_reset") return RS_VM_OPERATION_WINDOWS_RESET_V1;
+    if (name == "windows_reset_undo") {
+        return RS_VM_OPERATION_WINDOWS_RESET_UNDO_V1;
+    }
+    if (name == "windows_virtual_alloc_other") {
+        return RS_VM_OPERATION_WINDOWS_ALLOCATE_OTHER_V1;
+    }
     return 0;
 }
 
@@ -76,10 +84,12 @@ bool parse_event(const json::Value& doc, rs_vm_event_v1& event,
     event.native_error_code = doc.find("native_error_code")->as_int();
     if (!address(doc, "requested_address", event.requested_address, error) ||
         !address(doc, "returned_address", event.returned_address, error) ||
+        !address(doc, "effective_address", event.effective_address, error) ||
         !address(doc, "expected_address", event.expected_address, error)) {
         return false;
     }
     event.size = doc.find("size")->as_uint();
+    event.effective_size = doc.find("effective_size")->as_uint();
     event.offset = doc.find("offset")->as_int();
     event.native_flags = static_cast<uint32_t>(doc.find("native_flags")->as_uint());
     event.semantic_flags =
@@ -94,10 +104,74 @@ bool parse_event(const json::Value& doc, rs_vm_event_v1& event,
     return true;
 }
 
-bool is_mapping(uint32_t operation) {
+bool supports_expectation(uint32_t operation) {
     return operation == RS_VM_OPERATION_POSIX_MMAP_V1 ||
            operation == RS_VM_OPERATION_WINDOWS_RESERVE_V1 ||
-           operation == RS_VM_OPERATION_WINDOWS_COMMIT_V1;
+           operation == RS_VM_OPERATION_WINDOWS_COMMIT_V1 ||
+           operation == RS_VM_OPERATION_WINDOWS_RESET_V1 ||
+           operation == RS_VM_OPERATION_WINDOWS_RESET_UNDO_V1 ||
+           operation == RS_VM_OPERATION_WINDOWS_ALLOCATE_OTHER_V1;
+}
+
+bool validate_header_contract(const Header& header, std::string& error) {
+    const std::array<std::string_view, 3> posix{
+        "mmap", "mprotect", "munmap"};
+    const std::array<std::string_view, 3> windows{
+        "VirtualAlloc", "VirtualProtect", "VirtualFree"};
+    const auto& expected = header.platform == "windows" ? windows : posix;
+    if (header.instrumented_apis.size() != expected.size()) {
+        error = "trace header does not declare the complete platform API set";
+        return false;
+    }
+    for (std::size_t i = 0; i < expected.size(); ++i) {
+        if (header.instrumented_apis[i] != expected[i]) {
+            error = "trace header declares a platform-incompatible API set";
+            return false;
+        }
+    }
+    return true;
+}
+
+bool validate_semantic_flags(const rs_vm_event_v1& event,
+                             std::string& error) {
+    uint32_t allowed = 0;
+    uint32_t required = 0;
+    switch (event.operation) {
+        case RS_VM_OPERATION_POSIX_MMAP_V1:
+            allowed = RS_VM_SEMANTIC_REPLACE_V1;
+            break;
+        case RS_VM_OPERATION_POSIX_MPROTECT_V1:
+        case RS_VM_OPERATION_WINDOWS_PROTECT_V1:
+        case RS_VM_OPERATION_WINDOWS_RESET_V1:
+        case RS_VM_OPERATION_WINDOWS_RESET_UNDO_V1:
+        case RS_VM_OPERATION_WINDOWS_ALLOCATE_OTHER_V1:
+            break;
+        case RS_VM_OPERATION_POSIX_MUNMAP_V1:
+        case RS_VM_OPERATION_WINDOWS_RELEASE_V1:
+            allowed = required = RS_VM_SEMANTIC_RELEASE_V1;
+            break;
+        case RS_VM_OPERATION_WINDOWS_RESERVE_V1:
+            allowed = RS_VM_SEMANTIC_RESERVE_V1 |
+                      RS_VM_SEMANTIC_COMMIT_V1;
+            required = RS_VM_SEMANTIC_RESERVE_V1;
+            break;
+        case RS_VM_OPERATION_WINDOWS_COMMIT_V1:
+            allowed = RS_VM_SEMANTIC_COMMIT_V1;
+            if (event.success != 0) required = RS_VM_SEMANTIC_COMMIT_V1;
+            break;
+        case RS_VM_OPERATION_WINDOWS_DECOMMIT_V1:
+            allowed = required = RS_VM_SEMANTIC_DECOMMIT_V1;
+            break;
+        default:
+            error = "runtime trace contains an unknown operation";
+            return false;
+    }
+    if ((event.semantic_flags & ~allowed) != 0 ||
+        (event.semantic_flags & required) != required) {
+        error = "event semantic flags disagree with its operation";
+        return false;
+    }
+    return true;
 }
 
 bool validate_event_contract(const rs_vm_event_v1& event,
@@ -123,20 +197,24 @@ bool validate_event_contract(const rs_vm_event_v1& event,
         error = "Windows event must carry Win32 error state";
         return false;
     }
-    if (event.success == 0 && event.returned_address != 0) {
-        error = "failed event cannot report a returned address";
+    if (event.success == 0 &&
+        (event.returned_address != 0 || event.effective_address != 0 ||
+         event.effective_size != 0)) {
+        error = "failed event cannot report a returned or effective range";
         return false;
     }
-    if (event.success != 0 && event.size == 0 &&
-        event.operation != RS_VM_OPERATION_WINDOWS_RELEASE_V1) {
-        error = "successful VM event has zero size";
+    if (event.success != 0 &&
+        event.operation != RS_VM_OPERATION_WINDOWS_RELEASE_V1 &&
+        (event.size == 0 || event.effective_size == 0)) {
+        error = "successful VM event has an empty requested or effective range";
         return false;
     }
-    if (!is_mapping(event.operation) && event.exact_address_required != 0) {
-        error = "only mapping operations may carry an exact-address expectation";
+    if (!supports_expectation(event.operation) &&
+        event.exact_address_required != 0) {
+        error = "only address-returning operations may carry an expectation";
         return false;
     }
-    return true;
+    return validate_semantic_flags(event, error);
 }
 
 struct Segment {
@@ -144,6 +222,7 @@ struct Segment {
     uint64_t end = 0;
     uint32_t protection = 0;
     bool committed = false;
+    uint64_t reservation_base = 0;
 };
 
 bool add_size(uint64_t start, uint64_t size, uint64_t& end) {
@@ -233,23 +312,18 @@ void set_range(std::vector<Segment>& segments, uint64_t start, uint64_t end,
 }
 
 bool release_windows(std::vector<Segment>& segments, uint64_t address) {
-    sort_segments(segments);
-    std::size_t first = segments.size();
-    for (std::size_t i = 0; i < segments.size(); ++i) {
-        if (segments[i].start <= address && address < segments[i].end) {
-            first = i;
-            break;
-        }
-    }
-    if (first == segments.size()) return false;
-    uint64_t end = segments[first].end;
-    std::size_t last = first + 1;
-    while (last < segments.size() && segments[last].start == end) {
-        end = segments[last].end;
-        ++last;
-    }
-    segments.erase(segments.begin() + static_cast<std::ptrdiff_t>(first),
-                   segments.begin() + static_cast<std::ptrdiff_t>(last));
+    const bool found = std::any_of(
+        segments.begin(), segments.end(),
+        [address](const Segment& segment) {
+            return segment.reservation_base == address;
+        });
+    if (!found) return false;
+    segments.erase(
+        std::remove_if(segments.begin(), segments.end(),
+                       [address](const Segment& segment) {
+                           return segment.reservation_base == address;
+                       }),
+        segments.end());
     return true;
 }
 
@@ -336,11 +410,16 @@ std::optional<Trace> read_file(const std::string& path, std::string& error,
                  parsed.value->find("instrumented_apis")->as_array()) {
                 trace.header.instrumented_apis.push_back(api.as_string());
             }
+            if (!validate_header_contract(trace.header, error)) {
+                return std::nullopt;
+            }
             digest.update(line);
             digest.update("\n");
         } else if (type == "event") {
-            if (!saw_header || saw_footer || trace.events.size() >= limits.max_events) {
-                error = "event is outside the bounded header/footer sequence";
+            if (!saw_header || saw_footer ||
+                trace.events.size() >= limits.max_events ||
+                trace.events.size() >= trace.header.buffer_capacity) {
+                error = "event exceeds a reader or declared-buffer bound";
                 return std::nullopt;
             }
             rs_vm_event_v1 event{};
@@ -381,8 +460,9 @@ std::optional<Trace> read_file(const std::string& path, std::string& error,
         error = "runtime trace is missing its header or footer";
         return std::nullopt;
     }
-    if (trace.footer.event_count != trace.events.size()) {
-        error = "footer event count does not match the trace";
+    if (trace.footer.event_count != trace.events.size() ||
+        trace.footer.event_count > trace.header.buffer_capacity) {
+        error = "footer event count does not match the bounded trace";
         return std::nullopt;
     }
     if (!trace.footer.complete || trace.footer.dropped_events != 0 ||
@@ -402,7 +482,16 @@ std::optional<ReplayResult> replay(const Trace& trace, std::string& error) {
     ReplayResult result;
     result.event_count = trace.events.size();
 
+    uint64_t expected_sequence = 1;
     for (const rs_vm_event_v1& event : trace.events) {
+        if (event.sequence != expected_sequence ||
+            !validate_event_contract(event, trace.header, error)) {
+            if (error.empty()) {
+                error = "runtime trace has a sequence gap or reordering";
+            }
+            return std::nullopt;
+        }
+        ++expected_sequence;
         uint32_t expected_violation = RS_VM_VIOLATION_NONE_V1;
         if (event.exact_address_required != 0 && event.success != 0 &&
             event.returned_address != event.expected_address) {
@@ -426,78 +515,90 @@ std::optional<ReplayResult> replay(const Trace& trace, std::string& error) {
         uint64_t end = 0;
         switch (event.operation) {
             case RS_VM_OPERATION_POSIX_MMAP_V1: {
-                if (!add_size(event.returned_address, event.size, end)) {
-                    error = "successful mmap has an invalid range";
+                if (!add_size(event.effective_address, event.effective_size, end)) {
+                    error = "successful mmap has an invalid effective range";
                     return std::nullopt;
                 }
                 if ((event.semantic_flags & RS_VM_SEMANTIC_REPLACE_V1) != 0) {
-                    erase_range(segments, event.returned_address, end);
-                } else if (overlaps(segments, event.returned_address, end)) {
+                    erase_range(segments, event.effective_address, end);
+                } else if (overlaps(segments, event.effective_address, end)) {
                     error = "non-replacing mmap overlaps a live mapping";
                     return std::nullopt;
                 }
-                segments.push_back(Segment{event.returned_address, end,
-                                           event.requested_protection, true});
+                segments.push_back(Segment{event.effective_address, end,
+                                           event.requested_protection, true, 0});
                 sort_segments(segments);
                 break;
             }
             case RS_VM_OPERATION_POSIX_MPROTECT_V1:
             case RS_VM_OPERATION_WINDOWS_PROTECT_V1: {
-                if (!add_size(event.requested_address, event.size, end) ||
-                    !covered(segments, event.requested_address, end, true)) {
+                if (!add_size(event.effective_address, event.effective_size, end) ||
+                    !covered(segments, event.effective_address, end, true)) {
                     error = "successful protection change is outside live memory";
                     return std::nullopt;
                 }
-                set_range(segments, event.requested_address, end, true,
+                set_range(segments, event.effective_address, end, true,
                           event.requested_protection);
                 break;
             }
             case RS_VM_OPERATION_POSIX_MUNMAP_V1: {
-                if (!add_size(event.requested_address, event.size, end)) {
-                    error = "successful munmap has an invalid range";
+                if (!add_size(event.effective_address, event.effective_size, end)) {
+                    error = "successful munmap has an invalid effective range";
                     return std::nullopt;
                 }
-                erase_range(segments, event.requested_address, end);
+                erase_range(segments, event.effective_address, end);
                 break;
             }
             case RS_VM_OPERATION_WINDOWS_RESERVE_V1: {
-                if (!add_size(event.returned_address, event.size, end) ||
-                    overlaps(segments, event.returned_address, end)) {
+                if (!add_size(event.effective_address, event.effective_size, end) ||
+                    overlaps(segments, event.effective_address, end)) {
                     error = "successful reserve overlaps or overflows";
                     return std::nullopt;
                 }
                 const bool committed =
                     (event.semantic_flags & RS_VM_SEMANTIC_COMMIT_V1) != 0;
-                segments.push_back(Segment{event.returned_address, end,
-                                           event.requested_protection, committed});
+                segments.push_back(Segment{
+                    event.effective_address, end, event.requested_protection,
+                    committed, event.effective_address});
                 sort_segments(segments);
                 break;
             }
             case RS_VM_OPERATION_WINDOWS_COMMIT_V1: {
-                if (!add_size(event.returned_address, event.size, end) ||
-                    !covered(segments, event.returned_address, end, false)) {
+                if (!add_size(event.effective_address, event.effective_size, end) ||
+                    !covered(segments, event.effective_address, end, false)) {
                     error = "successful commit is outside a reservation";
                     return std::nullopt;
                 }
-                set_range(segments, event.returned_address, end, true,
+                set_range(segments, event.effective_address, end, true,
                           event.requested_protection);
                 break;
             }
             case RS_VM_OPERATION_WINDOWS_DECOMMIT_V1: {
-                if (!add_size(event.requested_address, event.size, end) ||
-                    !covered(segments, event.requested_address, end, true)) {
+                if (!add_size(event.effective_address, event.effective_size, end) ||
+                    !covered(segments, event.effective_address, end, true)) {
                     error = "successful decommit is outside committed memory";
                     return std::nullopt;
                 }
-                set_range(segments, event.requested_address, end, false, 0);
+                set_range(segments, event.effective_address, end, false, 0);
                 break;
             }
             case RS_VM_OPERATION_WINDOWS_RELEASE_V1:
-                if (!release_windows(segments, event.requested_address)) {
-                    error = "successful release is outside a reservation";
+                if (!release_windows(segments, event.effective_address)) {
+                    error = "successful release is not at a reservation base";
                     return std::nullopt;
                 }
                 break;
+            case RS_VM_OPERATION_WINDOWS_RESET_V1:
+            case RS_VM_OPERATION_WINDOWS_RESET_UNDO_V1:
+                if (!add_size(event.effective_address, event.effective_size, end) ||
+                    !covered(segments, event.effective_address, end, true)) {
+                    error = "successful reset is outside committed memory";
+                    return std::nullopt;
+                }
+                break;
+            case RS_VM_OPERATION_WINDOWS_ALLOCATE_OTHER_V1:
+                error = "successful VirtualAlloc has unsupported lifecycle flags";
+                return std::nullopt;
             default:
                 error = "runtime trace contains an unknown operation";
                 return std::nullopt;

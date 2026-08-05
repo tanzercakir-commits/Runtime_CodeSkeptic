@@ -78,6 +78,10 @@ const char* operation_name(uint32_t operation) {
         case RS_VM_OPERATION_WINDOWS_PROTECT_V1: return "windows_protect";
         case RS_VM_OPERATION_WINDOWS_DECOMMIT_V1: return "windows_decommit";
         case RS_VM_OPERATION_WINDOWS_RELEASE_V1: return "windows_release";
+        case RS_VM_OPERATION_WINDOWS_RESET_V1: return "windows_reset";
+        case RS_VM_OPERATION_WINDOWS_RESET_UNDO_V1: return "windows_reset_undo";
+        case RS_VM_OPERATION_WINDOWS_ALLOCATE_OTHER_V1:
+            return "windows_virtual_alloc_other";
         default: return "unknown";
     }
 }
@@ -124,6 +128,8 @@ rs::json::Value header_json(uint32_t capacity) {
 
 rs::json::Value event_json(const rs_vm_event_v1& event) {
     rs::json::Value doc = rs::json::Value::object();
+    doc["effective_address"] = rs::json::to_hex(event.effective_address);
+    doc["effective_size"] = static_cast<unsigned long long>(event.effective_size);
     doc["exact_address_required"] = event.exact_address_required != 0;
     doc["expected_address"] = rs::json::to_hex(event.expected_address);
     doc["native_error_code"] = static_cast<long long>(event.native_error_code);
@@ -219,14 +225,15 @@ void record_event(rs_vm_event_v1 event) noexcept {
     slot.event = event;
     slot.published.store(1, std::memory_order_release);
 
+    const uint32_t mode = g_mode.load(std::memory_order_acquire);
     const rs_event_callback_v1 callback =
         g_callback.load(std::memory_order_acquire);
-    if (callback != nullptr) {
+    if (mode == RS_MONITOR_MODE_REPORT_V1 && callback != nullptr) {
         callback(&slot.event, g_callback_data.load(std::memory_order_acquire));
     }
 
     const bool must_assert =
-        g_mode.load(std::memory_order_acquire) == RS_MONITOR_MODE_ASSERT_V1 &&
+        mode == RS_MONITOR_MODE_ASSERT_V1 &&
         event.violation != RS_VM_VIOLATION_NONE_V1;
     g_inside_recorder = false;
     if (must_assert) std::abort();
@@ -263,6 +270,9 @@ int RS_RUNTIME_CALL rs_runtime_initialize_v1(
         callback_data = config->callback_user_data;
     }
 
+    if (!rs::runtime::internal::initialize_platform_metrics()) {
+        return RS_RUNTIME_ERROR_INTERNAL_V1;
+    }
     clear_slots();
     g_capacity.store(capacity, std::memory_order_release);
     g_mode.store(mode, std::memory_order_release);

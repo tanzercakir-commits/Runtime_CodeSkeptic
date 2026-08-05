@@ -52,7 +52,10 @@ typedef enum rs_vm_operation_v1 {
     RS_VM_OPERATION_WINDOWS_COMMIT_V1 = 5,
     RS_VM_OPERATION_WINDOWS_PROTECT_V1 = 6,
     RS_VM_OPERATION_WINDOWS_DECOMMIT_V1 = 7,
-    RS_VM_OPERATION_WINDOWS_RELEASE_V1 = 8
+    RS_VM_OPERATION_WINDOWS_RELEASE_V1 = 8,
+    RS_VM_OPERATION_WINDOWS_RESET_V1 = 9,
+    RS_VM_OPERATION_WINDOWS_RESET_UNDO_V1 = 10,
+    RS_VM_OPERATION_WINDOWS_ALLOCATE_OTHER_V1 = 11
 } rs_vm_operation_v1;
 
 typedef enum rs_native_error_domain_v1 {
@@ -106,7 +109,9 @@ typedef struct rs_vm_event_v1 {
     uint32_t exact_address_required;
     uint32_t violation;
     uint32_t reserved32[4];
-    uint64_t reserved64[4];
+    uint64_t effective_address;
+    uint64_t effective_size;
+    uint64_t reserved64[2];
 } rs_vm_event_v1;
 
 typedef void (RS_RUNTIME_CALL *rs_event_callback_v1)(

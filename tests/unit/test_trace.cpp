@@ -45,7 +45,7 @@ rs_runtime_config_v1 trace_config() {
 bool record_lifecycle() {
 #if defined(_WIN32)
     void* memory = rs_virtual_alloc_v1(
-        nullptr, 4096, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
+        nullptr, 1, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
     if (memory == nullptr) return false;
     DWORD old_protection = 0;
     if (!rs_virtual_protect_v1(memory, 4096, PAGE_READONLY,
@@ -58,7 +58,7 @@ bool record_lifecycle() {
 #else
     const int flags = MAP_PRIVATE | MAP_ANON;
 #endif
-    void* memory = rs_mmap_v1(nullptr, 4096, PROT_READ | PROT_WRITE,
+    void* memory = rs_mmap_v1(nullptr, 1, PROT_READ | PROT_WRITE,
                               flags, -1, 0);
     if (memory == MAP_FAILED) return false;
     if (rs_mprotect_v1(memory, 4096, PROT_READ) != 0) return false;
@@ -119,7 +119,9 @@ rs_vm_event_v1 event(uint64_t sequence, uint32_t platform,
                                     : RS_NATIVE_ERROR_ERRNO_V1;
     value.requested_address = address;
     value.returned_address = address;
+    value.effective_address = address;
     value.size = size;
+    value.effective_size = size;
     value.semantic_flags = semantic_flags;
     value.requested_protection = 1;
     return value;
@@ -192,11 +194,11 @@ RS_TEST(reader_rejects_sequence_reordering_digest_tamper_and_incomplete_footer) 
     RS_CHECK(!rs::runtime::trace::read_file(path.string(), error));
 
     auto tampered = lines;
-    const std::string size_needle = "\"size\":4096";
+    const std::string size_needle = "\"size\":1";
     const std::size_t size_at = tampered[1].find(size_needle);
     RS_CHECK(size_at != std::string::npos);
     if (size_at != std::string::npos) {
-        tampered[1].replace(size_at, size_needle.size(), "\"size\":8192");
+        tampered[1].replace(size_at, size_needle.size(), "\"size\":2");
     }
     write_bytes(path, join_lines(tampered));
     error.clear();
@@ -236,6 +238,163 @@ RS_TEST(reader_enforces_file_line_and_event_limits) {
     RS_CHECK(!rs::runtime::trace::read_file(path.string(), error, limits));
     std::error_code ignored;
     std::filesystem::remove(path, ignored);
+}
+
+RS_TEST(reader_rejects_incomplete_api_sets_capacity_lies_and_u32_overflow) {
+    const std::string valid = valid_trace_bytes();
+    RS_CHECK(!valid.empty());
+    const auto path = temp_file("runtimeskeptic-trace-contract.jsonl");
+    std::string error;
+
+    std::string partial = valid;
+    const std::string api_set = "[\"mmap\",\"mprotect\",\"munmap\"]";
+    const std::string windows_api_set =
+        "[\"VirtualAlloc\",\"VirtualProtect\",\"VirtualFree\"]";
+    const std::string& emitted_api_set =
+#if defined(_WIN32)
+        windows_api_set;
+#else
+        api_set;
+#endif
+    const std::size_t api_at = partial.find(emitted_api_set);
+    RS_CHECK(api_at != std::string::npos);
+    if (api_at != std::string::npos) {
+        const std::size_t comma = partial.find_last_of(',', api_at +
+                                                       emitted_api_set.size());
+        RS_CHECK(comma != std::string::npos);
+        if (comma != std::string::npos) partial.erase(comma, partial.find(']', comma) - comma);
+    }
+    write_bytes(path, partial);
+    RS_CHECK(!rs::runtime::trace::read_file(path.string(), error));
+
+    std::string wrong_platform = valid;
+    const std::string replacement =
+#if defined(_WIN32)
+        "[\"mmap\",\"mprotect\",\"munmap\"]";
+#else
+        "[\"VirtualAlloc\",\"VirtualProtect\",\"VirtualFree\"]";
+#endif
+    const std::size_t platform_at = wrong_platform.find(emitted_api_set);
+    RS_CHECK(platform_at != std::string::npos);
+    if (platform_at != std::string::npos) {
+        wrong_platform.replace(platform_at, emitted_api_set.size(), replacement);
+    }
+    write_bytes(path, wrong_platform);
+    error.clear();
+    RS_CHECK(!rs::runtime::trace::read_file(path.string(), error));
+
+    std::string capacity_lie = valid;
+    const std::string capacity = "\"buffer_capacity\":32";
+    const std::size_t capacity_at = capacity_lie.find(capacity);
+    RS_CHECK(capacity_at != std::string::npos);
+    if (capacity_at != std::string::npos) {
+        capacity_lie.replace(capacity_at, capacity.size(),
+                             "\"buffer_capacity\":1");
+    }
+    write_bytes(path, capacity_lie);
+    error.clear();
+    RS_CHECK(!rs::runtime::trace::read_file(path.string(), error));
+
+    std::string overflow = valid;
+    const std::string field = "\"native_flags\":";
+    const std::size_t field_at = overflow.find(field);
+    const std::size_t field_end =
+        field_at == std::string::npos ? std::string::npos
+                                     : overflow.find(',', field_at);
+    RS_CHECK(field_at != std::string::npos);
+    RS_CHECK(field_end != std::string::npos);
+    if (field_at != std::string::npos && field_end != std::string::npos) {
+        overflow.replace(field_at + field.size(),
+                         field_end - (field_at + field.size()),
+                         "4294967296");
+    }
+    write_bytes(path, overflow);
+    error.clear();
+    RS_CHECK(!rs::runtime::trace::read_file(path.string(), error));
+
+    std::error_code ignored;
+    std::filesystem::remove(path, ignored);
+}
+
+RS_TEST(writer_records_native_effective_ranges_for_subpage_requests) {
+    const std::string bytes = valid_trace_bytes();
+    const auto path = temp_file("runtimeskeptic-trace-effective.jsonl");
+    write_bytes(path, bytes);
+    std::string error;
+    auto trace = rs::runtime::trace::read_file(path.string(), error);
+    RS_CHECK_MESSAGE(trace.has_value(), error);
+    if (trace && !trace->events.empty()) {
+        RS_CHECK_EQ(trace->events.front().size, static_cast<uint64_t>(1));
+        RS_CHECK(trace->events.front().effective_size >=
+                 trace->events.front().size);
+        auto replayed = rs::runtime::trace::replay(*trace, error);
+        RS_CHECK_MESSAGE(replayed.has_value(), error);
+    }
+    std::error_code ignored;
+    std::filesystem::remove(path, ignored);
+}
+
+RS_TEST(windows_replay_preserves_adjacent_reservation_identity) {
+    rs::runtime::trace::Trace trace;
+    trace.header.platform = "windows";
+    trace.events.push_back(event(1, RS_RUNTIME_PLATFORM_WINDOWS_V1,
+                                 RS_VM_OPERATION_WINDOWS_RESERVE_V1,
+                                 0x20000, 0x1000,
+                                 RS_VM_SEMANTIC_RESERVE_V1));
+    trace.events.push_back(event(2, RS_RUNTIME_PLATFORM_WINDOWS_V1,
+                                 RS_VM_OPERATION_WINDOWS_RESERVE_V1,
+                                 0x21000, 0x1000,
+                                 RS_VM_SEMANTIC_RESERVE_V1));
+    trace.events.push_back(event(3, RS_RUNTIME_PLATFORM_WINDOWS_V1,
+                                 RS_VM_OPERATION_WINDOWS_RELEASE_V1,
+                                 0x20000, 0,
+                                 RS_VM_SEMANTIC_RELEASE_V1));
+    trace.events.push_back(event(4, RS_RUNTIME_PLATFORM_WINDOWS_V1,
+                                 RS_VM_OPERATION_WINDOWS_COMMIT_V1,
+                                 0x21000, 0x1000,
+                                 RS_VM_SEMANTIC_COMMIT_V1));
+    trace.events.push_back(event(5, RS_RUNTIME_PLATFORM_WINDOWS_V1,
+                                 RS_VM_OPERATION_WINDOWS_RELEASE_V1,
+                                 0x21000, 0,
+                                 RS_VM_SEMANTIC_RELEASE_V1));
+    std::string error;
+    auto result = rs::runtime::trace::replay(trace, error);
+    RS_CHECK_MESSAGE(result.has_value(), error);
+}
+
+RS_TEST(windows_replay_rejects_interior_release_and_keeps_reset_non_lifecycle) {
+    rs::runtime::trace::Trace invalid;
+    invalid.header.platform = "windows";
+    invalid.events.push_back(event(1, RS_RUNTIME_PLATFORM_WINDOWS_V1,
+                                   RS_VM_OPERATION_WINDOWS_RESERVE_V1,
+                                   0x30000, 0x2000,
+                                   RS_VM_SEMANTIC_RESERVE_V1));
+    invalid.events.push_back(event(2, RS_RUNTIME_PLATFORM_WINDOWS_V1,
+                                   RS_VM_OPERATION_WINDOWS_RELEASE_V1,
+                                   0x31000, 0,
+                                   RS_VM_SEMANTIC_RELEASE_V1));
+    std::string error;
+    RS_CHECK(!rs::runtime::trace::replay(invalid, error));
+
+    rs::runtime::trace::Trace reset;
+    reset.header.platform = "windows";
+    reset.events.push_back(event(
+        1, RS_RUNTIME_PLATFORM_WINDOWS_V1,
+        RS_VM_OPERATION_WINDOWS_RESERVE_V1, 0x40000, 0x1000,
+        RS_VM_SEMANTIC_RESERVE_V1 | RS_VM_SEMANTIC_COMMIT_V1));
+    reset.events.push_back(event(2, RS_RUNTIME_PLATFORM_WINDOWS_V1,
+                                 RS_VM_OPERATION_WINDOWS_RESET_V1,
+                                 0x40000, 0x1000));
+    reset.events.push_back(event(3, RS_RUNTIME_PLATFORM_WINDOWS_V1,
+                                 RS_VM_OPERATION_WINDOWS_PROTECT_V1,
+                                 0x40000, 0x1000));
+    reset.events.push_back(event(4, RS_RUNTIME_PLATFORM_WINDOWS_V1,
+                                 RS_VM_OPERATION_WINDOWS_RELEASE_V1,
+                                 0x40000, 0,
+                                 RS_VM_SEMANTIC_RELEASE_V1));
+    error.clear();
+    auto result = rs::runtime::trace::replay(reset, error);
+    RS_CHECK_MESSAGE(result.has_value(), error);
 }
 
 RS_TEST(posix_lifecycle_replay_maps_protects_and_unmaps) {

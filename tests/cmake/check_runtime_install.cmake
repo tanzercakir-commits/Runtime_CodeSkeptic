@@ -29,3 +29,50 @@ endif()
 if(NOT runtime_libraries)
     message(FATAL_ERROR "installed libruntimeskeptic artifact missing")
 endif()
+file(GLOB trace_libraries
+    "${RS_INSTALL_PREFIX}/lib/*rs_trace*"
+    "${RS_INSTALL_PREFIX}/lib/*trace.lib")
+if(NOT trace_libraries)
+    message(FATAL_ERROR "installed trace replay library missing")
+endif()
+if(NOT EXISTS
+   "${RS_INSTALL_PREFIX}/lib/cmake/RuntimeSkeptic/RuntimeSkepticConfig.cmake")
+    message(FATAL_ERROR "installed RuntimeSkeptic CMake package missing")
+endif()
+
+set(consumer_dir "${RS_INSTALL_PREFIX}-consumer")
+file(REMOVE_RECURSE "${consumer_dir}")
+file(MAKE_DIRECTORY "${consumer_dir}")
+file(WRITE "${consumer_dir}/CMakeLists.txt"
+"cmake_minimum_required(VERSION 3.20)\n"
+"project(RuntimeSkepticConsumer LANGUAGES C CXX)\n"
+"find_package(RuntimeSkeptic CONFIG REQUIRED "
+"PATHS \"${RS_INSTALL_PREFIX}/lib/cmake/RuntimeSkeptic\" NO_DEFAULT_PATH)\n"
+"add_executable(consumer main.cpp)\n"
+"target_link_libraries(consumer PRIVATE "
+"RuntimeSkeptic::runtime RuntimeSkeptic::trace)\n")
+file(WRITE "${consumer_dir}/main.cpp"
+"#include <string>\n"
+"#include \"runtimeskeptic/runtime/runtime.h\"\n"
+"#include \"runtimeskeptic/runtime/trace.hpp\"\n"
+"int main() {\n"
+"  rs::runtime::trace::Trace trace;\n"
+"  std::string error;\n"
+"  auto result = rs::runtime::trace::replay(trace, error);\n"
+"  return rs_runtime_is_enabled_v1() + (result ? 0 : 1);\n"
+"}\n")
+execute_process(
+    COMMAND "${CMAKE_COMMAND}" -S "${consumer_dir}"
+            -B "${consumer_dir}/build"
+    RESULT_VARIABLE configure_result)
+if(NOT configure_result EQUAL 0)
+    message(FATAL_ERROR "installed-package consumer configure failed")
+endif()
+set(build_command "${CMAKE_COMMAND}" --build "${consumer_dir}/build")
+if(DEFINED RS_CONFIG AND NOT RS_CONFIG STREQUAL "")
+    list(APPEND build_command --config "${RS_CONFIG}")
+endif()
+execute_process(COMMAND ${build_command} RESULT_VARIABLE build_result)
+if(NOT build_result EQUAL 0)
+    message(FATAL_ERROR "installed-package consumer link failed")
+endif()

@@ -6,6 +6,7 @@
 
 namespace rs::runtime::internal {
 
+bool initialize_platform_metrics() noexcept;
 void record_event(rs_vm_event_v1 event) noexcept;
 uint32_t platform_id() noexcept;
 

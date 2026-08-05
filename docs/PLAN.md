@@ -251,7 +251,8 @@ T-009 can be consumed. (T-009)
 ### Deliverables
 
 - `[done]` `libruntimeskeptic` and install rules - `src/CMakeLists.txt`, with
-  fixed-capacity recorder in `src/runtime/runtime.cpp`
+  fixed-capacity recorder in `src/runtime/runtime.cpp`; the install CTest
+  configures and links a clean out-of-tree CMake consumer
 - `[done]` stable pure-C ABI - `include/runtimeskeptic/runtime/runtime.h`,
   `runtime_posix.h`, `runtime_windows.h`; compiled as C by
   `tests/conformance/test_runtime_c_api.c`
@@ -259,7 +260,8 @@ T-009 can be consumed. (T-009)
   rejected adversarially by `tests/unit/test_schema.cpp`
 - `[done]` deterministic writer, bounded reader and pure lifecycle replay -
   `src/runtime/runtime.cpp`, `src/runtime/trace.cpp`, `rs-replay trace`, and
-  `tests/unit/test_trace.cpp`
+  `tests/unit/test_trace.cpp`; requested and page-rounded effective ranges,
+  Windows reservation identity and reset semantics are represented explicitly
 - `[done]` sample integrations - `tools/guards/validate_schemas.py` executes
   and validates a fresh trace from `samples/runtime_monitor_posix.c`; the
   POSIX sample/replay round trip was also run from `build-wsl-phase4/bin/`,

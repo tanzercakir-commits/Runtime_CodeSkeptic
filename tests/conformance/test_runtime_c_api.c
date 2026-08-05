@@ -15,6 +15,10 @@ _Static_assert(sizeof(rs_runtime_stats_v1) == 80, "stats ABI drift");
 _Static_assert(offsetof(rs_vm_event_v1, sequence) == 8, "sequence offset drift");
 _Static_assert(offsetof(rs_vm_event_v1, requested_address) == 40,
                "address offset drift");
+_Static_assert(offsetof(rs_vm_event_v1, effective_address) == 120,
+               "effective address offset drift");
+_Static_assert(offsetof(rs_vm_event_v1, effective_size) == 128,
+               "effective size offset drift");
 
 int main(void) {
     rs_runtime_config_v1 config = {0};

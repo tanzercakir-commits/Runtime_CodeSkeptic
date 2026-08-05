@@ -66,12 +66,20 @@ wrappers transparent without discarding the current buffer.
 3. one footer with counts, completeness and SHA-256 over every preceding
    canonical line including its newline.
 
+Each event keeps the caller's requested address and byte length separate from
+the native effective address and page-rounded extent. This distinction lets
+replay reproduce a one-byte allocation followed by a page-sized protection
+change without guessing a host page size. Windows reset and reset-undo events
+require committed coverage but do not create a reserve or commit transition.
+
 Addresses are lowercase hex strings; sizes and flags are integers. The default
 trace omits timestamps, paths, file descriptors and OS thread identifiers.
 The reader caps files at 16 MiB, lines at 64 KiB and events at 4096. It rejects
 unknown versions, unknown fields, noncanonical JSON, sequence gaps, reordering,
 missing or duplicate records, digest mismatch, overflow, dropped/reentrant
-events and impossible platform/operation combinations.
+events, platform-incompatible API declarations, event counts beyond the
+declared buffer, narrowing numeric values and impossible platform/operation
+combinations.
 
 Run pure replay with:
 
@@ -98,3 +106,9 @@ build/bin/rs-runtime-benchmark --iterations 128 --output overhead.json
 Multi-config generators place executables under `build/bin/RelWithDebInfo`.
 The sample source is under `samples/`; benchmark methodology and interpretation
 are in `benchmarks/README.md`.
+
+A normal CMake install publishes the C ABI, trace C++ API, shared runtime,
+static replay library and versioned package targets. A downstream project can
+use `find_package(RuntimeSkeptic CONFIG REQUIRED)` and link
+`RuntimeSkeptic::runtime` and/or `RuntimeSkeptic::trace`. CTest verifies this
+from a clean out-of-tree consumer rather than only checking that files exist.
