@@ -142,7 +142,7 @@ transitive C++20 metadata in the installed consumer; on MSVC it exposed API
 header order, the same consumer metadata and an invalid reset-test protection.
 All three root causes are fixed locally. The v0.2 Linux package executes its
 analyzer demo, trace replay and benchmark, and two identical-source builds
-produce SHA-256 `54a0703352452e1f63c7e47e64bb2d3b461d5014bac9f5d8bd96fec8f6f5937e`.
+produce SHA-256 `3b8ef599dfe404612de885d5eefc9728186079d56060b278f7193aab3422432a`.
 **First step:** obtain one exact-head green CI matrix on Linux/GCC,
 Linux/Clang, physical macOS/Apple-Clang and Windows/MSVC. Fix evidence, not the
 gate, if any lane disagrees; consume T-009 only after all are green.

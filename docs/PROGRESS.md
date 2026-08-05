@@ -16,6 +16,32 @@ re-litigated; a mistake recorded here does not need to be re-made.
 
 ---
 
+## 2026-08-05 - Mach-O loader versions preserve the ABI-v1 ordering invariant
+
+**Changed.** The final second-agent audit found that generic CMake `VERSION
+0.2.0` plus `SOVERSION 1` would encode Mach-O `current_version 0.2.0` below
+`compatibility_version 1.0.0`. Apple targets now decouple loader metadata as
+current 1.2.0 / compatibility 1.0.0 while filenames and install names remain
+public release 0.2.0 / ABI 1. The macOS package gate inspects both values with
+`otool -L` in addition to its install-name check.
+
+**Evidence.** CMake documents that the Mach-O-specific target properties
+override embedded versions without changing the `VERSION`/`SOVERSION` file and
+install-name behavior. The exact native check is now part of the Apple Silicon
+release job. Linux remains green with SONAME `libruntimeskeptic.so.1`; two
+independent build directories produced final package SHA-256
+`3b8ef599dfe404612de885d5eefc9728186079d56060b278f7193aab3422432a`.
+
+**Learned.** Loader ABI numbers and pre-1.0 product versions are different
+number spaces. Reusing the product version as Mach-O `current_version` can
+create an invalid ordering even when filenames and link-time compilation look
+correct.
+
+**Next.** Obtain an exact-head Apple Clang package build/load plus Linux and
+MSVC CI evidence, then consume T-009 only when the complete matrix is green.
+
+---
+
 ## 2026-08-05 - v0.2 became an executable, reproducible presentation package
 
 **Changed.** The public version is now 0.2.0. Linux and Apple Silicon packages

@@ -12,7 +12,8 @@ Virtual Memory Runtime Monitor
   tested with MSVC, but v0.2 does not claim a Windows binary archive.
 - Canonical, bounded, integrity-sealed JSONL traces and pure lifecycle replay.
 - ABI-v1 loader identity (`SONAME` / Mach-O install name) with public version
-  0.2.0 and a version-compatible CMake package.
+  0.2.0, monotonic Mach-O compatibility/current versions, and a
+  version-compatible CMake package.
 - Compile-time and runtime disable modes, report callbacks and assertion mode.
 - C samples, a five-mode overhead benchmark, installed headers and versioned
   CMake package targets.

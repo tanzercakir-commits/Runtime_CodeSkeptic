@@ -102,6 +102,14 @@ if(NOT WIN32)
     target_link_libraries(runtimeskeptic PRIVATE Threads::Threads)
 endif()
 set_target_properties(runtimeskeptic PROPERTIES EXPORT_NAME runtime)
+if(APPLE)
+    # Mach-O requires current_version >= compatibility_version. The public
+    # product version is still 0.2.0 and the loader ABI is 1; encode both
+    # without asking dyld to accept the impossible 0.2.0 >= 1.0.0 relation.
+    set_target_properties(runtimeskeptic PROPERTIES
+        MACHO_CURRENT_VERSION 1.2.0
+        MACHO_COMPATIBILITY_VERSION 1.0.0)
+endif()
 add_library(RuntimeSkeptic::runtime ALIAS runtimeskeptic)
 
 add_library(rs_trace STATIC runtime/trace.cpp)

@@ -53,6 +53,11 @@ if [ ! -f "$RUNTIME_DYLIB" ] ||
     echo "release verification failed: runtime library lacks ABI-v1 install name" >&2
     exit 1
 fi
+if ! otool -L "$RUNTIME_DYLIB" | grep -Eq \
+    'libruntimeskeptic\.1\.dylib.*compatibility version 1\.0\.0, current version 1\.2\.0'; then
+    echo "release verification failed: invalid Mach-O ABI versions" >&2
+    exit 1
+fi
 for b in rs-check rs-env-probe rs-profile rs-replay rs-mcp; do
     cp "$BUILD_DIR/bin/$b" "$D/bin/"
     strip "$D/bin/$b" 2>/dev/null || true
