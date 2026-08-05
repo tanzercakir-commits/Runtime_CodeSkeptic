@@ -14,7 +14,8 @@ now the release posture.
 
 ## Resolution status — four rounds, and what each check could not see
 
-**Round 4 (commit pending) — stop hand-checking, read the schema.** The fourth
+**Round 4 (34e2339; portability follow-up b18706f)
+— stop hand-checking, read the schema.** The fourth
 re-test confirmed round 3 held (CI green 6/6 on `58f6851`) and then found the
 class four rounds of hand-written type checks kept leaking: an independent
 null/container matrix accepted **36/36** schema-invalid documents
@@ -43,7 +44,7 @@ complete by construction, and the matrix proves it equals the oracle. What it
 does not close — a bug in the schema itself — is why the semantic golden and
 verify-integrity checks stay. Accounts in `docs/PROGRESS.md`.
 
-**Round 3 (commit pending) — the matrix measured acceptance, not truth.** The
+**Round 3 (58f6851) — the matrix measured acceptance, not truth.** The
 third re-test confirmed round 2 held and CI was green 6/6, then found the
 round-2 matrix's blind spots: it asked only "schema accepted == parser
 accepted?", never whether the VERDICT was right, never the nested/container
@@ -89,6 +90,11 @@ cases** (was 89), and status now follows it, not a feeling:
   re-test confirmed the profile-id and MCP fixes hold, and flagged remaining doc
   drift (README timing, "Only Linux" help text, the `set -e` CI snippet, and
   this document's own premature "all FIXED"), fixed under T-026.
+
+**Final hardening head verified.** At b18706f, all six status refs are green:
+linux-gcc, linux-clang, macos-apple-clang, windows-msvc, compatibility-gate,
+and determinism. The temporary branch-only push trigger served its purpose and
+is removed by the presentation integration; main remains the only push target.
 
 **CI is now green on the fixed SHA** (`681b048`, CI run #137): all six jobs —
 `linux-gcc`, `linux-clang`, `macos-apple-clang`, `windows-msvc`,
@@ -242,7 +248,7 @@ in `tests/unit/test_evidence_bundle.cpp`.
 
 ## Discovered while fixing (not in the original review)
 
-### D1 — the tracked Wine profile carries a stale `profile_id`  ·  TRACKED
+### D1 — the tracked Wine profile carried a stale `profile_id`  ·  FIXED
 While checking that the A2 parser changes did not move any profile's identity, a
 recompute found `profiles/measured/wine-9.0-on-linux-x86_64.measured.json` stores
 a `profile_id` that no longer matches the canonical hash of its own facts
@@ -261,7 +267,9 @@ disagreement (it prints the recomputed id and reports "canonical form: stable"
 regardless). <!-- checked: 2026-08-02 --> Two follow-ups worth their own change,
 off the review branch: regenerate the stale id from its facts, and have `verify`
 warn when a stored `profile_id` disagrees with the recompute. Adjacent to B4b
-(provenance-field integrity).
+(provenance-field integrity). Fixed on this branch:
+the Wine profile was regenerated to its canonical id, and
+T-031 makes a stored and recomputed profile_id mismatch fail verification.
 
 ## Fix order (the reviewer's, and it is right)
 

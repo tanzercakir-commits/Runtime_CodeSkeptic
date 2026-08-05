@@ -12,6 +12,34 @@ file(READ ${RS_SCHEMA_DIR}/application-requirements.v1.json RS_SCHEMA_APPREQ)
 file(READ ${RS_SCHEMA_DIR}/application-requirements-bundle.v1.json RS_SCHEMA_APPREQ_BUNDLE)
 file(READ ${RS_SCHEMA_DIR}/environment-profile.v1.json RS_SCHEMA_ENVPROFILE)
 file(READ ${RS_SCHEMA_DIR}/analysis-bundle.v1.json RS_SCHEMA_ANALYSIS_BUNDLE)
+# MSVC rejects a single string literal longer than 16,380 bytes (C2026). The
+# requirement and profile schemas are already larger than that. Emit adjacent
+# raw literals in conservative 8 KiB chunks; C++ concatenates them at compile
+# time, while every individual token stays below the strictest compiler limit.
+function(rs_make_schema_literal input_var output_var)
+    set(_schema "${${input_var}}")
+    string(LENGTH "${_schema}" _length)
+    set(_offset 0)
+    set(_literal "")
+    while(_offset LESS _length)
+        math(EXPR _remaining "${_length} - ${_offset}")
+        if(_remaining GREATER 8000)
+            set(_take 8000)
+        else()
+            set(_take "${_remaining}")
+        endif()
+        string(SUBSTRING "${_schema}" ${_offset} ${_take} _chunk)
+        string(APPEND _literal
+            "R\"RSJSONSCHEMA(${_chunk})RSJSONSCHEMA\"\n    ")
+        math(EXPR _offset "${_offset} + ${_take}")
+    endwhile()
+    set(${output_var} "${_literal}" PARENT_SCOPE)
+endfunction()
+
+rs_make_schema_literal(RS_SCHEMA_APPREQ RS_SCHEMA_APPREQ_LITERAL)
+rs_make_schema_literal(RS_SCHEMA_APPREQ_BUNDLE RS_SCHEMA_APPREQ_BUNDLE_LITERAL)
+rs_make_schema_literal(RS_SCHEMA_ENVPROFILE RS_SCHEMA_ENVPROFILE_LITERAL)
+rs_make_schema_literal(RS_SCHEMA_ANALYSIS_BUNDLE RS_SCHEMA_ANALYSIS_BUNDLE_LITERAL)
 set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
     ${RS_SCHEMA_DIR}/application-requirements.v1.json
     ${RS_SCHEMA_DIR}/application-requirements-bundle.v1.json

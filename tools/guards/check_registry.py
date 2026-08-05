@@ -27,10 +27,10 @@ REGISTRY = ROOT / "docs" / "findings" / "registry.md"
 
 
 def main() -> int:
-    header = HEADER.read_text()
-    impl = IMPL.read_text()
-    analyzer = ANALYZER.read_text()
-    registry = REGISTRY.read_text()
+    header = HEADER.read_text(encoding="utf-8")
+    impl = IMPL.read_text(encoding="utf-8")
+    analyzer = ANALYZER.read_text(encoding="utf-8")
+    registry = REGISTRY.read_text(encoding="utf-8")
 
     declared = dict(re.findall(r'k([A-Za-z]+)\s*=\s*"(RS-VM-\d+)"', header))
     ids = set(declared.values())

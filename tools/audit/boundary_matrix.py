@@ -20,6 +20,8 @@ import subprocess
 import sys
 import copy
 import os
+import tempfile
+import shutil
 
 try:
     from jsonschema import Draft202012Validator
@@ -135,10 +137,14 @@ def schema_valid(doc, which):
     return next(v.iter_errors(doc), None) is None
 
 
+_TMP_DIR = tempfile.TemporaryDirectory(prefix="runtimecodeskeptic-boundary-")
+_TMP_INPUT = os.path.join(_TMP_DIR.name, "bm_input.json")
+
+
 def _write(doc):
-    path = os.path.join("/tmp", "bm_input.json")
-    json.dump(doc, open(path, "w"))
-    return path
+    with open(_TMP_INPUT, "w", encoding="utf-8") as stream:
+        json.dump(doc, stream)
+    return _TMP_INPUT
 
 
 def cpp_valid(doc, which):
@@ -481,7 +487,7 @@ def run_golden():
     bad = 0
     for label, req, prof, want in GOLDEN:
         rp = _write(req)
-        pp = os.path.join("/tmp", "bm_golden_prof.json")
+        pp = os.path.join(_TMP_DIR.name, "bm_golden_prof.json")
         json.dump(prof, open(pp, "w"))
         r = subprocess.run([RS_CHECK, rp, "--profile", pp, "--quiet"],
                            capture_output=True, text=True)
@@ -501,11 +507,12 @@ def run_golden():
 # generated from the tool and mutated field by field; the C++ validator must
 # match jsonschema on every one. ---
 def make_base_manifest():
-    bdir = os.path.join("/tmp", "bm_manifest_bundle")
-    subprocess.run(["rm", "-rf", bdir])
+    bdir = os.path.join(_TMP_DIR.name, "bm_manifest_bundle")
+    shutil.rmtree(bdir, ignore_errors=True)
+    report_path = os.path.join(_TMP_DIR.name, "bm_rep.txt")
     req = _write(BASE_REQ)
     r = subprocess.run([RS_CHECK, req, "--profile", FIXED_PROFILE,
-                        "--bundle", bdir, "--quiet", "-o", "/tmp/bm_rep.txt"],
+                        "--bundle", bdir, "--quiet", "-o", report_path],
                        capture_output=True, text=True)
     mpath = os.path.join(bdir, "manifest.json")
     if r.returncode not in (0, 1, 2, 3) or not os.path.exists(mpath):
@@ -564,7 +571,7 @@ def run_verify_integrity():
     ]
     bad = 0
     for label, prof, want in cases:
-        pp = os.path.join("/tmp", "bm_verify.json")
+        pp = os.path.join(_TMP_DIR.name, "bm_verify.json")
         json.dump(prof, open(pp, "w"))
         r = subprocess.run([RS_PROFILE, "verify", pp], capture_output=True, text=True)
         ok = r.returncode == want

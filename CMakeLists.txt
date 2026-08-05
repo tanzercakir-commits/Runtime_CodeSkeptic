@@ -31,7 +31,7 @@ option(RS_WARNINGS_AS_ERRORS "Treat compiler warnings as errors" OFF)
 
 add_library(rs_warnings INTERFACE)
 if(MSVC)
-    target_compile_options(rs_warnings INTERFACE /W4 /permissive-)
+    target_compile_options(rs_warnings INTERFACE /W4 /permissive- /EHsc)
     target_compile_definitions(rs_warnings INTERFACE _CRT_SECURE_NO_WARNINGS NOMINMAX)
     if(RS_WARNINGS_AS_ERRORS)
         target_compile_options(rs_warnings INTERFACE /WX)

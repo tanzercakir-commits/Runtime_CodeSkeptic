@@ -2,10 +2,7 @@ name: CI
 
 on:
   push:
-    # fix/review-hardening is here temporarily so the round-2 review fixes are
-    # exercised by the full matrix (and publish refs/status/*) before any merge
-    # to main. Remove it once the branch lands. Never merges anything.
-    branches: [main, fix/review-hardening]
+    branches: [main]
   pull_request:
   workflow_dispatch:
   # The expensive lanes still get exercised, just not on every commit.

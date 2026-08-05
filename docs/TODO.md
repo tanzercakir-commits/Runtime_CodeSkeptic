@@ -76,7 +76,7 @@ The honest next moves are on the compass below, none of them urgent.
 **How to verify the tree before believing anything, including this file:**
 
 ```
-bash tools/guards/run_all.sh          17 guards; all must pass
+bash tools/guards/run_all.sh          every guard must run and pass
 cmake --build build -j4 && ctest --test-dir build
 ```
 
@@ -322,9 +322,9 @@ Each needs a reason, so this cannot quietly become a way to empty the list.
 
 ## Done
 
-Finished items are not kept here — they move to `docs/PROGRESS.md`, newest
-first, in the commit that finishes them. Twenty-three items shipped this way
-(T-001 … T-022): the false-positive campaign across three OSes, Gate B, the
-evidence bundle, the probe on every platform. Read the log for what each one
-changed and what it taught; that is the wake this compass used to carry inline.
+Finished items leave this compass when they are complete. Their accounts move
+to docs/PROGRESS.md, newest first, in the same change. The false-positive
+campaign, Gate B, evidence bundles, platform probes, and every review-hardening
+round are recorded there. Read the log for what each changed and taught; counts
+are derived by tools and are never restated here.
 

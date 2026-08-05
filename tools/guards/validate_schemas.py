@@ -16,6 +16,7 @@ import json
 import subprocess
 import sys
 import tempfile
+import os
 from pathlib import Path
 
 try:
@@ -40,18 +41,22 @@ BY_SCHEMA_ID = {
 def load_schemas():
     store = {}
     for path in SCHEMAS.glob("*.json"):
-        doc = json.loads(path.read_text())
+        doc = json.loads(path.read_text(encoding="utf-8"))
         store[doc["$id"]] = doc
         store[path.name] = doc
     return store
 
 
 def _find_binary(name: str):
-    for candidate in (ROOT / "build" / "bin" / name,
-                      ROOT / "build" / "bin" / "RelWithDebInfo" / name,
-                      ROOT / "build" / "bin" / (name + ".exe")):
-        if candidate.exists():
-            return candidate
+    binary_root = ROOT / "build" / "bin"
+    roots = [binary_root]
+    roots.extend(binary_root / config for config in
+                 ("Release", "RelWithDebInfo", "Debug", "MinSizeRel"))
+    for root in roots:
+        for suffix in ("", ".exe"):
+            candidate = root / (name + suffix)
+            if candidate.exists():
+                return candidate
     return None
 
 
@@ -70,14 +75,14 @@ def _emit_bundle_manifest(rs_check: Path):
         out = Path(tmp) / "bundle"
         proc = subprocess.run(
             [str(rs_check), str(contract), "--profile", str(profiles[0]),
-             "--bundle", str(out), "--output", "/dev/null"],
-            capture_output=True, text=True)
+             "--bundle", str(out), "--output", os.devnull],
+            capture_output=True, encoding="utf-8", errors="replace")
         # rs-check exits with the verdict code (1 = UNSUPPORTED etc); only 70
         # (internal) or a missing manifest means the bundle itself failed.
         manifest = out / "manifest.json"
         if proc.returncode == 70 or not manifest.exists():
             return None
-        return json.loads(manifest.read_text())
+        return json.loads(manifest.read_text(encoding="utf-8"))
 
 
 def main() -> int:
@@ -110,11 +115,11 @@ def main() -> int:
 
     for path in targets:
         try:
-            doc = json.loads(path.read_text())
+            doc = json.loads(path.read_text(encoding="utf-8"))
         except json.JSONDecodeError as exc:
             failures.append(f"{path.relative_to(ROOT)}: not valid JSON: {exc}")
             continue
-        validate(doc, str(path.relative_to(ROOT)))
+        validate(doc, path.relative_to(ROOT).as_posix())
 
     # A FRESHLY PRODUCED BUNDLE MANIFEST, not a committed one. The manifest is an
     # emitted artifact - its host fields, hashes and replay status are computed at

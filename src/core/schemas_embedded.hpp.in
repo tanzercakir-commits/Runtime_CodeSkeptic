@@ -11,16 +11,16 @@
 namespace rs::schema::embedded {
 
 inline constexpr const char* kApplicationRequirements =
-    R"RSJSONSCHEMA(@RS_SCHEMA_APPREQ@)RSJSONSCHEMA";
+    @RS_SCHEMA_APPREQ_LITERAL@;
 
 inline constexpr const char* kApplicationRequirementsBundle =
-    R"RSJSONSCHEMA(@RS_SCHEMA_APPREQ_BUNDLE@)RSJSONSCHEMA";
+    @RS_SCHEMA_APPREQ_BUNDLE_LITERAL@;
 
 inline constexpr const char* kEnvironmentProfile =
-    R"RSJSONSCHEMA(@RS_SCHEMA_ENVPROFILE@)RSJSONSCHEMA";
+    @RS_SCHEMA_ENVPROFILE_LITERAL@;
 
 inline constexpr const char* kAnalysisBundle =
-    R"RSJSONSCHEMA(@RS_SCHEMA_ANALYSIS_BUNDLE@)RSJSONSCHEMA";
+    @RS_SCHEMA_ANALYSIS_BUNDLE_LITERAL@;
 
 }  // namespace rs::schema::embedded
 

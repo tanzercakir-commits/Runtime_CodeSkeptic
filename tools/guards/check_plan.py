@@ -55,7 +55,7 @@ def check(rel: str, problems: list, counts: dict, required: bool) -> bool:
             problems.append(f"{rel} is missing; it is the project's spine")
         return False
 
-    lines = doc.read_text().splitlines()
+    lines = doc.read_text(encoding="utf-8").splitlines()
 
     # The legend explains the markers; it is not a claim about the project.
     body_starts = next((i for i, l in enumerate(lines)

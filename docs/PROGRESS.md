@@ -16,6 +16,46 @@ re-litigated; a mistake recorded here does not need to be re-made.
 
 ---
 
+
+## 2026-08-05 - presentation integration becomes fail-closed (T-033)
+
+**Changed.** On local branch codex/presentation-ready, the 21-commit input and
+replay hardening line is now the release base instead of vulnerable main. The
+v0.1 package material was applied on top. Its macOS self-check no longer ends in
+a catch-all success: dist/verify-package.sh checks the packaged files, runs the
+packaged Redis demo, requires exit 1, and requires both UNSUPPORTED and
+RS-VM-0006. Quickstart wording now distinguishes static Linux from macOS
+system-library linking. The temporary hardening-branch CI trigger is removed.
+
+The process contract is mechanical now too. check_progress_history.py compares
+the working tree to HEAD (or a clean committed tree to the first parent) and
+allows only a new session block immediately below this file's front matter. Any
+edit, deletion, or reorder of prior history fails. Two deliberate-failure
+selftests pin both directions. TODO stopped restating guard and completed-item
+counts, the exact drift class its own history documents.
+
+The immutable record model is explicit: root plan.md is hash-pinned and never
+carries status; docs/TODO.md is consumed, while docs/PROGRESS.md is append-only.
+Three process-contract selftests pin the presence, success, and failure paths.
+
+**Learned.** A release test that ignores the tool exit code is worse than no
+test: it publishes confidence while accepting a missing binary, a crash, or the
+wrong verdict. The same principle applies to project memory: append-only prose
+protects nothing until old bytes are compared with git.
+
+**Verified.** Windows MSVC Release built with 0 warnings and 0 errors; CTest was
+16/16. The 639-mutation boundary matrix had zero divergence, false-green,
+over-strict, crash, golden-verdict, or integrity mismatches. Guard selftests were
+101/101 and the complete repository guard gate passed. The release verifier
+passed on a real packaged layout and rejected a missing package as required.
+Independent review found four P1 gaps; native arm64 packaging, complete package
+contents, historical plan immutability, and TODO-to-PROGRESS consumption are now
+all fail-closed and covered by negative tests.
+
+**Next.** Build and verify the release archive on a physical Apple Silicon Mac,
+then run one final GitHub Actions matrix and create the release candidate. This
+local branch remains uncommitted and unpushed for owner review.
+
 ## 2026-08-02 — round 4: stop hand-checking, read the schema (T-030/T-031/T-032)
 
 **Changed.** The fourth re-test confirmed round 3 held (CI green 6/6 on `58f6851`)

@@ -112,7 +112,7 @@ def parse_todo():
     in_untracked = in_now = False
     section = None
 
-    for line in TODO.read_text().splitlines():
+    for line in TODO.read_text(encoding="utf-8").splitlines():
         if line.startswith("## "):
             section = line[3:].strip()
             in_untracked = "not tracked" in line.lower()
@@ -192,7 +192,7 @@ def main() -> int:
                 f"blocker nobody wrote down is an excuse.")
 
     # --- check 5: finished work leaves a trace ---------------------------
-    progress_text = PROGRESS.read_text() if PROGRESS.exists() else ""
+    progress_text = PROGRESS.read_text(encoding="utf-8") if PROGRESS.exists() else ""
     for ident, v in items.items():
         if v["state"] == "done" and ident not in progress_text:
             problems.append(
@@ -203,7 +203,7 @@ def main() -> int:
     # --- checks 1 and 2: the plan and the compass agree ------------------
     plan_tagged = set()
     if PLAN.exists():
-        lines = PLAN.read_text().splitlines()
+        lines = PLAN.read_text(encoding="utf-8").splitlines()
         body_starts = next((i for i, l in enumerate(lines)
                             if l.startswith("## ")), 0)
         for i, line in enumerate(lines, 1):

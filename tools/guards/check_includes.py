@@ -90,7 +90,7 @@ def std_headers_reachable(path: Path, seen=None) -> set:
         return set()
     seen.add(path)
     try:
-        text = path.read_text()
+        text = path.read_text(encoding="utf-8")
     except UnicodeDecodeError:
         return set()
     out = set(STD_INCLUDE.findall(text))
@@ -120,9 +120,9 @@ def main() -> int:
         files.extend(ROOT.glob(pattern))
 
     for path in sorted(set(files)):
-        rel = str(path.relative_to(ROOT))
+        rel = path.relative_to(ROOT).as_posix()
         available = std_headers_reachable(path)
-        text = path.read_text()
+        text = path.read_text(encoding="utf-8")
         scanned += 1
         for header, patterns in NEEDS.items():
             if header in available:

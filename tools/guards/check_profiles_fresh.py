@@ -105,12 +105,12 @@ def main() -> int:
         return 0
 
     for profile in sorted(MEASURED.glob("*.measured.json")):
-        rel = str(profile.relative_to(ROOT))
+        rel = profile.relative_to(ROOT).as_posix()
         if profile.name in EXCEPTIONS:
             print(f"  exempt: {profile.name} - {EXCEPTIONS[profile.name]}")
             continue
         try:
-            os_name = json.loads(profile.read_text())["platform"]["os"]
+            os_name = json.loads(profile.read_text(encoding="utf-8"))["platform"]["os"]
         except (json.JSONDecodeError, KeyError) as exc:
             problems.append(f"{rel}: cannot read platform.os ({exc})")
             continue

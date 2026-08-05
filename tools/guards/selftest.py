@@ -96,7 +96,7 @@ class Case:
                     for rel, content in files.items():
                         target = root / rel
                         target.parent.mkdir(parents=True, exist_ok=True)
-                        target.write_text(content)
+                        target.write_text(content, encoding="utf-8", newline="")
                     self._git(root, "add", "-A")
                     self._git(root, "commit", "-q", "-m", "selftest", when=when)
 
@@ -106,7 +106,7 @@ class Case:
                 if content is None:          # a directory, or an empty file
                     target.mkdir(parents=True, exist_ok=True)
                 else:
-                    target.write_text(content)
+                    target.write_text(content, encoding="utf-8", newline="")
             proc = subprocess.run(
                 [sys.executable, str(root / "tools" / "guards" / self.guard)],
                 capture_output=True, text=True)
@@ -199,6 +199,13 @@ def _sha(text: str) -> str:
 
 ROADMAP_OK = "# Spec\n\n## Phase 0 — begin\n\n## Phase 1 — continue\n"
 PLAN_MIRROR_OK = "# Plan\n\nPhase 0  begin  DONE\nPhase 1  continue  OPEN\n"
+PROGRESS_OK = "# Progress\n\nAppend-only. Newest first.\n\n---\n\n## 2026-08-01 - old\n\nKept.\n"
+PROCESS_PLAN_OK = "# Stable project plan\n"
+PROCESS_PIN_OK = _sha(PROCESS_PLAN_OK) + "  plan.md\n"
+PROCESS_PLAN_V2 = PROCESS_PLAN_OK + "changed together with its pin\n"
+PROCESS_PIN_V2 = _sha(PROCESS_PLAN_V2) + "  plan.md\n"
+TODO_WITH_ITEM = "# TODO\n\n## Now\n\n### T-001 - ship\n"
+TODO_EMPTY = "# TODO\n\n## Now\n"
 
 CASES = [
     # ---- check_docs: check 3, named paths must exist -------------------
@@ -781,6 +788,38 @@ CASES = [
                                  "--build-config Debug")},
          expect_fail=True, expect_text="which no -DCMAKE_BUILD_TYPE="),
 
+    # ---- check_process_contract: stable plan, live working records -------
+    Case("check_process_contract.py", "the three-record contract passes",
+         {"plan.md": PROCESS_PLAN_OK,
+          "tools/guards/plan.sha256": PROCESS_PIN_OK,
+          "docs/TODO.md": TODO_OK,
+          "docs/PROGRESS.md": PROGRESS_OK},
+         expect_fail=False),
+
+    Case("check_process_contract.py", "editing the immutable plan fails",
+         {"plan.md": PROCESS_PLAN_OK + "mutable status\n",
+          "tools/guards/plan.sha256": PROCESS_PIN_OK,
+          "docs/TODO.md": TODO_OK,
+          "docs/PROGRESS.md": PROGRESS_OK},
+         expect_fail=True, expect_text="immutable project plan"),
+
+    Case("check_process_contract.py", "missing working records fail",
+         {"plan.md": PROCESS_PLAN_OK,
+          "tools/guards/plan.sha256": PROCESS_PIN_OK},
+         expect_fail=True, expect_text="missing consumable TODO"),
+
+    Case("check_process_contract.py", "plan and pin cannot move together",
+         {"plan.md": PROCESS_PLAN_V2,
+          "tools/guards/plan.sha256": PROCESS_PIN_V2,
+          "docs/TODO.md": TODO_OK,
+          "docs/PROGRESS.md": PROGRESS_OK},
+         expect_fail=True, expect_text="committed baseline",
+         commits=[("2026-08-01T12:00:00+00:00",
+                   {"plan.md": PROCESS_PLAN_OK,
+                    "tools/guards/plan.sha256": PROCESS_PIN_OK,
+                    "docs/TODO.md": TODO_OK,
+                    "docs/PROGRESS.md": PROGRESS_OK})]),
+
     # ---- check_roadmap: the spec is frozen, the map mirrors it ----------
     Case("check_roadmap.py", "the real risk: ROADMAP edited under a stale hash",
          {"ROADMAP.md": ROADMAP_OK + "a quiet extra promise\n",
@@ -806,6 +845,42 @@ CASES = [
           "tools/guards/roadmap.sha256": _sha(ROADMAP_OK) + "  ROADMAP.md\n",
           "docs/PLAN.md": "# Plan\n\nPhase 0  begin  DONE\n"},
          expect_fail=True, expect_text="Phase 1"),
+
+    # ---- check_progress_history: additions survive, history is immutable --
+    Case("check_progress_history.py", "editing an old progress entry fails",
+         {"docs/PROGRESS.md": PROGRESS_OK.replace("Kept.", "Rewritten.")},
+         expect_fail=True, expect_text="old PROGRESS content was edited",
+         commits=[("2026-08-01T12:00:00+00:00",
+                   {"docs/PROGRESS.md": PROGRESS_OK})]),
+
+    Case("check_progress_history.py", "a newest-first session prepend passes",
+         {"docs/PROGRESS.md": PROGRESS_OK.replace(
+             "---\n", "---\n\n## 2026-08-02 - new\n\nAdded only.\n", 1)},
+         expect_fail=False,
+         commits=[("2026-08-01T12:00:00+00:00",
+                   {"docs/PROGRESS.md": PROGRESS_OK})]),
+
+    Case("check_progress_history.py", "consumed TODO needs new progress evidence",
+         {"docs/TODO.md": TODO_EMPTY,
+          "docs/PROGRESS.md": PROGRESS_OK},
+         expect_fail=True, expect_text="consumed without a new PROGRESS block",
+         commits=[("2026-08-01T12:00:00+00:00",
+                   {"docs/TODO.md": TODO_WITH_ITEM,
+                    "docs/PROGRESS.md": PROGRESS_OK})]),
+
+    Case("check_progress_history.py", "consumed TODO named in new progress passes",
+         {"docs/TODO.md": TODO_EMPTY,
+          "docs/PROGRESS.md": PROGRESS_OK.replace(
+              "---\n", "---\n\n## 2026-08-02 - consume T-001\n\nCompleted T-001.\n", 1)},
+         expect_fail=False,
+         commits=[("2026-08-01T12:00:00+00:00",
+                   {"docs/TODO.md": TODO_WITH_ITEM,
+                    "docs/PROGRESS.md": PROGRESS_OK})]),
+
+    Case("check_progress_history.py", "shallow history fails closed",
+         {"docs/PROGRESS.md": PROGRESS_OK,
+          ".git/shallow": "0000000000000000000000000000000000000000\n"},
+         expect_fail=True, expect_text="shallow checkout"),
 
     # The line continuation matters: the flag is usually on the NEXT line.
     Case("check_workflow_ctest.py", "a flag on a continuation line still counts",
@@ -857,7 +932,7 @@ def plan_agrees() -> str:
     plan = ROOT / "docs" / "PLAN.md"
     if not plan.exists():
         return ""
-    m = re.search(r"tools/guards/selftest\.py`,\s*(\d+)\s*cases", plan.read_text())
+    m = re.search(r"tools/guards/selftest\.py`,\s*(\d+)\s*cases", plan.read_text(encoding="utf-8"))
     if not m:
         return ("docs/PLAN.md no longer states a case count for "
                 "`tools/guards/selftest.py`; either restore it or drop this "

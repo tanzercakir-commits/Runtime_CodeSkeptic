@@ -114,12 +114,12 @@ def main() -> int:
         print("corpus/runtime_failures/ is missing", file=sys.stderr)
         return 1
 
-    registry = REGISTRY.read_text() if REGISTRY.exists() else ""
+    registry = REGISTRY.read_text(encoding="utf-8") if REGISTRY.exists() else ""
     problems, counting, vm_counting, seen = [], 0, 0, {}
 
     for path in sorted(CORPUS.glob("RSC-*.md")):
-        rel = str(path.relative_to(ROOT))
-        fm = parse_front_matter(path.read_text())
+        rel = path.relative_to(ROOT).as_posix()
+        fm = parse_front_matter(path.read_text(encoding="utf-8"))
         if fm is None:
             problems.append(f"{rel}: no YAML front matter")
             continue
@@ -177,7 +177,7 @@ def main() -> int:
                 vm_counting += 1
 
     # Check 5: the README's numbers must be these numbers.
-    text = README.read_text() if README.exists() else ""
+    text = README.read_text(encoding="utf-8") if README.exists() else ""
     claim = re.search(r"<!--\s*counting:\s*(\d+)\s*/\s*30\s+vm:\s*(\d+)\s*/\s*10\s*-->",
                       text)
     if claim is None:

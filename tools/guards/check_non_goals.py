@@ -71,11 +71,11 @@ def check_removed_names() -> list:
             continue
         if SKIP_DIRS & set(path.parts):
             continue
-        rel = str(path.relative_to(ROOT))
+        rel = path.relative_to(ROOT).as_posix()
         if rel in REMEMBERS or rel.startswith(REMEMBERS_DIRS):
             continue
         try:
-            lines = path.read_text().splitlines()
+            lines = path.read_text(encoding="utf-8").splitlines()
         except UnicodeDecodeError:
             continue
         for i, line in enumerate(lines, 1):
@@ -97,14 +97,14 @@ EXTRACT_GLOBS = ("tools/*extract*", "src/*extract*", "include/**/*extract*",
 
 def main() -> int:
     problems = []
-    text = NON_GOALS.read_text() if NON_GOALS.exists() else ""
+    text = NON_GOALS.read_text(encoding="utf-8") if NON_GOALS.exists() else ""
 
     if not NON_GOALS.exists():
         print("docs/non_goals.md is missing; it is normative", file=sys.stderr)
         return 1
 
     exception = re.search(r"NON-GOAL-18-EXCEPTION:\s*(\d{4}-\d{2}-\d{2})", text)
-    found = sorted({str(p.relative_to(ROOT))
+    found = sorted({p.relative_to(ROOT).as_posix()
                     for g in EXTRACT_GLOBS for p in ROOT.glob(g)})
 
     if found and not exception:
