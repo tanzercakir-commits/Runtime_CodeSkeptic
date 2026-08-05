@@ -179,6 +179,19 @@ jobs:
             bash tools/campaign/constrained_lane.sh 2>&1 \
             | tee /tmp/meas/gt_constrained.txt
 
+      # The dangerous half of reserve/commit is not another RLIMIT_AS case:
+      # RLIMIT_AS fails at mmap. This worker alone enters a 64 MiB cgroup-v2
+      # leaf, so mmap+mprotect succeed and the shortage can move to first touch
+      # without exposing the runner or any sibling process to the OOM killer.
+      - name: Reserve/commit pressure moves to first touch (cgroup v2)
+        id: gt_commit_pressure
+        if: runner.os == 'Linux' && matrix.cc == 'gcc'
+        run: |
+          set -o pipefail
+          bash tools/campaign/cgroup_reserve_commit_lane.sh \
+            /tmp/meas/gt-host.json /tmp/meas/cgroup.ledger.jsonl 2>&1 \
+            | tee /tmp/meas/gt_commit_pressure.txt
+
       # EXECUTION COVERAGE, GRADED FROM THE CASE OUTCOME.
       #
       # The legacy counter treated an emitted finding id as execution. That
@@ -192,7 +205,7 @@ jobs:
         run: |
           set -o pipefail
           python3 tools/campaign/groundtruth_execution_coverage.py \
-            /tmp/meas/gt-host.ledger.jsonl /tmp/meas/constrained.ledger.jsonl \
+            /tmp/meas/*.ledger.jsonl \
             2>&1 | tee /tmp/meas/coverage.txt
 
       - name: Upload execution ledger

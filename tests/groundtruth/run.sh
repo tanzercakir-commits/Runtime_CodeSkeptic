@@ -123,11 +123,14 @@ declare -a failures=()
 
 count=$(python3 -c "import json;print(len(json.load(open('$MANIFEST'))['cases']))")
 for i in $(seq 0 $((count - 1))); do
-    read -r name contract program <<<"$(python3 -c "
+    read -r name contract program runner <<<"$(python3 -c "
 import json
 c = json.load(open('$MANIFEST'))['cases'][$i]
-print(c['case'], c['contract'], c['program'])
+print(c['case'], c['contract'], c['program'], c.get('runner', 'direct'))
 ")"
+    # Privileged containment cases have their own runner and ledger writer.
+    # The ordinary harness must never execute them without that boundary.
+    if [ "$runner" != "direct" ]; then continue; fi
     # `mapfile` is bash 4+ and macOS ships bash 3.2, so this file would have
     # died here the moment the selftest above stopped dying first. Read the
     # array the portable way.

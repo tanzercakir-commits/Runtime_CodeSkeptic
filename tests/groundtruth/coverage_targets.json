@@ -35,6 +35,9 @@
     ],
     "reservation-above-granted-1tib": [
       {"rule": "RS-VM-0026", "outcomes": ["refused"]}
+    ],
+    "reserve-then-touch-cgroup": [
+      {"rule": "RS-VM-0012", "outcomes": ["oom-killed-after-touch"]}
     ]
   },
   "not_checkable_by_current_method": {

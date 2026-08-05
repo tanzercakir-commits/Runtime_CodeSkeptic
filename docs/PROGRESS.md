@@ -16,6 +16,39 @@ re-litigated; a mistake recorded here does not need to be re-made.
 
 ---
 
+## 2026-08-05 - The POSIX reserve/commit mismatch gained a cgroup boundary
+
+**Changed.** A Linux-only pressure worker and transient-systemd lane now target
+the remaining half of T-012. Only the worker enters a 64 MiB cgroup-v2
+`MemoryMax` service with swap disabled. It reserves 256 MiB with `PROT_NONE`,
+makes the range writable, records both successes, and starts touching pages.
+The lane passes only if systemd reports `oom-kill`, the worker dies by SIGKILL,
+and that leaf's `memory.events.local` increments `oom_kill`. It then writes a
+normal execution ledger row whose RS-VM-0012 oracle is
+`oom-killed-after-touch`; the ordinary harness explicitly skips this external
+case so it can never run without containment.
+
+**Evidence.** The worker compiles on Linux with all warnings as errors; both
+shell entry points pass the bash-3.2 portability and dead-variable guards. The
+new contract validates against the published requirement schema and produces
+`CONDITIONALLY_SUPPORTED` with RS-VM-0012 against a measured POSIX-lazy
+profile. CI run 31037477215 independently proved the preceding ledger design:
+Linux gcc/clang, macOS, Windows, the aggregate execution-coverage job and every
+existing gate all passed.
+
+**Learned.** The safe unit is a transient service, not the runner process and
+not a shell moved into a hand-built cgroup. systemd owns creation and cleanup;
+the test reads the leaf-local kernel counter before resetting the failed unit.
+That makes the containment claim independently inspectable instead of inferred
+from exit 137.
+
+**Next.** Run the new lane on GitHub's passwordless-sudo Ubuntu VM. If its
+kernel evidence holds, consume T-012 and remove RS-VM-0012 from the execution
+backlog; if it fails, preserve the service status and local memory events in
+the CI diagnostics before changing the mechanism.
+
+---
+
 ## 2026-08-05 - Execution coverage became an oracle, not a finding count
 
 **Changed.** T-021 is now the active closeout item. The ground-truth harness

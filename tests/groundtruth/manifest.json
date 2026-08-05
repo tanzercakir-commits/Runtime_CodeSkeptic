@@ -163,6 +163,15 @@
       ],
       "why": "RS-VM-0026, and the case that makes T-015's divergence reachable without particular hardware. 1 TiB fits below max_user_address on every host here, so the bounds reason is silent in both lanes; only the measured max_single_reservation decides. Unconstrained it is SUPPORTED and granted; under RLIMIT_AS it is UNSUPPORTED/PROVEN and refused. One contract, two hosts, both pairings held.",
       "verifies_all_postconditions": true
+    },
+    {
+      "case": "reserve-then-touch-cgroup",
+      "contract": "contracts/reserve-then-touch-cgroup.json",
+      "program": "linux/reserve_commit_pressure",
+      "runner": "cgroup_v2",
+      "args": [],
+      "why": "RS-VM-0012. Only this worker enters a 64 MiB MemoryMax cgroup. mmap(PROT_NONE) and mprotect(RW) must succeed; a later page fault must be the first resource-failure point and memory.events.local must record the cgroup-local OOM kill.",
+      "verifies_all_postconditions": true
     }
   ]
 }
