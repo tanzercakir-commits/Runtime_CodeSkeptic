@@ -84,6 +84,111 @@ def parse_count(token: str) -> int | None:
     return words.get(token.lower())
 
 
+def cpp_code_only(text: str) -> str:
+    """Blank comments and literals while preserving offsets and newlines."""
+    chars = list(text)
+    i = 0
+    while i < len(chars):
+        if text.startswith("//", i):
+            end = text.find("\n", i + 2)
+            if end < 0:
+                end = len(chars)
+            for pos in range(i, end):
+                chars[pos] = " "
+            i = end
+            continue
+        if text.startswith("/*", i):
+            end = text.find("*/", i + 2)
+            end = len(chars) if end < 0 else end + 2
+            for pos in range(i, end):
+                if chars[pos] != "\n":
+                    chars[pos] = " "
+            i = end
+            continue
+        if chars[i] in {'"', "'"}:
+            quote = chars[i]
+            chars[i] = " "
+            i += 1
+            while i < len(chars):
+                current = text[i]
+                if current == "\\":
+                    chars[i] = " "
+                    if i + 1 < len(chars):
+                        if chars[i + 1] != "\n":
+                            chars[i + 1] = " "
+                        i += 2
+                    else:
+                        i += 1
+                    continue
+                if current == quote:
+                    chars[i] = " "
+                    i += 1
+                    break
+                if chars[i] != "\n":
+                    chars[i] = " "
+                i += 1
+            continue
+        i += 1
+    return "".join(chars)
+
+
+def rule_bodies(analyzer: str) -> list[tuple[str, str]]:
+    code = cpp_code_only(analyzer)
+    signature = re.compile(
+        r"\bvoid\s+\w+::(rule_[A-Za-z0-9_]+)\s*\([^;{}]*\)\s*\{"
+    )
+    bodies: list[tuple[str, str]] = []
+    for match in signature.finditer(code):
+        depth = 1
+        pos = match.end()
+        while pos < len(code) and depth:
+            if code[pos] == "{":
+                depth += 1
+            elif code[pos] == "}":
+                depth -= 1
+            pos += 1
+        if depth:
+            raise ValueError(f"unterminated analyzer rule {match.group(1)}")
+        bodies.append((match.group(1), code[match.end():pos - 1]))
+    return bodies
+
+
+def emitted_constants(analyzer: str) -> set[str]:
+    """Find IDs that flow through a constructed Finding into emit()."""
+    emitted: set[str] = set()
+    starter = re.compile(
+        r"\b(?:Finding|auto)\s+([A-Za-z_]\w*)\s*=\s*"
+        r"start\s*\(\s*([A-Za-z_:]\w*(?:::\w+)*)"
+    )
+    for _rule, body in rule_bodies(analyzer):
+        for match in starter.finditer(body):
+            finding_var, first_arg = match.groups()
+            emit = re.search(
+                rf"\bemit\s*\(\s*(?:std::move\s*\(\s*)?"
+                rf"{re.escape(finding_var)}\s*\)?\s*\)",
+                body[match.end():],
+            )
+            if emit is None:
+                continue
+            direct = re.fullmatch(r"ids::k([A-Za-z]+)", first_arg)
+            if direct:
+                emitted.add(direct.group(1))
+                continue
+
+            # A rule may select the ID through a local alias before constructing
+            # the Finding. Count only constants assigned to that exact alias
+            # before the start() call; unrelated references remain invisible.
+            alias = re.fullmatch(r"[A-Za-z_]\w*", first_arg)
+            if alias:
+                assigned = re.findall(
+                    rf"\b{re.escape(alias.group(0))}\s*=\s*"
+                    r"ids::k([A-Za-z]+)\s*;",
+                    body[:match.start()],
+                )
+                emitted.update(assigned)
+    return emitted
+
+
 def main() -> int:
     header = HEADER.read_text(encoding="utf-8")
     impl = IMPL.read_text(encoding="utf-8")
@@ -103,7 +208,10 @@ def main() -> int:
                 f"{fid} (k{const}) is declared but has no definition in finding.cpp"
             )
 
-    emitted_consts = set(re.findall(r"ids::k([A-Za-z]+)", analyzer))
+    try:
+        emitted_consts = emitted_constants(analyzer)
+    except ValueError as exc:
+        return fail([str(exc)])
     for const in sorted(emitted_consts):
         if const not in declared:
             problems.append(

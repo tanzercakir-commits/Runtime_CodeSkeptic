@@ -21,21 +21,20 @@ must name a test, a tool invocation, or a committed artifact.
 
 ## Where the project actually is
 
-**Phases 0-3 are the built surface. Phase 4 and beyond are not started.**
+**Phases 0-3 are complete and their executable gates are green. Phase 4 is
+the next implementation surface; Phase 5 remains decision-blocked.**
 
 ```
 Phase 0  taxonomy + corpus        DONE      corpus 44/30, vm 35/10
-Phase 1  environment probe        DONE      Linux + macOS x2 + Windows, all
-                                            measured, all establishing ranges
+Phase 1  environment probe        DONE      Linux + macOS x2 + Windows measured
 Phase 2  semantic IR + evaluator  DONE
-Phase 3  VM analyzer MVP          PARTIAL   Gate B PASSED (0 false positives on
-                                            3 OSes); one demonstration (RS-VM-0012
-                                            reserve/commit under pressure) unrun
-Phase 4  runtime wrapper          OPEN      not started
-Phase 5  CodeSkeptic integration  BLOCKED   owner's instruction: do not touch CodeSkeptic
-Phase 6  counterfactual           OPEN
-Phase 7  temporal contracts       OPEN
-Phase 8  further domains          OPEN      gated on Gate D
+Phase 3  VM analyzer MVP          DONE      Gate B passed; all seven demonstrations
+                                            and strict execution coverage green
+Phase 4  runtime wrapper          OPEN      next active item (T-009)
+Phase 5  CodeSkeptic integration  BLOCKED   owner's instruction: do not modify it
+Phase 6  counterfactual           OPEN      gated by Phase 5 / Gate C
+Phase 7  temporal contracts       OPEN      dependency-ordered after earlier gates
+Phase 8  further domains          OPEN      additionally gated by Gate D
 Phase 9  learned invariants       OPEN
 Phase 10 productization           OPEN
 ```
@@ -55,7 +54,7 @@ Phase 10 productization           OPEN
   `pattern_reconstruction` and count toward nothing by rule.
   `tools/guards/check_corpus.py` recomputes both numbers rather than trusting
   the README
-- `[done]` finding-ID registry — `docs/findings/registry.md`, 25 ids
+- `[done]` finding-ID registry — `docs/findings/registry.md`, 27 ids
 
 ### Exit criteria
 
@@ -206,13 +205,12 @@ findings from the set itself:
   under ETW, on the one host where allocation granularity (64 KiB) differs from
   page size (4 KiB) and `RS-VM-0005` therefore fires — 174 times, as
   information on SUPPORTED verdicts, which is exactly the T-019 behaviour that
-  keeps it out of the false-positive count (§9). **The remaining gaps, all
-  named:** the macOS population is 35x smaller than the Linux one for measured
-  reasons about that platform's loader (§8.1); only `strace` sees the
-  pre-rounding request, so the address rules are unexercised against real
-  software on all three (§9.3); and no false negative is measurable on any OS,
-  because no program in the corpus was ever refused. `[partial]` on those
-  named grounds, not on an unmeasured rate.
+  keeps it out of the false-positive count (§9). **Known measurement limits, carried rather than hidden:** the macOS
+population is smaller than Linux for measured loader reasons; only the Linux
+`strace` lane observes pre-rounding addresses; and the successful-program
+campaign cannot measure false negatives. Those limits do not reopen this
+criterion: its claimed false-positive populations are measured, while false
+negatives are graded independently by the ground-truth execution oracle.
 - `[done]` runs in CI without launching the application — `.github/workflows/ci.yml`
 
 ### The MVP's seven demonstrations (ROADMAP §14)
@@ -222,9 +220,14 @@ findings from the set itself:
   produces `relocated` against a real kernel
 - `[done]` 3. page-size mismatch — `RS-VM-0006`, ground truth
 - `[done]` 4. W^X / executable-memory restriction — `RS-VM-0009`/`0011`
-- `[partial]` 5. reserve/commit mismatch — `RS-VM-0012` exists but no
-  execution has ever confirmed it; the claim is about behaviour under memory
-  pressure, which the harness cannot provoke safely (T-012)
+- `[done]` 5. reserve/commit mismatch — `RS-VM-0012`,
+  confirmed at both failure points with bounded controls. Windows CTest
+  `test_windows_reserve_commit_job` proves reservation succeeds and
+  `MEM_COMMIT` fails synchronously with native error 1455 inside a
+  worker-only Job Object. `tools/campaign/cgroup_reserve_commit_lane.sh`
+  proves Linux reservation and `mprotect` succeed before first touch is
+  SIGKILLed in a 64 MiB cgroup-v2 leaf whose `memory.events.local`
+  increments `oom_kill` (CI run 31046034092).
 - `[done]` 6. **valid host operation rejected by caller assumption** —
   `RS-VM-0013`, confirmed by execution:
   `tests/groundtruth/cases/pointer_truncation.c` does `mmap(NULL)`, proves the
@@ -302,7 +305,7 @@ that risk materialising.
   zero-fill on ONE machine — `profiles/measured/`), and expose real
   constraints (the 384 GiB carveout).
 - `[done]` **Gate B** (after Phase 3) — it diagnoses real failures
-  (ground-truth harness, 16 cases, 0 contradicted), its evidence beats
+  (ground-truth harness, 24 registered cases, 0 contradicted), its evidence beats
   ordinary logs (the §17 bundle), and **the false-positive rate is measured at
   0 across three operating systems**: Linux x86-64 (1292 requirements), macOS
   14 arm64 (37), Windows 10.0.26100 (247), under three different tracers
@@ -327,21 +330,18 @@ that risk materialising.
 
 ## Cross-cutting work not owned by a phase
 
-- `[done]` ground-truth harness — `tests/groundtruth/`, 14 cases, and its own
-  selftest, because the comparison table was untested
-- `[partial]` rule coverage by execution — **measured in CI on every push**:
-  `tools/campaign/groundtruth_coverage.py` runs over both hosts the Linux job
-  produces (unconstrained and `RLIMIT_AS`-constrained) and reports four buckets
-  separately: rules executed against a real kernel, rules exercised only
-  against synthetic profiles in unit tests, rules not checkable by execution
-  (each with its reason on the line), and rules with **no coverage of any
-  kind** — a bucket that was invisible while the buckets were mixed, held
-  `RS-VM-0016` and `RS-VM-0025`, and was emptied by T-020. This line read
-  "13 of the 20 reachable" for two days while the tool said 9, because nothing
-  recomputed it; it now names the buckets and lets the tool carry the numbers,
-  because a count restated in prose is a count that will be wrong again.
-  `[partial]` while the synthetic-only bucket is a backlog rather than a list
-  of written reasons (T-021)
+- `[done]` ground-truth harness — `tests/groundtruth/`,
+  24 registered cases (23 direct plus the bounded cgroup lane), 25/25
+  adversarial pairing comparisons, three derivation checks, and case-specific
+  outcome/verdict oracles that reject typo outcomes and wrong-case output.
+- `[done]` rule coverage by execution — `tools/campaign/groundtruth_execution_coverage.py`
+  measures kernel outcomes, not textual finding presence, and
+  validates manifest/contract/argv bindings, rejects contradicted or unasserted
+  evidence, requires every execution exclusion to retain unit coverage, and
+  `--require-complete` fails while any synthetic-only backlog remains.
+  CI run 31046034092 aggregates the exact Linux gcc, Linux clang, and physical
+  macOS ledger artifacts; the remaining rules are an explicit, reasoned
+  not-checkable set rather than hidden backlog. (T-021 consumed)
 - `[done]` §17 **evidence bundle** — `rs-check --bundle DIR` writes a directory
   with the verbatim inputs, `findings.json`, `report.md`, `hashes.txt` and a
   `manifest.json` (`runtime-skeptic.analysis-bundle.v1`, validated against a
@@ -361,7 +361,7 @@ that risk materialising.
   match the filesystem, and a named path must exist. Still `[partial]` because
   only paths and a fixed list of phrases are mechanical; the rest of the prose
   is unchecked and always will be.
-- `[done]` the guards are tested — `tools/guards/selftest.py`, 106 cases, each
+- `[done]` the guards are tested — `tools/guards/selftest.py`, 110 cases, each
   requiring a check to fail against a deliberately wrong throwaway repository
   before it is trusted on this one; first in `tools/guards/run_all.sh`. This
   number read `25` while there were 58, surviving two earlier increases, so

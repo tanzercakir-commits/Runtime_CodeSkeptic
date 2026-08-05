@@ -16,6 +16,45 @@ re-litigated; a mistake recorded here does not need to be re-made.
 
 ---
 
+## 2026-08-05 - Phase 3 closeout survived an independent fail-open audit
+
+**Changed.** Commit `05670f3` replaced finding-count coverage with 24
+case-specific ground-truth oracles (23 direct plus a bounded cgroup lane),
+mechanically bound manifest argv to analyzed contracts, and made the aggregate
+fail while synthetic-only backlog remains. This closeout consumes T-012 and
+T-021, marks all seven Phase 3 demonstrations complete, and promotes T-009 as
+the sole active Phase 4 item.
+
+The independent audit found two process fail-opens before sign-off. Registry
+coverage counted any textual `ids::k*` reference as an emission; it now
+follows a constructed `Finding` through `start(...)` into `emit(...)` and
+ignores comments and dead references. Substantive commits could also leave
+`docs/PROGRESS.md` unchanged when no TODO id moved; the history guard now
+requires a newest-first block for every substantive tracked or untracked
+change. Adversarial guard coverage is 110/110. CI runs repository-wide guards
+once on gcc while clang retains an independent build, tests and execution
+ledger, avoiding a duplicate mingw install and 639-case boundary sweep.
+
+**Evidence.** Local WSL validation passes 16/16 CTest, all project guards, a
+639-case schema boundary matrix with zero divergences, 25/25 pairing selftests,
+and 23 direct kernel cases with zero contradictions. CI run 31046034092 passed
+Windows/MSVC, physical macOS, Linux/gcc, determinism, compatibility, and both
+worker-only T-012 pressure controls; the exact gcc/clang/macOS strict aggregate
+remains the mandatory merge gate for this closeout commit. Dead-reference,
+comment-only emission and source-change-without-PROGRESS fixtures all fail as
+designed.
+
+**Learned.** Finding presence is not rule execution; CONDITIONAL and UNKNOWN
+rows are observations, not held predictions. A symbol reference is likewise
+not an emission, and a changed TODO is not a reliable proxy for a working
+session. Redundant validation can reduce assurance when it blocks the
+compiler-specific evidence that follows it.
+
+**Next.** Require the closeout commit's full GitHub matrix to pass, then freeze
+the Phase 4 C ABI and semantic-event schema before implementing wrappers.
+
+---
+
 ## 2026-08-05 - The POSIX reserve/commit mismatch gained a cgroup boundary
 
 **Changed.** A Linux-only pressure worker and transient-systemd lane now target

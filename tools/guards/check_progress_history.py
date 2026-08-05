@@ -7,7 +7,9 @@ front-matter divider. "Append-only" here means immutable history, not physical
 end-of-file order. This guard compares the working tree to HEAD when the file
 is dirty, otherwise HEAD to its first parent (the shape CI sees after a commit).
 The previous file must survive byte-for-byte as the front matter plus the old
-entry tail; only one new block between them is permitted.
+entry tail; only one new block between them is permitted. Any commit or dirty
+working tree with substantive project changes must add that block. TODO-only
+queue edits are exempt unless they consume an item.
 """
 import subprocess
 import re
@@ -36,6 +38,16 @@ def task_ids(text: str) -> set:
     return set(re.findall(r"^###\s+(T-\d{3})\b", text, re.MULTILINE))
 
 
+def changed_paths(dirty: bool) -> set[str]:
+    if dirty:
+        tracked = git("diff", "--name-only", "HEAD", "--").stdout
+        untracked = git("ls-files", "--others", "--exclude-standard").stdout
+        names = tracked.splitlines() + untracked.splitlines()
+    else:
+        names = git("diff", "--name-only", "HEAD^", "HEAD", "--").stdout.splitlines()
+    return {name.replace("\\", "/") for name in names if name.strip()}
+
+
 def main() -> int:
     if not PROGRESS.exists():
         print(f"{REL} is missing; completed work has nowhere durable to go",
@@ -45,7 +57,7 @@ def main() -> int:
         print("progress history: not a git checkout, history check skipped")
         return 0
 
-    dirty = bool(git("status", "--porcelain", "--", REL, TODO_REL).stdout.strip())
+    dirty = bool(git("status", "--porcelain").stdout.strip())
     baseline_ref = "HEAD" if dirty else "HEAD^"
     before = committed(baseline_ref)
     if before is None:
@@ -60,14 +72,31 @@ def main() -> int:
     before_todo = committed(baseline_ref, TODO_REL) or ""
     after_todo = TODO.read_text(encoding="utf-8") if TODO.exists() else ""
     removed_ids = sorted(task_ids(before_todo) - task_ids(after_todo))
+    substantive = sorted(
+        changed_paths(dirty) - {REL, TODO_REL}
+    )
     after = PROGRESS.read_text(encoding="utf-8")
     if after == before:
+        problems = []
         if removed_ids:
+            problems.append(
+                "TODO item(s) consumed without a new PROGRESS block: "
+                + ", ".join(removed_ids)
+            )
+        if substantive:
+            preview = ", ".join(substantive[:8])
+            if len(substantive) > 8:
+                preview += f", ... (+{len(substantive) - 8})"
+            problems.append(
+                "substantive change(s) made without a new PROGRESS block: "
+                + preview
+            )
+        if problems:
             print("progress history guard failed:", file=sys.stderr)
-            print("  TODO item(s) consumed without a new PROGRESS block: " +
-                  ", ".join(removed_ids), file=sys.stderr)
+            for problem in problems:
+                print("  " + problem, file=sys.stderr)
             return 1
-        print("progress history: unchanged")
+        print("progress history: unchanged (record-only paths)")
         return 0
 
     marker = before.find(DIVIDER)

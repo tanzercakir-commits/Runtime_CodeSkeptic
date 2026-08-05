@@ -209,7 +209,20 @@ TODO_EMPTY = "# TODO\n\n## Now\n"
 
 REGISTRY_HEADER = 'inline constexpr const char* kOne = "RS-VM-0001";\n'
 REGISTRY_IMPL = "auto definition = ids::kOne;\n"
-REGISTRY_ANALYZER = "auto emitted = ids::kOne;\n"
+REGISTRY_ANALYZER = """void Analysis::rule_one() {
+    Finding f = start(ids::kOne, Confidence::Proven, SupportLevel::Unsupported);
+    emit(std::move(f));
+}
+"""
+REGISTRY_ANALYZER_DEAD = """void Analysis::rule_one() {
+    auto dead_reference = ids::kOne;
+}
+"""
+REGISTRY_ANALYZER_COMMENT = """void Analysis::rule_one() {
+    // Finding f = start(ids::kOne, Confidence::Proven, SupportLevel::Unsupported);
+    // emit(std::move(f));
+}
+"""
 REGISTRY_OK = """# Registry
 
 The 1 registered `RS-VM-*` finding IDs are documented here.
@@ -252,6 +265,14 @@ CASES = [
     Case("check_registry.py", "a complete one-ID registry passes",
          REGISTRY_FILES,
          expect_fail=False),
+
+    Case("check_registry.py", "a dead ID reference is not an emission",
+         {**REGISTRY_FILES, "src/vm/analyzer.cpp": REGISTRY_ANALYZER_DEAD},
+         expect_fail=True, expect_text="analyzer.cpp never emits it"),
+
+    Case("check_registry.py", "a commented emission shape is ignored",
+         {**REGISTRY_FILES, "src/vm/analyzer.cpp": REGISTRY_ANALYZER_COMMENT},
+         expect_fail=True, expect_text="analyzer.cpp never emits it"),
 
     Case("check_registry.py", "the status count must match declarations",
          {**REGISTRY_FILES,
@@ -930,6 +951,25 @@ CASES = [
          expect_fail=False,
          commits=[("2026-08-01T12:00:00+00:00",
                    {"docs/PROGRESS.md": PROGRESS_OK})]),
+
+    Case("check_progress_history.py",
+         "substantive work without a session entry fails",
+         {"src/engine.cpp": "int answer() { return 42; }\n",
+          "docs/PROGRESS.md": PROGRESS_OK},
+         expect_fail=True, expect_text="substantive change(s)",
+         commits=[("2026-08-01T12:00:00+00:00",
+                   {"src/engine.cpp": "int answer() { return 0; }\n",
+                    "docs/PROGRESS.md": PROGRESS_OK})]),
+
+    Case("check_progress_history.py",
+         "substantive work with a newest-first session entry passes",
+         {"src/engine.cpp": "int answer() { return 42; }\n",
+          "docs/PROGRESS.md": PROGRESS_OK.replace(
+              "---\n", "---\n\n## 2026-08-02 - engine\n\nImplemented it.\n", 1)},
+         expect_fail=False,
+         commits=[("2026-08-01T12:00:00+00:00",
+                   {"src/engine.cpp": "int answer() { return 0; }\n",
+                    "docs/PROGRESS.md": PROGRESS_OK})]),
 
     Case("check_progress_history.py", "consumed TODO needs new progress evidence",
          {"docs/TODO.md": TODO_EMPTY,

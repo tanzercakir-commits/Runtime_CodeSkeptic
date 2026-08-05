@@ -96,7 +96,13 @@ jobs:
       # the behavioural tests: a repository that has started lying about itself
       # passes every test right up until someone trusts a document.
       # tools/guards/run_all.sh records what each guard caught.
+      # These repository-wide guards are compiler-independent. Run them once
+      # on gcc; clang still builds, tests and emits an independent execution
+      # ledger. Duplicating the mingw install and 639-case boundary sweep held
+      # the clang lane inside this step long after every native test was green.
       - name: Project guards
+        if: matrix.cc == 'gcc'
+        timeout-minutes: 20
         id: guards
         env:
           # The boundary matrix is the schema-conformance check, and this is the

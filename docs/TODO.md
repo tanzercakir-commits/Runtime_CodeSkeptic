@@ -52,30 +52,24 @@ Everything here is measured or enforced, not remembered.
 **Where the project stands (2026-08-05):**
 
 ```
-Phase 0-2   DONE
-Phase 3     PARTIAL, but the finish line moved: GATE B PASSED. The one thing
-            still open in Phase 3 is demonstration 5 (RS-VM-0012, reserve/
-            commit under memory pressure), which is BLOCKED - the harness
-            cannot provoke exhaustion safely (T-012), not a matter of effort.
-Phase 4     next after the Phase 3 execution-coverage closeout (T-009)
-Phase 5     blocked by the owner's standing instruction (T-011)
-Phase 6-10  sequenced on this compass; each phase starts only after the
-            preceding phase's executable exit gate is green
+Phase 0-3   DONE. Gate B, all seven demonstrations, T-012 bounded pressure,
+            and strict rule-execution coverage are green.
+Phase 4     NOW: runtime wrapper library (T-009).
+Phase 5     BLOCKED by the owner's standing CodeSkeptic instruction (T-011).
+Phase 6-10  dependency-ordered behind Phase 5 / Gate C; Phase 8 also needs
+            its own Gate D evidence.
 Gate B      false-positive rate measured 0 on THREE operating systems:
-              Linux x86-64     1292 requirements   (strace)
-              macOS 14 arm64     37 requirements   (dtrace, mach traps)
-              Windows 10.0.26100 247 requirements  (ETW)
-            174 RS-VM-0005 notes on Windows, all SUPPORTED (T-019's payoff:
-            the noisy rule speaks as information, not a gate-breaking
-            condition, on the one host where it fires).
+              Linux x86-64       1292 requirements  (strace)
+              macOS 14 arm64       37 requirements  (dtrace, mach traps)
+              Windows 10.0.26100  247 requirements  (ETW)
+            174 RS-VM-0005 notes on Windows, all SUPPORTED.
 ```
 
-**What "finish this project" now means.** Close the remaining executable Phase
-3 evidence gap, then advance through Phases 4-10 in dependency order. A phase
-leaves the compass only after its ROADMAP exit criteria run as tests or guards
-and the evidence is appended to `docs/PROGRESS.md`. Phase 5 remains blocked
-until the owner explicitly lifts the CodeSkeptic restriction; that decision
-does not prevent Phase 4 from being completed first.
+**What "finish this project" now means.** Phase 3 is closed. Complete the
+Phase 4 runtime wrapper against every executable ROADMAP exit criterion,
+then honor Gate C: Phase 5 and the dependency-ordered later phases do not
+start until the owner explicitly lifts the CodeSkeptic restriction. Every
+completed item is consumed into `docs/PROGRESS.md`.
 
 **How to verify the tree before believing anything, including this file:**
 
@@ -116,27 +110,40 @@ diagnostics channel now carries the constrained lane's own output (it did not
 then, twice over - see fcbbdeb). Do not chase it; the next red run will carry
 its evidence.
 
-**A rule for maintaining THIS file:** `ROADMAP.md` is frozen by hash
-(`tools/guards/check_roadmap.py`); `docs/PLAN.md` moves only its status
-markers; this file and `docs/PROGRESS.md` are the ones that change. A weekly
-scheduled session (Mondays 06:00 UTC) reads the CI channels and reports drift;
-it cannot push.
+**A rule for maintaining THIS file:** `plan.md` and `ROADMAP.md` are frozen by
+hash guards; `docs/PLAN.md` updates status and current evidence; this file
+and `docs/PROGRESS.md` carry the changing queue and immutable history. A
+weekly scheduled session (Mondays 06:00 UTC) reads the CI channels and
+reports drift; it cannot push.
 
 ---
 
 ## Now
 
-<!-- pending-promotion: T-021 -->
-**T-021 is active:** close or justify every synthetic-only execution rule, then
-consume the item into `docs/PROGRESS.md`. The item remains physically below
-until this bounded closeout is complete.
+### T-009 — Phase 4 runtime wrapper `[now]`
+
+**Serves:** every scenario that needs observed call semantics or replay.
+**Plan:** `docs/PLAN.md` Phase 4.
+**Done when:** all Phase 4 deliverables and exit criteria are executable:
+selected POSIX and Windows virtual-memory calls have semantics-preserving C
+wrappers; native error state is unchanged; versioned semantic events record
+requested/returned addresses, protection changes and lifecycle; writer,
+reader and replay are deterministic; immediate violations are caught at the
+call boundary; monitoring can be disabled at compile time and runtime; sample
+integrations and a reproducible overhead benchmark are committed; conformance,
+replay, recursion/allocator-safety and malformed-trace tests pass on Linux,
+macOS and Windows.
+**First step:** freeze the C ABI and event schema with rejection tests before
+implementing wrappers; the wrapper must be a transparent call when monitoring
+is disabled.
 
 ---
 
 ## Next
 
-**T-009 is the next promotion:** Phase 4 starts immediately after T-021's
-bounded evidence closeout; later phases stay dependency-ordered below.
+Phase 5 / T-011 is the next dependency gate after T-009 and remains blocked
+by the owner's standing instruction. No Phase 6-10 item is promoted across
+Gate C while that instruction remains in force.
 
 ---
 
@@ -183,39 +190,6 @@ Dynamic Loader/ABI (Candidate B) is the strong second choice and the most
 VM-adjacent, but its behaviour is harder to *measure* and leans on cited specs —
 pick it only with a concrete loader-incident corpus already in hand.
 
-### T-021 — The synthetic-only backlog: argued with, never shown a kernel `[now]`
-
-**Serves:** the same standard T-020 served, one bucket further in — a rule that
-only ever meets a profile someone wrote by hand has never been contradicted by
-anything
-**Plan:** `docs/PLAN.md` Cross-cutting, "rule coverage by execution"
-**Done when:** the synthetic-only bucket has shrunk, and every rule remaining in
-it carries a written reason it cannot be executed — at which point it stops being
-a backlog and becomes the "not checkable by execution" list, which is already
-required to name its reason per line.
-
-T-020 emptied the `NO COVERAGE OF ANY KIND` bucket. The next bucket up is not a
-defect and is not nothing: those rules have unit tests against synthetic
-profiles and have never been run against a kernel. **The count is deliberately
-not written here** — the tool prints it on every push, over both hosts, and this
-project has already had one stale count ("13 of the 20 reachable") sitting in
-two documents while the tool said something else. Read the output.
-
-Two honest cautions before anyone treats this as a number to drive down:
-
-- **Some of these can never be executed here, and saying so is the work.**
-  `RS-VM-0016` needs a host with no non-destructive exact-placement primitive;
-  every runner this project can reach has one. That is a reason, and once it is
-  written down the rule belongs in the "not checkable" list, not the backlog.
-- **A ground-truth case that cannot fail is worse than none.** The harness
-  compares a prediction against what the kernel actually did; a case constructed
-  so the prediction is trivially right adds a green row and no information.
-
-**First step:** take the four rules whose ground-truth case is most obviously
-constructible (`RS-VM-0005`, `RS-VM-0006`, `RS-VM-0009`, `RS-VM-0010` are
-plain-mapping properties) and write one case each. Then re-read the bucket and
-decide whether the rest are backlog or reasons.
-
 ### T-008 — Fleet aggregation `[later]`
 
 **Serves:** S8 (500 applications, one policy question)
@@ -225,17 +199,6 @@ and answers "how many are affected, and which".
 
 Straightforward, and worth nothing before T-002. Answering "31 applications
 affected" with an unmeasured false-positive rate is worse than not answering.
-
-### T-009 — Phase 4 runtime wrapper `[later]`
-
-**Serves:** every scenario, indirectly
-**Plan:** `docs/PLAN.md` Phase 4
-**Done when:** something in this repository can produce `observed_invariant`
-evidence, which nothing can today.
-
-This is the only evidence class the project defines and cannot generate. It is
-also the honest answer to T-001's trap and to S4: a runtime observation is what
-decides a displacement constraint.
 
 ### T-010 — Downstream-consequence modelling `[later]`
 
@@ -326,25 +289,6 @@ removed; what it learned is in `docs/PROGRESS.md`.
 
 The §16 differential test needs a second, independent producer of contracts, and
 by this decision that producer lives in the other repository. Same blocker.
-
-### T-012 — Reserve/commit under memory pressure `[blocked]`
-
-**Blocker:** the Linux first-touch half still needs a cgroup-v2 leaf that can
-contain an OOM kill. `RLIMIT_AS` is not a substitute: it rejects the mapping at
-a checked call and therefore erases the semantic mismatch under test.
-**Serves:** S3
-**Plan:** `docs/PLAN.md` Phase 3, MVP demonstration 5
-**Done when:** two bounded controls run: Windows must reserve successfully and
-reject `MEM_COMMIT` synchronously; Linux must reserve and `mprotect`
-successfully, then have first touch killed inside a child-only cgroup with
-`memory.events.local` recording the OOM kill.
-
-**Measured control, 2026-08-05:** `test_windows_reserve_commit_job` puts only
-its worker under a 64 MiB Job Object process-memory limit. A 256 MiB
-`MEM_RESERVE` succeeds and a 128 MiB `MEM_COMMIT` fails synchronously with
-`ERROR_COMMITMENT_LIMIT` (1455); timeout and `KILL_ON_JOB_CLOSE` bound it. The
-remaining evidence is the POSIX moved-to-first-touch half that actually
-confirms `RS-VM-0012`.
 
 ---
 

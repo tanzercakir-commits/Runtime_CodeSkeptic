@@ -84,21 +84,21 @@ page-size-dependent — and that field does not exist yet. <!-- checked: 2026-07
 
 ## S3 — Wine: reserve/commit semantics
 
-`[open]` — `RS-VM-0012` and `rule_reserve_commit()` exist; no execution has ever
-confirmed the rule, and there is no Windows profile to compare against
+`[done]` — `RS-VM-0012` is confirmed at both platform failure points.
 
-Two separate gaps, and the second is the harder one:
+The scenario is a semantic comparison, not an exhaustion stunt. A measured
+Windows profile establishes `windows_reserve_commit`; the Windows CTest
+`test_windows_reserve_commit_job` then proves a 256 MiB reservation succeeds
+while a 128 MiB `MEM_COMMIT` fails synchronously with native error 1455
+inside a worker-only Job Object. On Linux, the cgroup-v2 ground-truth lane
+proves reservation and `mprotect` succeed before first touch is SIGKILLed,
+with the leaf-local `oom_kill` counter incrementing. Wine's measured
+POSIX-lazy profile therefore differs from the Windows contract in the exact
+way the rule reports, without exposing the shared runner to an OOM kill.
 
-1. `docs/PLAN.md` lists MVP demonstration 5 as `[partial]` for a reason — the
-   claim is about behaviour under memory pressure, which the ground-truth
-   harness cannot provoke safely on a shared runner.
-2. The scenario's whole shape is *Windows semantics on a Linux host*, and
-   `src/probe/vm_probe_unimplemented.cpp` means the Windows side is a profile in
-   which every fact is unknown. Comparing a measured host against an all-unknown
-   one produces `UNKNOWN`, correctly and uselessly.
-
-Wine is the sharpest argument for the Windows probe in the whole document.
-
+CI run 31046034092 passed both bounded controls and the case-specific
+execution oracle. The earlier claim that this could not be provoked safely
+was true only before worker-only Job Object and cgroup containment existed.
 ---
 
 ## S4 — LuaJIT: machine code must land within ±2 GB
@@ -149,45 +149,35 @@ public. This scenario is the best available argument for closing that hole.
 
 ## S6 — CI pipeline: reject the PR before the customer sees it
 
-`[partial]` — mechanically it already works; what is missing is the right to
-trust it
+`[done]` — `.github/workflows/ci.yml` is wired and evidence-qualified.
 
-```
-$ rs-check REQUIREMENT.json --profile PROFILE.json
-  exit 0  SUPPORTED       1  UNSUPPORTED
-  exit 2  CONDITIONAL     3  UNKNOWN       64  usage error
-```
+`rs-check` returns stable CI codes for all four verdicts, and the
+repository evaluates shipped contracts on every pull request without
+launching the target application. Gate B is measured rather than assumed:
+0 false positives across Linux (1292 observed requirements), macOS (37),
+and Windows (247). The separate strict ground-truth aggregate rejects
+false-negative evidence gaps and contradicted pairings. A pipeline may
+therefore block on UNSUPPORTED while treating CONDITIONAL and UNKNOWN as
+explicit policy choices, not as accidental success.
 
-A pipeline can gate on that today, and this repository's own `.github/workflows/ci.yml`
-runs the analyzer on every push without launching anything.
-
-The blocker is not plumbing. **ROADMAP Gate B — the false-positive rate — has
-never been measured** (`docs/PLAN.md` Phase 3). Blocking a merge on an
-unmeasured false-positive rate is how a tool gets switched off in its first
-week, and a switched-off guard is worse than none. The honest deployment order
-is: run it non-blocking, count the `UNSUPPORTED` verdicts against software known
-to ship and work, and only then let it fail a build.
-
-This is the same argument the project already made to itself about
-`check_docs.py`, so it should not need re-learning here.
-
+CI run 31046034092 passed compatibility, determinism, all three native
+platform jobs, the bounded pressure controls, and strict execution coverage.
 ---
 
 ## S7 — Game studio: five platforms, one report
 
-<!-- checked: 2026-07-25 -->
-`[open]` — two platform families are measured, Windows is a stub, and no command
-produces a per-platform matrix
+`[partial]` — all named platform families except Steam Deck have measured
+profiles, but no command produces the requested per-platform matrix.
 
-The tool answers *one contract against one host*. The scenario wants *one
-contract against five hosts, as a table*. Nothing in `tools/` does that; it is a
-small program over `rs-check`, and it is not written.
+The tool answers one contract against one host. Linux, macOS Apple
+Silicon, Rosetta x86-64, native Windows x64 and Wine-on-Linux profiles
+are available or measured by CI, so the evidence side is no longer a
+stub. The missing capability is the report join: evaluate one contract
+against a selected profile set and render verdict changes as one table.
 
-Steam Deck and Wine are both listed as targets and neither has ever been probed.
-Steam Deck in particular is not "Linux": it is a specific kernel configuration
-with its own mapping behaviour, and assuming it matches a generic x86-64 Linux
-profile is the precise mistake this project exists to catch.
-
+Steam Deck remains deliberately unclaimed. It is a specific kernel and
+userspace configuration, not a synonym for generic Linux; a measured
+Steam Deck profile is required before it appears in such a matrix.
 ---
 
 ## S8 — Security team: 500 applications, RWX now forbidden
@@ -284,7 +274,7 @@ that would serve it:
 | S8 | `T-008` fleet aggregation |
 | S2 (second half) | `T-010` downstream-consequence modelling |
 | S10 | `T-011` CodeSkeptic integration — blocked |
-| S3 | `T-012` reserve/commit under pressure — blocked |
+| S3 | `T-012` completed; bounded Windows and Linux controls are in PROGRESS |
 | S4 | `T-009` runtime wrapper; a displacement constraint needs an observation |
 
 `tools/guards/check_todo.py` keeps that list and `docs/PLAN.md` from drifting
