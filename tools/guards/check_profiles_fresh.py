@@ -46,9 +46,12 @@ ROOT = Path(__file__).resolve().parents[2]
 MEASURED = ROOT / "profiles" / "measured"
 
 # The probe sources whose change invalidates a measurement, per OS. The shared
-# header and the arena walk are in every set because they shape the ranges and
-# the ceiling every platform reports.
-SHARED = ["include/runtimeskeptic/probe/vm_probe.hpp"]
+# header is in every set. arena_walk shapes ranges on all three implemented
+# platforms, so both its interface and implementation are shared measurement
+# dependencies too; omitting Windows here once let a stale profile pass.
+SHARED = ["include/runtimeskeptic/probe/vm_probe.hpp",
+          "src/probe/arena_walk.cpp",
+          "include/runtimeskeptic/probe/arena_walk.hpp"]
 
 # Profiles that no CI workflow regenerates. Each needs a stated reason, the same
 # discipline as docs/TODO.md's "Deliberately not tracked": an exemption without
@@ -69,12 +72,10 @@ EXCEPTIONS = {
 }
 
 PROBE_SOURCES = {
-    "macos": ["src/probe/vm_probe_macos.cpp", "src/probe/arena_walk.cpp",
-              "include/runtimeskeptic/probe/arena_walk.hpp"] + SHARED,
+    "macos": ["src/probe/vm_probe_macos.cpp"] + SHARED,
     "windows": ["src/probe/vm_probe_windows.cpp",
                 "src/probe/windows_regions.cpp"] + SHARED,
-    "linux": ["src/probe/vm_probe_linux.cpp", "src/probe/arena_walk.cpp",
-              "include/runtimeskeptic/probe/arena_walk.hpp"] + SHARED,
+    "linux": ["src/probe/vm_probe_linux.cpp"] + SHARED,
 }
 
 

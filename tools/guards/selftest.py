@@ -431,20 +431,20 @@ CASES = [
          expect_fail=True, expect_text="too far for a timezone artifact"),
 
     # ---- check_profiles_fresh: a measurement older than its instrument -
-    # An external reviewer found a committed macOS profile carrying a ceiling
-    # bug two later commits had already fixed - the profile was never
-    # regenerated, and no guard asked whether a measurement still matches the
-    # probe that made it.
+    # An external reviewer found a committed profile older than its probe. The
+    # same class recurred when arena_walk was omitted from the Windows mapping:
+    # macOS went stale while Windows silently passed even though all three
+    # implementations consume the shared walk.
     Case("check_profiles_fresh.py",
-         "a profile older than the probe that makes it is stale",
+         "a Windows profile older than the shared arena walk is stale",
          {},
          commits=[("2026-07-25T12:00:00+00:00",
                    {"profiles/measured/x.measured.json":
-                        '{"platform":{"os":"macos"},"virtual_memory":{}}',
-                    "src/probe/vm_probe_macos.cpp": "// probe v1\n"}),
+                        '{"platform":{"os":"windows"},"virtual_memory":{}}',
+                    "src/probe/arena_walk.cpp": "// shared walk v1\n"}),
                   ("2026-07-27T12:00:00+00:00",
-                   {"src/probe/vm_probe_macos.cpp":
-                        "// probe v2 - ceiling measured correctly now\n"})],
+                   {"src/probe/arena_walk.cpp":
+                        "// shared walk v2 - range semantics changed\n"})],
          expect_fail=True, expect_text="STALE"),
 
     Case("check_profiles_fresh.py",
