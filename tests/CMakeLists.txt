@@ -42,6 +42,20 @@ rs_add_test(test_arena_walk    SOURCES unit/test_arena_walk.cpp    LIBRARIES rs_
 # fallback behaviour instead.
 rs_add_test(test_probe SOURCES conformance/test_probe.cpp LIBRARIES rs_probe)
 
+# A native Windows control for the reserve/commit model. It is intentionally a
+# standalone executable: ground-truth cases may use platform APIs, but may not
+# include or link RuntimeSkeptic code and thereby let the tool grade itself.
+# The child alone is placed under a 64 MiB Job Object commit limit, so the test
+# cannot create machine-wide memory pressure.
+if(WIN32 AND CMAKE_SIZEOF_VOID_P EQUAL 8)
+    add_executable(test_windows_reserve_commit_job
+        groundtruth/windows/reserve_commit_job.cpp)
+    target_link_libraries(test_windows_reserve_commit_job PRIVATE rs_warnings)
+    add_test(NAME test_windows_reserve_commit_job
+        COMMAND test_windows_reserve_commit_job)
+    set_tests_properties(test_windows_reserve_commit_job PROPERTIES TIMEOUT 15)
+endif()
+
 # -- incidents --------------------------------------------------------------
 # Golden tests over the on-disk fixtures in profiles/ and contracts/.
 rs_add_test(test_incidents SOURCES incidents/test_incidents.cpp LIBRARIES rs_reports)

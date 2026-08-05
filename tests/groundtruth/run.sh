@@ -21,6 +21,7 @@ BIN="${GT_BIN:-$ROOT/build/groundtruth}"
 CASES="${GT_CASES:-$HERE/cases}"
 MANIFEST="${GT_MANIFEST:-$HERE/manifest.json}"
 PROFILE="${1:-}"
+LEDGER="${GT_LEDGER:-}"
 
 if [ -z "$PROFILE" ]; then
     echo "usage: $0 MEASURED-PROFILE.json" >&2
@@ -28,6 +29,15 @@ if [ -z "$PROFILE" ]; then
 fi
 [ -x "$RS_CHECK" ] || { echo "$0: $RS_CHECK not found; build first" >&2; exit 64; }
 [ -f "$PROFILE" ] || { echo "$0: $PROFILE not found" >&2; exit 64; }
+if [ -n "$LEDGER" ]; then
+    : > "$LEDGER"
+    PROFILE_ID=$(python3 -c "
+import json
+p = json.load(open('$PROFILE'))
+print(p.get('profile_id', ''))
+")
+    [ -n "$PROFILE_ID" ] || { echo "$0: profile has no profile_id" >&2; exit 65; }
+fi
 
 # --- build the cases -------------------------------------------------------
 # Compiled here rather than by the project's CMake, on purpose: these programs
@@ -162,9 +172,25 @@ print(json.load(open('$MANIFEST'))['cases'][$i].get('derive_address_from', ''))
         fi
     fi
 
-    "$RS_CHECK" "$use_contract" --profile "$PROFILE" --format json >/dev/null 2>&1
-    predicted=$(verdict_of $?)
+    analysis_json=$("$RS_CHECK" "$use_contract" --profile "$PROFILE" \
+        --format json 2>"$BIN/analyzer.log")
+    analysis_code=$?
+    if [ "$analysis_code" -gt 3 ]; then
+        echo "$0: rs-check failed for $name (exit $analysis_code)" >&2
+        cat "$BIN/analyzer.log" >&2
+        exit 70
+    fi
+    if ! analysis_findings=$(printf '%s' "$analysis_json" | python3 -c "
+import json,sys
+d=json.load(sys.stdin); rows=d.get('results',[d])
+print(','.join(sorted({f['id'] for r in rows for f in r.get('findings',[])})))
+"); then
+        echo "$0: rs-check returned invalid JSON for $name" >&2
+        exit 70
+    fi
+    predicted=$(verdict_of "$analysis_code")
 
+    analyzer_verdict="$predicted"
     # A case may only settle a prediction if it checks EVERY postcondition its
     # contract states. exact-mapping-misaligned reported `satisfied` having
     # verified placement and ignored the alignment clause next to it, which
@@ -228,6 +254,20 @@ except Exception: print('the case produced no parsable output')
             mark="not asserted"; unasserted=$((unasserted + 1))
             ;;
     esac
+    if [ -n "$LEDGER" ]; then
+        python3 - "$LEDGER" "$PROFILE_ID" "$name" "$contract" \
+            "$analyzer_verdict" "$outcome" "$mark" "$analysis_findings" <<'PY'
+import json
+import sys
+path, profile_id, case, contract, verdict, outcome, pairing, finding_csv = sys.argv[1:]
+row = {"schema": "runtime-skeptic.groundtruth-execution.v1",
+       "profile_id": profile_id, "case": case, "contract": contract,
+       "analyzer_verdict": verdict, "outcome": outcome, "pairing": pairing,
+       "finding_ids": [x for x in finding_csv.split(",") if x]}
+with open(path, "a", encoding="utf-8") as out:
+    out.write(json.dumps(row, sort_keys=True, separators=(",", ":")) + "\n")
+PY
+    fi
 
     printf '%-34s %-13s %-11s %s\n' "$name" "$predicted" "$outcome" "$mark"
     printf '    %s\n' "$detail"

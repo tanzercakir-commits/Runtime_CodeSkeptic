@@ -16,6 +16,45 @@ re-litigated; a mistake recorded here does not need to be re-made.
 
 ---
 
+## 2026-08-05 - Execution coverage became an oracle, not a finding count
+
+**Changed.** T-021 is now the active closeout item. The ground-truth harness
+writes a versioned JSONL ledger containing the measured profile id, actual
+kernel outcome, whole-contract pairing and exact analyzer finding ids.
+`groundtruth_execution_coverage.py` counts a rule branch only when its registered
+case-specific outcome occurs, rejects malformed or contradictory evidence, and
+is selftested with deliberately false ledgers. CI now emits unconstrained-Linux,
+constrained-Linux and macOS ledgers and adds an aggregate coverage gate.
+
+A separate, RuntimeSkeptic-free Windows CTest supplies the bounded control half
+of T-012. Only its worker enters a 64 MiB Job Object; 256 MiB `MEM_RESERVE`
+succeeds, 128 MiB `MEM_COMMIT` fails synchronously with native error 1455
+(`ERROR_COMMITMENT_LIMIT`), and a timeout plus `KILL_ON_JOB_CLOSE` bounds it.
+
+**Evidence.** The changed Linux harness was rebuilt with warnings as errors and
+ran 16 real cases in WSL: 14 asserted pairings held, zero were contradicted and
+two conditional rows remained explicitly unasserted. The new ledger grader
+accepted 16 rows and confirmed seven rule branches from actual outcomes on that
+host. Its adversarial selftest proves that a wrong outcome is not counted and
+that malformed JSON or a contradicted pairing fails closed. The Windows suite
+passes 17/17, including the new Job Object control.
+
+**Learned.** The former coverage number was flattering and unsound: it counted
+any finding emitted for any contract/profile pair, never ran the case, silently
+ignored tool errors and counted rows the harness called `not asserted`.
+`RLIMIT_AS` is also the wrong instrument for RS-VM-0012 because it moves failure
+back to a checked mapping call. The missing POSIX evidence needs a cgroup-v2
+worker leaf where reservation and `mprotect` succeed and first touch alone is
+OOM-killed.
+
+**Next.** Add that cgroup first-touch lane, then consume the remaining T-021
+backlog with isolated oracles for RS-VM-0004/0005/0015/0020/0022/0023 and
+policy lanes for RS-VM-0010/0019. The macOS aggregate should independently
+supply RS-VM-0001/0006/0009/0011; T-012 remains blocked until the Linux half
+runs under a proven containment boundary.
+
+---
+
 ## 2026-08-05 - CI freshness gate closed with real measurements
 
 **Changed.** The first draft-PR matrix built and tested successfully on Linux,

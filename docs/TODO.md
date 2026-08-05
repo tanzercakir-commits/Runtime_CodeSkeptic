@@ -49,7 +49,7 @@ PROGRESS entry is work that will be redone.
 For the session that begins after any amount of forgetting, on any model.
 Everything here is measured or enforced, not remembered.
 
-**Where the project stands (2026-08-01):**
+**Where the project stands (2026-08-05):**
 
 ```
 Phase 0-2   DONE
@@ -57,7 +57,10 @@ Phase 3     PARTIAL, but the finish line moved: GATE B PASSED. The one thing
             still open in Phase 3 is demonstration 5 (RS-VM-0012, reserve/
             commit under memory pressure), which is BLOCKED - the harness
             cannot provoke exhaustion safely (T-012), not a matter of effort.
-Phase 4+    not started; Phase 5 blocked by the owner's instruction
+Phase 4     next after the Phase 3 execution-coverage closeout (T-009)
+Phase 5     blocked by the owner's standing instruction (T-011)
+Phase 6-10  sequenced on this compass; each phase starts only after the
+            preceding phase's executable exit gate is green
 Gate B      false-positive rate measured 0 on THREE operating systems:
               Linux x86-64     1292 requirements   (strace)
               macOS 14 arm64     37 requirements   (dtrace, mach traps)
@@ -67,11 +70,12 @@ Gate B      false-positive rate measured 0 on THREE operating systems:
             condition, on the one host where it fires).
 ```
 
-**What "finish this project" now means.** Gate B was the last *measured* exit
-criterion. What is left is either blocked by the owner (Phase 5 / CodeSkeptic,
-T-011) or is new scope (Phase 4 runtime wrapper T-009, Phase 6+). There is no
-unfinished measurement standing between the tool and its own Phase 3 claim.
-The honest next moves are on the compass below, none of them urgent.
+**What "finish this project" now means.** Close the remaining executable Phase
+3 evidence gap, then advance through Phases 4-10 in dependency order. A phase
+leaves the compass only after its ROADMAP exit criteria run as tests or guards
+and the evidence is appended to `docs/PROGRESS.md`. Phase 5 remains blocked
+until the owner explicitly lifts the CodeSkeptic restriction; that decision
+does not prevent Phase 4 from being completed first.
 
 **How to verify the tree before believing anything, including this file:**
 
@@ -122,25 +126,17 @@ it cannot push.
 
 ## Now
 
-*(empty. The fourth re-test's findings — T-030/T-031/T-032 — are closed and in
-`docs/PROGRESS.md`. The decisive one: inputs are no longer hand-checked field by
-field; they are validated against the published schema by a real C++ validator
-(`src/core/schema.cpp`, embedded at build) that gates the two domain entry
-points, and the boundary matrix PROVES that validator equals Python's
-`jsonschema` across 639 mutations — 0 divergences, 0 false-greens. Awaiting the
-reviewer's fifth re-test; nothing merged to `main`, LinkedIn still NO-GO by the
-owner. Full account: `docs/reviews/2026-08-02-independent-review.md`.)*
+<!-- pending-promotion: T-021 -->
+**T-021 is active:** close or justify every synthetic-only execution rule, then
+consume the item into `docs/PROGRESS.md`. The item remains physically below
+until this bounded closeout is complete.
 
 ---
 
 ## Next
 
-*(empty. Gate B is passed and no measured criterion is open. What is left is
-`Later` scope or owner-blocked work — nothing forced. The most defensible
-next pick is **T-021** (the synthetic-only coverage backlog: real, bounded,
-and the same "grade every claim" standard that has driven everything above),
-but it is a `[later]` and not urgent. The honest state of the project is that
-its Phase 3 promise is measured and kept.)*
+**T-009 is the next promotion:** Phase 4 starts immediately after T-021's
+bounded evidence closeout; later phases stay dependency-ordered below.
 
 ---
 
@@ -187,7 +183,7 @@ Dynamic Loader/ABI (Candidate B) is the strong second choice and the most
 VM-adjacent, but its behaviour is harder to *measure* and leans on cited specs —
 pick it only with a concrete loader-incident corpus already in hand.
 
-### T-021 — The synthetic-only backlog: argued with, never shown a kernel `[later]`
+### T-021 — The synthetic-only backlog: argued with, never shown a kernel `[now]`
 
 **Serves:** the same standard T-020 served, one bucket further in — a rule that
 only ever meets a profile someone wrote by hand has never been contradicted by
@@ -253,6 +249,51 @@ project to start generating plausible prose, which Phase 0 forbids by name. If
 it is ever built, the consequences must come from a field the program's author
 filled in — not from the analyzer's imagination.
 
+### T-033 — Phase 6 bounded counterfactual explorer `[later]`
+
+**Serves:** latent portability failures whose legal bad outcome has not occurred
+in the observed run.
+**Plan:** `docs/PLAN.md` Phase 6.
+**Done when:** a bounded explorer enumerates legal outcomes and short event
+sequences, reproduces at least five corpus failures, emits the triggering
+assumption and path, and labels bounded absence as `NO COUNTEREXAMPLE FOUND`,
+never as proof; deterministic and complexity-bound guards pass.
+**First step:** version the counterfactual result schema and encode hinted
+relocation as the first one-step outcome family.
+
+### T-034 — Phase 7 Trace/State DSL `[later]`
+
+**Serves:** temporal compatibility claims that cannot be expressed by one call.
+**Plan:** `docs/PLAN.md` Phase 7.
+**Done when:** a versioned DSL, compiler and deterministic monitor reject
+invalid definitions, replay valid traces, and return a minimal violating
+subsequence for protection-transition and mapping-lifecycle properties.
+**First step:** freeze the smallest state-machine grammar over Phase 4 events
+and write parser rejection tests before implementing evaluation.
+
+### T-035 — Phase 9 learned invariants `[later]`
+
+**Serves:** repeatable regression and drift detection over traces and profiles.
+**Plan:** `docs/PLAN.md` Phase 9.
+**Done when:** an optional reproducible miner reports candidate invariants and
+resource trends with the complete observation set and model parameters, can
+reproduce its output byte-for-byte, and never labels an inferred invariant as
+proof or hides it behind an opaque score.
+**First step:** define the candidate-invariant artifact and a deterministic
+baseline miner over Phase 4 trace fixtures.
+
+### T-036 — Phase 10 productization `[later]`
+
+**Serves:** external users consuming RuntimeSkeptic in CI and release systems.
+**Plan:** `docs/PLAN.md` Phase 10.
+**Done when:** the stable CLI and C API, schemas, SARIF, GitHub Actions example,
+reproducible evidence bundles, signed-profile verification, registry,
+tutorials, benchmark corpus, plugin boundary and private-profile boundary all
+have executable conformance tests and a release archive passes them on Linux,
+macOS and Windows.
+**First step:** turn every Phase 10 deliverable into a versioned public
+contract and release-conformance test before adding integrations.
+
 ---
 
 ## Blocked
@@ -288,18 +329,22 @@ by this decision that producer lives in the other repository. Same blocker.
 
 ### T-012 — Reserve/commit under memory pressure `[blocked]`
 
-**Blocker:** the ground-truth harness cannot provoke memory pressure safely on a
-shared runner, and a test that can take down its host is not a test.
+**Blocker:** the Linux first-touch half still needs a cgroup-v2 leaf that can
+contain an OOM kill. `RLIMIT_AS` is not a substitute: it rejects the mapping at
+a checked call and therefore erases the semantic mismatch under test.
 **Serves:** S3
 **Plan:** `docs/PLAN.md` Phase 3, MVP demonstration 5
-**Done when:** a ground-truth case reserves address space, has the commit
-refused under real pressure, and the harness records the refusal — inside a
-bound that cannot affect anything else on the machine.
+**Done when:** two bounded controls run: Windows must reserve successfully and
+reject `MEM_COMMIT` synchronously; Linux must reserve and `mprotect`
+successfully, then have first touch killed inside a child-only cgroup with
+`memory.events.local` recording the OOM kill.
 
-`RS-VM-0012` and `rule_reserve_commit()` exist and are exercised by contracts;
-what has never happened is a real host demonstrating the behaviour. Unblocking
-needs either a dedicated machine or a `cgroup`-bounded child, and the second is
-worth investigating when T-004 brings a Windows runner into scope.
+**Measured control, 2026-08-05:** `test_windows_reserve_commit_job` puts only
+its worker under a 64 MiB Job Object process-memory limit. A 256 MiB
+`MEM_RESERVE` succeeds and a 128 MiB `MEM_COMMIT` fails synchronously with
+`ERROR_COMMITMENT_LIMIT` (1455); timeout and `KILL_ON_JOB_CLOSE` bound it. The
+remaining evidence is the POSIX moved-to-first-touch half that actually
+confirms `RS-VM-0012`.
 
 ---
 
@@ -307,12 +352,12 @@ worth investigating when T-004 brings a Windows runner into scope.
 
 Each needs a reason, so this cannot quietly become a way to empty the list.
 
-- **ROADMAP Phases 6, 7, 9, 10** (counterfactual, temporal, learned invariants,
-  productization) — ROADMAP §19 Risk 1 is *excessive scope*, mitigated by
-  "remain virtual-memory-only through the first useful releases". Opening any of
-  them while the first domain is still the only one measured would be that risk
-  materialising. (Phase 8 — further runtime domains — is now on the compass as
-  **T-023**, still gated on Gate D and deliberately in `Later`, not `Now`.)
+- **ROADMAP Phases 6, 7, 8, 9, 10** retain their `(untracked)` PLAN tags because
+  the PLAN contract is immutable except for status markers. The executable work
+  is nevertheless ordered here as T-033, T-034, T-023, T-035 and T-036. This
+  section names the intentional tag exception without reopening the frozen map;
+  the compass owns sequencing and each item still has a runnable completion
+  test.
 - **Documentation accuracy** (`docs/PLAN.md`, `[partial]`) — permanently
   partial by nature. Only paths and a fixed list of phrases are mechanical;
   prose is not compiled and never will be. `tools/guards/check_docs.py` covers

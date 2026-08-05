@@ -152,7 +152,8 @@ jobs:
           # tee, not >: the output belongs in the job log AND in a file, because
           # the file is what gets published to refs/measurements/*. pipefail so
           # tee's success cannot mask the harness's exit code.
-          bash tests/groundtruth/run.sh /tmp/meas/gt-host.json 2>&1 \
+          GT_LEDGER=/tmp/meas/gt-host.ledger.jsonl \
+            bash tests/groundtruth/run.sh /tmp/meas/gt-host.json 2>&1 \
             | tee /tmp/meas/gt_run.txt
 
       # A SECOND HOST, MADE RATHER THAN WAITED FOR.
@@ -174,28 +175,33 @@ jobs:
         run: |
           set -o pipefail
           mkdir -p /tmp/meas
-          bash tools/campaign/constrained_lane.sh 2>&1 \
+          GT_LEDGER=/tmp/meas/constrained.ledger.jsonl \
+            bash tools/campaign/constrained_lane.sh 2>&1 \
             | tee /tmp/meas/gt_constrained.txt
 
-      # THE COVERAGE NUMBER, MEASURED ON EVERY PUSH RATHER THAN BY HAND.
+      # EXECUTION COVERAGE, GRADED FROM THE CASE OUTCOME.
       #
-      # "10 of 23 rules executed" was a claim that lived in two documents and was
-      # stale in both within a day of being written, because the only thing that
-      # recomputed it was a human remembering to run the tool. It runs here now,
-      # over BOTH hosts this job already produces - the unconstrained one and the
-      # RLIMIT_AS-constrained one - because RS-VM-0026 fires only on the second,
-      # and feeding one profile under-reported it as backlog for a day.
+      # The legacy counter treated an emitted finding id as execution. That
+      # counted CONDITIONAL/UNKNOWN rows the harness explicitly did not assert
+      # and ignored whether the case reached the rule-specific bad outcome.
+      # These ledgers carry the actual kernel outcome plus the exact findings;
+      # the grader counts only a registered rule/outcome oracle and fails closed.
       - name: Rule coverage by execution
         id: coverage
         if: runner.os == 'Linux'
         run: |
           set -o pipefail
-          ( ulimit -v 4194304
-            build/bin/rs-env-probe vm --name constrained \
-              --output /tmp/meas/constrained-host.json )
-          python3 tools/campaign/groundtruth_coverage.py \
-            /tmp/meas/gt-host.json /tmp/meas/constrained-host.json 2>&1 \
-            | tee /tmp/meas/coverage.txt
+          python3 tools/campaign/groundtruth_execution_coverage.py \
+            /tmp/meas/gt-host.ledger.jsonl /tmp/meas/constrained.ledger.jsonl \
+            2>&1 | tee /tmp/meas/coverage.txt
+
+      - name: Upload execution ledger
+        if: runner.os == 'Linux'
+        uses: actions/upload-artifact@v4
+        with:
+          name: groundtruth-ledger-${{ matrix.os }}-${{ matrix.cc }}
+          path: /tmp/meas/*.ledger.jsonl
+          if-no-files-found: error
 
       # The evidence bundle, end to end: emit one from a real measured profile,
       # then REPLAY IT with a different binary invocation reading only the
@@ -480,8 +486,26 @@ jobs:
           set -o pipefail
           mkdir -p /tmp/meas
           build/bin/rs-env-probe vm --name gt-host --output /tmp/meas/gt-host.json
-          bash tests/groundtruth/run.sh /tmp/meas/gt-host.json 2>&1 \
+          GT_LEDGER=/tmp/meas/gt-host.ledger.jsonl \
+            bash tests/groundtruth/run.sh /tmp/meas/gt-host.json 2>&1 \
             | tee /tmp/meas/gt_run.txt
+
+      - name: Rule coverage by observed outcome
+        id: coverage
+        if: runner.os == 'macOS'
+        run: |
+          set -o pipefail
+          python3 tools/campaign/groundtruth_execution_coverage.py \
+            /tmp/meas/gt-host.ledger.jsonl 2>&1 \
+            | tee /tmp/meas/coverage.txt
+
+      - name: Upload execution ledger
+        if: runner.os == 'macOS'
+        uses: actions/upload-artifact@v4
+        with:
+          name: groundtruth-ledger-macos-apple-clang
+          path: /tmp/meas/*.ledger.jsonl
+          if-no-files-found: error
 
       # Publish the outcome as a namespaced ref, so it is readable from a
       # development sandbox that can reach this repository over the git protocol
@@ -618,6 +642,36 @@ jobs:
           git commit -q --allow-empty -m "${slug} ${state} @ ${{ github.sha }}"
           git push --force origin \
             "HEAD:refs/status/${{ github.sha }}/${slug}/${state}"
+
+  execution-coverage:
+    name: execution coverage / aggregate
+    needs: [build-and-test, expensive-platforms]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: groundtruth-ledger-*
+          path: coverage-ledgers
+
+      - name: Aggregate rule-specific execution evidence
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          ledgers=(coverage-ledgers/*/*.jsonl)
+          if [ "${#ledgers[@]}" -lt 3 ]; then
+            echo "::error::expected Linux and macOS execution ledgers"
+            exit 1
+          fi
+          python3 tools/campaign/groundtruth_execution_coverage.py \
+            "${ledgers[@]}" | tee execution-coverage.txt
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: execution-coverage-aggregate
+          path: execution-coverage.txt
+          if-no-files-found: error
 
   compatibility-gate:
     name: compatibility gate (linux)

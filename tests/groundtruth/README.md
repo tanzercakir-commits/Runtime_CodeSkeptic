@@ -78,30 +78,30 @@ report; it just does not pass or fail anything.
 
 ## Coverage
 
-Case count is not coverage. What matters is which rules an execution has ever
-checked, and `tools/campaign/groundtruth_coverage.py` counts what the analyzer
-actually emits rather than what a manifest claims:
+Case count and finding emission are not coverage. The harness optionally writes
+a machine-readable execution ledger containing the measured profile id, actual
+kernel outcome, analyzer verdict, pairing state and exact finding ids:
 
 ```console
-$ tools/campaign/groundtruth_coverage.py PROFILE.json [PROFILE.json ...]
-rules exercised by an execution: 9/25
-of the 20 rules an execution could check, 9 are checked (45%)
+$ GT_LEDGER=run.jsonl tests/groundtruth/run.sh PROFILE.json
+$ tools/campaign/groundtruth_execution_coverage.py run.jsonl [run.jsonl ...]
 ```
 
-Five rules are **not checkable this way at all**, and the tool prints the reason
-for each rather than leaving them as an unexplained gap. `RS-VM-0012` claims
-failures *move* from a checked call to an unchecked access under memory
-pressure, and provoking that means exhausting the runner. `RS-VM-0014` is an
-internal contradiction in a requirement, so no host is consulted and there is
-nothing to execute. "Not yet written" and "not checkable" are different facts
-and only one of them is a backlog item.
+`coverage_targets.json` supplies the rule-specific oracle. A branch is counted
+only when the analyzer emitted that rule **and** the real case reached one of
+the registered outcomes. A `CONDITIONAL` whole-contract verdict remains
+unasserted by the harness, while a concrete `relocated` or `faulted` outcome may
+still confirm the narrower branch it directly observes.
 
-That number was wrong the first time it was printed, in the flattering
-direction: the check grepped the manifest for rule ids mentioned in prose and
-believed a commit message that claimed `RS-VM-0012` was covered. It is not -
-the contract sets `commit_is_checked_call: true`, which is the POSIX idiom, and
-the rule correctly returns early. The case and the contract were consistent
-with each other; only the coverage claim was false.
+The grader fails closed on malformed JSON, unknown rule ids, empty ledgers,
+broken cases and contradicted pairings. Rules that cannot be graded by this
+method carry an explicit reason; everything else remains in the synthetic-only
+backlog. CI produces Linux, constrained-Linux and macOS ledgers, then grades
+their aggregate instead of mistaking one runner's missing branch for global
+absence.
+
+`groundtruth_coverage.py` is retained only for historical comparison. It counts
+emitted findings and therefore must not be used as proof of execution coverage.
 
 ## Running
 
