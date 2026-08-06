@@ -1,0 +1,35 @@
+observed: python3
+observed: perl
+observed: ruby
+observed: php
+observed: git
+observed: openssl
+observed: jq
+skipped: redis (no redis-server on this host)
+observed: gzip
+observed: xz
+skipped: ffmpeg (no ffmpeg on this host)
+observed: node-jit
+observed: java-jit
+========================================================================
+FALSE-POSITIVE RATE against observed, successful requests
+========================================================================
+
+SHAPE  (11 program(s), 246 requirement(s) evaluated, 0 rejected before evaluation)
+   SUPPORTED                    246  100.0%
+   CONDITIONALLY_SUPPORTED        0    0.0%
+   UNKNOWN                        0    0.0%
+   UNSUPPORTED                    0    0.0%
+   -------------------------- -----
+   FALSE POSITIVES                0    0.0%   <- every UNSUPPORTED here contradicts an observation
+   answered nothing (UNKNOWN)     0    0.0%   <- read this before believing the line above
+   findings emitted:
+      RS-VM-0005  x171
+
+========================================================================
+
+wrote build/fp-windows/false-positive-rate.json
+
+NOT COVERED on this host:
+  skipped: redis (no redis-server on this host)
+  skipped: ffmpeg (no ffmpeg on this host)
