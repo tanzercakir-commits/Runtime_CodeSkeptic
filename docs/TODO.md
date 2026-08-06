@@ -119,17 +119,6 @@ reports drift; it cannot push.
 
 ## Now
 
-### T-037 — Pin Platform Expansion Plan v2 and enforce its claim boundary `[now]`
-
-**Serves:** contributors need to distinguish a cross-compile, a hosted VM and
-a real target before any new support row is credible.
-**Plan:** Platform Expansion v2, G1-G5
-**Done when:** `python3 tools/guards/check_platform_expansion.py` passes on the
-real tree and its adversarial selftests prove that a modified plan, a
-fail-open ARM lane, or an automatically triggered paid-hardware lane fails.
-**First step:** hash-pin `docs/plans/platform-expansion-v2.md`, then make the
-guard read the plan, both workflows and their evidence commands.
-
 ### T-038 — Validate Linux ARM64 and Windows ARM64 hosted environments `[now]`
 
 **Serves:** embedded/edge developers need ARM64 evidence without waiting for a
@@ -141,18 +130,6 @@ native ARM64 builds, complete CTest, two-process profile reproducibility,
 both hosted images; the authoritative GitHub checks are green.
 **First step:** add the two runner-specific jobs without reusing x86 package
 names or weakening any existing test.
-
-### T-039 — Preserve RISC-V64/ARM identity and prepare native RISC-V evidence `[now]`
-
-**Serves:** a future RISC-V or ARMv7 contributor must not receive a measured
-profile falsely labelled `x86_64` or `x86`.
-**Plan:** Platform Expansion v2, G1 and G4
-**Done when:** `ctest --test-dir build --build-config RelWithDebInfo` proves
-the architecture model, the Linux probe derives the process ISA from compiler
-macros, and the manual RISC-V workflow plus remote harness pass the platform
-expansion guard without containing an emulation evidence path.
-**First step:** add `riscv64` to the model, then remove pointer-width-based x86
-defaults from the Linux probe.
 
 ---
 

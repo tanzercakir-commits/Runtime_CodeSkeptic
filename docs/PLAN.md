@@ -386,17 +386,19 @@ The frozen `plan.md` and `ROADMAP.md` remain unchanged as historical intent.
 
 ## Cross-cutting work not owned by a phase
 
-- `[open]` **Platform Expansion Plan v2: claim boundary and evidence gates** -
-  the owner accepted `docs/plans/platform-expansion-v2.md`; it remains open
-  until its hash pin and adversarial workflow guard are executable. (T-037)
+- `[done]` **Platform Expansion Plan v2: claim boundary and evidence gates** - `tools/guards/check_platform_expansion.py` enforces it:
+  the accepted addendum is hash-pinned; its structural guard and five
+  adversarial cases reject plan mutation, fail-open hosted lanes, runner drift,
+  and automatic hardware execution.
 - `[open]` **hosted Linux ARM64 and Windows ARM64 validation** - standard
   public runners are selected, but support is not claimed until native build,
   CTest, two-process probe verification and scoped provenance artifacts pass
   on both. (T-038)
-- `[open]` **RISC-V64/ARM architecture identity and native harness** - the
-  current Linux process detection collapses non-AArch64 64-bit processes to
-  x86_64 and every 32-bit process to x86; fix that before accepting a new
-  profile, and provide the manual-only hardware path. (T-039)
+- `[done]` **RISC-V64/ARM architecture identity and native harness** - `tests/unit/test_profile.cpp` and the native harness prove it:
+  `riscv64` is a first-class 64-bit identity; compiler target macros preserve
+  RISC-V64 and 32-bit Arm process identity. The manual-only, strict-host-key
+  hardware harness runs build, CTest, two probes, profile policy, and ground
+  truth without an emulation or provisioning path.
 - `[blocked]` **new physical platform measurements** - RISC-V64 (T-040),
   ARM64 16/64 KiB plus ARMv7 (T-041), and an RTOS pilot (T-042) require
   authorized targets or licensed SDKs that are not currently available.
@@ -431,7 +433,7 @@ The frozen `plan.md` and `ROADMAP.md` remain unchanged as historical intent.
   match the filesystem, and a named path must exist. Still `[partial]` because
   only paths and a fixed list of phrases are mechanical; the rest of the prose
   is unchecked and always will be.
-- `[done]` the guards are tested — `tools/guards/selftest.py`, 149 cases, each
+- `[done]` the guards are tested — `tools/guards/selftest.py`, 154 cases, each
   requiring a check to fail against a deliberately wrong throwaway repository
   before it is trusted on this one; first in `tools/guards/run_all.sh`. This
   number read `25` while there were 58, surviving two earlier increases, so

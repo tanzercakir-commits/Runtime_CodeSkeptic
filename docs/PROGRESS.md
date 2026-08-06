@@ -16,6 +16,40 @@ re-litigated; a mistake recorded here does not need to be re-made.
 
 ---
 
+## 2026-08-06 - Native architecture evidence became fail-closed
+
+**Changed.** T-037 and T-039 were consumed. RISC-V64 is now a first-class
+64-bit profile architecture, while Linux process identity comes from compiler
+target macros so neither RISC-V64 nor 32-bit Arm falls through to an x86
+default. The pinned Plan v2 now has a structural guard and five adversarial
+cases. A policy validator requires measured origin, exact OS/host/process ISA,
+pointer width, native translation state, measured VM fundamentals, two-process
+identity agreement, and a provenance envelope whose claim is explicitly
+limited to one named environment. Hosted Linux and Windows ARM64 jobs and a
+manual RISC-V64 physical-host path use that gate. The schema guard also learned
+to execute only binaries native to the current OS after Windows selected a
+stale extensionless Linux ELF from another build tree.
+
+**Evidence.** Warning-clean MSVC RelWithDebInfo compiled with zero warnings and
+zero errors; CTest passed 24/24. Two real Windows probe processes produced the
+same profile id, both passed `rs-profile verify`, and the new policy gate wrote
+a scoped validation envelope. Guard selftests passed 154/154, the native-profile
+validator passed 5/5 adversarial cases, the platform-expansion guard passed,
+the 639-case input boundary matrix reported zero divergences, and 79 artifacts
+validated against six schemas. Bash syntax and both workflow YAML documents
+were parsed locally.
+
+**Learned.** Pointer width is not an ISA detector. Also, a provenance field
+that the probe never populates cannot be made mandatory only in CI: the first
+real validator run correctly exposed that `probe_binary_hash` is currently
+empty, so the gate now requires the populated tool/probe/timestamp metadata
+and separately hashes the uploaded profile artifact.
+
+**Next.** Run T-038's two hosted ARM64 jobs on GitHub. Only their green native
+artifacts can close the task or justify a public support row.
+
+---
+
 ## 2026-08-06 - Platform Expansion v2 accepted and bounded
 
 **Changed.** The owner accepted a platform-evidence addendum without changing

@@ -738,9 +738,26 @@ vm::Architecture architecture_from_machine(const char* machine) {
     const std::string m(machine);
     if (m == "x86_64" || m == "amd64") return vm::Architecture::X86_64;
     if (m == "aarch64" || m == "arm64") return vm::Architecture::Aarch64;
+    if (m == "riscv64") return vm::Architecture::Riscv64;
     if (m == "i386" || m == "i686") return vm::Architecture::X86;
     if (m.rfind("arm", 0) == 0) return vm::Architecture::Arm;
     return vm::Architecture::Other;
+}
+
+vm::Architecture process_architecture() {
+#if defined(__aarch64__) || defined(__arm64__)
+    return vm::Architecture::Aarch64;
+#elif defined(__x86_64__) || defined(__amd64__)
+    return vm::Architecture::X86_64;
+#elif defined(__i386__)
+    return vm::Architecture::X86;
+#elif defined(__arm__)
+    return vm::Architecture::Arm;
+#elif defined(__riscv) && defined(__riscv_xlen) && __riscv_xlen == 64
+    return vm::Architecture::Riscv64;
+#else
+    return vm::Architecture::Other;
+#endif
 }
 
 }  // namespace
@@ -765,14 +782,10 @@ Result probe_virtual_memory(const Options& options) {
         profile.platform.os_version = std::string(uts.sysname) + " " + uts.release;
         profile.platform.host_arch = architecture_from_machine(uts.machine);
     }
-    // The probe is the process being measured, so process width is known
-    // exactly and does not need uname.
-    profile.platform.process_arch =
-        sizeof(void*) == 8
-            ? (profile.platform.host_arch == vm::Architecture::Aarch64
-                   ? vm::Architecture::Aarch64
-                   : vm::Architecture::X86_64)
-            : vm::Architecture::X86;
+    // The probe is the process being measured. Compiler target macros identify
+    // the process ISA; pointer width alone cannot distinguish x86_64, AArch64,
+    // and RISC-V64 (or x86 from 32-bit Arm).
+    profile.platform.process_arch = process_architecture();
     // Detecting emulated execution (qemu-user and friends) is not attempted in
     // v0.1, so translation mode stays unknown rather than being guessed as
     // "none".

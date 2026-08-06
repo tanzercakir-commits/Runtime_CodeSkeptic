@@ -1,0 +1,151 @@
+name: Platform expansion
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/platform-expansion.yml'
+      - 'CMakeLists.txt'
+      - 'cmake/**'
+      - 'include/**'
+      - 'src/**'
+      - 'tests/**'
+      - 'tools/ci/**'
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/platform-expansion.yml'
+      - 'CMakeLists.txt'
+      - 'cmake/**'
+      - 'include/**'
+      - 'src/**'
+      - 'tests/**'
+      - 'tools/ci/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  linux-arm64:
+    name: linux / arm64 / native evidence
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Refuse a non-native runner
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(uname -m)" = aarch64
+          python3 -c 'import platform; assert platform.machine().lower() in {"aarch64", "arm64"}'
+
+      - name: Configure
+        run: >-
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=RelWithDebInfo
+          -DRS_WARNINGS_AS_ERRORS=ON
+
+      - name: Build
+        run: cmake --build build --config RelWithDebInfo --parallel
+
+      - name: Test
+        run: ctest --test-dir build --build-config RelWithDebInfo --output-on-failure
+
+      - name: Measure twice and validate the claim
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p evidence/linux-arm64
+          build/bin/rs-env-probe vm --name linux-arm64-a \
+            --output evidence/linux-arm64/profile-a.json
+          build/bin/rs-env-probe vm --name linux-arm64-b \
+            --output evidence/linux-arm64/profile-b.json
+          build/bin/rs-profile verify evidence/linux-arm64/profile-a.json
+          build/bin/rs-profile verify evidence/linux-arm64/profile-b.json
+          python3 tools/ci/validate_native_profile.py --selftest
+          python3 tools/ci/validate_native_profile.py \
+            --profile evidence/linux-arm64/profile-a.json \
+            --compare-profile evidence/linux-arm64/profile-b.json \
+            --expected-os linux --expected-arch aarch64 \
+            --expected-translation-mode unknown \
+            --runner-class github_hosted_vm \
+            --provider github-actions --runner-image ubuntu-24.04-arm \
+            --source-revision "$GITHUB_SHA" \
+            --output evidence/linux-arm64/validation.json
+
+      - name: Ground truth against the fresh profile
+        shell: bash
+        run: |
+          set -euo pipefail
+          RS_CHECK="$PWD/build/bin/rs-check" \
+          RS_PROBE="$PWD/build/bin/rs-env-probe" \
+            bash tests/groundtruth/selftest.sh
+          GT_LEDGER="$PWD/evidence/linux-arm64/groundtruth.ledger.jsonl" \
+            bash tests/groundtruth/run.sh \
+              "$PWD/evidence/linux-arm64/profile-a.json" \
+              2>&1 | tee evidence/linux-arm64/groundtruth.txt
+
+      - name: Upload attributable evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: platform-linux-arm64-${{ github.sha }}
+          path: evidence/linux-arm64
+          if-no-files-found: error
+          retention-days: 30
+
+  windows-arm64:
+    name: windows / arm64 / native evidence
+    runs-on: windows-11-arm
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Refuse a non-native runner
+        shell: pwsh
+        run: |
+          $osArch = [Runtime.InteropServices.RuntimeInformation]::OSArchitecture
+          if ($osArch -ne [Runtime.InteropServices.Architecture]::Arm64) {
+            throw "expected an ARM64 OS, got $osArch"
+          }
+          Write-Host "OS architecture: $osArch"
+
+      - name: Configure for ARM64
+        run: >-
+          cmake -S . -B build -A ARM64 -DCMAKE_BUILD_TYPE=RelWithDebInfo
+          -DRS_WARNINGS_AS_ERRORS=ON
+
+      - name: Build
+        run: cmake --build build --config RelWithDebInfo --parallel
+
+      - name: Test
+        run: ctest --test-dir build --build-config RelWithDebInfo --output-on-failure
+
+      - name: Measure twice and validate the claim
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $evidence = 'evidence/windows-arm64'
+          New-Item -ItemType Directory -Force -Path $evidence | Out-Null
+          $bin = 'build/bin/RelWithDebInfo'
+          & "$bin/rs-env-probe.exe" vm --name windows-arm64-a --output "$evidence/profile-a.json"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & "$bin/rs-env-probe.exe" vm --name windows-arm64-b --output "$evidence/profile-b.json"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & "$bin/rs-profile.exe" verify "$evidence/profile-a.json"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & "$bin/rs-profile.exe" verify "$evidence/profile-b.json"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python tools/ci/validate_native_profile.py --profile "$evidence/profile-a.json" --compare-profile "$evidence/profile-b.json" --expected-os windows --expected-arch aarch64 --expected-translation-mode none --runner-class github_hosted_vm --provider github-actions --runner-image windows-11-arm --source-revision "$env:GITHUB_SHA" --output "$evidence/validation.json"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Upload attributable evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: platform-windows-arm64-${{ github.sha }}
+          path: evidence/windows-arm64
+          if-no-files-found: error
+          retention-days: 30

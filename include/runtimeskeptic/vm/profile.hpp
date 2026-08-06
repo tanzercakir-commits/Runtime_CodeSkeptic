@@ -34,7 +34,15 @@ inline constexpr const char* kProfileSchema =
     "runtime-skeptic.environment-profile.v1";
 
 enum class OperatingSystem { Linux, MacOS, Windows, Other, Unknown };
-enum class Architecture { X86_64, Aarch64, X86, Arm, Other, Unknown };
+enum class Architecture {
+    X86_64,
+    Aarch64,
+    Riscv64,
+    X86,
+    Arm,
+    Other,
+    Unknown
+};
 enum class TranslationMode { None, Rosetta2, Wow64, QemuUser, Other, Unknown };
 enum class ReserveCommitModel { PosixLazy, WindowsReserveCommit, Unknown };
 enum class BeyondEofBehavior { Sigbus, Error, ZeroFill, Unknown };

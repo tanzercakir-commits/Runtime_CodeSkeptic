@@ -105,7 +105,9 @@ run() {
 }
 
 run "guards themselves"     python3 "$HERE/selftest.py"
+run "native profile policy" python3 "$HERE/../ci/validate_native_profile.py" --selftest
 run "process records"       python3 "$HERE/check_process_contract.py"
+run "platform evidence boundary" python3 "$HERE/check_platform_expansion.py"
 run "plan structure"        python3 "$HERE/check_plan.py"
 run "documentation drift"   python3 "$HERE/check_docs.py"
 run "finding registry"      python3 "$HERE/check_registry.py"

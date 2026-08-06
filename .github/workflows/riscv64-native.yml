@@ -1,0 +1,94 @@
+name: RISC-V64 native hardware evidence
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirmation:
+        description: 'Type RUN after the riscv64-hardware environment approver confirms the host and cost.'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  native-riscv64:
+    if: ${{ inputs.confirmation == 'RUN' }}
+    runs-on: ubuntu-latest
+    environment: riscv64-hardware
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Refuse incomplete SSH configuration
+        shell: bash
+        env:
+          RS_RISCV_HOST: ${{ secrets.RS_RISCV_HOST }}
+          RS_RISCV_USER: ${{ secrets.RS_RISCV_USER }}
+          RS_RISCV_SSH_KEY: ${{ secrets.RS_RISCV_SSH_KEY }}
+          RS_RISCV_KNOWN_HOSTS: ${{ secrets.RS_RISCV_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          test -n "$RS_RISCV_HOST"
+          test -n "$RS_RISCV_USER"
+          test -n "$RS_RISCV_SSH_KEY"
+          test -n "$RS_RISCV_KNOWN_HOSTS"
+
+      - name: Prepare pinned SSH client and source archive
+        shell: bash
+        env:
+          RS_RISCV_SSH_KEY: ${{ secrets.RS_RISCV_SSH_KEY }}
+          RS_RISCV_KNOWN_HOSTS: ${{ secrets.RS_RISCV_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          install -m 700 -d "$RUNNER_TEMP/ssh"
+          printf '%s\n' "$RS_RISCV_SSH_KEY" > "$RUNNER_TEMP/ssh/key"
+          chmod 600 "$RUNNER_TEMP/ssh/key"
+          printf '%s\n' "$RS_RISCV_KNOWN_HOSTS" > "$RUNNER_TEMP/ssh/known_hosts"
+          chmod 600 "$RUNNER_TEMP/ssh/known_hosts"
+          git archive --format=tar.gz --output "$RUNNER_TEMP/source.tar.gz" HEAD
+
+      - name: Run on the approved physical host
+        id: remote
+        shell: bash
+        env:
+          RS_RISCV_HOST: ${{ secrets.RS_RISCV_HOST }}
+          RS_RISCV_USER: ${{ secrets.RS_RISCV_USER }}
+        run: |
+          set -euo pipefail
+          remote_dir="/tmp/runtimeskeptic-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          ssh_opts=(-i "$RUNNER_TEMP/ssh/key" -o BatchMode=yes \
+            -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$RUNNER_TEMP/ssh/known_hosts")
+          ssh "${ssh_opts[@]}" "$RS_RISCV_USER@$RS_RISCV_HOST" \
+            "umask 077 && mkdir '$remote_dir'"
+          scp "${ssh_opts[@]}" "$RUNNER_TEMP/source.tar.gz" \
+            "$RS_RISCV_USER@$RS_RISCV_HOST:$remote_dir/source.tar.gz"
+          ssh "${ssh_opts[@]}" "$RS_RISCV_USER@$RS_RISCV_HOST" \
+            "set -eu; cd '$remote_dir'; mkdir source evidence; tar -xzf source.tar.gz -C source; RS_SOURCE_REVISION='$GITHUB_SHA' RS_RUNNER_CLASS=bare_metal RS_PROVIDER=user-managed RS_RUNNER_IMAGE=riscv64-hardware bash source/tools/platform/run_native_validation.sh riscv64 '$remote_dir/evidence'"
+          mkdir -p evidence/riscv64
+          scp "${ssh_opts[@]}" \
+            "$RS_RISCV_USER@$RS_RISCV_HOST:$remote_dir/evidence/"'*' \
+            evidence/riscv64/
+
+      - name: Remove the exact remote work directory
+        if: always()
+        shell: bash
+        env:
+          RS_RISCV_HOST: ${{ secrets.RS_RISCV_HOST }}
+          RS_RISCV_USER: ${{ secrets.RS_RISCV_USER }}
+        run: |
+          set -u
+          remote_dir="/tmp/runtimeskeptic-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          ssh -i "$RUNNER_TEMP/ssh/key" -o BatchMode=yes \
+            -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$RUNNER_TEMP/ssh/known_hosts" \
+            "$RS_RISCV_USER@$RS_RISCV_HOST" "rm -rf -- '$remote_dir'"
+
+      - name: Upload attributable hardware evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: platform-riscv64-${{ github.sha }}-${{ github.run_id }}
+          path: evidence/riscv64
+          if-no-files-found: error
+          retention-days: 30

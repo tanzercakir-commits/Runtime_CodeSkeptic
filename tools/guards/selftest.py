@@ -324,7 +324,103 @@ RUNTIME_FILES = {
     "src/runtime/trace.cpp": RUNTIME_TRACE,
 }
 
+PLATFORM_EXPANSION_PLAN_OK = "# Accepted platform expansion v2\n"
+PLATFORM_EXPANSION_PIN_OK = (
+    _sha(PLATFORM_EXPANSION_PLAN_OK)
+    + "  docs/plans/platform-expansion-v2.md\n"
+)
+PLATFORM_HOSTED_OK = """name: Platform
+on:
+  workflow_dispatch:
+jobs:
+  linux:
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - run: test "$(uname -m)" = aarch64
+      - run: ctest --test-dir build --build-config RelWithDebInfo
+      - run: rs-profile verify a; rs-profile verify b; tool --compare-profile b --expected-arch aarch64 --runner-class github_hosted_vm --provider github-actions
+      - uses: actions/upload-artifact@v4
+  windows:
+    runs-on: windows-11-arm
+    steps:
+      - run: OSArchitecture
+      - run: ctest --test-dir build --build-config RelWithDebInfo
+      - run: rs-profile verify a; rs-profile verify b; tool --compare-profile b --expected-arch aarch64 --runner-class github_hosted_vm --provider github-actions
+      - uses: actions/upload-artifact@v4
+"""
+PLATFORM_RISCV_OK = """name: RISC-V
+on:
+  workflow_dispatch:
+jobs:
+  native:
+    if: inputs.confirmation == 'RUN'
+    environment: riscv64-hardware
+    timeout-minutes: 30
+    steps:
+      - run: ssh -o StrictHostKeyChecking=yes -o UserKnownHostsFile=known RS_RISCV_KNOWN_HOSTS
+      - run: RS_RUNNER_CLASS=bare_metal run_native_validation.sh riscv64
+      - if: always()
+        run: cleanup
+"""
+PLATFORM_HARNESS_OK = """ACTUAL_ARCH="$(uname -m)"
+if [ "$ACTUAL_ARCH" != "$EXPECTED_ARCH" ]; then exit 1; fi
+trap cleanup EXIT HUP INT TERM
+cmake -DRS_WARNINGS_AS_ERRORS=ON
+ctest --test-dir build --build-config RelWithDebInfo
+"$BIN/rs-profile" verify a
+tool --compare-profile b
+tests/groundtruth/selftest.sh
+tests/groundtruth/run.sh
+"""
+PLATFORM_VALIDATOR_OK = """POINTER_WIDTH = {"riscv64": 64}
+if profile.get("origin") != "measured": fail()
+message = "independent probes disagree"
+limit = "not platform-family support"
+classes = ("bare_metal",)
+"""
+PLATFORM_FILES_OK = {
+    "docs/plans/platform-expansion-v2.md": PLATFORM_EXPANSION_PLAN_OK,
+    "tools/guards/platform-expansion-v2.sha256": PLATFORM_EXPANSION_PIN_OK,
+    ".github/workflows/platform-expansion.yml": PLATFORM_HOSTED_OK,
+    ".github/workflows/riscv64-native.yml": PLATFORM_RISCV_OK,
+    "tools/platform/run_native_validation.sh": PLATFORM_HARNESS_OK,
+    "tools/ci/validate_native_profile.py": PLATFORM_VALIDATOR_OK,
+    "src/probe/vm_probe_linux.cpp":
+        "process_architecture() __riscv_xlen Architecture::Riscv64\n",
+    "include/runtimeskeptic/vm/profile.hpp": "Riscv64\n",
+}
+
+
 CASES = [
+    # ---- check_platform_expansion: evidence cannot outgrow execution -----
+    Case("check_platform_expansion.py", "a pinned, native-only evidence plan passes",
+         PLATFORM_FILES_OK, expect_fail=False),
+
+    Case("check_platform_expansion.py", "an edited plan under a stale pin fails",
+         {**PLATFORM_FILES_OK,
+          "docs/plans/platform-expansion-v2.md":
+              PLATFORM_EXPANSION_PLAN_OK + "quiet scope expansion\n"},
+         expect_fail=True, expect_text="stale pin"),
+
+    Case("check_platform_expansion.py", "evidence cannot fail open",
+         {**PLATFORM_FILES_OK,
+          ".github/workflows/platform-expansion.yml":
+              PLATFORM_HOSTED_OK + "continue-on-error: true\n"},
+         expect_fail=True, expect_text="continue-on-error"),
+
+    Case("check_platform_expansion.py", "hosted ARM64 runner labels are contractual",
+         {**PLATFORM_FILES_OK,
+          ".github/workflows/platform-expansion.yml":
+              PLATFORM_HOSTED_OK.replace("runs-on: windows-11-arm",
+                                         "runs-on: windows-latest")},
+         expect_fail=True, expect_text="windows-11-arm"),
+
+    Case("check_platform_expansion.py", "RISC-V hardware stays manual-only",
+         {**PLATFORM_FILES_OK,
+          ".github/workflows/riscv64-native.yml":
+              PLATFORM_RISCV_OK.replace("  workflow_dispatch:",
+                                        "  workflow_dispatch:\n  schedule:")},
+         expect_fail=True, expect_text="manual-only"),
     # ---- check_release_consistency: one public version, one package set ---
     Case("check_release_consistency.py", "release declarations agree",
          {"CMakeLists.txt": "project(RuntimeSkeptic\n    VERSION 0.2.0)\n",
