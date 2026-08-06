@@ -16,6 +16,28 @@ re-litigated; a mistake recorded here does not need to be re-made.
 
 ---
 
+## 2026-08-06 - Hosted ARM64 reached the public matrix without overclaiming
+
+**Changed.** README now names Linux ARM64 on `ubuntu-24.04-arm` and Windows
+ARM64 on `windows-11-arm` as validated hosted environments. It explicitly
+separates their per-run evidence artifacts from checked-in snapshot profiles
+and rejects promotion to an ARM64 architecture-family support claim.
+
+**Evidence.** Final-sha platform run `31085768346` passed both ARM64 jobs on
+commit `2705ff6`: warning-clean builds, complete CTest, two independent probes,
+profile verification, strict claim policy and artifact upload. Full CI run
+`31085768332` passed all nine reported checks on the same commit.
+
+**Learned.** A support matrix needs an evidence-strength boundary in prose even
+when the table is compact; otherwise a named guest can be read as a promise for
+every device sharing its ISA.
+
+**Next.** Keep the public rows scoped to those two hosted images. Add physical
+RISC-V, ARM page variants or RTOS rows only after their blocked evidence tasks
+produce authoritative measurements.
+
+---
+
 ## 2026-08-06 - The RISC-V hardware gate is armed without spending
 
 **Changed.** GitHub environment `riscv64-hardware` now exists with the

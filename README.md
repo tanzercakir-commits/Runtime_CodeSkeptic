@@ -147,13 +147,18 @@ a range the probe never tested answers `UNKNOWN` rather than
 | Windows | x86-64 | — | [`profiles/measured/`](profiles/measured/) |
 | Windows (Wine on Linux) | x86-64 | Wine | [`profiles/measured/`](profiles/measured/) |
 | Linux | x86-64 | — | measured by CI each run, not checked in |
+| Linux | ARM64 | native | validated on `ubuntu-24.04-arm`; per-run evidence artifact |
+| Windows | ARM64 | native | validated on `windows-11-arm`; per-run evidence artifact |
 
-The four macOS and Windows profiles are checked in under
-[profiles/measured/](profiles/measured/), each fact recording how it was
-measured. The Linux profile is *not* shipped: the CI probe measures the runner
-on every run and publishes the result to `refs/measurements/*` (the working copy
-lands in the git-ignored `profiles/generated/`), so it is always fresh rather
-than a snapshot. Measure your own with `rs-env-probe`, as above.
+The four snapshot profiles for macOS, Windows x86-64 and Wine are checked in
+under [profiles/measured/](profiles/measured/), each fact recording how it was
+measured. Linux profiles and the hosted ARM64 profiles are not shipped: CI
+measures those runners on every evidence run and publishes attributable
+artifacts, keeping the result fresh rather than freezing another snapshot.
+
+The ARM64 rows mean **validated hosted environments** only. They do not claim
+that every ARM64 kernel, page-size configuration, device or architecture-family
+variant is supported. Measure your own target with `rs-env-probe`, as above.
 
 ## System architecture
 
