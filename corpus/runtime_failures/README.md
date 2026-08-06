@@ -4,7 +4,7 @@ The incident corpus: one Markdown file per cross-layer runtime failure, classifi
 
 **Status:** ROADMAP Phase 0 deliverable (`corpus/runtime_failures/`). **Incomplete, and none of its current contents count toward the Phase 0 exit criteria.**
 
-<!-- counting: 44/30 vm: 35/10 -->
+<!-- counting: 45/30 vm: 36/10 -->
 
 > ### Current state, computed, not claimed
 >
@@ -16,8 +16,8 @@ The incident corpus: one Markdown file per cross-layer runtime failure, classifi
 >
 > | | Required by Phase 0 | Present | **Counting** |
 > | --- | --- | --- | --- |
-> | Classified real incidents | >= 30 | 54 files | **44** |
-> | In the virtual-memory categories | >= 10 | | **35** |
+> | Classified real incidents | >= 30 | 55 files | **45** |
+> | In the virtual-memory categories | >= 10 | | **36** |
 >
 > **Both exit criteria are met.** What is *not* met, and matters more than the
 > count: every counting entry is `sourced`, none is `reproduced`, and none has
@@ -35,7 +35,7 @@ The incident corpus: one Markdown file per cross-layer runtime failure, classifi
 > were then independently re-fetched by a second reader and all six matched -
 > RSC-0011, RSC-0018, RSC-0020, RSC-0035, RSC-0047 and RSC-0052.
 >
-> **That is 6 of 44 confirmed twice. It is a sample, not a proof.**
+> **That is 6 of 45 confirmed twice. It is a sample, not a proof.**
 > `tools/campaign/verify_corpus_sources.py` exists to close the gap by
 > re-fetching every `source:` and checking the quote is still present - but it
 > cannot run in the environment these entries were written in, where the

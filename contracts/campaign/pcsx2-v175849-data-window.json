@@ -1,0 +1,59 @@
+{
+  "schema": "runtime-skeptic.application-requirements.v1",
+  "name": "PCSX2 v1.7.5849 x86-64 data memory: 155 MiB must land in one of eleven 256 MiB-spaced windows near the emulator text",
+  "component": "PCSX2 SysMemory::AllocateVirtualMemory, data-memory allocation before PR #11734",
+  "operation": "virtual_memory_map",
+  "request": {
+    "size": 162529280,
+    "exact_address_required": false,
+    "protection": {
+      "read": true,
+      "write": true,
+      "execute": false
+    },
+    "max_displacement_bytes": 1610612736,
+    "displacement_reference": "PCSX2 AllocateVirtualMemory text address rounded down to a 256 MiB boundary",
+    "validates_returned_address": true
+  },
+  "assumptions": {
+    "guest_host_identity_required": false,
+    "translation_layer_available": false,
+    "retries_on_failure": true,
+    "max_retries": 11
+  },
+  "required_postconditions": [
+    "the 155 MiB data mapping starts at codeBase + n*256MiB for one n in {-6,-5,...,4}",
+    "the returned address equals the selected candidate; a kernel relocation is rejected",
+    "the later 305 MiB recompiler mapping must satisfy the same executable-relative policy"
+  ],
+  "permitted_fallbacks": [
+    "relocate"
+  ],
+  "failure_sink": {
+    "kind": "process_exit",
+    "location": {
+      "file": "PCSX2/pcsx2@v1.7.5849:pcsx2/Memory.cpp",
+      "line": 167,
+      "symbol": "SysMemory::AllocateMemoryMap"
+    },
+    "description": "after all eleven exact placements fail, startup reports 'Failed to map data memory at an acceptable location', releases the memory map and returns false"
+  },
+  "assumption_evidence": "statically_inferred",
+  "extraction_limitations": [
+    "the schema carries the maximum displacement but cannot express the discrete set of eleven candidates",
+    "a reusable host profile cannot know where a future PCSX2 process image will land; evaluating the candidate ranges requires a launch-time reference",
+    "the v1.7.5849 constants are 155 MiB data plus 305 MiB code, 460 MiB total; the nearby source comment says approximately 640 MiB and is not used as evidence"
+  ],
+  "x_campaign": {
+    "project": "PCSX2",
+    "source": "https://github.com/PCSX2/pcsx2/issues/11728",
+    "fix": "https://github.com/PCSX2/pcsx2/pull/11734",
+    "expected_verdict_by_host": {
+      "macos/aarch64+none": "UNKNOWN",
+      "macos/x86_64+rosetta2": "UNKNOWN",
+      "windows/x86_64+none": "UNKNOWN",
+      "windows/x86_64+other": "UNKNOWN"
+    },
+    "rationale": "none of the measured profiles contains the future executable placement needed to derive the eleven candidate addresses; a confident supported or unsupported verdict would invent evidence"
+  }
+}

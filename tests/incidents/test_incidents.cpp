@@ -158,6 +158,43 @@ RS_TEST(database_reservation_is_conditional_on_a_lazy_host) {
 }
 
 // ---------------------------------------------------------------------------
+// Public retrospective: PCSX2 #11728 / PR #11734.
+//
+// A reusable host profile cannot know where a future PCSX2 process image will
+// land. The regression is therefore not a guessed compatibility verdict: all
+// checked-in measured profiles must preserve the executable-relative
+// requirement and stop at UNKNOWN through RS-VM-0024.
+// ---------------------------------------------------------------------------
+RS_TEST(pcsx2_relative_window_retrospective_stays_evidence_bounded) {
+    auto requirement =
+        load_requirement("contracts/campaign/pcsx2-v175849-data-window.json");
+    if (!requirement) return;
+
+    for (const char* path : {
+             "profiles/measured/macos-14-arm64-native.measured.json",
+             "profiles/measured/macos-14-arm64-rosetta-x86_64.measured.json",
+             "profiles/measured/windows-server-2025-x86_64.measured.json",
+             "profiles/measured/wine-9.0-on-linux-x86_64.measured.json",
+         }) {
+        auto profile = load_profile(path);
+        if (!profile) continue;
+
+        const auto result = analyze(*requirement, *profile);
+        RS_CHECK_MESSAGE(result.overall == SupportLevel::Unknown,
+                         std::string(path) +
+                             " invented a decisive PCSX2 verdict");
+
+        const Finding* f =
+            find(result, ids::kDisplacementConstraintNotEvaluable);
+        RS_CHECK_MESSAGE(f != nullptr,
+                         std::string(path) + " dropped RS-VM-0024");
+        if (f != nullptr) {
+            RS_CHECK(f->confidence == Confidence::Hypothesis);
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Report rendering must not lose the confidence qualifier.
 // ---------------------------------------------------------------------------
 RS_TEST(reports_carry_the_confidence_and_the_origin_warning) {
