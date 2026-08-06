@@ -16,6 +16,11 @@
 set -euo pipefail
 umask 022
 
+# CI run 31058058088 attributed every remaining byte difference exclusively to
+# the two installed static archives. Apple's archive tools honor ZERO_AR_DATE
+# by normalizing archive-member dates; propagate it to CMake's libtool calls.
+export ZERO_AR_DATE=1
+
 V=0.2.0
 PKG="runtimeskeptic-v$V-macos-arm64"
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"

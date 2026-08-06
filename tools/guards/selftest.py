@@ -316,7 +316,9 @@ CASES = [
           "dist/build-linux-release.sh":
               'V=0.2.0\ncp "$ROOT/dist/RELEASE-v$V.md" "$D/RELEASE.md"\n',
           "dist/build-macos-release.sh":
-              'V=0.2.0\ncp "dist/RELEASE-v$V.md" "$D/RELEASE.md"\n',
+              'V=0.2.0\nexport ZERO_AR_DATE=1\n'
+              'cmake -S . -B build\n'
+              'cp "dist/RELEASE-v$V.md" "$D/RELEASE.md"\n',
           "dist/QUICKSTART.md": "# RuntimeSkeptic v0.2.0 - quickstart\n",
           "dist/RELEASE-v0.2.0.md": "# RuntimeSkeptic v0.2.0\n",
           ".github/workflows/ci.yml":
@@ -331,7 +333,9 @@ CASES = [
           "dist/build-linux-release.sh":
               'V=0.2.0\ncp "$ROOT/dist/RELEASE-v$V.md" "$D/RELEASE.md"\n',
           "dist/build-macos-release.sh":
-              'V=0.2.0\ncp "dist/RELEASE-v$V.md" "$D/RELEASE.md"\n',
+              'V=0.2.0\nexport ZERO_AR_DATE=1\n'
+              'cmake -S . -B build\n'
+              'cp "dist/RELEASE-v$V.md" "$D/RELEASE.md"\n',
           "dist/QUICKSTART.md": "# RuntimeSkeptic v0.2.0 - quickstart\n",
           "dist/RELEASE-v0.2.0.md": "# RuntimeSkeptic v0.2.0\n",
           ".github/workflows/ci.yml":
@@ -346,13 +350,50 @@ CASES = [
           "dist/build-linux-release.sh":
               'V=0.2.0\ncp "$ROOT/dist/RELEASE-v$V.md" "$D/RELEASE.md"\n',
           "dist/build-macos-release.sh":
-              'V=0.2.0\ncp "dist/RELEASE-v$V.md" "$D/RELEASE.md"\n',
+              'V=0.2.0\nexport ZERO_AR_DATE=1\n'
+              'cmake -S . -B build\n'
+              'cp "dist/RELEASE-v$V.md" "$D/RELEASE.md"\n',
           "dist/QUICKSTART.md": "# RuntimeSkeptic v0.2.0 - quickstart\n",
           "dist/RELEASE-v0.2.0.md": "# RuntimeSkeptic v0.2.0\n",
           ".github/workflows/ci.yml":
               ("runtimeskeptic-v0.2.0-linux-x86_64.tar.gz\n" * 2
                + "runtimeskeptic-v0.1.0-macos-arm64.tar.gz\n" * 2)},
          expect_fail=True, expect_text="macos-arm64"),
+
+    Case("check_release_consistency.py",
+         "missing deterministic macOS archive environment fails",
+         {"CMakeLists.txt": "project(RuntimeSkeptic VERSION 0.2.0)\n",
+          "include/runtimeskeptic/version.hpp":
+              'constexpr auto kToolVersion = "runtimeskeptic/0.2.0";\n',
+          "dist/build-linux-release.sh":
+              'V=0.2.0\ncp "$ROOT/dist/RELEASE-v$V.md" "$D/RELEASE.md"\n',
+          "dist/build-macos-release.sh":
+              'V=0.2.0\ncmake -S . -B build\n'
+              'cp "dist/RELEASE-v$V.md" "$D/RELEASE.md"\n',
+          "dist/QUICKSTART.md": "# RuntimeSkeptic v0.2.0 - quickstart\n",
+          "dist/RELEASE-v0.2.0.md": "# RuntimeSkeptic v0.2.0\n",
+          ".github/workflows/ci.yml":
+              ("runtimeskeptic-v0.2.0-linux-x86_64.tar.gz\n" * 2
+               + "runtimeskeptic-v0.2.0-macos-arm64.tar.gz\n" * 2)},
+         expect_fail=True, expect_text="ZERO_AR_DATE=1"),
+
+    Case("check_release_consistency.py",
+         "late macOS archive environment fails",
+         {"CMakeLists.txt": "project(RuntimeSkeptic VERSION 0.2.0)\n",
+          "include/runtimeskeptic/version.hpp":
+              'constexpr auto kToolVersion = "runtimeskeptic/0.2.0";\n',
+          "dist/build-linux-release.sh":
+              'V=0.2.0\ncp "$ROOT/dist/RELEASE-v$V.md" "$D/RELEASE.md"\n',
+          "dist/build-macos-release.sh":
+              ('V=0.2.0\ncmake -S . -B build\n'
+               'export ZERO_AR_DATE=1\n'
+               'cp "dist/RELEASE-v$V.md" "$D/RELEASE.md"\n'),
+          "dist/QUICKSTART.md": "# RuntimeSkeptic v0.2.0 - quickstart\n",
+          "dist/RELEASE-v0.2.0.md": "# RuntimeSkeptic v0.2.0\n",
+          ".github/workflows/ci.yml":
+              ("runtimeskeptic-v0.2.0-linux-x86_64.tar.gz\n" * 2
+               + "runtimeskeptic-v0.2.0-macos-arm64.tar.gz\n" * 2)},
+         expect_fail=True, expect_text="before its first CMake"),
 
     # ---- runtime safety: wrapper transparency and pure replay ------------
     Case("check_runtime_safety.py", "the bounded one-call boundary passes",

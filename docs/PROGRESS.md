@@ -16,6 +16,34 @@ re-litigated; a mistake recorded here does not need to be re-made.
 
 ---
 
+## 2026-08-06 - macOS nondeterminism was isolated to two archive files
+
+**Changed.** The macOS release builder now exports `ZERO_AR_DATE=1` before
+CMake invokes Apple's static-archive tools. The release-consistency guard
+requires that environment contract before the first CMake command. Negative
+guard selftests remove it and move it after configure; both prove the
+repository fails closed. The guard selftest is now 119/119.
+
+**Evidence.** CI run 31058058088 rebuilt and functionally verified the complete
+macOS package twice. The bounded comparator reported exactly two changing tar
+members: `lib/librs_core.a` and `lib/librs_trace.a`. Their content hashes
+changed; every executable, dylib, header and outer tar metadata record remained
+identical. This confines the measured drift to two static archive files; it
+does not distinguish their archive headers from object-member bytes.
+
+**Learned.** `ZERO_AR_DATE` is the next measured hypothesis for these two
+archive files, not a proven diagnosis and not a linker UUID workaround. Testing
+it preserves Mach-O build UUIDs and crash/debug identity. A cheap ordered source
+guard prevents a future edit from silently moving the environment input after
+the archive tools have already run.
+
+**Next.** Run this exact head through the full CI matrix. If the two independent
+macOS archives now have one SHA-256 and every other job remains green, consume
+T-009 and mark Phase 4 done in the mutable plan.
+
+---
+
+
 ## 2026-08-05 - macOS release drift became attributable evidence
 
 **Changed.** CI now preserves both independently built release archives before

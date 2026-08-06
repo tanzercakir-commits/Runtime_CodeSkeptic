@@ -70,6 +70,20 @@ def main() -> int:
             if "RELEASE-v$V.md" not in script:
                 problems.append(
                     f"{name} package script does not derive release notes from V")
+        zero_ar_date = re.search(
+            r"^export ZERO_AR_DATE=1$", macos, re.MULTILINE)
+        cmake_steps = [
+            position for marker in ("cmake -S ", "cmake --build ")
+            for position in [macos.find(marker)] if position >= 0
+        ]
+        if zero_ar_date is None:
+            problems.append(
+                "macOS release does not export ZERO_AR_DATE=1 for "
+                "deterministic static archives")
+        elif not cmake_steps or zero_ar_date.start() > min(cmake_steps):
+            problems.append(
+                "macOS release must export ZERO_AR_DATE=1 before its first "
+                "CMake configure/build command")
 
     if problems:
         for problem in problems:

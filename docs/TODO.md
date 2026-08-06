@@ -49,12 +49,12 @@ PROGRESS entry is work that will be redone.
 For the session that begins after any amount of forgetting, on any model.
 Everything here is measured or enforced, not remembered.
 
-**Where the project stands (2026-08-05):**
+**Where the project stands (2026-08-06):**
 
 ```
 Phase 0-3   DONE. Gate B, all seven demonstrations, T-012 bounded pressure,
             and strict rule-execution coverage are green.
-Phase 4     NOW: native matrix green; macOS archive drift attribution pending (T-009).
+Phase 4     NOW: native matrix green; archive-timestamp hypothesis pending CI (T-009).
 Phase 5     BLOCKED by the owner's standing CodeSkeptic instruction (T-011).
 Phase 6-10  dependency-ordered behind Phase 5 / Gate C; Phase 8 also needs
             its own Gate D evidence.
@@ -136,17 +136,16 @@ macOS and Windows.
 **Current evidence:** the ABI/schema are frozen; native/disabled/checked
 wrappers, canonical trace writer, bounded reader, pure replay, sample,
 benchmark, installed out-of-tree SDK consumer and structural safety guard pass
-23/23 CTest cases locally under Linux/GCC with warnings as errors. Exact-head
-CI run 31056411069 passed native behavior on Linux/GCC, Linux/Clang, Apple
-Clang and MSVC; the macOS package also passed its ABI/load, installed-consumer,
-analyzer, trace-replay and benchmark checks. Its two clean archives differed
-only at the final byte comparison, but that run did not preserve both archives
-and therefore cannot support a causal claim. CI now preserves the first archive
-and uses a bounded, adversarially tested member comparator to attribute the
-next mismatch instead of returning only two opaque hashes. The v0.2 Linux
-package executes its
-analyzer demo, trace replay and benchmark, and two independent builds produce
-SHA-256 `3b8ef599dfe404612de885d5eefc9728186079d56060b278f7193aab3422432a`.
+23/23 CTest cases locally under Linux/GCC with warnings as errors. CI run
+31058058088 again passed Apple Clang build/tests and both package functional
+verifications, then its bounded comparator attributed every remaining byte
+difference exclusively to `librs_core.a` and `librs_trace.a`. No executable,
+dylib, header or outer tar metadata differed. The macOS release environment
+now exports `ZERO_AR_DATE=1` into CMake's Apple archive-tool invocations, and
+the release-consistency guard has an adversarial case that rejects its removal.
+The v0.2 Linux package executes its analyzer demo, trace replay and benchmark;
+two independent builds produce SHA-256
+`3b8ef599dfe404612de885d5eefc9728186079d56060b278f7193aab3422432a`.
 **First step:** obtain one exact-head green CI matrix on Linux/GCC,
 Linux/Clang, physical macOS/Apple-Clang and Windows/MSVC. Fix evidence, not the
 gate, if any lane disagrees; consume T-009 only after all are green.
