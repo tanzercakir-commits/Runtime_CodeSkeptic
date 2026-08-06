@@ -16,6 +16,26 @@ re-litigated; a mistake recorded here does not need to be re-made.
 
 ---
 
+## 2026-08-06 - Promotional copy left the public product tree
+
+**Changed.** The remaining editable launch campaign draft was removed. This
+supersedes the previous session's decision to retain editable
+post text: the public repository now contains neither launch raster assets nor
+social-media copy.
+
+**Evidence.** `git ls-files docs/launch` returns no tracked path, repository
+references contain no launch-document filename, and the full project guard
+suite passes.
+
+**Learned.** Editable campaign copy is still a promotional artifact. A public
+product repository should lead with runnable software, user documentation and
+reproducible evidence, while channel-specific post drafts stay outside it.
+
+**Next.** Keep future social-media copy outside the product tree. Add public
+documents only when they directly help users build, run, verify or contribute.
+
+---
+
 ## 2026-08-06 - Launch visuals left the repository surface
 
 **Changed.** The tracked LinkedIn launch PNG was removed from `docs/launch/`.
