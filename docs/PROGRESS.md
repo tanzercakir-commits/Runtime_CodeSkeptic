@@ -16,6 +16,27 @@ re-litigated; a mistake recorded here does not need to be re-made.
 
 ---
 
+## 2026-08-06 - Launch visuals left the repository surface
+
+**Changed.** The tracked LinkedIn launch PNG was removed from `docs/launch/`.
+Draft PR #3, which contained a second corrected PNG, was closed without merge
+and its remote branch was deleted. The Turkish post text remains available as
+editable source; no campaign raster is presented as project evidence.
+
+**Evidence.** `docs/launch/` contains no PNG, JPEG or WebP asset after the
+change, repository references contain no removed image path, and the full
+project guard suite passes.
+
+**Learned.** A presentation graphic can preserve claims after their scope has
+changed. Keeping the post as text makes those claims reviewable; generated
+campaign images should be distributed outside the product repository.
+
+**Next.** Keep release evidence in measured profiles, reports and reproducible
+commands. Add a promotional raster again only with an explicit owner request
+and a same-change evidence review.
+
+---
+
 ## 2026-08-06 - The README now starts with a runnable path
 
 **Changed.** The public README now opens with verifiable CI, language,
