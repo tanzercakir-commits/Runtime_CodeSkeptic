@@ -16,6 +16,27 @@ re-litigated; a mistake recorded here does not need to be re-made.
 
 ---
 
+## 2026-08-06 - CI moved off the retired Node action runtime
+
+**Changed.** Every workflow now uses Node.js 24 action generations:
+`checkout@v6`, `upload-artifact@v7` and `download-artifact@v8`. A repository-wide
+guard rejects older majors and moving refs such as `@main`; five adversarial
+cases lift the guard suite to 160 cases.
+
+**Evidence.** The previous final-sha jobs were functionally green but GitHub
+annotated checkout, upload and download steps as Node.js 20 actions being forced
+onto Node.js 24. Official action release notes identify the selected majors as
+Node.js 24 defaults. The new guard scans all five workflows and the full local
+guard suite must pass before the upgrade is pushed.
+
+**Learned.** A green check can still carry a dated execution dependency. The
+runtime warning belonged in a mechanical floor, not a future maintenance note.
+
+**Next.** Run the complete GitHub matrix on the action-upgrade commit and require
+both zero failures and disappearance of the Node.js 20 annotations.
+
+---
+
 ## 2026-08-06 - Hosted ARM64 reached the public matrix without overclaiming
 
 **Changed.** README now names Linux ARM64 on `ubuntu-24.04-arm` and Windows

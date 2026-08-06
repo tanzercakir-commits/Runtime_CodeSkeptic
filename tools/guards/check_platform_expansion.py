@@ -60,7 +60,7 @@ def main() -> int:
         errors.append(f"{HOSTED}: both profiles in both lanes must pass rs-profile verify")
     if hosted.count("--expected-arch aarch64") < 2:
         errors.append(f"{HOSTED}: both hosted lanes must enforce aarch64 profiles")
-    if hosted.count("actions/upload-artifact@v4") < 2:
+    if hosted.count("actions/upload-artifact@v7") < 2:
         errors.append(f"{HOSTED}: both hosted lanes must upload attributable evidence")
     if hosted.count("ctest --test-dir") < 2 or hosted.count("--build-config") < 2:
         errors.append(f"{HOSTED}: both hosted lanes must run configured CTest")

@@ -161,6 +161,15 @@ jobs:
           ctest --test-dir build --build-config RelWithDebInfo --rerun-failed --output-on-failure > /tmp/diag/ctest.txt
 """
 
+ACTION_RUNTIME_OK = """name: CI
+jobs:
+  build:
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/upload-artifact@v7
+      - uses: actions/download-artifact@v8
+"""
+
 # `check_windows_compiles.py` needs a real cross-compiler. Where there is none it
 # reports SKIPPED and passes, so the cases below adapt rather than lie about what
 # was checked - a case that "passes" because the guard declined to look is the
@@ -339,14 +348,14 @@ jobs:
       - run: test "$(uname -m)" = aarch64
       - run: ctest --test-dir build --build-config RelWithDebInfo
       - run: rs-profile verify a; rs-profile verify b; tool --compare-profile b --expected-arch aarch64 --runner-class github_hosted_vm --provider github-actions
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
   windows:
     runs-on: windows-11-arm
     steps:
       - run: OSArchitecture
       - run: ctest --test-dir build --build-config RelWithDebInfo
       - run: rs-profile verify a; rs-profile verify b; tool --compare-profile b --expected-arch aarch64 --runner-class github_hosted_vm --provider github-actions
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
 """
 PLATFORM_RISCV_OK = """name: RISC-V
 on:
@@ -393,6 +402,31 @@ PLATFORM_FILES_OK = {
 
 
 CASES = [
+    # ---- check_action_runtimes: green cannot depend on retired Node ------
+    Case("check_action_runtimes.py", "Node.js 24 action majors pass",
+         {".github/workflows/ci.yml": ACTION_RUNTIME_OK},
+         expect_fail=False),
+
+    Case("check_action_runtimes.py", "legacy checkout runtime fails",
+         {".github/workflows/ci.yml":
+              ACTION_RUNTIME_OK.replace("checkout@v6", "checkout@v4")},
+         expect_fail=True, expect_text="Node.js 24 minimum v6"),
+
+    Case("check_action_runtimes.py", "legacy upload runtime fails",
+         {".github/workflows/ci.yml":
+              ACTION_RUNTIME_OK.replace("upload-artifact@v7", "upload-artifact@v4")},
+         expect_fail=True, expect_text="Node.js 24 minimum v7"),
+
+    Case("check_action_runtimes.py", "legacy download runtime fails",
+         {".github/workflows/ci.yml":
+              ACTION_RUNTIME_OK.replace("download-artifact@v8", "download-artifact@v4")},
+         expect_fail=True, expect_text="Node.js 24 minimum v8"),
+
+    Case("check_action_runtimes.py", "moving action refs fail",
+         {".github/workflows/ci.yml":
+              ACTION_RUNTIME_OK.replace("checkout@v6", "checkout@main")},
+         expect_fail=True, expect_text="not a reviewable major release tag"),
+
     # ---- check_platform_expansion: evidence cannot outgrow execution -----
     Case("check_platform_expansion.py", "a pinned, native-only evidence plan passes",
          PLATFORM_FILES_OK, expect_fail=False),

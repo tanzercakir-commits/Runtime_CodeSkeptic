@@ -433,7 +433,7 @@ The frozen `plan.md` and `ROADMAP.md` remain unchanged as historical intent.
   match the filesystem, and a named path must exist. Still `[partial]` because
   only paths and a fixed list of phrases are mechanical; the rest of the prose
   is unchecked and always will be.
-- `[done]` the guards are tested — `tools/guards/selftest.py`, 155 cases, each
+- `[done]` the guards are tested — `tools/guards/selftest.py`, 160 cases, each
   requiring a check to fail against a deliberately wrong throwaway repository
   before it is trusted on this one; first in `tools/guards/run_all.sh`. This
   number read `25` while there were 58, surviving two earlier increases, so

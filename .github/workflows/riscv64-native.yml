@@ -18,7 +18,7 @@ jobs:
     environment: riscv64-hardware
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Refuse incomplete SSH configuration
         shell: bash
@@ -86,7 +86,7 @@ jobs:
             "$RS_RISCV_USER@$RS_RISCV_HOST" "rm -rf -- '$remote_dir'"
 
       - name: Upload attributable hardware evidence
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: platform-riscv64-${{ github.sha }}-${{ github.run_id }}
           path: evidence/riscv64
