@@ -16,6 +16,38 @@ re-litigated; a mistake recorded here does not need to be re-made.
 
 ---
 
+## 2026-08-06 - T-009 was consumed and Phase 4 closed on native CI evidence
+
+**Changed.** T-009 left the consumable queue and Phase 4 moved from partial to
+done in the mutable plan. The frozen `plan.md` and `ROADMAP.md` remain
+byte-unchanged. The public result is RuntimeSkeptic v0.2.0: a stable C ABI,
+semantics-preserving POSIX/Windows wrappers, bounded canonical trace/replay,
+installed CMake SDK, sample, schema-valid benchmark and verified native
+presentation packages.
+
+**Evidence.** Commit `95421a99672c5ab504fbcd5e6ac5dbad13e843ee`
+completed CI run 31059244690 (#156) with all seven jobs green. Linux/GCC,
+Linux/Clang and AppleClang passed 23/23 tests; MSVC passed 24/24 including the
+Windows reserve/commit case. The Linux archive reproduced at SHA-256
+`bf37d5cf335ab705f5462a352d9b0595b75b59fad310359bf78ff62b7b0c7845`;
+the Apple Silicon archive reproduced at SHA-256
+`f95918a8b1960bfb569eb99a35c3da2ee1e6f4040288b48cbcbabd206908aa0f`.
+Both were uploaded as non-expired workflow artifacts, and aggregate execution
+coverage succeeded. The final independent audit reported no actionable P0/P1.
+
+**Learned.** `ZERO_AR_DATE=1` was confirmed by the next native run rather than
+promoted from hypothesis by prose: both changing `.a` files stabilized while
+Mach-O build UUIDs remained intact. Reproducibility now has both a byte-level
+gate and bounded member attribution if it ever regresses.
+
+**Next.** Phase 5 / T-011 is the first remaining dependency gate. Do not modify
+CodeSkeptic or promote Phases 6-10 until the owner explicitly lifts that
+standing restriction; report the project as maximally complete under the
+current authority.
+
+---
+
+
 ## 2026-08-06 - macOS nondeterminism was isolated to two archive files
 
 **Changed.** The macOS release builder now exports `ZERO_AR_DATE=1` before

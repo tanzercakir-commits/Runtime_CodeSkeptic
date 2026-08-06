@@ -21,9 +21,8 @@ must name a test, a tool invocation, or a committed artifact.
 
 ## Where the project actually is
 
-**Phases 0-3 are complete and their executable gates are green. Phase 4 is
-implemented locally and awaits authoritative multi-platform CI; Phase 5 remains
-decision-blocked.**
+**Phases 0-4 are complete and their executable gates are green. Phase 5
+remains decision-blocked by the owner's standing CodeSkeptic instruction.**
 
 ```
 Phase 0  taxonomy + corpus        DONE      corpus 44/30, vm 35/10
@@ -31,7 +30,7 @@ Phase 1  environment probe        DONE      Linux + macOS x2 + Windows measured
 Phase 2  semantic IR + evaluator  DONE
 Phase 3  VM analyzer MVP          DONE      Gate B passed; all seven demonstrations
                                             and strict execution coverage green
-Phase 4  runtime wrapper          PARTIAL   implementation green locally; CI pending (T-009)
+Phase 4  runtime wrapper          DONE      CI #156; reproducible Linux/macOS v0.2 packages
 Phase 5  CodeSkeptic integration  BLOCKED   owner's instruction: do not modify it
 Phase 6  counterfactual           OPEN      gated by Phase 5 / Gate C
 Phase 7  temporal contracts       OPEN      dependency-ordered after earlier gates
@@ -243,12 +242,15 @@ negatives are graded independently by the ground-truth execution oracle.
 ## Phase 4 — Runtime wrapper library
 
 
-`[partial]` The ABI, wrappers, trace/replay path, installed SDK, v0.2 packages,
-samples, benchmark and safety guards are implemented and pass a
-warnings-as-errors Linux build. CI run 31053293069 proved the runtime suite on
-Apple Clang and identified three packaging/Windows test defects now fixed
-locally; the fixed commit still needs exact-head Linux/GCC, Linux/Clang, Apple
-Clang and MSVC evidence before T-009 can be consumed. (T-009)
+`[done]` `.github/workflows/ci.yml` run 31059244690 proves the ABI,
+wrappers and deterministic
+trace/replay path, installed SDK, v0.2 packages, samples, benchmark and safety
+guards are executable. Commit
+`95421a99672c5ab504fbcd5e6ac5dbad13e843ee` passed CI run 31059244690
+(#156): Linux/GCC, Linux/Clang, AppleClang, MSVC, determinism, compatibility
+and aggregate execution coverage all succeeded. The independently rebuilt
+Linux and macOS presentation archives were byte-identical within their native
+jobs and uploaded as workflow artifacts.
 
 ### Deliverables
 
@@ -274,10 +276,10 @@ Clang and MSVC evidence before T-009 can be consumed. (T-009)
 
 ### Exit criteria
 
-- `[partial]` wrapper behavior matches native calls and does not alter native
-  error state - `tests/conformance/test_runtime.cpp` passes on Linux/GCC and
-  CI run 31053293069 passed the runtime suite on Apple Clang; the corrected
-  Windows reset case still needs exact-head MSVC CI evidence (T-009)
+- `[done]` wrapper behavior matches native calls and does not alter native
+  error state - `tests/conformance/test_runtime.cpp` plus the C ABI/disabled
+  tests passed in CI run 31059244690 on Linux/GCC, Linux/Clang and AppleClang
+  (23/23), and MSVC including its Windows-specific reserve/commit case (24/24)
 - `[done]` `tests/unit/test_trace.cpp` proves trace order is contiguous and
   byte-stable for deterministic recorded
   execution - concurrency and double-flush tests in `test_runtime` and

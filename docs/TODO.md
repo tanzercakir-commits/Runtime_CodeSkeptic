@@ -52,9 +52,8 @@ Everything here is measured or enforced, not remembered.
 **Where the project stands (2026-08-06):**
 
 ```
-Phase 0-3   DONE. Gate B, all seven demonstrations, T-012 bounded pressure,
-            and strict rule-execution coverage are green.
-Phase 4     NOW: native matrix green; archive-timestamp hypothesis pending CI (T-009).
+Phase 0-4   DONE. Gate B, all seven demonstrations, T-012 bounded pressure,
+            strict rule-execution coverage and the runtime SDK matrix are green.
 Phase 5     BLOCKED by the owner's standing CodeSkeptic instruction (T-011).
 Phase 6-10  dependency-ordered behind Phase 5 / Gate C; Phase 8 also needs
             its own Gate D evidence.
@@ -65,11 +64,10 @@ Gate B      false-positive rate measured 0 on THREE operating systems:
             174 RS-VM-0005 notes on Windows, all SUPPORTED.
 ```
 
-**What "finish this project" now means.** Phase 3 is closed. Complete the
-Phase 4 runtime wrapper against every executable ROADMAP exit criterion,
-then honor Gate C: Phase 5 and the dependency-ordered later phases do not
-start until the owner explicitly lifts the CodeSkeptic restriction. Every
-completed item is consumed into `docs/PROGRESS.md`.
+**What "finish this project" now means.** Phase 4 is closed. Honor Gate C:
+Phase 5 and the dependency-ordered later phases do not start until the owner
+explicitly lifts the CodeSkeptic restriction. Every completed item is consumed
+into `docs/PROGRESS.md`.
 
 **How to verify the tree before believing anything, including this file:**
 
@@ -120,43 +118,16 @@ reports drift; it cannot push.
 
 ## Now
 
-### T-009 — Phase 4 runtime wrapper `[now]`
-
-**Serves:** every scenario that needs observed call semantics or replay.
-**Plan:** `docs/PLAN.md` Phase 4.
-**Done when:** all Phase 4 deliverables and exit criteria are executable:
-selected POSIX and Windows virtual-memory calls have semantics-preserving C
-wrappers; native error state is unchanged; versioned semantic events record
-requested/returned addresses, protection changes and lifecycle; writer,
-reader and replay are deterministic; immediate violations are caught at the
-call boundary; monitoring can be disabled at compile time and runtime; sample
-integrations and a reproducible overhead benchmark are committed; conformance,
-replay, recursion/allocator-safety and malformed-trace tests pass on Linux,
-macOS and Windows.
-**Current evidence:** the ABI/schema are frozen; native/disabled/checked
-wrappers, canonical trace writer, bounded reader, pure replay, sample,
-benchmark, installed out-of-tree SDK consumer and structural safety guard pass
-23/23 CTest cases locally under Linux/GCC with warnings as errors. CI run
-31058058088 again passed Apple Clang build/tests and both package functional
-verifications, then its bounded comparator attributed every remaining byte
-difference exclusively to `librs_core.a` and `librs_trace.a`. No executable,
-dylib, header or outer tar metadata differed. The macOS release environment
-now exports `ZERO_AR_DATE=1` into CMake's Apple archive-tool invocations, and
-the release-consistency guard has an adversarial case that rejects its removal.
-The v0.2 Linux package executes its analyzer demo, trace replay and benchmark;
-two independent builds produce SHA-256
-`3b8ef599dfe404612de885d5eefc9728186079d56060b278f7193aab3422432a`.
-**First step:** obtain one exact-head green CI matrix on Linux/GCC,
-Linux/Clang, physical macOS/Apple-Clang and Windows/MSVC. Fix evidence, not the
-gate, if any lane disagrees; consume T-009 only after all are green.
+No executable item is authorized here: Phase 5 / T-011 is the next
+dependency gate and is explicitly blocked by the owner's standing instruction.
 
 ---
 
 ## Next
 
-Phase 5 / T-011 is the next dependency gate after T-009 and remains blocked
-by the owner's standing instruction. No Phase 6-10 item is promoted across
-Gate C while that instruction remains in force.
+Phase 5 / T-011 is the next dependency gate and remains blocked by the
+owner's standing instruction. No Phase 6-10 item is promoted across Gate C
+while that instruction remains in force.
 
 ---
 
