@@ -4,10 +4,9 @@
 //
 // Schema: runtime-skeptic.application-requirements.v1
 //
-// In Phase 3 this document is written by hand (ROADMAP: "accept manually
-// authored application requirements"). In Phase 5 CodeSkeptic emits it.
-// The `assumption_evidence` field records which of the two produced it,
-// because a hand-declared contract is authoritative about intent while a
+// The document can be written by hand or supplied as a producer-neutral
+// schema-valid artifact. The `assumption_evidence` field records its evidence
+// class because a hand-declared contract is authoritative about intent while a
 // statically inferred one is not.
 #ifndef RUNTIMESKEPTIC_VM_REQUIREMENT_HPP
 #define RUNTIMESKEPTIC_VM_REQUIREMENT_HPP
@@ -303,11 +302,10 @@ public:
 // Bundles
 // ---------------------------------------------------------------------------
 //
-// A static analyzer does not find one requirement, it finds all of them. The
-// bundle is the interchange format between CodeSkeptic's
-// `--runtime-assumptions` mode and rs-check (ROADMAP 12.1: "Integration
-// should occur through versioned artifacts rather than direct source
-// dependencies" - so neither project links against the other).
+// One application can carry many requirements. The bundle is the
+// producer-neutral interchange format accepted by rs-check. RuntimeSkeptic
+// validates the versioned artifact and has no source dependency on its
+// producer.
 
 inline constexpr const char* kRequirementBundleSchema =
     "runtime-skeptic.application-requirements-bundle.v1";

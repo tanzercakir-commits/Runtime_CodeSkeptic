@@ -171,7 +171,7 @@ def schema_valid(doc, which):
     return next(v.iter_errors(doc), None) is None
 
 
-_TMP_DIR = tempfile.TemporaryDirectory(prefix="runtimecodeskeptic-boundary-")
+_TMP_DIR = tempfile.TemporaryDirectory(prefix="runtime-skeptic-boundary-")
 _TMP_INPUT = os.path.join(_TMP_DIR.name, "bm_input.json")
 
 

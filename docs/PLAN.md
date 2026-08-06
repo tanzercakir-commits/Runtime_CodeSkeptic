@@ -21,8 +21,9 @@ must name a test, a tool invocation, or a committed artifact.
 
 ## Where the project actually is
 
-**Phases 0-4 are complete and their executable gates are green. Phase 5
-remains decision-blocked by the owner's standing CodeSkeptic instruction.**
+**Phases 0-4 are complete and their executable gates are green. The owner
+accepted RuntimeSkeptic as a standalone product at Phase 4; Phases 5-10 are
+not applicable to the v0.2 product line under ADR-0001.**
 
 ```
 Phase 0  taxonomy + corpus        DONE      corpus 44/30, vm 35/10
@@ -31,12 +32,12 @@ Phase 2  semantic IR + evaluator  DONE
 Phase 3  VM analyzer MVP          DONE      Gate B passed; all seven demonstrations
                                             and strict execution coverage green
 Phase 4  runtime wrapper          DONE      CI #156; reproducible Linux/macOS v0.2 packages
-Phase 5  CodeSkeptic integration  BLOCKED   owner's instruction: do not modify it
-Phase 6  counterfactual           OPEN      gated by Phase 5 / Gate C
-Phase 7  temporal contracts       OPEN      dependency-ordered after earlier gates
-Phase 8  further domains          OPEN      additionally gated by Gate D
-Phase 9  learned invariants       OPEN
-Phase 10 productization           OPEN
+Phase 5  CodeSkeptic integration  N/A       standalone product decision (ADR-0001)
+Phase 6  counterfactual           N/A       outside the v0.2 product line
+Phase 7  temporal contracts       N/A       outside the v0.2 product line
+Phase 8  further domains          N/A       outside the v0.2 product line
+Phase 9  learned invariants       N/A       outside the v0.2 product line
+Phase 10 productization           N/A       outside the v0.2 product line
 ```
 
 ---
@@ -309,8 +310,11 @@ invariant phase.
 
 ## Phase 5 — CodeSkeptic static integration
 
-`[blocked]` **By the owner's explicit instruction: CodeSkeptic is not to be
-modified.** Recorded here so the blocker is visible rather than inferred. (T-011)
+`[n/a]` **The owner accepted the standalone product boundary on 2026-08-06.**
+The binding decision is
+`docs/decisions/0001-standalone-product-boundary.md`: RuntimeSkeptic does not
+copy, vendor, submodule, fetch, link, import or invoke CodeSkeptic. Requirement
+documents remain hand-authored or producer-neutral schema-valid artifacts.
 
 ### A boundary that was crossed and walked back
 
@@ -325,13 +329,14 @@ removed** on 2026-07-25, in full: the tool, the library, the header, the tests,
 the fixture, the build wiring and the CI step. `git log` is the only place it
 survives.
 
-The decision was the owner's and the reasoning was theirs: RuntimeSkeptic is to
-stay a pure runtime project. A merge with CodeSkeptic may be considered later,
-and if it happens, extraction arrives from the side that owns it rather than as
-a duplicate that had quietly grown here.
+The permanent v0.2 decision is to keep RuntimeSkeptic a standalone runtime
+project. A future adapter can exist only as a separate optional package under a
+new accepted plan; it cannot create a dependency from this repository.
 
-`tools/guards/check_non_goals.py` stays, now passing, and fails again the
-moment an extractor reappears under this repository.
+`tools/guards/check_non_goals.py` and
+`tools/guards/check_standalone_boundary.py` fail the moment an extractor,
+vendored copy, submodule, fetch, link or invocation reappears here. The ADR is
+hash-pinned so weakening the decision cannot be a drive-by documentation edit.
 
 What was learned is kept in `docs/PROGRESS.md` - the recogniser designs and the
 three bugs that only realistic input exposed - so a future extractor does not
@@ -341,17 +346,10 @@ have to rediscover them.
 
 ## Phases 6-10
 
-`[open]` Phase 8 — additional runtime domains, gated on Gate D (ten real
-incidents per domain, a bounded operation model, measurable behaviour,
-actionable output). (T-023)
-
-`[open]` Phases 6 (counterfactual), 7 (temporal), 9 (learned invariants),
-10 (productization). (untracked)
-
-ROADMAP §19 Risk 1 is *excessive scope*, mitigated by "remain
-virtual-memory-only through the first useful releases". Opening any of these
-before Phase 0's corpus and Phase 3's false-positive rate are settled would be
-that risk materialising.
+`[n/a]` These roadmap horizons are not release obligations for the v0.2
+product line. They are not claimed as implemented. Reopening any one requires
+an explicit Plan v2 with new scope, evidence gates, tasks and owner acceptance.
+The frozen `plan.md` and `ROADMAP.md` remain unchanged as historical intent.
 
 ---
 
@@ -381,7 +379,7 @@ that risk materialising.
   software (§9.3), and the campaign measures no false negatives because no
   observed program was ever refused — that half of correctness is the
   ground-truth harness's job, not this campaign's.
-- `[blocked]` **Gate C** — Phase 5 is blocked. (T-011)
+- `[n/a]` **Gate C** — retired for the standalone v0.2 line by ADR-0001.
 - `[n/a]` **Gate D** — no new domain is proposed.
 
 ---
@@ -409,17 +407,16 @@ that risk materialising.
   edited file (hash mismatch) and a manifest that lies about its verdict
   (re-derivation). `tests/unit/test_evidence_bundle.cpp`, and a cross-process
   round-trip in CI. (T-007)
-- `[blocked]` §16 **differential test: hand-written vs statically extracted
-  contract** — needs a second, independent producer of contracts, and by the
-  Phase 5 decision that producer lives in CodeSkeptic. Blocked on the same
-  instruction that blocks Phase 5, not on effort. (T-011)
+- `[n/a]` §16 **differential test: hand-written vs statically extracted
+  contract** — retired with Phase 5 by ADR-0001; producer-neutral schema
+  validation remains covered by the existing contract tests.
 - `[partial]` documentation accuracy — `tools/guards/check_docs.py` exists
   because several documents were found asserting things about the code that
   had stopped being true. Now checks both directions: an absence claim must (untracked)
   match the filesystem, and a named path must exist. Still `[partial]` because
   only paths and a fixed list of phrases are mechanical; the rest of the prose
   is unchecked and always will be.
-- `[done]` the guards are tested — `tools/guards/selftest.py`, 119 cases, each
+- `[done]` the guards are tested — `tools/guards/selftest.py`, 149 cases, each
   requiring a check to fail against a deliberately wrong throwaway repository
   before it is trusted on this one; first in `tools/guards/run_all.sh`. This
   number read `25` while there were 58, surviving two earlier increases, so

@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # SPDX-License-Identifier: Apache-2.0
 #
-# Build the macOS arm64 prebuilt package for a RuntimeSkeptic release, to attach
-# to the same GitHub Release as the Linux one. Run it from a clean clone on an
+# Build the macOS arm64 CI verification package. Workflows upload it as an
+# ephemeral Actions artifact; v0.2 has no permanent binary Release. Run it on an
 # Apple Silicon Mac:
 #
 #     ./dist/build-macos-release.sh

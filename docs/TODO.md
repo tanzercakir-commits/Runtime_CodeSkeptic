@@ -54,9 +54,9 @@ Everything here is measured or enforced, not remembered.
 ```
 Phase 0-4   DONE. Gate B, all seven demonstrations, T-012 bounded pressure,
             strict rule-execution coverage and the runtime SDK matrix are green.
-Phase 5     BLOCKED by the owner's standing CodeSkeptic instruction (T-011).
-Phase 6-10  dependency-ordered behind Phase 5 / Gate C; Phase 8 also needs
-            its own Gate D evidence.
+Phase 5     N/A. ADR-0001 fixes RuntimeSkeptic as a standalone product.
+Phase 6-10  N/A for the v0.2 product line; reopening requires an accepted
+            Plan v2 with new evidence gates and queue items.
 Gate B      false-positive rate measured 0 on THREE operating systems:
               Linux x86-64       1292 requirements  (strace)
               macOS 14 arm64       37 requirements  (dtrace, mach traps)
@@ -64,10 +64,10 @@ Gate B      false-positive rate measured 0 on THREE operating systems:
             174 RS-VM-0005 notes on Windows, all SUPPORTED.
 ```
 
-**What "finish this project" now means.** Phase 4 is closed. Honor Gate C:
-Phase 5 and the dependency-ordered later phases do not start until the owner
-explicitly lifts the CodeSkeptic restriction. Every completed item is consumed
-into `docs/PROGRESS.md`.
+**What "finish this project" now means.** The standalone v0.2 product closes
+at Phase 4 under `docs/decisions/0001-standalone-product-boundary.md`. Phases
+5-10 are not incomplete work in this line; they require a separately accepted
+Plan v2. Every completed or retired item is consumed into `docs/PROGRESS.md`.
 
 **How to verify the tree before believing anything, including this file:**
 
@@ -118,61 +118,18 @@ reports drift; it cannot push.
 
 ## Now
 
-No executable item is authorized here: Phase 5 / T-011 is the next
-dependency gate and is explicitly blocked by the owner's standing instruction.
+No release-blocking executable item remains in the accepted v0.2 scope.
 
 ---
 
 ## Next
 
-Phase 5 / T-011 is the next dependency gate and remains blocked by the
-owner's standing instruction. No Phase 6-10 item is promoted across Gate C
-while that instruction remains in force.
+Any new product work starts with an owner-accepted Plan v2. It must define its
+own scope, evidence gates and consumable tasks before implementation begins.
 
 ---
 
 ## Later
-
-### T-023 — Open the second runtime domain: Filesystem first `[later]`
-
-**Serves:** the "other layers" this project has always named — filesystem,
-loader, time, networking (`docs/scenarios/`, and the public pitch). Virtual
-memory is one domain of many; the thesis is general and this is where it widens.
-**Plan:** `docs/PLAN.md` Phase 8 — additional runtime domains
-**Done when:** ONE new domain is fully through **Gate D** (ROADMAP §20) — ≥10
-real documented incidents, a bounded operation model, a probe that MEASURES the
-host's behaviour, a false-positive campaign reporting its rate on a named
-population (target 0), and 2–3 reproduce-exact diagnosis cards — and
-`docs/PLAN.md` Phase 8 moves `[open]` → `[partial]` with the domain named.
-
-**The guardrails, before any code — this is what the tool's credibility rests
-on:** Gate D gates every domain, so the corpus comes FIRST and code after. One
-domain at a time (ROADMAP §18). Never add an extractor and never modify
-CodeSkeptic (`docs/non_goals.md` §18; `tools/guards/check_non_goals.py` fails the
-build the moment one reappears). The false-positive rate is the north star,
-measured the way VM's was — a rule that fires on a request that actually
-succeeded is a bug, not a finding.
-
-**First step — VM's proven playbook, in order.** Start with **Filesystem
-Semantics** (ROADMAP §18 Candidate A: independently *measurable* the way VM was,
-and an abundant real-incident record — case-collision on case-insensitive hosts,
-non-atomic cross-filesystem rename, fsync-durability drift):
-
-```
-1  corpus        >=10 real incidents in corpus/runtime_failures/<domain>/  (Gate D-1)
-2  operation     docs/domains/<domain>/operation-model.md - a CLOSED operation
-                 set every incident maps to                               (Gate D-2)
-3  probe         rs-env-probe <domain>: MEASURE real host behaviour, facts carry
-                 evidence classes, unmeasured stays `unknown`             (Gate D-3)
-4  schema+rules  version the schema under schemas/, RS-<DOMAIN>-xxxx ids in the
-                 registry, every finding through clamp_confidence
-5  campaign      tools/campaign/ observe-and-replay, rate in docs/campaigns/ (Gate D-4)
-6  cards         2-3 reproduce-exact diagnosis cards + Gate D sign-off in PROGRESS
-```
-
-Dynamic Loader/ABI (Candidate B) is the strong second choice and the most
-VM-adjacent, but its behaviour is harder to *measure* and leans on cited specs —
-pick it only with a concrete loader-incident corpus already in hand.
 
 ### T-008 — Fleet aggregation `[later]`
 
@@ -196,83 +153,12 @@ project to start generating plausible prose, which Phase 0 forbids by name. If
 it is ever built, the consequences must come from a field the program's author
 filled in — not from the analyzer's imagination.
 
-### T-033 — Phase 6 bounded counterfactual explorer `[later]`
-
-**Serves:** latent portability failures whose legal bad outcome has not occurred
-in the observed run.
-**Plan:** `docs/PLAN.md` Phase 6.
-**Done when:** a bounded explorer enumerates legal outcomes and short event
-sequences, reproduces at least five corpus failures, emits the triggering
-assumption and path, and labels bounded absence as `NO COUNTEREXAMPLE FOUND`,
-never as proof; deterministic and complexity-bound guards pass.
-**First step:** version the counterfactual result schema and encode hinted
-relocation as the first one-step outcome family.
-
-### T-034 — Phase 7 Trace/State DSL `[later]`
-
-**Serves:** temporal compatibility claims that cannot be expressed by one call.
-**Plan:** `docs/PLAN.md` Phase 7.
-**Done when:** a versioned DSL, compiler and deterministic monitor reject
-invalid definitions, replay valid traces, and return a minimal violating
-subsequence for protection-transition and mapping-lifecycle properties.
-**First step:** freeze the smallest state-machine grammar over Phase 4 events
-and write parser rejection tests before implementing evaluation.
-
-### T-035 — Phase 9 learned invariants `[later]`
-
-**Serves:** repeatable regression and drift detection over traces and profiles.
-**Plan:** `docs/PLAN.md` Phase 9.
-**Done when:** an optional reproducible miner reports candidate invariants and
-resource trends with the complete observation set and model parameters, can
-reproduce its output byte-for-byte, and never labels an inferred invariant as
-proof or hides it behind an opaque score.
-**First step:** define the candidate-invariant artifact and a deterministic
-baseline miner over Phase 4 trace fixtures.
-
-### T-036 — Phase 10 productization `[later]`
-
-**Serves:** external users consuming RuntimeSkeptic in CI and release systems.
-**Plan:** `docs/PLAN.md` Phase 10.
-**Done when:** the stable CLI and C API, schemas, SARIF, GitHub Actions example,
-reproducible evidence bundles, signed-profile verification, registry,
-tutorials, benchmark corpus, plugin boundary and private-profile boundary all
-have executable conformance tests and a release archive passes them on Linux,
-macOS and Windows.
-**First step:** turn every Phase 10 deliverable into a versioned public
-contract and release-conformance test before adding integrations.
-
 ---
 
 ## Blocked
 
-### T-011 — CodeSkeptic integration `[blocked]`
-
-**Blocker:** the owner's standing instruction — CodeSkeptic is not to be
-modified, and no merge before many real-life tests exist.
-**Serves:** S10 (PR review)
-**Plan:** `docs/PLAN.md` Phase 5, Gate C, and §16 (differential test)
-**Done when:** a contract produced by CodeSkeptic and a hand-written contract
-for the same source reach the same verdict on the same profile, as a test — and
-the extracted one is labelled `COUNTEREXAMPLE`, never `PROVEN`, per the ceiling
-in `docs/scenarios/README.md`.
-
-**Owner's update, 2026-07-30:** CodeSkeptic is FINISHED, per the owner. The
-blocker on this item is the owner's standing instruction, so it stays until the
-owner lifts it in so many words — but what it would unblock has narrowed to
-almost nothing: the differential test CONSUMES CodeSkeptic's emitted contract
-bundles (`rs-check` already loads the
-`application-requirements-bundle.v1` shape its `--runtime-assumptions` mode
-emits) and modifies nothing. The day the owner says go, the first step is an
-emitted bundle from CodeSkeptic checked into `contracts/` here and compared
-against a hand-written contract for the same source.
-
-Blocked by a decision, not by difficulty, and the decision looks right: the
-alternative was two extractors drifting apart in two repositories. An extractor
-was built here on 2026-07-25, worked, broke `docs/non_goals.md` §18, and was
-removed; what it learned is in `docs/PROGRESS.md`.
-
-The §16 differential test needs a second, independent producer of contracts, and
-by this decision that producer lives in the other repository. Same blocker.
+None. T-011 was consumed by the standalone product decision; Phases 5-10 are
+outside the current queue rather than blocked work.
 
 ---
 
@@ -280,12 +166,6 @@ by this decision that producer lives in the other repository. Same blocker.
 
 Each needs a reason, so this cannot quietly become a way to empty the list.
 
-- **ROADMAP Phases 6, 7, 8, 9, 10** retain their `(untracked)` PLAN tags because
-  the PLAN contract is immutable except for status markers. The executable work
-  is nevertheless ordered here as T-033, T-034, T-023, T-035 and T-036. This
-  section names the intentional tag exception without reopening the frozen map;
-  the compass owns sequencing and each item still has a runnable completion
-  test.
 - **Documentation accuracy** (`docs/PLAN.md`, `[partial]`) — permanently
   partial by nature. Only paths and a fixed list of phrases are mechanical;
   prose is not compiled and never will be. `tools/guards/check_docs.py` covers

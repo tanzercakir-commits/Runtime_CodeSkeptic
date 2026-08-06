@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://runtimeskeptic.dev/schemas/application-requirements.v1.json",
   "title": "runtime-skeptic.application-requirements.v1",
-  "description": "What a program requires of its execution environment. Written by hand, or emitted by a static analyzer outside this repository - contract extraction is reserved for CodeSkeptic by docs/non_goals.md section 18. Fields under `x_` are extensions and are ignored by the reader; ANY OTHER unrecognized field is reported as a limitation of the analysis rather than dropped in silence.",
+  "description": "What a program requires of its execution environment. Written by hand or supplied as a producer-neutral artifact; this standalone repository performs no contract extraction. Fields under `x_` are extensions and are ignored by the reader; ANY OTHER unrecognized field is reported as a limitation of the analysis rather than dropped in silence.",
   "type": "object",
   "required": [
     "schema",

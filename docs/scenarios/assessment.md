@@ -234,23 +234,15 @@ and a comparison.
 
 ## S10 — Code review: a PR comment before the code is merged
 
-`[blocked]` — by the owner's standing instruction that CodeSkeptic is not to be
-modified; ROADMAP Phase 5, `docs/PLAN.md`
+`[n/a]` — this integration scenario is outside the standalone v0.2 product
+boundary accepted in
+`docs/decisions/0001-standalone-product-boundary.md`.
 
-An extractor was built inside this repository on 2026-07-25 and it *worked* — it
-recovered the shadPS4 issue #4157 pattern from source text and reached the same
-`RS-VM-0001 / UNSUPPORTED` verdict as the hand-written contract. It also broke
-`docs/non_goals.md` section 18, and the owner chose to remove it rather than
-grant an exception. What it learned is preserved in `docs/PROGRESS.md`.
-
-So this scenario is blocked by a decision, not by difficulty, and the decision
-looks right: the alternative was two extractors drifting apart in two
-repositories.
-
-The one thing this row should carry forward is the ceiling in `README.md`. When
-the pipeline is eventually built, the verdicts it produces will be
-`COUNTEREXAMPLE`, not `PROVEN`, and any report template written in advance
-should say so.
+The earlier in-repository extractor experiment was removed because it crossed
+the product boundary. RuntimeSkeptic remains able to consume producer-neutral,
+schema-valid requirement artifacts, but it does not copy, fetch, link or invoke
+a source analyzer. Reopening this scenario requires an accepted Plan v2 and a
+separate optional adapter.
 
 ---
 
@@ -273,7 +265,7 @@ that would serve it:
 | S3, S7 | `T-004` Windows probe |
 | S8 | `T-008` fleet aggregation |
 | S2 (second half) | `T-010` downstream-consequence modelling |
-| S10 | `T-011` CodeSkeptic integration — blocked |
+| S10 | n/a for the standalone v0.2 line (ADR-0001) |
 | S3 | `T-012` completed; bounded Windows and Linux controls are in PROGRESS |
 | S4 | `T-009` runtime wrapper; a displacement constraint needs an observation |
 

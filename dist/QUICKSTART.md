@@ -1,7 +1,13 @@
-# RuntimeSkeptic v0.2.0 — quickstart (prebuilt, no build needed)
+# RuntimeSkeptic v0.2.0 — verified CI package quickstart
 
 RuntimeSkeptic predicts whether a program's virtual-memory requirements survive
 a given host — *before* it runs there — with a cross-layer evidence chain.
+
+This guide begins after downloading and extracting a successful CI package.
+Those packages are verification artifacts, not permanent GitHub Release assets;
+the stable public path is the source build in the repository README. Windows is
+source-only in v0.2. RuntimeSkeptic is standalone and does not require
+CodeSkeptic.
 
 The five Linux analyzer executables are statically linked. The runtime monitor
 ships as a shared library with its C headers, pure replay library, sample and

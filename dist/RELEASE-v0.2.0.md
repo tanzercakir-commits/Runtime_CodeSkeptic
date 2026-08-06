@@ -39,5 +39,8 @@ The ABI v1 boundary is explicit wrappers, not linker interposition. It covers
 `mmap`/`mprotect`/`munmap` and
 `VirtualAlloc`/`VirtualProtect`/`VirtualFree`. A checked allocation call
 carries exact-address intent; raw allocation calls do not guess it. Runtime
-events remain observations, not cross-run invariants. Static CodeSkeptic
-integration and later roadmap gates are not part of v0.2.
+events remain observations, not cross-run invariants. ADR-0001 fixes v0.2 as
+a standalone product with no CodeSkeptic dependency; roadmap Phases 5-10 are
+not current product obligations. Linux and Apple Silicon packages are CI
+verification artifacts, not permanent GitHub Release assets. Windows is
+source-only in v0.2.

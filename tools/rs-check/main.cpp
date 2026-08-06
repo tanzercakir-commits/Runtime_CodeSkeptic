@@ -26,8 +26,9 @@ USAGE
 REQUIREMENT.json is either a single
 runtime-skeptic.application-requirements.v1 document, or a
 runtime-skeptic.application-requirements-bundle.v1 containing many - the
-shape CodeSkeptic's --runtime-assumptions mode emits. Every requirement in a
-bundle is evaluated, and the run's verdict is the worst of them.
+producer-neutral shape accepted from any schema-valid source. Every
+requirement in a bundle is evaluated, and the run's verdict is the worst of
+them.
 
 OPTIONS
   --profile FILE       environment profile from rs-env-probe (required)

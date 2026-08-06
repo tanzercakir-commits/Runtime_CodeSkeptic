@@ -2,11 +2,9 @@
 //
 // Model Context Protocol server.
 //
-// The framing, protocol version, error codes and result shape deliberately
-// mirror CodeSkeptic's `src/server/McpServer.cpp` rather than being chosen
-// afresh: the two tools are meant to sit side by side in the same agent
-// configuration, and an agent that has learned one should not have to learn a
-// second set of conventions. Specifically:
+// The framing, protocol version, error codes and result shape are public
+// RuntimeSkeptic protocol choices. The server is standalone and requires no
+// second tool or agent configuration. Specifically:
 //
 //   - newline-delimited JSON-RPC 2.0 on stdio, NOT Content-Length framing
 //   - protocolVersion "2024-11-05", capabilities {"tools": {}}

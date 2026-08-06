@@ -2,12 +2,14 @@
 
 **Predict runtime failures before they become crashes.**
 
-RuntimeSkeptic compares what a program *assumes* about its execution
-environment against what that environment *measurably provides*, and answers
-with an evidence chain: supported here, refused here, or conditionally — before
-the program runs there. The shipped compatibility analyzer and runtime monitor cover virtual memory.
+RuntimeSkeptic is a standalone, open-source virtual-memory compatibility
+analyzer and runtime monitor. It compares what a program *assumes* about its
+execution environment against what that environment *measurably provides*, then
+returns an evidence chain: supported here, refused here, or conditionally —
+before the program runs there. It does not require or integrate CodeSkeptic.
 
 Full pitch: [docs/problem_statement.md](docs/problem_statement.md) ·
+product boundary: [ADR-0001](docs/decisions/0001-standalone-product-boundary.md) ·
 what this deliberately is not: [docs/non_goals.md](docs/non_goals.md) ·
 plan: [ROADMAP.md](ROADMAP.md)
 
@@ -15,9 +17,11 @@ plan: [ROADMAP.md](ROADMAP.md)
 
 ## Try it
 
-A C++20 compiler and CMake 3.20 are enough — no external dependencies, no
-network access, nothing to configure. The one-time build takes a minute or two
-(longer on Windows/MSVC); after that, every query below is instant.
+This is a source-first release: clone the repository and build it with a C++20
+compiler and CMake 3.20. There are no external build or runtime dependencies.
+The one-time build takes a minute or two (longer on Windows/MSVC); after that,
+every query below is instant. CI packages are verification artifacts, not a
+permanent no-build GitHub Release. Windows is source-only in v0.2.
 
 ```console
 $ git clone https://github.com/tanzercakir-commits/Runtime_CodeSkeptic && cd Runtime_CodeSkeptic
@@ -150,11 +154,11 @@ than a snapshot. Measure your own with `rs-env-probe`, as above.
 
 ```text
                         ┌────────────────────────────┐
-                        │ Static Program Analyzer    │
-                        │ CodeSkeptic integration    │
+                        │ Requirement Documents      │
+                        │ Hand-authored / versioned  │
                         └──────────────┬─────────────┘
                                        │
-                                       │ extracted assumptions
+                                       │ stated assumptions
                                        ▼
 ┌─────────────────────┐     ┌────────────────────────────┐
 │ Environment Probes  │────▶│ Runtime Semantic IR        │
@@ -182,11 +186,11 @@ than a snapshot. Measure your own with `rs-env-probe`, as above.
                                └──────────────────────────┘
 ```
 
-The full architecture, component by component: [ROADMAP.md](ROADMAP.md)
-sections 9–10. Not every box exists yet — v0.2 ships the probes, the contracts,
-the analysis engine, the evidence reports, runtime wrappers and pure trace replay; the static extractor is a later
-phase and belongs to CodeSkeptic
-([docs/non_goals.md](docs/non_goals.md)). Project docs — compass, map, history,
+The full historical architecture is in [ROADMAP.md](ROADMAP.md) sections 9–10.
+The accepted v0.2 product ships the probes, contracts, analysis engine, evidence
+reports, runtime wrappers and pure trace replay. Static source analysis is
+outside this product boundary; any future adapter requires an accepted Plan v2
+and remains separate and optional. Project docs — compass, map, history,
 campaigns — start at [docs/TODO.md](docs/TODO.md).
 
 ## License

@@ -21,7 +21,7 @@ json::Value call(const std::string& line) {
 }
 
 // Tool payloads arrive as a JSON string inside content[0].text - the
-// CodeSkeptic convention. This unwraps that envelope.
+// protocol convention. This unwraps that envelope.
 json::Value tool_payload(const json::Value& response) {
     const json::Value* result = response.find("result");
     if (result == nullptr) return json::Value();
@@ -120,7 +120,7 @@ RS_TEST(tools_list_advertises_every_tool_with_a_schema) {
 }
 
 RS_TEST(every_advertised_property_is_a_string_type) {
-    // The CodeSkeptic convention: booleans and lists cross as strings, so
+    // The protocol convention: booleans and lists cross as strings, so
     // clients that flatten arguments still work.
     const auto response =
         call(R"({"jsonrpc":"2.0","id":1,"method":"tools/list"})");

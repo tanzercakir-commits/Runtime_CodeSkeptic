@@ -636,7 +636,7 @@ RS_TEST(the_retry_rule_is_reachable_for_statically_inferred_requirements) {
     // proven_unsupported() tested `confidence == Proven`. Confidence is
     // clamped by evidence, so a statically inferred requirement can never
     // reach Proven - which made this rule dead on exactly the input a static
-    // extractor produces. Every document CodeSkeptic emits is in that class.
+    // an external producer may produce. Every such document stays in that class.
     Requirement r = exact_mapping_requirement();
     r.assumption_evidence = EvidenceClass::StaticallyInferred;
     r.assumptions.retries_on_failure = true;

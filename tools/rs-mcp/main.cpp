@@ -33,8 +33,8 @@ USAGE
   rs-mcp [--serve]
 
 Speaks newline-delimited JSON-RPC 2.0 on stdin/stdout, protocol version
-2024-11-05. The framing and conventions match CodeSkeptic's --serve mode so
-both can sit in one agent configuration.
+2024-11-05. RuntimeSkeptic owns this interface independently; no second
+server or project is required.
 
 TOOLS
   probe_host          measure this machine's virtual-memory behaviour

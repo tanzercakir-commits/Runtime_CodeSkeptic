@@ -16,6 +16,31 @@ re-litigated; a mistake recorded here does not need to be re-made.
 
 ---
 
+## 2026-08-06 - RuntimeSkeptic became a standalone v0.2 product
+
+**Changed.** The owner accepted
+`docs/decisions/0001-standalone-product-boundary.md`: the v0.2 product closes
+at Phase 4 and has no CodeSkeptic dependency. T-011 was consumed as not
+applicable, not completed. T-023, T-033, T-034, T-035 and T-036 left the
+current queue with roadmap Phases 5-10; reopening any of them requires an
+owner-accepted Plan v2. Frozen `plan.md` and `ROADMAP.md` remain unchanged.
+
+**Evidence.** A hash-pinned ADR and
+`tools/guards/check_standalone_boundary.py` reject copied or vendored source,
+submodules, prebuilt dependency archives, build-time fetch/link wiring and
+direct or indirect CodeSkeptic invocation. The adversarial guard suite covers
+each bypass family; `check_non_goals.py` no longer has a dated exception.
+
+**Learned.** A public release claim must distinguish source availability from
+a permanent binary release. RuntimeSkeptic is source-first: users can clone and
+build it with C++20 and CMake. Linux and Apple Silicon archives are CI evidence,
+not permanent GitHub Release assets; Windows remains source-only.
+
+**Next.** Keep the standalone boundary closed. New scope starts in Plan v2,
+never as an implicit dependency or a resurrected TODO item.
+
+---
+
 ## 2026-08-06 - T-009 was consumed and Phase 4 closed on native CI evidence
 
 **Changed.** T-009 left the consumable queue and Phase 4 moved from partial to

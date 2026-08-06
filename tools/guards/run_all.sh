@@ -19,6 +19,8 @@
 #                    life, so no third party could check an artifact
 #   check_plan       a [done] with no evidence is just a claim
 #   check_non_goals  a normative commitment was broken inside one session
+#   check_standalone the accepted product boundary must not acquire a copied,
+#                    renamed, submodule, fetched, linked or invoked dependency
 #   check_dates      the author is a language model that saw three different
 #                    dates for one day in a single session, and a
 #                    `<!-- checked: -->` marker is worthless if the date in it
@@ -118,6 +120,7 @@ run "execution coverage ledger" \
 run "cgroup launcher fail-closed" \
     bash "$HERE/../../tests/groundtruth/cgroup_launcher_selftest.sh"
 run "input boundary matrix" python3 "$HERE/../audit/boundary_matrix.py"
+run "standalone product boundary" python3 "$HERE/check_standalone_boundary.py"
 run "normative non-goals"   python3 "$HERE/check_non_goals.py"
 run "dates against git"     python3 "$HERE/check_dates.py"
 run "progress is append-only" python3 "$HERE/check_progress_history.py"

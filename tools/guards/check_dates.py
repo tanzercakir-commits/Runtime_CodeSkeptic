@@ -10,7 +10,7 @@ WHY THIS GUARD EXISTS, stated plainly. The author of these documents is a
 language model, and this session alone produced three dates for the same day:
 the environment header said 2026-07-24, a later reminder said 2026-07-25, and
 the container clock said 2026-07-25T20:34Z. It has also been confidently wrong
-about checkable facts more than once - it reported that neither CodeSkeptic
+about checkable facts more than once - it reported that neither project
 clone had a GitHub remote when one did, and it wrote a commit message
 describing a fix the diff did not contain. A date it types is exactly that
 class of claim: plausible, unverified, and load-bearing.

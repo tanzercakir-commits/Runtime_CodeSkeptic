@@ -76,7 +76,7 @@ const std::string* string_arg(const Value* args, const char* key) {
 }
 
 // A tri-state read of a boolean argument. The tool schemas type every property
-// as a string (the CodeSkeptic convention), so "true"/"false" arrive as text;
+// as a string (the public protocol convention), so "true"/"false" arrive as text;
 // a real JSON boolean is honoured too. Anything else - crucially a typo like
 // "treu" - is NOT silently coerced to false: that silence hid a findings
 // suppression in the independent review (B4d), where report_unknowns:"treu"
@@ -163,7 +163,7 @@ Value string_array(const std::vector<std::string>& items) {
 // Tool schemas
 // ---------------------------------------------------------------------------
 //
-// Following CodeSkeptic: every property is type "string", including booleans
+// Every property is type "string", including booleans
 // and lists. Agents pass "true"/"false" and comma-separated values. It costs a
 // little elegance and buys compatibility with clients that flatten arguments.
 

@@ -44,6 +44,17 @@ These are commitments, not a description of current limitations.
 Reserved for CodeSkeptic: contract extraction, fatal-sink identification.
 """
 
+STANDALONE_ADR_OK = """# ADR-0001 — RuntimeSkeptic remains standalone
+
+<!-- STANDALONE-BOUNDARY: accepted 2026-08-06 -->
+
+**Status:** Accepted
+
+The product is standalone. CodeSkeptic source is not copied or vendored,
+submoduled, fetched, linked, imported or invoked. An optional future adapter is
+disabled by default and communicates only through versioned artifacts.
+"""
+
 # A todo list that satisfies every shape rule, so a case about ONE rule fails
 # for that rule and not for a missing prerequisite.
 TODO_OK = """# TODO
@@ -195,6 +206,12 @@ import hashlib as _hashlib
 
 def _sha(text: str) -> str:
     return _hashlib.sha256(text.encode()).hexdigest()
+
+
+STANDALONE_PIN_OK = (
+    _sha(STANDALONE_ADR_OK)
+    + "  docs/decisions/0001-standalone-product-boundary.md\n"
+)
 
 
 ROADMAP_OK = "# Spec\n\n## Phase 0 — begin\n\n## Phase 1 — continue\n"
@@ -553,15 +570,181 @@ CASES = [
           "tools/rs-contract-extractor/main.cpp": "int main(){}\n"},
          expect_fail=True, expect_text="extractor growing back"),
 
-    Case("check_non_goals.py", "a dated section-18 exception permits it",
+    Case("check_non_goals.py", "a dated section-18 exception no longer permits it",
          {"docs/non_goals.md": BASE_NON_GOALS +
                                "\nNON-GOAL-18-EXCEPTION: 2026-07-25\n",
           "tools/rs-contract-extractor/main.cpp": "int main(){}\n"},
-         expect_fail=False, expect_text="reconciled"),
+         expect_fail=True, expect_text="no longer overrides"),
 
     Case("check_non_goals.py", "deleting section 18 is not a resolution",
          {"docs/non_goals.md": "# Non-goals\n\nNothing here.\n"},
          expect_fail=True, expect_text="no longer contains section 18"),
+
+    # ---- standalone boundary: no hidden or renamed dependency edge -----
+    Case("check_standalone_boundary.py", "accepted artifact-only boundary passes",
+         {"docs/decisions/0001-standalone-product-boundary.md": STANDALONE_ADR_OK,
+          "tools/guards/standalone-boundary.sha256": STANDALONE_PIN_OK,
+          "docs/history.md": "CodeSkeptic remains a separate project.\n",
+          "contracts/producer-neutral.json": '{"schema_version":"v1"}\n'},
+         expect_fail=False),
+
+    Case("check_standalone_boundary.py", "missing ADR and pin fail closed",
+         {}, expect_fail=True, expect_text="accepted standalone ADR is missing"),
+
+    Case("check_standalone_boundary.py", "edited ADR fails its hash pin",
+         {"docs/decisions/0001-standalone-product-boundary.md":
+              STANDALONE_ADR_OK.replace("disabled by default", "enabled by default"),
+          "tools/guards/standalone-boundary.sha256": STANDALONE_PIN_OK},
+         expect_fail=True, expect_text="changed without an explicit pin update"),
+
+    Case("check_standalone_boundary.py", "renamed vendored source fails",
+         {"docs/decisions/0001-standalone-product-boundary.md": STANDALONE_ADR_OK,
+          "tools/guards/standalone-boundary.sha256": STANDALONE_PIN_OK,
+          "vendor/analysis-core/copied.cpp": "int copied;\n"},
+         expect_fail=True, expect_text="vendored dependency content"),
+
+    Case("check_standalone_boundary.py", "renamed prebuilt archive fails",
+         {"docs/decisions/0001-standalone-product-boundary.md": STANDALONE_ADR_OK,
+          "tools/guards/standalone-boundary.sha256": STANDALONE_PIN_OK,
+          "lib/analysis-core.a": "not really an archive\n"},
+         expect_fail=True, expect_text="tracked prebuilt library/archive"),
+
+    Case("check_standalone_boundary.py", "renamed submodule fork fails",
+         {"docs/decisions/0001-standalone-product-boundary.md": STANDALONE_ADR_OK,
+          "tools/guards/standalone-boundary.sha256": STANDALONE_PIN_OK,
+          ".gitmodules": "[submodule \"analysis-core\"]\n"
+                         "  path = modules/analysis-core\n"
+                         "  url = https://example.invalid/fork.git\n"},
+         expect_fail=True, expect_text="no source submodule"),
+
+    Case("check_standalone_boundary.py", "FetchContent edge fails",
+         {"docs/decisions/0001-standalone-product-boundary.md": STANDALONE_ADR_OK,
+          "tools/guards/standalone-boundary.sha256": STANDALONE_PIN_OK,
+          "CMakeLists.txt": "FetchContent_Declare(CodeSkeptic URL x)\n"},
+         expect_fail=True, expect_text="fetches, links, imports or invokes"),
+
+    Case("check_standalone_boundary.py", "indirect ExternalProject edge fails",
+         {"docs/decisions/0001-standalone-product-boundary.md": STANDALONE_ADR_OK,
+          "tools/guards/standalone-boundary.sha256": STANDALONE_PIN_OK,
+          "CMakeLists.txt": "set(PRODUCER CodeSkeptic)\nExternalProject_Add(${PRODUCER})\n"},
+         expect_fail=True, expect_text="fetches, links, imports or invokes"),
+
+    Case("check_standalone_boundary.py", "indirect add_subdirectory edge fails",
+         {"docs/decisions/0001-standalone-product-boundary.md": STANDALONE_ADR_OK,
+          "tools/guards/standalone-boundary.sha256": STANDALONE_PIN_OK,
+          "CMakeLists.txt": "set(CS_DIR CodeSkeptic)\nadd_subdirectory(${CS_DIR})\n"},
+         expect_fail=True, expect_text="fetches, links, imports or invokes"),
+
+    Case("check_standalone_boundary.py", "indirect link edge fails",
+         {"docs/decisions/0001-standalone-product-boundary.md": STANDALONE_ADR_OK,
+          "tools/guards/standalone-boundary.sha256": STANDALONE_PIN_OK,
+          "CMakeLists.txt": "set(CS_LIB CodeSkeptic)\ntarget_link_libraries(rs PRIVATE ${CS_LIB})\n"},
+         expect_fail=True, expect_text="fetches, links, imports or invokes"),
+
+    Case("check_standalone_boundary.py", "workflow clone edge fails",
+         {"docs/decisions/0001-standalone-product-boundary.md": STANDALONE_ADR_OK,
+          "tools/guards/standalone-boundary.sha256": STANDALONE_PIN_OK,
+          ".github/workflows/ci.yml": "steps:\n  - run: git clone https://x/CodeSkeptic\n"},
+         expect_fail=True, expect_text="fetches, links, imports or invokes"),
+
+    Case("check_standalone_boundary.py", "Python process invocation fails",
+         {"docs/decisions/0001-standalone-product-boundary.md": STANDALONE_ADR_OK,
+          "tools/guards/standalone-boundary.sha256": STANDALONE_PIN_OK,
+          "tools/bridge.py": "import subprocess\nsubprocess.run(['codeskeptic', '--scan'])\n"},
+         expect_fail=True, expect_text="fetches, links, imports or invokes"),
+
+    Case("check_standalone_boundary.py", "native process invocation fails",
+         {"docs/decisions/0001-standalone-product-boundary.md": STANDALONE_ADR_OK,
+          "tools/guards/standalone-boundary.sha256": STANDALONE_PIN_OK,
+          "src/bridge.cpp": 'int x = system("CodeSkeptic --scan");\n'},
+         expect_fail=True, expect_text="fetches, links, imports or invokes"),
+
+    Case("check_standalone_boundary.py", "direct source include fails",
+         {"docs/decisions/0001-standalone-product-boundary.md": STANDALONE_ADR_OK,
+          "tools/guards/standalone-boundary.sha256": STANDALONE_PIN_OK,
+          "src/bridge.cpp": "#include <codeskeptic/api.h>\n"},
+         expect_fail=True, expect_text="fetches, links, imports or invokes"),
+
+
+    Case("check_standalone_boundary.py", "CLI invocation without flags fails",
+         {"docs/decisions/0001-standalone-product-boundary.md": STANDALONE_ADR_OK,
+          "tools/guards/standalone-boundary.sha256": STANDALONE_PIN_OK,
+          "tools/bridge.sh": "CodeSkeptic input.json\n"},
+         expect_fail=True, expect_text="fetches, links, imports or invokes"),
+
+    Case("check_standalone_boundary.py", "copy-pastable docs invocation fails",
+         {"docs/decisions/0001-standalone-product-boundary.md": STANDALONE_ADR_OK,
+          "tools/guards/standalone-boundary.sha256": STANDALONE_PIN_OK,
+          "docs/integrations.md": "```console\n$ CodeSkeptic input.json\n```\n"},
+         expect_fail=True, expect_text="documentation boundary"),
+
+    Case("check_standalone_boundary.py", "versioned shared library fails",
+         {"docs/decisions/0001-standalone-product-boundary.md": STANDALONE_ADR_OK,
+          "tools/guards/standalone-boundary.sha256": STANDALONE_PIN_OK,
+          "lib/libanalysis.so.1": "not really a library\n"},
+         expect_fail=True, expect_text="tracked prebuilt library/archive"),
+
+    Case("check_standalone_boundary.py", "extensionless binary fails",
+         {"docs/decisions/0001-standalone-product-boundary.md": STANDALONE_ADR_OK,
+          "tools/guards/standalone-boundary.sha256": STANDALONE_PIN_OK,
+          "bin/analysis-core": "not really an executable\n"},
+         expect_fail=True, expect_text="tracked prebuilt library/archive"),
+
+    Case("check_standalone_boundary.py", "first-party release archive passes",
+         {"docs/decisions/0001-standalone-product-boundary.md": STANDALONE_ADR_OK,
+          "tools/guards/standalone-boundary.sha256": STANDALONE_PIN_OK,
+          "dist/runtime-skeptic-source.zip": "first-party release fixture\n"},
+         expect_fail=False),
+
+
+    Case("check_standalone_boundary.py", "POSIX path-prefixed CLI fails",
+         {"docs/decisions/0001-standalone-product-boundary.md": STANDALONE_ADR_OK,
+          "tools/guards/standalone-boundary.sha256": STANDALONE_PIN_OK,
+          "tools/bridge.sh": "./CodeSkeptic input.json\n"},
+         expect_fail=True, expect_text="fetches, links, imports or invokes"),
+
+    Case("check_standalone_boundary.py", "Windows path-prefixed docs CLI fails",
+         {"docs/decisions/0001-standalone-product-boundary.md": STANDALONE_ADR_OK,
+          "tools/guards/standalone-boundary.sha256": STANDALONE_PIN_OK,
+          "docs/integrations.md": "```powershell\n.\\CodeSkeptic.exe input.json\n```\n"},
+         expect_fail=True, expect_text="documentation boundary"),
+
+    Case("check_standalone_boundary.py", "PowerShell call operator CLI fails",
+         {"docs/decisions/0001-standalone-product-boundary.md": STANDALONE_ADR_OK,
+          "tools/guards/standalone-boundary.sha256": STANDALONE_PIN_OK,
+          "tools/bridge.ps1": "& .\\CodeSkeptic.exe input.json\n"},
+         expect_fail=True, expect_text="fetches, links, imports or invokes"),
+
+    Case("check_standalone_boundary.py", "Python module invocation fails",
+         {"docs/decisions/0001-standalone-product-boundary.md": STANDALONE_ADR_OK,
+          "tools/guards/standalone-boundary.sha256": STANDALONE_PIN_OK,
+          "README.md": "```console\n$ python -m CodeSkeptic input.json\n```\n"},
+         expect_fail=True, expect_text="documentation boundary"),
+
+    Case("check_standalone_boundary.py", "named executable outside docs fails",
+         {"docs/decisions/0001-standalone-product-boundary.md": STANDALONE_ADR_OK,
+          "tools/guards/standalone-boundary.sha256": STANDALONE_PIN_OK,
+          "tools/CodeSkeptic.exe": "not really an executable\n"},
+         expect_fail=True, expect_text="CodeSkeptic-named content"),
+
+    Case("check_standalone_boundary.py", "renamed Windows binary in bin fails",
+         {"docs/decisions/0001-standalone-product-boundary.md": STANDALONE_ADR_OK,
+          "tools/guards/standalone-boundary.sha256": STANDALONE_PIN_OK,
+          "bin/analysis-core.exe": "not really an executable\n"},
+         expect_fail=True, expect_text="tracked prebuilt library/archive"),
+
+
+    Case("check_standalone_boundary.py", "executable hidden under docs fails",
+         {"docs/decisions/0001-standalone-product-boundary.md": STANDALONE_ADR_OK,
+          "tools/guards/standalone-boundary.sha256": STANDALONE_PIN_OK,
+          "docs/CodeSkeptic.exe": "not really an executable\n"},
+         expect_fail=True, expect_text="CodeSkeptic-named content"),
+
+    Case("check_standalone_boundary.py", "source hidden under docs fails",
+         {"docs/decisions/0001-standalone-product-boundary.md": STANDALONE_ADR_OK,
+          "tools/guards/standalone-boundary.sha256": STANDALONE_PIN_OK,
+          "docs/CodeSkeptic.cpp": "int copied_source;\n"},
+         expect_fail=True, expect_text="CodeSkeptic-named content"),
 
     # ---- check_plan: a [done] is a claim and needs evidence -------------
     Case("check_plan.py", "a [done] with no evidence fails",
@@ -938,6 +1121,27 @@ CASES = [
                           "**Done when:** `ctest` passes.\n",
           "docs/PLAN.md": "# Plan\n\n## Phase 1\n\n- `[done]` nothing\n"},
          expect_fail=False),
+
+
+    Case("check_todo.py", "duplicate section headings fail",
+         {"docs/TODO.md": "# TODO\n\n## Now\n\n## Later\n\n## Later\n\n"
+                          "### T-001 — scoped `[later]`\n\n"
+                          "**Done when:** `ctest` passes.\n"},
+         expect_fail=True, expect_text="duplicate section heading"),
+
+    Case("check_todo.py", "malformed task heading fails",
+         {"docs/TODO.md": "# TODO\n\n## Later\n\n"
+                          "### T-001 —### T-001 — scoped `[later]`\n\n"
+                          "**Done when:** `ctest` passes.\n"},
+         expect_fail=True, expect_text="malformed task heading"),
+
+    Case("check_todo.py", "duplicate task ids fail",
+         {"docs/TODO.md": "# TODO\n\n## Later\n\n"
+                          "### T-001 — first `[later]`\n\n"
+                          "**Done when:** `ctest` passes.\n\n"
+                          "### T-001 — second `[later]`\n\n"
+                          "**Done when:** `ctest` passes.\n"},
+         expect_fail=True, expect_text="duplicate TODO id"),
 
     Case("check_todo.py", "(untracked) needs a section that justifies it",
          {"docs/TODO.md": "# TODO\n\n## Now\n\n### T-001 — a thing `[now]`\n\n"
