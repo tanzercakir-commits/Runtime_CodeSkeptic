@@ -486,8 +486,21 @@ struct ScanOutcome {
 // request overlaps a VMA. The adaptive walk below subdivides both outcomes and
 // records a limitation only after an exact page placement is refused.
 constexpr std::uint64_t kTiB = 1ull << 40;
+constexpr std::uint64_t kX86DefaultMapWindow = 1ull << 47;
+constexpr std::uint64_t kAarch64DefaultMapWindow = 1ull << 48;
 constexpr std::uint64_t kArenaMaxWindow = 1ull << 30;
 constexpr std::size_t kArenaAttemptBudget = 262144;
+
+std::uint64_t default_map_window_for(vm::Architecture architecture) {
+    // Linux arm64 derives ELF_ET_DYN_BASE and the ordinary mmap window from
+    // DEFAULT_MAP_WINDOW_64 (1 << VA_BITS_MIN), which is 48 bits on the
+    // standard arm64 kernel exercised by CI. The old unconditional 47-bit cap
+    // was x86-64 policy and left real AArch64 code, heap and mmap pages unknown.
+    if (architecture == vm::Architecture::Aarch64) {
+        return kAarch64DefaultMapWindow;
+    }
+    return kX86DefaultMapWindow;
+}
 
 void scan_one_arena(const char* what, std::uint64_t bottom, std::uint64_t top,
                     std::uint64_t page_size, std::uint64_t max_window_size,
@@ -566,13 +579,15 @@ void scan_one_arena(const char* what, std::uint64_t bottom, std::uint64_t top,
 void scan_allocation_arenas(std::uint64_t page_size,
                             std::uint64_t max_user_address,
                             std::uint64_t max_window_size,
+                            vm::Architecture process_architecture,
                             ScanOutcome& outcome) {
     if (page_size == 0 || max_window_size == 0 ||
         max_user_address <= max_window_size) {
         return;
     }
 
-    const std::uint64_t ceiling = arena_ceiling_for(max_user_address, kTiB);
+    const std::uint64_t ceiling = arena_ceiling_for(
+        max_user_address, kTiB, default_map_window_for(process_architecture));
     const std::uint64_t raw_top =
         max_user_address < ceiling ? max_user_address : ceiling;
     const std::uint64_t probe_top = (raw_top / page_size) * page_size;
@@ -588,7 +603,8 @@ void scan_allocation_arenas(std::uint64_t page_size,
 
 ScanOutcome scan_address_space(std::size_t page_size, std::uint64_t probe_length,
                                std::uint64_t max_user_address,
-                               std::uint64_t arena_window_size) {
+                               std::uint64_t arena_window_size,
+                               vm::Architecture process_architecture) {
     ScanOutcome outcome;
 
     std::vector<std::uint64_t> candidates;
@@ -713,7 +729,7 @@ ScanOutcome scan_address_space(std::size_t page_size, std::uint64_t probe_length
     }
 
     scan_allocation_arenas(page_size, max_user_address, arena_window_size,
-                            outcome);
+                           process_architecture, outcome);
 
     collapse_contained_ranges(outcome.unavailable);
     collapse_contained_ranges(outcome.available);
@@ -738,9 +754,26 @@ vm::Architecture architecture_from_machine(const char* machine) {
     const std::string m(machine);
     if (m == "x86_64" || m == "amd64") return vm::Architecture::X86_64;
     if (m == "aarch64" || m == "arm64") return vm::Architecture::Aarch64;
+    if (m == "riscv64") return vm::Architecture::Riscv64;
     if (m == "i386" || m == "i686") return vm::Architecture::X86;
     if (m.rfind("arm", 0) == 0) return vm::Architecture::Arm;
     return vm::Architecture::Other;
+}
+
+vm::Architecture process_architecture() {
+#if defined(__aarch64__) || defined(__arm64__)
+    return vm::Architecture::Aarch64;
+#elif defined(__x86_64__) || defined(__amd64__)
+    return vm::Architecture::X86_64;
+#elif defined(__i386__)
+    return vm::Architecture::X86;
+#elif defined(__arm__)
+    return vm::Architecture::Arm;
+#elif defined(__riscv) && defined(__riscv_xlen) && __riscv_xlen == 64
+    return vm::Architecture::Riscv64;
+#else
+    return vm::Architecture::Other;
+#endif
 }
 
 }  // namespace
@@ -765,14 +798,10 @@ Result probe_virtual_memory(const Options& options) {
         profile.platform.os_version = std::string(uts.sysname) + " " + uts.release;
         profile.platform.host_arch = architecture_from_machine(uts.machine);
     }
-    // The probe is the process being measured, so process width is known
-    // exactly and does not need uname.
-    profile.platform.process_arch =
-        sizeof(void*) == 8
-            ? (profile.platform.host_arch == vm::Architecture::Aarch64
-                   ? vm::Architecture::Aarch64
-                   : vm::Architecture::X86_64)
-            : vm::Architecture::X86;
+    // The probe is the process being measured. Compiler target macros identify
+    // the process ISA; pointer width alone cannot distinguish x86_64, AArch64,
+    // and RISC-V64 (or x86 from 32-bit Arm).
+    profile.platform.process_arch = process_architecture();
     // Detecting emulated execution (qemu-user and friends) is not attempted in
     // v0.1, so translation mode stays unknown rather than being guessed as
     // "none".
@@ -1054,8 +1083,9 @@ Result probe_virtual_memory(const Options& options) {
             biggest == 0 ? page_size
                          : (biggest < kArenaMaxWindow ? biggest
                                                      : kArenaMaxWindow);
-        ScanOutcome scan = scan_address_space(page_size, probe_length, max_user,
-                                               arena_window);
+        ScanOutcome scan = scan_address_space(
+            page_size, probe_length, max_user, arena_window,
+            profile.platform.process_arch);
         profile.vm.available_ranges = std::move(scan.available);
         profile.vm.unavailable_ranges = std::move(scan.unavailable);
         for (auto& note : scan.occupied_notes) {

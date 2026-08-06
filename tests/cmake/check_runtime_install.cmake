@@ -61,10 +61,15 @@ file(WRITE "${consumer_dir}/main.cpp"
 "  auto result = rs::runtime::trace::replay(trace, error);\n"
 "  return rs_runtime_is_enabled_v1() + (result ? 0 : 1);\n"
 "}\n")
-execute_process(
-    COMMAND "${CMAKE_COMMAND}" -S "${consumer_dir}"
-            -B "${consumer_dir}/build"
-    RESULT_VARIABLE configure_result)
+set(configure_command "${CMAKE_COMMAND}" -S "${consumer_dir}"
+    -B "${consumer_dir}/build")
+if(DEFINED RS_OSX_ARCHITECTURES AND
+   NOT RS_OSX_ARCHITECTURES STREQUAL "")
+    list(APPEND configure_command
+        "-DCMAKE_OSX_ARCHITECTURES=${RS_OSX_ARCHITECTURES}")
+endif()
+execute_process(COMMAND ${configure_command}
+                RESULT_VARIABLE configure_result)
 if(NOT configure_result EQUAL 0)
     message(FATAL_ERROR "installed-package consumer configure failed")
 endif()

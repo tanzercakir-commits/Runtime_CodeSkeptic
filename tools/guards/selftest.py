@@ -161,6 +161,15 @@ jobs:
           ctest --test-dir build --build-config RelWithDebInfo --rerun-failed --output-on-failure > /tmp/diag/ctest.txt
 """
 
+ACTION_RUNTIME_OK = """name: CI
+jobs:
+  build:
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/upload-artifact@v7
+      - uses: actions/download-artifact@v8
+"""
+
 # `check_windows_compiles.py` needs a real cross-compiler. Where there is none it
 # reports SKIPPED and passes, so the cases below adapt rather than lie about what
 # was checked - a case that "passes" because the guard declined to look is the
@@ -324,7 +333,135 @@ RUNTIME_FILES = {
     "src/runtime/trace.cpp": RUNTIME_TRACE,
 }
 
+PLATFORM_EXPANSION_PLAN_OK = "# Accepted platform expansion v2\n"
+PLATFORM_EXPANSION_PIN_OK = (
+    _sha(PLATFORM_EXPANSION_PLAN_OK)
+    + "  docs/plans/platform-expansion-v2.md\n"
+)
+PLATFORM_HOSTED_OK = """name: Platform
+on:
+  workflow_dispatch:
+jobs:
+  linux:
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - run: test "$(uname -m)" = aarch64
+      - run: ctest --test-dir build --build-config RelWithDebInfo
+      - run: rs-profile verify a; rs-profile verify b; tool --compare-profile b --expected-arch aarch64 --runner-class github_hosted_vm --provider github-actions
+      - uses: actions/upload-artifact@v7
+  windows:
+    runs-on: windows-11-arm
+    steps:
+      - run: OSArchitecture
+      - run: ctest --test-dir build --build-config RelWithDebInfo
+      - run: rs-profile verify a; rs-profile verify b; tool --compare-profile b --expected-arch aarch64 --runner-class github_hosted_vm --provider github-actions
+      - uses: actions/upload-artifact@v7
+"""
+PLATFORM_RISCV_OK = """name: RISC-V
+on:
+  workflow_dispatch:
+jobs:
+  native:
+    if: inputs.confirmation == 'RUN'
+    environment: riscv64-hardware
+    timeout-minutes: 30
+    steps:
+      - run: ssh -o StrictHostKeyChecking=yes -o UserKnownHostsFile=known RS_RISCV_KNOWN_HOSTS
+      - run: RS_RUNNER_CLASS=bare_metal run_native_validation.sh riscv64
+      - if: always()
+        run: cleanup
+"""
+PLATFORM_HARNESS_OK = """ACTUAL_ARCH="$(uname -m)"
+if [ "$ACTUAL_ARCH" != "$EXPECTED_ARCH" ]; then exit 1; fi
+trap cleanup EXIT HUP INT TERM
+cmake -DRS_WARNINGS_AS_ERRORS=ON
+ctest --test-dir build --build-config RelWithDebInfo
+"$BIN/rs-profile" verify a
+tool --compare-profile b
+tests/groundtruth/selftest.sh
+tests/groundtruth/run.sh
+"""
+PLATFORM_VALIDATOR_OK = """POINTER_WIDTH = {"riscv64": 64}
+if profile.get("origin") != "measured": fail()
+message = "independent probes disagree"
+limit = "not platform-family support"
+classes = ("bare_metal",)
+"""
+PLATFORM_FILES_OK = {
+    "docs/plans/platform-expansion-v2.md": PLATFORM_EXPANSION_PLAN_OK,
+    "tools/guards/platform-expansion-v2.sha256": PLATFORM_EXPANSION_PIN_OK,
+    ".github/workflows/platform-expansion.yml": PLATFORM_HOSTED_OK,
+    ".github/workflows/riscv64-native.yml": PLATFORM_RISCV_OK,
+    "tools/platform/run_native_validation.sh": PLATFORM_HARNESS_OK,
+    "tools/ci/validate_native_profile.py": PLATFORM_VALIDATOR_OK,
+    "src/probe/vm_probe_linux.cpp":
+        ("process_architecture() __riscv_xlen Architecture::Riscv64 "
+         "kAarch64DefaultMapWindow default_map_window_for\n"),
+    "include/runtimeskeptic/vm/profile.hpp": "Riscv64\n",
+}
+
+
 CASES = [
+    # ---- check_action_runtimes: green cannot depend on retired Node ------
+    Case("check_action_runtimes.py", "Node.js 24 action majors pass",
+         {".github/workflows/ci.yml": ACTION_RUNTIME_OK},
+         expect_fail=False),
+
+    Case("check_action_runtimes.py", "legacy checkout runtime fails",
+         {".github/workflows/ci.yml":
+              ACTION_RUNTIME_OK.replace("checkout@v6", "checkout@v4")},
+         expect_fail=True, expect_text="Node.js 24 minimum v6"),
+
+    Case("check_action_runtimes.py", "legacy upload runtime fails",
+         {".github/workflows/ci.yml":
+              ACTION_RUNTIME_OK.replace("upload-artifact@v7", "upload-artifact@v4")},
+         expect_fail=True, expect_text="Node.js 24 minimum v7"),
+
+    Case("check_action_runtimes.py", "legacy download runtime fails",
+         {".github/workflows/ci.yml":
+              ACTION_RUNTIME_OK.replace("download-artifact@v8", "download-artifact@v4")},
+         expect_fail=True, expect_text="Node.js 24 minimum v8"),
+
+    Case("check_action_runtimes.py", "moving action refs fail",
+         {".github/workflows/ci.yml":
+              ACTION_RUNTIME_OK.replace("checkout@v6", "checkout@main")},
+         expect_fail=True, expect_text="not a reviewable major release tag"),
+
+    # ---- check_platform_expansion: evidence cannot outgrow execution -----
+    Case("check_platform_expansion.py", "a pinned, native-only evidence plan passes",
+         PLATFORM_FILES_OK, expect_fail=False),
+
+    Case("check_platform_expansion.py", "an edited plan under a stale pin fails",
+         {**PLATFORM_FILES_OK,
+          "docs/plans/platform-expansion-v2.md":
+              PLATFORM_EXPANSION_PLAN_OK + "quiet scope expansion\n"},
+         expect_fail=True, expect_text="stale pin"),
+
+    Case("check_platform_expansion.py", "evidence cannot fail open",
+         {**PLATFORM_FILES_OK,
+          ".github/workflows/platform-expansion.yml":
+              PLATFORM_HOSTED_OK + "continue-on-error: true\n"},
+         expect_fail=True, expect_text="continue-on-error"),
+
+    Case("check_platform_expansion.py", "hosted ARM64 runner labels are contractual",
+         {**PLATFORM_FILES_OK,
+          ".github/workflows/platform-expansion.yml":
+              PLATFORM_HOSTED_OK.replace("runs-on: windows-11-arm",
+                                         "runs-on: windows-latest")},
+         expect_fail=True, expect_text="windows-11-arm"),
+
+    Case("check_platform_expansion.py", "RISC-V hardware stays manual-only",
+         {**PLATFORM_FILES_OK,
+          ".github/workflows/riscv64-native.yml":
+              PLATFORM_RISCV_OK.replace("  workflow_dispatch:",
+                                        "  workflow_dispatch:\n  schedule:")},
+         expect_fail=True, expect_text="manual-only"),
+    Case("check_platform_expansion.py", "ARM64 keeps its native mmap geometry",
+         {**PLATFORM_FILES_OK,
+          "src/probe/vm_probe_linux.cpp":
+              PLATFORM_FILES_OK["src/probe/vm_probe_linux.cpp"].replace(
+                  "kAarch64DefaultMapWindow", "kGenericMapWindow")},
+         expect_fail=True, expect_text="kAarch64DefaultMapWindow"),
     # ---- check_release_consistency: one public version, one package set ---
     Case("check_release_consistency.py", "release declarations agree",
          {"CMakeLists.txt": "project(RuntimeSkeptic\n    VERSION 0.2.0)\n",

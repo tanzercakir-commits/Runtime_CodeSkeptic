@@ -13,14 +13,16 @@ using vm::AddressRange;
 using vm::ClassifiedRange;
 
 std::uint64_t arena_ceiling_for(std::uint64_t max_user_address,
-                                std::uint64_t granularity) {
+                                std::uint64_t granularity,
+                                std::uint64_t default_map_window) {
     // The window Linux allocates in without an explicit high hint. See the
-    // header for why TASK_SIZE is the wrong input.
-    constexpr std::uint64_t kDefaultMapWindow = 1ull << 47;
+    // header for why TASK_SIZE is the wrong input. The caller supplies the
+    // architecture's kernel constant: 47 bits is x86-64 policy, not a
+    // universal Linux address-space rule.
     if (granularity == 0) return max_user_address;
-    const std::uint64_t effective = max_user_address < kDefaultMapWindow
+    const std::uint64_t effective = max_user_address < default_map_window
                                         ? max_user_address
-                                        : kDefaultMapWindow;
+                                        : default_map_window;
     // Round UP: rounding down put the whole arena 4 TiB below where anything
     // maps, into the exact bucket 629 of 639 observed addresses sit above.
     if (effective > ~std::uint64_t{0} - granularity) return effective;

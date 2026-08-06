@@ -91,6 +91,9 @@ on:
       # The Rosetta lane runs this, and this is where it broke.
       - 'tests/groundtruth/run.sh'
       - 'tests/groundtruth/selftest.sh'
+      # The translated SDK install test must build its consumer for x86-64 too.
+      - 'tests/CMakeLists.txt'
+      - 'tests/cmake/check_runtime_install.cmake'
       # T-018: THE CAMPAIGN RUNS HERE NOW, so the campaign's own code belongs
       # in this list. It did not, and the omission behaved exactly as this
       # file's comment above predicts it would: 756f3b0 rewrote the dtrace
@@ -124,7 +127,7 @@ jobs:
     name: native arm64
     runs-on: macos-14
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Build
         run: |
@@ -187,7 +190,7 @@ jobs:
               print(f"  UNAVAILABLE {r['start']} .. {r['end']}  {r['note']}")
           PY
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always() && steps.measure.outcome == 'success'
         with:
           name: macos-arm64-native-profile
@@ -331,7 +334,7 @@ jobs:
     name: x86-64 under Rosetta 2
     runs-on: macos-14
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       # Rosetta 2 may or may not be installed on a hosted runner. If it is
       # absent the job reports that plainly and stops; a missing translator is
@@ -475,7 +478,7 @@ jobs:
           build-x64/bin/rs-profile diff macos-rosetta-x86_64.json \
             profiles/fixtures/macos-arm64-rosetta-x86_64.reported.fixture.json || true
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always() && steps.measure.outcome == 'success'
         with:
           name: macos-rosetta-x86_64-profile
