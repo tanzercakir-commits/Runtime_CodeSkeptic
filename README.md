@@ -1,53 +1,44 @@
 # RuntimeSkeptic
 
-**Predict runtime failures before they become crashes.**
+[![CI](https://github.com/tanzercakir-commits/Runtime_CodeSkeptic/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/tanzercakir-commits/Runtime_CodeSkeptic/actions/workflows/ci.yml)
+[![C++20](https://img.shields.io/badge/C%2B%2B-20-00599C?logo=c%2B%2B&logoColor=white)](CMakeLists.txt)
+[![Platforms](https://img.shields.io/badge/platforms-Linux%20%7C%20macOS%20%7C%20Windows-4C566A)](.github/workflows/ci.yml)
+[![License](https://img.shields.io/badge/license-Apache--2.0-2C8EBB)](LICENSE)
 
-RuntimeSkeptic is a standalone, open-source virtual-memory compatibility
-analyzer and runtime monitor. It compares what a program *assumes* about its
-execution environment against what that environment *measurably provides*, then
-returns an evidence chain: supported here, refused here, or conditionally —
-before the program runs there. It does not require or integrate CodeSkeptic.
+**Find virtual-memory compatibility failures before deployment.**
 
-Full pitch: [docs/problem_statement.md](docs/problem_statement.md) ·
-product boundary: [ADR-0001](docs/decisions/0001-standalone-product-boundary.md) ·
-what this deliberately is not: [docs/non_goals.md](docs/non_goals.md) ·
-plan: [ROADMAP.md](ROADMAP.md)
+RuntimeSkeptic measures what a host actually supports, compares it with a
+program's declared runtime requirements, and returns an evidence-backed
+verdict: `SUPPORTED`, `UNSUPPORTED`, `CONDITIONALLY_SUPPORTED`, or `UNKNOWN`.
+It is a standalone, open-source CLI and runtime monitor with no external build
+or runtime dependencies.
 
----
+## Quick start
 
-## Try it
+You need [CMake 3.20+](CMakeLists.txt) and a C++20 compiler.
 
-This is a source-first release: clone the repository and build it with a C++20
-compiler and CMake 3.20. There are no external build or runtime dependencies.
-The one-time build takes a minute or two (longer on Windows/MSVC); after that,
-every query below is instant. CI packages are verification artifacts, not a
-permanent no-build GitHub Release. Windows is source-only in v0.2.
+### Linux and macOS
+
+Clone, build, and run the test suite:
 
 ```console
-$ git clone https://github.com/tanzercakir-commits/Runtime_CodeSkeptic && cd Runtime_CodeSkeptic
-$ cmake -S . -B build && cmake --build build -j
+$ git clone https://github.com/tanzercakir-commits/Runtime_CodeSkeptic
+$ cd Runtime_CodeSkeptic
+$ cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+$ cmake --build build --parallel
+$ ctest --test-dir build --output-on-failure
 ```
 
-> **On Windows (PowerShell):** `&&` and the trailing `\` line-continuation below
-> are POSIX shell, not PowerShell 5.1. Run each command on its own line, build a
-> named configuration, and note that the Visual Studio generator writes to a
-> per-configuration subdirectory — `build\bin\Release\`, or `build\bin\Debug\`
-> when no `--config` is given:
->
-> ```powershell
-> git clone https://github.com/tanzercakir-commits/Runtime_CodeSkeptic; cd Runtime_CodeSkeptic
-> cmake -S . -B build
-> cmake --build build --config Release
-> build\bin\Release\rs-check.exe contracts\campaign\redis-jemalloc-page-size-lg12.json --profile profiles\measured\macos-14-arm64-native.measured.json
-> ```
-
-Now ask a real question — *why does Redis refuse to start on an Apple Silicon
-Mac?* You do not need a Mac; the repository ships that host's measured profile.
+Then try a real compatibility question: *why does Redis refuse to start on an
+Apple Silicon Mac?* You do not need a Mac; the repository includes a measured
+profile from that host.
 
 ```console
 $ build/bin/rs-check contracts/campaign/redis-jemalloc-page-size-lg12.json \
       --profile profiles/measured/macos-14-arm64-native.measured.json
 ```
+
+The key lines are (abridged):
 
 ```text
   UNSUPPORTED
@@ -63,21 +54,35 @@ RS-VM-0006  Host page size differs from the required page size
     process_exit at redis/redis@b53f65d:deps/jemalloc/src/pages.c:761
 ```
 
-Redis's bundled jemalloc was compiled for a 4 KiB page and aborts on a 16 KiB
-host. Proven from one measurement and one declared requirement — Redis was
-never installed, and no Mac was touched.
+The result shows the complete conflict: Redis's bundled jemalloc requires a
+4 KiB page, while the measured host provides 16 KiB pages. Redis does not need
+to be installed on the machine running the analysis.
 
-**Then measure your own machine** and check anything against it:
+Measure your own machine and check a contract against it:
 
 ```console
 $ build/bin/rs-env-probe vm --name my-laptop --output host.json
 $ build/bin/rs-check contracts/emulator-highmem-guest-mapping.json --profile host.json
 ```
 
-Exit codes are CI-ready: `0` SUPPORTED · `1` UNSUPPORTED ·
-`2` CONDITIONALLY_SUPPORTED · `3` UNKNOWN. All tools and flags:
-[docs/integrations.md](docs/integrations.md). More one-command cases:
-[docs/diagnosis-cards.md](docs/diagnosis-cards.md).
+### Windows (PowerShell)
+
+```powershell
+git clone https://github.com/tanzercakir-commits/Runtime_CodeSkeptic
+cd Runtime_CodeSkeptic
+cmake -S . -B build
+cmake --build build --config Release --parallel
+ctest --test-dir build -C Release --output-on-failure
+build\bin\Release\rs-check.exe `
+  contracts\campaign\redis-jemalloc-page-size-lg12.json `
+  --profile profiles\measured\macos-14-arm64-native.measured.json
+```
+
+Exit codes work directly in CI: `0` SUPPORTED · `1` UNSUPPORTED ·
+`2` CONDITIONALLY_SUPPORTED · `3` UNKNOWN.
+
+> RuntimeSkeptic v0.2 is source-first. CI packages verify release construction;
+> they are not permanent GitHub Release downloads.
 
 ## Observe a real call
 
@@ -186,12 +191,20 @@ than a snapshot. Measure your own with `rs-env-probe`, as above.
                                └──────────────────────────┘
 ```
 
-The full historical architecture is in [ROADMAP.md](ROADMAP.md) sections 9–10.
-The accepted v0.2 product ships the probes, contracts, analysis engine, evidence
-reports, runtime wrappers and pure trace replay. Static source analysis is
-outside this product boundary; any future adapter requires an accepted Plan v2
-and remains separate and optional. Project docs — compass, map, history,
-campaigns — start at [docs/TODO.md](docs/TODO.md).
+RuntimeSkeptic v0.2 includes environment probes, requirement contracts, the
+analysis engine, evidence reports, runtime wrappers, and pure trace replay.
+
+## Documentation
+
+- [Understand evidence and confidence](docs/evidence_model.md)
+- [See more one-command diagnoses](docs/diagnosis-cards.md)
+- [Integrate the CLI and its exit codes](docs/integrations.md)
+- [Use the runtime monitor and replay format](docs/runtime-monitor.md)
+- [Read the product boundary](docs/decisions/0001-standalone-product-boundary.md)
+
+Maintainers can find current status in [docs/PLAN.md](docs/PLAN.md), the working
+queue in [docs/TODO.md](docs/TODO.md), and immutable history in
+[docs/PROGRESS.md](docs/PROGRESS.md).
 
 ## License
 

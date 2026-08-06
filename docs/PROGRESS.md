@@ -16,6 +16,36 @@ re-litigated; a mistake recorded here does not need to be re-made.
 
 ---
 
+## 2026-08-06 - The README now starts with a runnable path
+
+**Changed.** The public README now opens with verifiable CI, language,
+platform, and license badges followed by a direct product description. The
+maintainer-oriented pitch, boundary, non-goal, and roadmap link row left the
+above-the-fold area. Linux/macOS and Windows users now reach complete clone,
+build, test, and first-analysis commands without first reading release-policy
+or project-governance prose.
+
+**Evidence.** Every badge target exists in the repository or on the project's
+GitHub Actions page. The commands use the repository's declared CMake 3.20 and
+C++20 requirements, include the correct multi-config test and executable paths
+for Visual Studio, and retain the Redis/Apple Silicon example exercised by the
+release test surface. The repository-wide guard suite passed, including all
+149/149 adversarial guard selftests and 639/639 input-boundary cases with no
+divergence. A fresh Windows MSVC Release build completed with zero warnings and
+zero errors, CTest passed 24/24, and the documented Redis command returned the
+expected UNSUPPORTED verdict and exit code 1. Documentation links remain
+available in a dedicated section below the product walkthrough.
+
+**Learned.** Product governance belongs in the maintainer path, not in the
+first screen a prospective user sees. A source-first limitation remains
+important, but it is clearer after the user has a working path than before the
+first command.
+
+**Next.** Keep the first screen focused on what the tool answers and how to run
+it. Add new badges only when they report a mechanically verifiable property.
+
+---
+
 ## 2026-08-06 - RuntimeSkeptic became a standalone v0.2 product
 
 **Changed.** The owner accepted
