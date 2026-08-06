@@ -116,7 +116,7 @@ jobs:
     name: windows x86_64
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Build
         id: build
@@ -283,7 +283,7 @@ jobs:
           bash tools/ci/publish_measurement.sh measurements \
             "fp-campaign-windows" "${{ github.sha }}" $FILES
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always() && steps.measure.outcome == 'success'
         with:
           name: windows-x86_64-profile

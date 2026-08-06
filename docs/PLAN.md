@@ -386,6 +386,23 @@ The frozen `plan.md` and `ROADMAP.md` remain unchanged as historical intent.
 
 ## Cross-cutting work not owned by a phase
 
+- `[done]` **Platform Expansion Plan v2: claim boundary and evidence gates** - `tools/guards/check_platform_expansion.py` enforces it:
+  the accepted addendum is hash-pinned; its structural guard and six
+  adversarial cases reject plan mutation, fail-open hosted lanes, runner drift,
+  automatic hardware execution, and loss of ARM64-native mmap geometry.
+- `[done]` **hosted Linux ARM64 and Windows ARM64 validation** - `.github/workflows/platform-expansion.yml` proves it; GitHub run
+  `31083869013` is the authoritative evidence: both native ARM64 runners built
+  warning-clean, passed complete CTest, reproduced profiles across independent
+  processes, passed strict profile policy and uploaded scoped artifacts.
+- `[done]` **RISC-V64/ARM architecture identity and native harness** - `tests/unit/test_profile.cpp` and the native harness prove it:
+  `riscv64` is a first-class 64-bit identity; compiler target macros preserve
+  RISC-V64 and 32-bit Arm process identity. The manual-only, strict-host-key
+  hardware harness runs build, CTest, two probes, profile policy, and ground
+  truth without an emulation or provisioning path.
+- `[blocked]` **new physical platform measurements** - RISC-V64 (T-040),
+  ARM64 16/64 KiB plus ARMv7 (T-041), and an RTOS pilot (T-042) require
+  authorized targets or licensed SDKs that are not currently available.
+
 - `[done]` ground-truth harness — `tests/groundtruth/`,
   24 registered cases (23 direct plus the bounded cgroup lane), 25/25
   adversarial pairing comparisons, three derivation checks, and case-specific
@@ -416,7 +433,7 @@ The frozen `plan.md` and `ROADMAP.md` remain unchanged as historical intent.
   match the filesystem, and a named path must exist. Still `[partial]` because
   only paths and a fixed list of phrases are mechanical; the rest of the prose
   is unchecked and always will be.
-- `[done]` the guards are tested — `tools/guards/selftest.py`, 149 cases, each
+- `[done]` the guards are tested — `tools/guards/selftest.py`, 160 cases, each
   requiring a check to fail against a deliberately wrong throwaway repository
   before it is trusted on this one; first in `tools/guards/run_all.sh`. This
   number read `25` while there were 58, surviving two earlier increases, so

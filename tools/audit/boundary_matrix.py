@@ -332,7 +332,7 @@ PROF_FIELDS = [
     (("platform", "os"), [("number", 5), ("bool", True), ("object", {}),
                           ("unmodeled", "freebsd"), ("valid", "linux")]),
     (("platform", "process_arch"), [("number", 5), ("object", {}),
-                                    ("unmodeled", "riscv64"), ("valid", "aarch64")]),
+                                    ("unmodeled", "loongarch64"), ("valid", "aarch64")]),
     (("platform", "translation_mode"), ENUM_BADS + [("valid", "rosetta2")]),
     (("virtual_memory", "page_size"), FACT_BATTERY),
     (("virtual_memory", "max_user_address"), FACT_BATTERY),

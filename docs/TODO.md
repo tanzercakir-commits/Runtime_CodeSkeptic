@@ -55,8 +55,9 @@ Everything here is measured or enforced, not remembered.
 Phase 0-4   DONE. Gate B, all seven demonstrations, T-012 bounded pressure,
             strict rule-execution coverage and the runtime SDK matrix are green.
 Phase 5     N/A. ADR-0001 fixes RuntimeSkeptic as a standalone product.
-Phase 6-10  N/A for the v0.2 product line; reopening requires an accepted
-            Plan v2 with new evidence gates and queue items.
+Phase 6-10  N/A for the v0.2 product line.
+Plan v2     G1-G3 DONE. Hosted Linux/Windows ARM64 evidence is green; physical
+            RISC-V, alternate ARM page sizes/ARMv7 and RTOS remain blocked.
 Gate B      false-positive rate measured 0 on THREE operating systems:
               Linux x86-64       1292 requirements  (strace)
               macOS 14 arm64       37 requirements  (dtrace, mach traps)
@@ -118,14 +119,11 @@ reports drift; it cannot push.
 
 ## Now
 
-No release-blocking executable item remains in the accepted v0.2 scope.
-
 ---
 
 ## Next
 
-Any new product work starts with an owner-accepted Plan v2. It must define its
-own scope, evidence gates and consumable tasks before implementation begins.
+No unblocked item is queued.
 
 ---
 
@@ -157,8 +155,43 @@ filled in — not from the analyzer's imagination.
 
 ## Blocked
 
-None. T-011 was consumed by the standalone product decision; Phases 5-10 are
-outside the current queue rather than blocked work.
+### T-040 — Publish a real RISC-V64 hardware measurement `[blocked]`
+
+**Serves:** RISC-V users need execution evidence, not a cross-compile claim.
+**Plan:** Platform Expansion v2, G4-G5
+**Done when:** a manually approved `riscv64-native.yml` run on an authorized
+physical target publishes a verified profile, matching two-process IDs,
+complete CTest output and ground-truth evidence; the README may then name that
+exact measured environment.
+**First step:** provision the hourly host, add its SSH endpoint, private key and
+pinned host key as `riscv64-hardware` environment secrets, then run with
+confirmation `RUN`. The protected environment and owner approval already exist.
+**Blocker:** no authorized live RISC-V64 host or SSH environment secrets are
+available in this repository. The workflow must not spend money or invent
+credentials autonomously.
+
+### T-041 — Measure ARM64 page variants and Linux ARMv7 `[blocked]`
+
+**Serves:** appliance and embedded Linux users whose compatibility boundary is
+the kernel page configuration or a 32-bit address space.
+**Plan:** Platform Expansion v2, G4-G5
+**Done when:** real 16 KiB and 64 KiB ARM64 kernels plus one ARMv7 target each
+produce verified, reproducible profiles and ground-truth ledgers.
+**First step:** recruit or authorize targets; record kernel configuration and
+runner class without collecting serial or corporate device data.
+**Blocker:** standard hosted runners do not expose these three environments.
+
+### T-042 — Pilot an authorized RTOS target `[blocked]`
+
+**Serves:** safety-critical and defense-adjacent users evaluating QNX/VxWorks.
+**Plan:** Platform Expansion v2, G4-G5
+**Done when:** an owner-approved QNX or VxWorks sub-plan names the licensed SDK,
+BSP, target, probe API model and native test oracle, and the first authorized
+target passes them.
+**First step:** obtain a partner, licensed SDK and non-sensitive laboratory
+target before writing an OS backend.
+**Blocker:** no licensed SDK, BSP, hardware target or evidence owner is in the
+repository's current authority.
 
 ---
 

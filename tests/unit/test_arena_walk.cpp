@@ -471,6 +471,18 @@ RS_TEST(a_five_level_paging_host_does_not_move_the_arena_to_the_top_of_56_bits) 
     RS_CHECK_EQ(la57, normal);
 }
 
+RS_TEST(the_default_map_window_is_an_architecture_input) {
+    constexpr std::uint64_t kTiB = 1ull << 40;
+    constexpr std::uint64_t kX86Window = 1ull << 47;
+    constexpr std::uint64_t kAarch64Window = 1ull << 48;
+    constexpr std::uint64_t kAarch64Max = 1ull << 48;
+
+    RS_CHECK_EQ(arena_ceiling_for(kAarch64Max, kTiB, kX86Window),
+                kX86Window);
+    RS_CHECK_EQ(arena_ceiling_for(kAarch64Max, kTiB, kAarch64Window),
+                kAarch64Window);
+}
+
 RS_TEST(the_ceiling_rounds_up_never_down) {
     constexpr std::uint64_t kTiB = 1ull << 40;
     RS_CHECK(arena_ceiling_for(0x7ffffffff000ull, kTiB) > 0x7ffffffff000ull);
