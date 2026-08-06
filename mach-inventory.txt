@@ -1,0 +1,23 @@
+=== mach_trap probes containing vm ===
+   46  mach_trap                    _kernelrpc_mach_vm_allocate_trap entry
+   48  mach_trap                   _kernelrpc_mach_vm_purgable_control_trap entry
+   50  mach_trap                   _kernelrpc_mach_vm_deallocate_trap entry
+   54  mach_trap                     _kernelrpc_mach_vm_protect_trap entry
+   56  mach_trap                         _kernelrpc_mach_vm_map_trap entry
+
+=== trap and syscall counts for one python3 run ===
+
+  _kernelrpc_mach_port_construct_trap                               1
+  _kernelrpc_mach_port_deallocate_trap                              1
+  _kernelrpc_mach_vm_deallocate_trap                                1
+  mach_msg2_trap                                                    1
+  mach_reply_port                                                   1
+  sys crossarch_trap                                                1
+  sys mprotect                                                      1
+  sys posix_spawn                                                   1
+  sys shared_region_check_np                                        1
+  sys stat64                                                        1
+  sys thread_selfid                                                 1
+  task_self_trap                                                    1
+  _kernelrpc_mach_port_destruct_trap                                2
+  sys getattrlist                                                   3
