@@ -16,6 +16,31 @@ re-litigated; a mistake recorded here does not need to be re-made.
 
 ---
 
+## 2026-08-06 - The LinkedIn launch visual was corrected against current evidence
+
+**Changed.** A non-destructive `runtime-skeptic-linkedin-tr-v2.png` launch asset
+now replaces the old visual's inaccurate "three machines", "before running
+anything", and "no Mac was touched" claims. It names the two measured host
+profiles, says the target programs were not executed for these checks, pins
+Redis, Box64, and QEMU to the commits their contracts actually describe, and
+states Box64's dynarec fallback instead of implying a crash.
+
+**Evidence.** Current `rs-check` returned the documented `UNSUPPORTED` verdict
+for Redis/jemalloc `b53f65d`, Box64 `a2ae050`, and QEMU `300438f` against the
+named measured profiles. The validation band remains grounded in the campaign
+artifacts: 1292 Linux, 37 macOS, and 247 Windows requirements total 1576
+kernel-observed requests, with zero measured false positives across three OSes.
+
+**Learned.** A strong launch graphic can remain numerically correct while its
+headline overstates the experiment. Host measurement, target execution, and a
+source-derived counterfactual are different actions and must not be collapsed
+into "nothing ran".
+
+**Next.** Publish the corrected asset rather than the original; keep commit
+pins visible whenever a real program's current behavior may have moved.
+
+---
+
 ## 2026-08-06 - The README now starts with a runnable path
 
 **Changed.** The public README now opens with verifiable CI, language,
