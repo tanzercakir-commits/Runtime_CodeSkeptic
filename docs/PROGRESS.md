@@ -16,6 +16,27 @@ re-litigated; a mistake recorded here does not need to be re-made.
 
 ---
 
+## 2026-08-06 - The RISC-V hardware gate is armed without spending
+
+**Changed.** GitHub environment `riscv64-hardware` now exists with the
+repository owner as a required reviewer. No host was provisioned, no secret was
+invented, and no paid or hardware workflow was started. T-040's first step now
+begins at the real remaining boundary: an authorized host plus its scoped SSH
+endpoint, key and pinned host-key secrets.
+
+**Evidence.** GitHub returned environment id `19395035280` with one
+`required_reviewers` protection rule for `tanzercakir-commits` and
+`prevent_self_review: false`. The workflow remains manual-only, requires exact
+confirmation `RUN`, and has no usable connection secrets.
+
+**Learned.** The approval boundary can be installed before hardware exists,
+removing one operational step without pretending the absent target is evidence.
+
+**Next.** Stop at T-040's explicit blocker. An authorized RISC-V64 target and
+its credentials are required before the first hardware measurement is lawful.
+
+---
+
 ## 2026-08-06 - Rosetta closed the cross-architecture package loop
 
 **Changed.** The fresh x86-64-under-Rosetta profile from commit `fc2f075` now

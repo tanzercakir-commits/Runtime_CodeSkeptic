@@ -163,8 +163,9 @@ filled in — not from the analyzer's imagination.
 physical target publishes a verified profile, matching two-process IDs,
 complete CTest output and ground-truth evidence; the README may then name that
 exact measured environment.
-**First step:** provision the hourly host, configure the protected
-`riscv64-hardware` GitHub environment and run with confirmation `RUN`.
+**First step:** provision the hourly host, add its SSH endpoint, private key and
+pinned host key as `riscv64-hardware` environment secrets, then run with
+confirmation `RUN`. The protected environment and owner approval already exist.
 **Blocker:** no authorized live RISC-V64 host or SSH environment secrets are
 available in this repository. The workflow must not spend money or invent
 credentials autonomously.
