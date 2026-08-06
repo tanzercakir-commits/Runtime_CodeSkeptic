@@ -56,8 +56,8 @@ Phase 0-4   DONE. Gate B, all seven demonstrations, T-012 bounded pressure,
             strict rule-execution coverage and the runtime SDK matrix are green.
 Phase 5     N/A. ADR-0001 fixes RuntimeSkeptic as a standalone product.
 Phase 6-10  N/A for the v0.2 product line.
-Plan v2     ACCEPTED for platform evidence only. It does not reopen ADR-0001
-            or the frozen roadmap; see docs/plans/platform-expansion-v2.md.
+Plan v2     G1-G3 DONE. Hosted Linux/Windows ARM64 evidence is green; physical
+            RISC-V, alternate ARM page sizes/ARMv7 and RTOS remain blocked.
 Gate B      false-positive rate measured 0 on THREE operating systems:
               Linux x86-64       1292 requirements  (strace)
               macOS 14 arm64       37 requirements  (dtrace, mach traps)
@@ -119,23 +119,11 @@ reports drift; it cannot push.
 
 ## Now
 
-### T-038 — Validate Linux ARM64 and Windows ARM64 hosted environments `[now]`
-
-**Serves:** embedded/edge developers need ARM64 evidence without waiting for a
-partner device; Windows-on-Arm users need the Windows probe exercised natively.
-**Plan:** Platform Expansion v2, G2-G3
-**Done when:** `.github/workflows/platform-expansion.yml` runs warning-clean
-native ARM64 builds, complete CTest, two-process profile reproducibility,
-`rs-profile verify`, strict profile-policy validation and artifact upload on
-both hosted images; the authoritative GitHub checks are green.
-**First step:** add the two runner-specific jobs without reusing x86 package
-names or weakening any existing test.
-
 ---
 
 ## Next
 
-No unblocked item waits behind the active Platform Expansion slice.
+No unblocked item is queued.
 
 ---
 

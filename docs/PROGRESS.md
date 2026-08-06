@@ -16,6 +16,35 @@ re-litigated; a mistake recorded here does not need to be re-made.
 
 ---
 
+## 2026-08-06 - Hosted ARM64 evidence closed; Rosetta tested the SDK boundary
+
+**Changed.** T-038 was consumed after both hosted ARM64 evidence lanes went
+green. The repository now carries fresh v0.2 native macOS and Windows x86-64
+profiles from the same probe generation. Their refresh exposed a separate
+cross-architecture packaging defect: the installed-package consumer ignored
+the parent build's `CMAKE_OSX_ARCHITECTURES`, so an x86-64 SDK was linked into
+an arm64 consumer under Rosetta. The install test now forwards that target and
+the macOS measurement trigger watches both files that define the test.
+
+**Evidence.** Platform run `31083869013` passed warning-clean native Linux and
+Windows ARM64 builds, complete CTest, two-process reproducibility, profile
+verification, strict policy validation and artifact upload. macOS measurement
+run `31084206595` passed its native arm64 job and published the replacement;
+Windows run `31084204325` passed build, 24 tests, two-process reproducibility,
+the ETW campaign and profile publication. Both replacements pass `rs-profile
+verify` and all 79 schema artifacts validate. The local MSVC install consumer
+and complete 24-test suite pass with the architecture forwarding in place.
+
+**Learned.** A test launched from a cross-compiled CMake tree does not inherit
+that tree's target architecture when it configures a second consumer project.
+The package was correct; the test silently switched toolchain architecture.
+
+**Next.** Push the consumer fix, dispatch the Rosetta lane on that exact commit,
+import its measured profile, then require the full PR matrix and all guards to
+be green again.
+
+---
+
 ## 2026-08-06 - Linux ARM64 shed an x86-only address-space assumption
 
 **Changed.** PR #4's first native run proved that architecture identity alone

@@ -390,10 +390,10 @@ The frozen `plan.md` and `ROADMAP.md` remain unchanged as historical intent.
   the accepted addendum is hash-pinned; its structural guard and six
   adversarial cases reject plan mutation, fail-open hosted lanes, runner drift,
   automatic hardware execution, and loss of ARM64-native mmap geometry.
-- `[open]` **hosted Linux ARM64 and Windows ARM64 validation** - standard
-  public runners are selected, but support is not claimed until native build,
-  CTest, two-process probe verification and scoped provenance artifacts pass
-  on both. (T-038)
+- `[done]` **hosted Linux ARM64 and Windows ARM64 validation** - `.github/workflows/platform-expansion.yml` proves it; GitHub run
+  `31083869013` is the authoritative evidence: both native ARM64 runners built
+  warning-clean, passed complete CTest, reproduced profiles across independent
+  processes, passed strict profile policy and uploaded scoped artifacts.
 - `[done]` **RISC-V64/ARM architecture identity and native harness** - `tests/unit/test_profile.cpp` and the native harness prove it:
   `riscv64` is a first-class 64-bit identity; compiler target macros preserve
   RISC-V64 and 32-bit Arm process identity. The manual-only, strict-host-key

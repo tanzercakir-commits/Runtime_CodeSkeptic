@@ -91,6 +91,9 @@ on:
       # The Rosetta lane runs this, and this is where it broke.
       - 'tests/groundtruth/run.sh'
       - 'tests/groundtruth/selftest.sh'
+      # The translated SDK install test must build its consumer for x86-64 too.
+      - 'tests/CMakeLists.txt'
+      - 'tests/cmake/check_runtime_install.cmake'
       # T-018: THE CAMPAIGN RUNS HERE NOW, so the campaign's own code belongs
       # in this list. It did not, and the omission behaved exactly as this
       # file's comment above predicts it would: 756f3b0 rewrote the dtrace
