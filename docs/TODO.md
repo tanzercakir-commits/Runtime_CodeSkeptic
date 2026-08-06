@@ -155,6 +155,11 @@ filled in — not from the analyzer's imagination.
 
 ## Blocked
 
+**Community validation wanted.** The three items below are deliberately blocked
+on evidence that only an operator of the real target can provide. Contributions
+should bring attributable native measurements; cross-compiles and emulators do
+not promote a platform into the public support matrix.
+
 ### T-040 — Publish a real RISC-V64 hardware measurement `[blocked]`
 
 **Serves:** RISC-V users need execution evidence, not a cross-compile claim.

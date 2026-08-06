@@ -87,7 +87,7 @@ sonucudur:
 | **FEX-Emu** | RS-VM-0006 (sayfa boyutu) | ✅ SUPPORTED | ❌ **UNSUPPORTED** | ✅ SUPPORTED | Hayır (Linux/ARM) — extract-only |
 | **RPCS3** | RS-VM-0009/0011 (W^X + entitlement) | ✅ SUPPORTED | ❌ **UNSUPPORTED** | ✅ SUPPORTED | **Evet** — çalıştırıp ETW ile gözleyebilirsin |
 | **wasmtime** | RS-VM-0012 (reserve/commit) | ⚠️ CONDITIONAL | ⚠️ CONDITIONAL | ✅ SUPPORTED | **Evet** |
-| **PCSX2** | RS-VM-0012 + büyük bitişik ayırma | ⚠️ CONDITIONAL | ⚠️ CONDITIONAL | ✅ SUPPORTED | **Evet** |
+| **PCSX2** | RS-VM-0024 (çalıştırılabilir dosyaya göre yerleşim) | **UNKNOWN** | **UNKNOWN** | **UNKNOWN** | **Evet** |
 
 **En güçlü ikisi FEX ve RPCS3** — konağa göre yeşilden kırmıza dönüyorlar. İşte
 "durumu gör" tam bu.
@@ -255,48 +255,39 @@ iki-adımlı modeli Windows'un yerel modeliyle örtüşür.
 
 ---
 
-### 2.4 PCSX2 — başlangıçta bulunması gereken ~400 MB bitişik ayırma
+### 2.4 PCSX2 — çalıştırılabilir dosyanın yakınına sığmayan bellek pencereleri
 
-**Ne:** PS2 emülatörü, Windows-yerel, çok aktif. EE/IOP ana belleği + recompiler
-önbellekleri için tek parça büyük (~400 MB) bir bölge ayırır. Tarihsel olarak
-**sabit bir taban adreste** haritalanırdı; PR #11734 bunu `rbx` üzerinden
-taşınabilir yaptı — çünkü asıl sorun *"the emulator failing to start when it
-can't find anywhere to map recompiler memory"* idi. Tam da aracın modellediği
-olay sınıfı.
+**Gerçek olay:** [issue #11728](https://github.com/PCSX2/pcsx2/issues/11728),
+PCSX2'nin eski Intel Mac'lerde açılışta `Failed to map data memory at an
+acceptable location` hatasıyla kapandığını kaydediyor. Muhabirler, yerleşim
+bağımlılığını kaldıran [PR #11734](https://github.com/PCSX2/pcsx2/pull/11734)
+derlemesinin aynı makinelerde sorunu giderdiğini doğruladı.
 
-**Kural:** `RS-VM-0012` (reserve/commit) — ve serbest yer yoksa
-`RS-VM-0001/0021` (bulunabilirlik).
+Eski rehber bu olayı tek bir “~400 MB bitişik ayırma” olarak sadeleştiriyordu;
+bu doğru değildi. Etkilenen `v1.7.5849` kaynak sabitleri **155 MiB veri** ve
+**305 MiB recompiler** alanı tanımlıyor. Eski x86-64 yol bunları program
+metninin 256 MiB'ye yuvarlanmış adresine göre, `+4` ile `-6` arasındaki on
+bir ayrı kesin adayda arıyordu.
 
-**Ölçülmüş verdict:**
+**Kural:** `RS-VM-0024`. Gereksinim çalıştırılabilir dosyaya göre en fazla
+1.5 GiB yer değiştirmeyi taşıyor; ancak statik bir konak profili gelecekteki
+PCSX2 sürecinin metin adresini bilemez. Çalışma anındaki referans ve on bir
+adayın uygunluk ölçümü sağlanırsa her kesin aday `RS-VM-0001` ile
+değerlendirilebilir.
+
+**Retrospektif sonuç:**
 
 ```
-Linux        CONDITIONAL   RS-VM-0012 (COUNTEREXAMPLE)
-macOS        CONDITIONAL   RS-VM-0012 (COUNTEREXAMPLE)
-Windows      SUPPORTED
+macOS ARM64           UNKNOWN   RS-VM-0024
+macOS x86-64/Rosetta  UNKNOWN   RS-VM-0024
+Windows x86-64        UNKNOWN   RS-VM-0024
+Wine x86-64           UNKNOWN   RS-VM-0024
 ```
 
-**Sözleşme** (`contracts\campaign\pcsx2-recompiler-reservation.json`):
-
-```json
-{
-  "schema": "runtime-skeptic.application-requirements.v1",
-  "name": "PCSX2: a ~400 MB contiguous recompiler+main-memory reservation the emulator needs at startup",
-  "component": "PCSX2 vtlb/fastmem + EE/IOP recompiler caches; historically at a fixed base, PR #11734 makes it relocatable via rbx",
-  "operation": "virtual_memory_reserve",
-  "request": {
-    "size": 419430400,
-    "exact_address_required": false,
-    "protection": { "read": true, "write": true, "execute": false },
-    "reserve_then_commit": true
-  },
-  "assumptions": { "guest_host_identity_required": false, "translation_layer_available": false, "retries_on_failure": false },
-  "required_postconditions": ["a single contiguous region large enough for main memory plus recompiler caches is reservable, or the emulator cannot start"],
-  "permitted_fallbacks": [],
-  "failure_sink": { "kind": "process_exit", "description": "PR #11734 exists to 'prevent the emulator from failing to start when it can't find anywhere to map recompiler memory'" },
-  "assumption_evidence": "statically_inferred",
-  "x_campaign": { "project": "PCSX2", "source": "github.com/PCSX2/pcsx2#11734", "expected_verdict": "SUPPORTED where the space is free" }
-}
-```
+Buradaki `UNKNOWN` eksik test değil, doğru kanıt sınırıdır: olay gerçek ve
+düzeltme doğrulanmış olsa da depodaki profiller etkilenen Intel Mac'in süreç
+yerleşimini içermiyor. Sözleşme:
+[`contracts/campaign/pcsx2-v175849-data-window.json`](../contracts/campaign/pcsx2-v175849-data-window.json).
 
 ---
 
@@ -310,7 +301,7 @@ koştur. Beklenen (ölçülmüş) matris:
 FEX      (0006)   ❌ UNSUPPORTED     ✅ SUPPORTED
 RPCS3    (0009)   ❌ UNSUPPORTED     ✅ SUPPORTED
 wasmtime (0012)   ⚠️ CONDITIONAL     ✅ SUPPORTED
-PCSX2    (0012)   ⚠️ CONDITIONAL     ✅ SUPPORTED
+PCSX2    (0024)   UNKNOWN            UNKNOWN
 ```
 
 Bir tek sözleşmenin verdict'inin konağa göre değişmesi = **"ortam bir girdidir"**

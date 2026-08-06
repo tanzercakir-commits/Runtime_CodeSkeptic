@@ -160,6 +160,28 @@ The ARM64 rows mean **validated hosted environments** only. They do not claim
 that every ARM64 kernel, page-size configuration, device or architecture-family
 variant is supported. Measure your own target with `rs-env-probe`, as above.
 
+## Community validation wanted
+
+Some useful targets cannot be represented honestly by a cross-compile or an
+emulator. If you operate one of the environments below, you can extend the
+evidence without changing RuntimeSkeptic's claim boundary:
+
+- physical Linux RISC-V64;
+- Linux ARM64 with a 16 KiB or 64 KiB kernel page size;
+- native Linux ARMv7;
+- an authorized, licensed QNX or VxWorks development target;
+- a reproducible game, emulator or JIT failure caused by address placement,
+  page geometry, executable-memory policy or translation-layer behavior.
+
+Start with a public issue or a minimal reproducer, record the exact source
+revision and target configuration, then produce two independent profiles plus
+the native test output. The reusable native harness is
+[`tools/platform/run_native_validation.sh`](tools/platform/run_native_validation.sh).
+Do not publish credentials, device serials, proprietary source, private crash
+logs or licensed SDK contents. A new environment is named as validated only
+after its attributable evidence passes the same profile, CTest and ground-truth
+checks as the hosted lanes.
+
 ## System architecture
 
 ```text

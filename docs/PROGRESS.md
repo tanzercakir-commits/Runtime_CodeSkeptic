@@ -16,6 +16,36 @@ re-litigated; a mistake recorded here does not need to be re-made.
 
 ---
 
+## 2026-08-06 - Public game issues became an evidence campaign
+
+**Changed.** README and TODO now invite attributable community validation for
+physical RISC-V64, non-4-KiB ARM64, ARMv7, licensed RTOS targets and relevant
+game/emulator/JIT failures. Public PCSX2 issue #11728 and fixing PR #11734 were
+converted into corpus case `RSC-0055`, a campaign contract and a corrected
+real-world playbook entry. A campaign note records both accepted incidents and
+rejected false leads.
+
+**Evidence.** The affected PCSX2 source defines 155 MiB of data memory and 305
+MiB of recompiler memory and searches eleven executable-relative candidate
+locations. The contract loads against all four checked-in host profiles and
+returns `UNKNOWN` through `RS-VM-0024`, as expected: those profiles do not
+contain a future process image address or availability of the derived ranges.
+The corpus now contains 55 files, with 45 counting cases and 36 VM cases.
+
+**Learned.** The previous guide's "approximately 400 MB contiguous reserve" and
+`RS-VM-0012` explanation was wrong; the decisive constraint was discrete
+placement relative to the executable. Public game issues are useful evidence
+only after GPU failures, sandbox policy, application bookkeeping and other
+out-of-model defects are filtered out. A truthful `UNKNOWN` is stronger than a
+fabricated compatibility claim.
+
+**Next.** Publish the branch after GitHub authentication is restored. An
+affected Intel Mac launch-time profile can promote the PCSX2 case from
+`sourced` to `reproduced`; physical and licensed community targets remain
+blocked until attributable native evidence arrives.
+
+---
+
 ## 2026-08-06 - CI moved off the retired Node action runtime
 
 **Changed.** Every workflow now uses Node.js 24 action generations:
