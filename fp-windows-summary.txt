@@ -1,0 +1,18 @@
+observed: python3
+observed: perl
+observed: ruby
+observed: php
+observed: git
+observed: openssl
+observed: jq
+skipped: redis (no redis-server on this host)
+observed: gzip
+observed: xz
+skipped: ffmpeg (no ffmpeg on this host)
+observed: node-jit
+observed: java-jit
+gzip (shape): rs-check produced nothing: rs-check: 'build\fp-windows\gzip.shape.json' contains no usable requirements. An empty bundle is not a clean result.
+
+NOT COVERED on this host:
+  skipped: redis (no redis-server on this host)
+  skipped: ffmpeg (no ffmpeg on this host)
