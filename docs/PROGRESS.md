@@ -16,6 +16,30 @@ re-litigated; a mistake recorded here does not need to be re-made.
 
 ---
 
+## 2026-08-06 - Rosetta closed the cross-architecture package loop
+
+**Changed.** The fresh x86-64-under-Rosetta profile from commit `fc2f075` now
+replaces the stale v0.1 measurement. The measured-profile provenance table
+names the exact v0.2 source commit and workflow run for native macOS, Rosetta
+and Windows instead of pointing at the superseded `67dfbd8` pair.
+
+**Evidence.** macOS measurement run `31084931185` passed both jobs. The Rosetta
+lane built x86-64, passed all 23 translated tests including the installed-SDK
+consumer, reproduced the profile across two processes, verified translation
+identity, passed ground truth and published ref `refs/measurements/fc2f075.../
+rosetta-x86_64`. The imported profile passes `rs-profile verify`; its canonical
+identity is stable and all repository schemas accept it.
+
+**Learned.** Measurement freshness and package portability are one loop here:
+refreshing a profile exercised a consumer configuration ordinary native CI
+could not reach, and the corrected consumer was then proven by the measurement
+lane that had exposed it.
+
+**Next.** Push the refreshed Rosetta profile and require the complete PR CI,
+both hosted ARM64 evidence lanes, and the local guard suite to finish green.
+
+---
+
 ## 2026-08-06 - Hosted ARM64 evidence closed; Rosetta tested the SDK boundary
 
 **Changed.** T-038 was consumed after both hosted ARM64 evidence lanes went
