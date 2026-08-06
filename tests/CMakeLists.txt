@@ -74,6 +74,7 @@ add_test(NAME test_runtime_install
         -DRS_BUILD_DIR=${CMAKE_BINARY_DIR}
         -DRS_INSTALL_PREFIX=${CMAKE_BINARY_DIR}/runtime-install-test
         -DRS_CONFIG=$<CONFIG>
+        "-DRS_OSX_ARCHITECTURES=${CMAKE_OSX_ARCHITECTURES}"
         -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/check_runtime_install.cmake)
 set_tests_properties(test_runtime_install PROPERTIES TIMEOUT 120)
 

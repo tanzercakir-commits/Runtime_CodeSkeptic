@@ -407,7 +407,7 @@ RS_TEST(an_unmodeled_os_or_arch_maps_to_other_not_rejected) {
     auto parsed = json::parse(R"({
         "schema": "runtime-skeptic.environment-profile.v1",
         "origin": "measured",
-        "platform": {"os": "freebsd", "process_arch": "riscv64"}
+        "platform": {"os": "freebsd", "process_arch": "loongarch64"}
     })");
     RS_CHECK(parsed.ok());
     std::string error;
@@ -419,6 +419,30 @@ RS_TEST(an_unmodeled_os_or_arch_maps_to_other_not_rejected) {
     // `other` is not `unknown`: the field was present, just unmodeled. But an
     // unmodeled arch carries no pointer width, so nothing is fabricated from it.
     RS_CHECK_EQ(p->process_pointer_width(), 0u);
+}
+
+RS_TEST(riscv64_is_first_class_and_has_a_64_bit_pointer_width) {
+    Architecture arch = Architecture::Unknown;
+    RS_CHECK(architecture_from_string("riscv64", arch));
+    RS_CHECK(arch == Architecture::Riscv64);
+    RS_CHECK_EQ(to_string(arch), std::string_view("riscv64"));
+    RS_CHECK_EQ(pointer_width_bits(arch), 64u);
+
+    auto parsed = json::parse(R"({
+        "schema": "runtime-skeptic.environment-profile.v1",
+        "origin": "measured",
+        "platform": {"os": "linux", "host_arch": "riscv64",
+                     "process_arch": "riscv64"}
+    })");
+    RS_CHECK(parsed.ok());
+    std::string error;
+    auto profile = EnvironmentProfile::from_json(*parsed.value, error);
+    RS_CHECK_MESSAGE(profile.has_value(), error);
+    if (profile) {
+        RS_CHECK(profile->platform.host_arch == Architecture::Riscv64);
+        RS_CHECK(profile->platform.process_arch == Architecture::Riscv64);
+        RS_CHECK_EQ(profile->process_pointer_width(), 64u);
+    }
 }
 
 // Under-strict half. The schema types os as a string; a number is not a

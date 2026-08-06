@@ -17,14 +17,14 @@
     "duration_ms": 0,
     "probe_binary_hash": "",
     "probe_version": "rs-env-probe/vm/0.1.0",
-    "run_id": "0b7c3ed2ef915b55",
-    "timestamp_utc": "2026-08-05T18:08:17Z",
-    "tool_version": "runtimeskeptic/0.1.0",
+    "run_id": "fa850058af2195b5",
+    "timestamp_utc": "2026-08-06T08:17:25Z",
+    "tool_version": "runtimeskeptic/0.2.0",
     "warnings": [
       "the lowest placeable page in this process is 0x300000000, which is where its own __PAGEZERO and image end. macOS has no equivalent of vm.mmap_min_addr to read, so min_map_address is left UNKNOWN rather than filled in with a property of the probe binary; under Rosetta this value moves between runs of the same job because the translated image is slid by ASLR",
       "max_user_address resolved to 0x7ffffe000000 from a highest placed probe point of 0x400000000000; mach_vm_region at the ceiling says: mach_vm_region found no region at or above this address. A region of this task covering that address would mean the ceiling is our own layout rather than the host's, which is the defect this line exists to expose",
-      "survey: 0 structural hole(s) recorded; 3 refusal(s) not recorded because a no-access region of this task covers them, and 13 not recorded because they lie below the lowest page this process can place, which is where its own __PAGEZERO and image end - a link-time choice, not a platform property. Both classes moved between runs, which is what made profile_id irreproducible",
-      "allocation arena [0x100000000, 0xfc0000000) walked in contiguous windows of 0x400000 bytes: 13538 placed, 72 already held by the probe process, 0 structurally refused, 17 refused but covered by a no-access region of this task (treated as held, because nothing here distinguishes one of our own guard reservations from a platform band - this arena stops below the commpage so that no platform band is inside it; if this number rises while unavailable_ranges stays empty, that assumption has broken), and 1477 not probed because they lie inside an entry already described. Only the structurally refused count is a host limitation",
+      "survey: 0 structural hole(s) recorded; 3 refusal(s) not recorded because a no-access region of this task covers them, and 14 not recorded because they lie below the lowest page this process can place, which is where its own __PAGEZERO and image end - a link-time choice, not a platform property. Both classes moved between runs, which is what made profile_id irreproducible",
+      "allocation arena [0x100000000, 0xfc0000000) walked in contiguous windows of 0x400000 bytes: 13525 placed, 76 already held by the probe process, 0 structurally refused, 16 refused but covered by a no-access region of this task (treated as held, because nothing here distinguishes one of our own guard reservations from a platform band - this arena stops below the commpage so that no platform band is inside it; if this number rises while unavailable_ranges stays empty, that assumption has broken), and 1487 not probed because they lie inside an entry already described. Only the structurally refused count is a host limitation",
       "allocation arena [0x7bfffe000000, 0x7ffffe000000) walked in contiguous windows of 0x1000000000 bytes: 64 placed, 0 already held by the probe process, 0 structurally refused, 0 refused but covered by a no-access region of this task (treated as held, because nothing here distinguishes one of our own guard reservations from a platform band - this arena's floor is derived from the measured max_user_address and lies far above the commpage and the GPU carveout, the only platform bands this project has documented; if this number rises while unavailable_ranges stays empty, that assumption has broken), and 0 not probed because they lie inside an entry already described. Only the structurally refused count is a host limitation"
     ]
   },

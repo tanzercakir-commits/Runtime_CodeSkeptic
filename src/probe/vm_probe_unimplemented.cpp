@@ -77,6 +77,10 @@ Result probe_virtual_memory(const Options&) {
     profile.platform.process_arch = vm::Architecture::X86_64;
 #elif defined(__i386__) || defined(_M_IX86)
     profile.platform.process_arch = vm::Architecture::X86;
+#elif defined(__arm__) || defined(_M_ARM)
+    profile.platform.process_arch = vm::Architecture::Arm;
+#elif defined(__riscv) && defined(__riscv_xlen) && __riscv_xlen == 64
+    profile.platform.process_arch = vm::Architecture::Riscv64;
 #else
     profile.platform.process_arch = vm::Architecture::Unknown;
 #endif

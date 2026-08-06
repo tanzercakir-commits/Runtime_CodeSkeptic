@@ -55,12 +55,14 @@ def _find_binary(name: str):
         roots.append(binary_root)
         roots.extend(binary_root / config for config in
                      ("Release", "RelWithDebInfo", "Debug", "MinSizeRel"))
-    # Prefer a native no-suffix binary across every build tree before a PE file.
-    for suffix in ("", ".exe"):
-        for root in roots:
-            candidate = root / (name + suffix)
-            if candidate.exists():
-                return candidate
+    # Execute only binaries native to this operating system. Preferring every
+    # extensionless file first selected a stale Linux ELF from another build
+    # tree on Windows and crashed the guard before it validated anything.
+    suffix = ".exe" if os.name == "nt" else ""
+    for root in roots:
+        candidate = root / (name + suffix)
+        if candidate.is_file():
+            return candidate
     return None
 
 

@@ -1,7 +1,7 @@
 {
   "notes": [
-    "VirtualQuery walk: 31 free, 17 reserved, 90 committed region(s); largest free run 138202732875776 bytes. Recorded as a note and NOT as available_ranges: which regions are free is a property of this process's ASLR layout, and a profile that hashed it would differ between two runs on one machine.",
-    "VirtualQuery occupancy (NOT a fact about the host - this process's own layout, for designing an arena's bounds): occupied [0x7ffe0000, 0x7ffda9549000), 4350083072 bytes total, in 3 TiB bucket(s): 0x0=6299648 0x20000000000=2641920 0x7f0000000000=4341141504"
+    "VirtualQuery walk: 31 free, 17 reserved, 90 committed region(s); largest free run 139043203248128 bytes. Recorded as a note and NOT as available_ranges: which regions are free is a property of this process's ASLR layout, and a profile that hashed it would differ between two runs on one machine.",
+    "VirtualQuery occupancy (NOT a fact about the host - this process's own layout, for designing an arena's bounds): occupied [0x7ffe0000, 0x7fffd5549000), 4350095360 bytes total, in 3 TiB bucket(s): 0x0=6299648 0x10000000000=2641920 0x7f0000000000=4341153792"
   ],
   "origin": "measured",
   "platform": {
@@ -18,12 +18,12 @@
     "probe_binary_hash": "",
     "probe_version": "rs-env-probe/vm/0.1.0",
     "run_id": "",
-    "timestamp_utc": "2026-08-05T21:26:03Z",
-    "tool_version": "runtimeskeptic/0.1.0",
+    "timestamp_utc": "2026-08-06T08:18:06Z",
+    "tool_version": "runtimeskeptic/0.2.0",
     "warnings": [
       "lpMaximumApplicationAddress is INCLUSIVE: VirtualQuery(0x7ffffffef000) succeeded reporting MEM_FREE over 4096 bytes, so the address is part of this process's space, and a one-page reservation there failed with error 0 - consistent with the system's top-of-space guard region, which is why the reservation is not what decides this",
       "max_single_reservation_hinted is not measured on this platform and is left unknown: a VirtualAlloc base address is a requirement, not an advisory hint, so there is no second question to ask. On Linux that second number is what separates 'the largest the kernel grants' from 'the largest inside the default mmap window'",
-      "allocation arena [0x7f0000000000, 0x7ffffffeffff) walked in contiguous windows of 0x4000000 bytes: 16313 placed, 1 already held by this process at the window's own base, 0 structurally refused, 6 refused with a region of this process elsewhere in the window (treated as held; this arena's floor is 127 TiB above KUSER_SHARED_DATA at 0x7ffe0000, the only system-wide band this platform is known to place, so if this number rises while unavailable_ranges stays empty that assumption has broken), and 63 not probed because they lie inside a region already described. Only the structurally refused count is a host limitation, and a refusal is recorded at the resolution of one window - which over-claims for a hole smaller than that, and has measured zero so far. This split moves with ASLR, which is why it is a warning and not a fact",
+      "allocation arena [0x7f0000000000, 0x7ffffffeffff) walked in contiguous windows of 0x4000000 bytes: 16312 placed, 1 already held by this process at the window's own base, 0 structurally refused, 6 refused with a region of this process elsewhere in the window (treated as held; this arena's floor is 127 TiB above KUSER_SHARED_DATA at 0x7ffe0000, the only system-wide band this platform is known to place, so if this number rises while unavailable_ranges stays empty that assumption has broken), and 64 not probed because they lie inside a region already described. Only the structurally refused count is a host limitation, and a refusal is recorded at the resolution of one window - which over-claims for a hole smaller than that, and has measured zero so far. This split moves with ASLR, which is why it is a warning and not a fact",
       "allocation arena [0x10000000000, 0x7f0000000000) walked in contiguous windows of 0x1000000000 bytes: 2015 placed, 0 already held by this process at the window's own base, 0 structurally refused, 1 refused with a region of this process elsewhere in the window (treated as held; this arena starts at 1 TiB, above KUSER_SHARED_DATA at 0x7ffe0000, so the only system-wide band this platform is known to place is outside it and [min_map_address, 1 TiB) is deliberately left to the landmark ladder, so if this number rises while unavailable_ranges stays empty that assumption has broken), and 0 not probed because they lie inside a region already described. Only the structurally refused count is a host limitation, and a refusal is recorded at the resolution of one window - which over-claims for a hole smaller than that, and has measured zero so far. This split moves with ASLR, which is why it is a warning and not a fact"
     ]
   },

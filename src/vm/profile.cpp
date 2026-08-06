@@ -40,9 +40,10 @@ constexpr std::array<std::pair<std::string_view, OperatingSystem>, 5> kOs{{
     {"unknown", OperatingSystem::Unknown},
 }};
 
-constexpr std::array<std::pair<std::string_view, Architecture>, 6> kArch{{
+constexpr std::array<std::pair<std::string_view, Architecture>, 7> kArch{{
     {"x86_64", Architecture::X86_64},
     {"aarch64", Architecture::Aarch64},
+    {"riscv64", Architecture::Riscv64},
     {"x86", Architecture::X86},
     {"arm", Architecture::Arm},
     {"other", Architecture::Other},
@@ -170,6 +171,7 @@ unsigned pointer_width_bits(Architecture arch) {
     switch (arch) {
         case Architecture::X86_64:
         case Architecture::Aarch64:
+        case Architecture::Riscv64:
             return 64;
         case Architecture::X86:
         case Architecture::Arm:

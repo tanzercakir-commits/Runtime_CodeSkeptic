@@ -167,8 +167,11 @@ ArenaWalk walk_arena_adaptive(const std::string& what,
 // It lives in this header, away from the platform file, for one reason: an LA57
 // host is one this project cannot obtain on demand, and the version of the fix
 // that needs one to be checked has not removed the dependency - it has moved it.
-std::uint64_t arena_ceiling_for(std::uint64_t max_user_address,
-                                std::uint64_t granularity);
+// `default_map_window` is the architecture-specific Linux mmap policy ceiling;
+// the default preserves the x86-64 behavior for callers and focused unit tests.
+std::uint64_t arena_ceiling_for(
+    std::uint64_t max_user_address, std::uint64_t granularity,
+    std::uint64_t default_map_window = std::uint64_t{1} << 47);
 
 // The FLOOR of an arena occupying the top `span` of the user address space, or 0
 // meaning "there is no room for one". Returns the base of the `span`-sized bucket

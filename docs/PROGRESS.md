@@ -16,6 +16,200 @@ re-litigated; a mistake recorded here does not need to be re-made.
 
 ---
 
+## 2026-08-06 - CI moved off the retired Node action runtime
+
+**Changed.** Every workflow now uses Node.js 24 action generations:
+`checkout@v6`, `upload-artifact@v7` and `download-artifact@v8`. A repository-wide
+guard rejects older majors and moving refs such as `@main`; five adversarial
+cases lift the guard suite to 160 cases.
+
+**Evidence.** The previous final-sha jobs were functionally green but GitHub
+annotated checkout, upload and download steps as Node.js 20 actions being forced
+onto Node.js 24. Official action release notes identify the selected majors as
+Node.js 24 defaults. The new guard scans all five workflows and the full local
+guard suite must pass before the upgrade is pushed.
+
+**Learned.** A green check can still carry a dated execution dependency. The
+runtime warning belonged in a mechanical floor, not a future maintenance note.
+
+**Next.** Run the complete GitHub matrix on the action-upgrade commit and require
+both zero failures and disappearance of the Node.js 20 annotations.
+
+---
+
+## 2026-08-06 - Hosted ARM64 reached the public matrix without overclaiming
+
+**Changed.** README now names Linux ARM64 on `ubuntu-24.04-arm` and Windows
+ARM64 on `windows-11-arm` as validated hosted environments. It explicitly
+separates their per-run evidence artifacts from checked-in snapshot profiles
+and rejects promotion to an ARM64 architecture-family support claim.
+
+**Evidence.** Final-sha platform run `31085768346` passed both ARM64 jobs on
+commit `2705ff6`: warning-clean builds, complete CTest, two independent probes,
+profile verification, strict claim policy and artifact upload. Full CI run
+`31085768332` passed all nine reported checks on the same commit.
+
+**Learned.** A support matrix needs an evidence-strength boundary in prose even
+when the table is compact; otherwise a named guest can be read as a promise for
+every device sharing its ISA.
+
+**Next.** Keep the public rows scoped to those two hosted images. Add physical
+RISC-V, ARM page variants or RTOS rows only after their blocked evidence tasks
+produce authoritative measurements.
+
+---
+
+## 2026-08-06 - The RISC-V hardware gate is armed without spending
+
+**Changed.** GitHub environment `riscv64-hardware` now exists with the
+repository owner as a required reviewer. No host was provisioned, no secret was
+invented, and no paid or hardware workflow was started. T-040's first step now
+begins at the real remaining boundary: an authorized host plus its scoped SSH
+endpoint, key and pinned host-key secrets.
+
+**Evidence.** GitHub returned environment id `19395035280` with one
+`required_reviewers` protection rule for `tanzercakir-commits` and
+`prevent_self_review: false`. The workflow remains manual-only, requires exact
+confirmation `RUN`, and has no usable connection secrets.
+
+**Learned.** The approval boundary can be installed before hardware exists,
+removing one operational step without pretending the absent target is evidence.
+
+**Next.** Stop at T-040's explicit blocker. An authorized RISC-V64 target and
+its credentials are required before the first hardware measurement is lawful.
+
+---
+
+## 2026-08-06 - Rosetta closed the cross-architecture package loop
+
+**Changed.** The fresh x86-64-under-Rosetta profile from commit `fc2f075` now
+replaces the stale v0.1 measurement. The measured-profile provenance table
+names the exact v0.2 source commit and workflow run for native macOS, Rosetta
+and Windows instead of pointing at the superseded `67dfbd8` pair.
+
+**Evidence.** macOS measurement run `31084931185` passed both jobs. The Rosetta
+lane built x86-64, passed all 23 translated tests including the installed-SDK
+consumer, reproduced the profile across two processes, verified translation
+identity, passed ground truth and published ref `refs/measurements/fc2f075.../
+rosetta-x86_64`. The imported profile passes `rs-profile verify`; its canonical
+identity is stable and all repository schemas accept it.
+
+**Learned.** Measurement freshness and package portability are one loop here:
+refreshing a profile exercised a consumer configuration ordinary native CI
+could not reach, and the corrected consumer was then proven by the measurement
+lane that had exposed it.
+
+**Next.** Push the refreshed Rosetta profile and require the complete PR CI,
+both hosted ARM64 evidence lanes, and the local guard suite to finish green.
+
+---
+
+## 2026-08-06 - Hosted ARM64 evidence closed; Rosetta tested the SDK boundary
+
+**Changed.** T-038 was consumed after both hosted ARM64 evidence lanes went
+green. The repository now carries fresh v0.2 native macOS and Windows x86-64
+profiles from the same probe generation. Their refresh exposed a separate
+cross-architecture packaging defect: the installed-package consumer ignored
+the parent build's `CMAKE_OSX_ARCHITECTURES`, so an x86-64 SDK was linked into
+an arm64 consumer under Rosetta. The install test now forwards that target and
+the macOS measurement trigger watches both files that define the test.
+
+**Evidence.** Platform run `31083869013` passed warning-clean native Linux and
+Windows ARM64 builds, complete CTest, two-process reproducibility, profile
+verification, strict policy validation and artifact upload. macOS measurement
+run `31084206595` passed its native arm64 job and published the replacement;
+Windows run `31084204325` passed build, 24 tests, two-process reproducibility,
+the ETW campaign and profile publication. Both replacements pass `rs-profile
+verify` and all 79 schema artifacts validate. The local MSVC install consumer
+and complete 24-test suite pass with the architecture forwarding in place.
+
+**Learned.** A test launched from a cross-compiled CMake tree does not inherit
+that tree's target architecture when it configures a second consumer project.
+The package was correct; the test silently switched toolchain architecture.
+
+**Next.** Push the consumer fix, dispatch the Rosetta lane on that exact commit,
+import its measured profile, then require the full PR matrix and all guards to
+be green again.
+
+---
+
+## 2026-08-06 - Linux ARM64 shed an x86-only address-space assumption
+
+**Changed.** PR #4's first native run proved that architecture identity alone
+was insufficient: the Linux allocation-arena walk still capped every 64-bit
+target at x86-64's 47-bit default mmap window. The probe now selects the Linux
+default map window from the measured process architecture, retaining 47 bits
+for x86-64 and using the kernel's 48-bit ARM64 geometry. A focused unit test
+and a sixth platform-expansion adversarial case make the distinction durable.
+
+**Evidence.** GitHub run 31082924513 passed the complete Windows ARM64 lane and
+failed Linux ARM64 only in `test_probe`, where real code, heap and direct mmap
+addresses sat above the old 47-bit ceiling. The corrected geometry is covered
+by the warning-clean local build, complete CTest suite, platform guard, and
+155-case guard selftest before the authoritative lanes are rerun.
+
+**Learned.** A valid architecture label can coexist with architecture-invalid
+probe geometry. Linux `TASK_SIZE`, the ordinary mmap window, and their kernel
+defaults are separate policies; treating x86-64's map window as universal
+made valid AArch64 allocations appear outside the observed arena.
+
+**Next.** Rerun both hosted ARM64 lanes. Consume T-038 only after Linux and
+Windows both build warning-clean, pass every test and emit accepted two-probe
+evidence artifacts.
+
+---
+
+## 2026-08-06 - Native architecture evidence became fail-closed
+
+**Changed.** T-037 and T-039 were consumed. RISC-V64 is now a first-class
+64-bit profile architecture, while Linux process identity comes from compiler
+target macros so neither RISC-V64 nor 32-bit Arm falls through to an x86
+default. The pinned Plan v2 now has a structural guard and five adversarial
+cases. A policy validator requires measured origin, exact OS/host/process ISA,
+pointer width, native translation state, measured VM fundamentals, two-process
+identity agreement, and a provenance envelope whose claim is explicitly
+limited to one named environment. Hosted Linux and Windows ARM64 jobs and a
+manual RISC-V64 physical-host path use that gate. The schema guard also learned
+to execute only binaries native to the current OS after Windows selected a
+stale extensionless Linux ELF from another build tree.
+
+**Evidence.** Warning-clean MSVC RelWithDebInfo compiled with zero warnings and
+zero errors; CTest passed 24/24. Two real Windows probe processes produced the
+same profile id, both passed `rs-profile verify`, and the new policy gate wrote
+a scoped validation envelope. Guard selftests passed 154/154, the native-profile
+validator passed 5/5 adversarial cases, the platform-expansion guard passed,
+the 639-case input boundary matrix reported zero divergences, and 79 artifacts
+validated against six schemas. Bash syntax and both workflow YAML documents
+were parsed locally.
+
+**Learned.** Pointer width is not an ISA detector. Also, a provenance field
+that the probe never populates cannot be made mandatory only in CI: the first
+real validator run correctly exposed that `probe_binary_hash` is currently
+empty, so the gate now requires the populated tool/probe/timestamp metadata
+and separately hashes the uploaded profile artifact.
+
+**Next.** Run T-038's two hosted ARM64 jobs on GitHub. Only their green native
+artifacts can close the task or justify a public support row.
+
+---
+
+## 2026-08-06 - Platform Expansion v2 accepted and bounded
+
+**Changed.** The owner accepted a platform-evidence addendum without changing
+the immutable `plan.md`, frozen `ROADMAP.md`, or standalone ADR. T-037 through
+T-039 now own the executable slice: claim-boundary enforcement, hosted Linux
+and Windows ARM64 evidence, and correct RISC-V64/ARM identity plus a manual
+hardware harness. T-040 through T-042 keep real RISC-V, page-size/ARMv7, and
+RTOS measurements visible behind their actual target and license blockers.
+
+**Learned.** The Linux probe was not architecture-neutral: every 64-bit
+non-AArch64 process became `x86_64`, and every 32-bit process became `x86`.
+Adding a RISC-V runner before fixing that would have produced a schema-valid,
+measured, false profile. Runner coverage must follow identity correctness.
+
+**Next.** Pin and adversarially guard the accepted plan; implement the
+architecture correction and scoped profile validator; then run the two hosted
+ARM64 lanes before changing any public support claim.
 ## 2026-08-06 - Promotional copy left the public product tree
 
 **Changed.** The remaining editable launch campaign draft was removed. This

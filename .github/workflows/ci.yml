@@ -61,7 +61,7 @@ jobs:
           - { name: "linux / clang",   os: ubuntu-latest,  cc: clang, cxx: clang++ }
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           # tools/guards/check_dates.py blames PROGRESS.md headings against the
           # commit that wrote them. actions/checkout defaults to fetch-depth: 1,
@@ -116,7 +116,7 @@ jobs:
 
       - name: Upload v0.2 Linux presentation package
         if: matrix.cc == 'gcc'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: runtimeskeptic-v0.2.0-linux-x86_64
           path: dist/runtimeskeptic-v0.2.0-linux-x86_64.tar.gz
@@ -246,7 +246,7 @@ jobs:
 
       - name: Upload execution ledger
         if: runner.os == 'Linux'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: groundtruth-ledger-${{ matrix.os }}-${{ matrix.cc }}
           path: /tmp/meas/*.ledger.jsonl
@@ -286,7 +286,7 @@ jobs:
           "$BIN/rs-profile" verify host-profile.json
 
       - name: Upload the measured profile
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: profile-${{ matrix.os }}-${{ matrix.cc || 'msvc' }}
           path: host-profile.json
@@ -493,7 +493,7 @@ jobs:
           - { name: "macos / apple-clang", os: macos-latest,   cc: clang, cxx: clang++ }
           - { name: "windows / msvc",      os: windows-latest, cc: "",    cxx: "" }
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Configure
         id: configure
@@ -532,7 +532,7 @@ jobs:
 
       - name: Upload v0.2 macOS presentation package
         if: runner.os == 'macOS'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: runtimeskeptic-v0.2.0-macos-arm64
           path: dist/runtimeskeptic-v0.2.0-macos-arm64.tar.gz
@@ -579,7 +579,7 @@ jobs:
 
       - name: Upload execution ledger
         if: runner.os == 'macOS'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: groundtruth-ledger-macos-apple-clang
           path: /tmp/meas/*.ledger.jsonl
@@ -726,9 +726,9 @@ jobs:
     needs: [build-and-test, expensive-platforms]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           pattern: groundtruth-ledger-*
           path: coverage-ledgers
@@ -754,7 +754,7 @@ jobs:
           python3 tools/campaign/groundtruth_execution_coverage.py \
             --require-complete "${ledgers[@]}" | tee execution-coverage.txt
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: execution-coverage-aggregate
           path: execution-coverage.txt
@@ -764,7 +764,7 @@ jobs:
     name: compatibility gate (linux)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Build
         id: build
@@ -843,7 +843,7 @@ jobs:
           fi
           cat fixture-report.md
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: reports
           path: |
@@ -978,7 +978,7 @@ jobs:
     name: determinism
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - run: |
           cmake -S . -B build -DCMAKE_BUILD_TYPE=RelWithDebInfo
           cmake --build build --parallel
