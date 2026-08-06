@@ -20,7 +20,10 @@ RS_CHECK="${RS_CHECK:-$ROOT/build/bin/rs-check}"
 BIN="${GT_BIN:-$ROOT/build/groundtruth}"
 CASES="${GT_CASES:-$HERE/cases}"
 MANIFEST="${GT_MANIFEST:-$HERE/manifest.json}"
+ORACLES="${GT_ORACLES:-$HERE/pairing_oracles.json}"
+PAIRING_TOOL="$ROOT/tools/campaign/groundtruth_pairing.py"
 PROFILE="${1:-}"
+LEDGER="${GT_LEDGER:-}"
 
 if [ -z "$PROFILE" ]; then
     echo "usage: $0 MEASURED-PROFILE.json" >&2
@@ -28,6 +31,22 @@ if [ -z "$PROFILE" ]; then
 fi
 [ -x "$RS_CHECK" ] || { echo "$0: $RS_CHECK not found; build first" >&2; exit 64; }
 [ -f "$PROFILE" ] || { echo "$0: $PROFILE not found" >&2; exit 64; }
+[ -f "$ORACLES" ] || { echo "$0: $ORACLES not found" >&2; exit 64; }
+[ -f "$PAIRING_TOOL" ] || { echo "$0: $PAIRING_TOOL not found" >&2; exit 64; }
+if ! python3 "$PAIRING_TOOL" validate "$MANIFEST" "$ORACLES" >/dev/null; then
+    echo "$0: ground-truth pairing registry is invalid" >&2
+    exit 65
+fi
+
+if [ -n "$LEDGER" ]; then
+    : > "$LEDGER"
+    PROFILE_ID=$(python3 -c "
+import json
+p = json.load(open('$PROFILE'))
+print(p.get('profile_id', ''))
+")
+    [ -n "$PROFILE_ID" ] || { echo "$0: profile has no profile_id" >&2; exit 65; }
+fi
 
 # --- build the cases -------------------------------------------------------
 # Compiled here rather than by the project's CMake, on purpose: these programs
@@ -113,11 +132,14 @@ declare -a failures=()
 
 count=$(python3 -c "import json;print(len(json.load(open('$MANIFEST'))['cases']))")
 for i in $(seq 0 $((count - 1))); do
-    read -r name contract program <<<"$(python3 -c "
+    read -r name contract program runner <<<"$(python3 -c "
 import json
 c = json.load(open('$MANIFEST'))['cases'][$i]
-print(c['case'], c['contract'], c['program'])
+print(c['case'], c['contract'], c['program'], c.get('runner', 'direct'))
 ")"
+    # Privileged containment cases have their own runner and ledger writer.
+    # The ordinary harness must never execute them without that boundary.
+    if [ "$runner" != "direct" ]; then continue; fi
     # `mapfile` is bash 4+ and macOS ships bash 3.2, so this file would have
     # died here the moment the selftest above stopped dying first. Read the
     # array the portable way.
@@ -150,21 +172,62 @@ for a in json.load(open('$MANIFEST'))['cases'][$i]['args']: print(a)
 import json
 print(json.load(open('$MANIFEST'))['cases'][$i].get('derive_address_from', ''))
 ")
+    derive_request_field=$(python3 -c "
+import json
+print(json.load(open('$MANIFEST'))['cases'][$i].get(
+    'derive_request_field', 'address'))
+")
+    derive_arg_index=$(python3 -c "
+import json
+print(json.load(open('$MANIFEST'))['cases'][$i].get('derive_arg_index', 0))
+")
     if [ -n "$derive_from" ]; then
-        derived="$BIN/derived-$name.json"
-        if derived_addr=$(python3 "$HERE/derive_contract.py" \
-                "$CONTRACT_ROOT/$contract" "$PROFILE" "$derive_from" "$derived"); then
-            use_contract="$derived"
-            # The case program takes the same address; substituting only the
-            # contract would compare a prediction about one address against an
-            # observation of another.
-            if [ "$nargs" -gt 0 ]; then args[0]="$derived_addr"; fi
+        case "$derive_arg_index" in
+            ''|*[!0-9]*) echo "$0: invalid derive_arg_index for $name" >&2; exit 65 ;;
+        esac
+        if [ "$derive_arg_index" -ge "$nargs" ]; then
+            echo "$0: derive_arg_index is outside argv for $name" >&2
+            exit 65
         fi
+        derived="$BIN/derived-$name.json"
+        derived_addr=$(python3 "$HERE/derive_contract.py" \
+            "$CONTRACT_ROOT/$contract" "$PROFILE" "$derive_from" "$derived" \
+            "$derive_request_field")
+        derive_status=$?
+        case "$derive_status" in
+        0)
+            use_contract="$derived"
+            # The case program receives the same value as the derived contract;
+            # substituting only one side would compare different requests.
+            args[$derive_arg_index]="$derived_addr"
+            ;;
+        1) ;;  # measured fact absent: deliberate committed-contract fallback
+        *)
+            echo "$0: contract derivation failed for $name (exit $derive_status)" >&2
+            exit 70
+            ;;
+        esac
     fi
 
-    "$RS_CHECK" "$use_contract" --profile "$PROFILE" --format json >/dev/null 2>&1
-    predicted=$(verdict_of $?)
+    analysis_json=$("$RS_CHECK" "$use_contract" --profile "$PROFILE" \
+        --format json 2>"$BIN/analyzer.log")
+    analysis_code=$?
+    if [ "$analysis_code" -gt 3 ]; then
+        echo "$0: rs-check failed for $name (exit $analysis_code)" >&2
+        cat "$BIN/analyzer.log" >&2
+        exit 70
+    fi
+    if ! analysis_findings=$(printf '%s' "$analysis_json" | python3 -c "
+import json,sys
+d=json.load(sys.stdin); rows=d.get('results',[d])
+print(','.join(sorted({f['id'] for r in rows for f in r.get('findings',[])})))
+"); then
+        echo "$0: rs-check returned invalid JSON for $name" >&2
+        exit 70
+    fi
+    predicted=$(verdict_of "$analysis_code")
 
+    analyzer_verdict="$predicted"
     # A case may only settle a prediction if it checks EVERY postcondition its
     # contract states. exact-mapping-misaligned reported `satisfied` having
     # verified placement and ignored the alignment clause next to it, which
@@ -176,6 +239,17 @@ c = json.load(open('$MANIFEST'))['cases'][$i]
 print('yes' if c.get('verifies_all_postconditions') is True else 'no')
 ")
     if [ "$full" != "yes" ]; then predicted="RECORD-ONLY"; fi
+    relocation_satisfies=$(python3 -c "
+import json
+d = json.load(open('$use_contract'))
+r = d.get('request', {})
+a = d.get('assumptions', {})
+ok = (r.get('exact_address_required') is False
+      and a.get('guest_host_identity_required') is False
+      and 'relocate' in d.get('permitted_fallbacks', []))
+print('yes' if ok else 'no')
+")
+
 
     # "${args[@]+...}" and not "${args[@]}", because bash 3.2 under `set -u`
     # treats an EMPTY array's expansion as an unbound variable - and macOS ships
@@ -195,39 +269,61 @@ import json,sys
 try: print(json.load(sys.stdin).get('detail',''))
 except Exception: print('the case produced no parsable output')
 ")
+    observed_case=$(printf '%s' "$observed_json" | python3 -c "
+import json,sys
+try:
+    value = json.load(sys.stdin).get('case')
+    print(value if isinstance(value, str) else '')
+except Exception: print('')
+")
+    if [ "$outcome" != "no-output" ] && [ "$observed_case" != "$name" ]; then
+        detail="case output named '$observed_case', expected '$name'"
+        outcome="case-mismatch"
+    fi
 
     total=$((total + 1))
-    case "$predicted" in
-        SUPPORTED)
-            if [ "$outcome" = "satisfied" ]; then
-                mark="held"; held=$((held + 1))
-            elif [ "$outcome" = "skipped" ]; then
-                mark="skipped"; unasserted=$((unasserted + 1))
-            elif [ "$outcome" = "no-output" ]; then
-                mark="CASE BROKEN"; contradicted=$((contradicted + 1))
-                failures+=("$name: the case produced no parsable output, so nothing was observed")
-            else
-                mark="CONTRADICTED"; contradicted=$((contradicted + 1))
-                failures+=("$name: predicted SUPPORTED, reality $outcome - $detail")
-            fi
+    if [ "$outcome" = "satisfied-relocated" ] && \
+            [ "$relocation_satisfies" != "yes" ]; then
+        mark="CASE BROKEN"; contradicted=$((contradicted + 1))
+        failures+=("$name: case called relocation satisfied but the contract does not permit relocation")
+    elif ! mark=$(python3 "$PAIRING_TOOL" classify "$MANIFEST" "$ORACLES" \
+            "$name" "$analyzer_verdict" "$outcome" 2>"$BIN/pairing.err"); then
+        pairing_error=$(tr '\r\n' ' ' < "$BIN/pairing.err")
+        mark="CASE BROKEN"; contradicted=$((contradicted + 1))
+        failures+=("$name: $pairing_error")
+    else
+        if [ "$predicted" = "RECORD-ONLY" ]; then mark="not asserted"; fi
+        case "$mark" in
+        held)
+            held=$((held + 1))
             ;;
-        UNSUPPORTED)
-            if [ "$outcome" = "satisfied" ]; then
-                mark="CONTRADICTED"; contradicted=$((contradicted + 1))
-                failures+=("$name: predicted UNSUPPORTED, but the operation succeeded - $detail")
-            elif [ "$outcome" = "no-output" ]; then
-                mark="CASE BROKEN"; contradicted=$((contradicted + 1))
-                failures+=("$name: the case produced no parsable output, so nothing was observed - a broken case must not read as a confirmed refusal")
-            elif [ "$outcome" = "skipped" ]; then
-                mark="skipped"; unasserted=$((unasserted + 1))
-            else
-                mark="held"; held=$((held + 1))
-            fi
+        CONTRADICTED)
+            contradicted=$((contradicted + 1))
+            failures+=("$name: predicted $analyzer_verdict, reality $outcome - $detail")
+            ;;
+        skipped|"not asserted")
+            unasserted=$((unasserted + 1))
             ;;
         *)
-            mark="not asserted"; unasserted=$((unasserted + 1))
+            mark="CASE BROKEN"; contradicted=$((contradicted + 1))
+            failures+=("$name: pairing helper returned an invalid class")
             ;;
-    esac
+        esac
+    fi
+    if [ -n "$LEDGER" ]; then
+        python3 - "$LEDGER" "$PROFILE_ID" "$name" "$contract" \
+            "$analyzer_verdict" "$outcome" "$mark" "$analysis_findings" <<'PY'
+import json
+import sys
+path, profile_id, case, contract, verdict, outcome, pairing, finding_csv = sys.argv[1:]
+row = {"schema": "runtime-skeptic.groundtruth-execution.v1",
+       "profile_id": profile_id, "case": case, "contract": contract,
+       "analyzer_verdict": verdict, "outcome": outcome, "pairing": pairing,
+       "finding_ids": [x for x in finding_csv.split(",") if x]}
+with open(path, "a", encoding="utf-8") as out:
+    out.write(json.dumps(row, sort_keys=True, separators=(",", ":")) + "\n")
+PY
+    fi
 
     printf '%-34s %-13s %-11s %s\n' "$name" "$predicted" "$outcome" "$mark"
     printf '    %s\n' "$detail"

@@ -1,0 +1,72 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "runtime-skeptic.runtime-trace-record.v1",
+  "title": "RuntimeSkeptic runtime trace JSONL record",
+  "description": "One canonical record from a bounded runtime trace. A trace is exactly one header, zero or more contiguous events, and one footer whose digest covers every preceding canonical line including its newline.",
+  "oneOf": [
+    {
+      "type": "object",
+      "required": ["schema", "record_type", "abi_version", "platform", "monitor_mode", "buffer_capacity", "instrumented_apis"],
+      "additionalProperties": false,
+      "properties": {
+        "schema": { "const": "runtime-skeptic.runtime-trace-record.v1" },
+        "record_type": { "const": "header" },
+        "abi_version": { "const": 1 },
+        "platform": { "enum": ["posix", "windows"] },
+        "monitor_mode": { "enum": ["record", "report", "assert"] },
+        "buffer_capacity": { "type": "integer", "minimum": 1, "maximum": 4096 },
+        "instrumented_apis": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "enum": ["mmap", "mprotect", "munmap", "VirtualAlloc", "VirtualProtect", "VirtualFree"] }
+        }
+      }
+    },
+    {
+      "type": "object",
+      "required": ["schema", "record_type", "sequence", "platform", "operation", "status", "native_error_domain", "native_error_code", "requested_address", "returned_address", "effective_address", "expected_address", "size", "effective_size", "offset", "native_flags", "semantic_flags", "requested_protection", "previous_protection", "exact_address_required", "violation"],
+      "additionalProperties": false,
+      "properties": {
+        "schema": { "const": "runtime-skeptic.runtime-trace-record.v1" },
+        "record_type": { "const": "event" },
+        "sequence": { "type": "integer", "minimum": 1 },
+        "platform": { "enum": ["posix", "windows"] },
+        "operation": { "enum": ["posix_mmap", "posix_mprotect", "posix_munmap", "windows_reserve", "windows_commit", "windows_protect", "windows_decommit", "windows_release", "windows_reset", "windows_reset_undo", "windows_virtual_alloc_other"] },
+        "status": { "enum": ["success", "failure"] },
+        "native_error_domain": { "enum": ["none", "errno", "win32"] },
+        "native_error_code": { "type": "integer" },
+        "requested_address": { "$ref": "#/$defs/address" },
+        "returned_address": { "$ref": "#/$defs/address" },
+        "effective_address": { "$ref": "#/$defs/address" },
+        "expected_address": { "$ref": "#/$defs/address" },
+        "size": { "type": "integer", "minimum": 0 },
+        "effective_size": { "type": "integer", "minimum": 0 },
+        "offset": { "type": "integer" },
+        "native_flags": { "type": "integer", "minimum": 0, "maximum": 4294967295 },
+        "semantic_flags": { "type": "integer", "minimum": 0, "maximum": 31 },
+        "requested_protection": { "type": "integer", "minimum": 0, "maximum": 4294967295 },
+        "previous_protection": { "type": "integer", "minimum": 0, "maximum": 4294967295 },
+        "exact_address_required": { "type": "boolean" },
+        "violation": { "enum": ["none", "exact_address_relocated", "invalid_expectation"] }
+      }
+    },
+    {
+      "type": "object",
+      "required": ["schema", "record_type", "event_count", "dropped_events", "reentrant_events", "complete", "digest"],
+      "additionalProperties": false,
+      "properties": {
+        "schema": { "const": "runtime-skeptic.runtime-trace-record.v1" },
+        "record_type": { "const": "footer" },
+        "event_count": { "type": "integer", "minimum": 0 },
+        "dropped_events": { "type": "integer", "minimum": 0 },
+        "reentrant_events": { "type": "integer", "minimum": 0 },
+        "complete": { "type": "boolean" },
+        "digest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" }
+      }
+    }
+  ],
+  "$defs": {
+    "address": { "type": "string", "pattern": "^0x(0|[1-9a-f][0-9a-f]*)$" }
+  }
+}

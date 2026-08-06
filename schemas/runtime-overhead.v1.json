@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "runtime-skeptic.runtime-overhead.v1",
+  "title": "RuntimeSkeptic runtime-wrapper overhead benchmark",
+  "type": "object",
+  "required": ["schema", "iterations", "unit", "modes"],
+  "additionalProperties": false,
+  "properties": {
+    "schema": { "const": "runtime-skeptic.runtime-overhead.v1" },
+    "iterations": { "type": "integer", "minimum": 1, "maximum": 2048 },
+    "unit": { "const": "nanoseconds" },
+    "modes": {
+      "type": "array",
+      "minItems": 5,
+      "maxItems": 5,
+      "items": {
+        "type": "object",
+        "required": ["name", "median_ns", "p95_ns", "delta_ns", "ratio_milli"],
+        "additionalProperties": false,
+        "properties": {
+          "name": { "enum": ["native", "compile_disabled", "runtime_disabled", "enabled_buffered", "enabled_plus_flush"] },
+          "median_ns": { "type": "integer", "minimum": 0 },
+          "p95_ns": { "type": "integer", "minimum": 0 },
+          "delta_ns": { "type": "integer" },
+          "ratio_milli": { "type": "integer", "minimum": 0 }
+        }
+      }
+    }
+  }
+}

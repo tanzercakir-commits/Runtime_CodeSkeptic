@@ -1,13 +1,17 @@
 cmake_minimum_required(VERSION 3.20)
 
 project(RuntimeSkeptic
-    VERSION 0.1.0
+    VERSION 0.2.0
     DESCRIPTION "Cross-layer runtime compatibility analyzer"
-    LANGUAGES CXX)
+    LANGUAGES C CXX)
 
 # ---------------------------------------------------------------------------
 # Global settings
 # ---------------------------------------------------------------------------
+
+set(CMAKE_C_STANDARD 11)
+set(CMAKE_C_STANDARD_REQUIRED ON)
+set(CMAKE_C_EXTENSIONS OFF)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -19,6 +23,7 @@ endif()
 
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
+set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 
 option(RS_BUILD_TESTS "Build RuntimeSkeptic tests" ON)
 option(RS_WARNINGS_AS_ERRORS "Treat compiler warnings as errors" OFF)
@@ -31,7 +36,7 @@ option(RS_WARNINGS_AS_ERRORS "Treat compiler warnings as errors" OFF)
 
 add_library(rs_warnings INTERFACE)
 if(MSVC)
-    target_compile_options(rs_warnings INTERFACE /W4 /permissive-)
+    target_compile_options(rs_warnings INTERFACE /W4 /permissive- /EHsc)
     target_compile_definitions(rs_warnings INTERFACE _CRT_SECURE_NO_WARNINGS NOMINMAX)
     if(RS_WARNINGS_AS_ERRORS)
         target_compile_options(rs_warnings INTERFACE /WX)
@@ -65,6 +70,7 @@ endif()
 
 add_subdirectory(src)
 add_subdirectory(tools)
+add_subdirectory(samples)
 
 if(RS_BUILD_TESTS)
     enable_testing()

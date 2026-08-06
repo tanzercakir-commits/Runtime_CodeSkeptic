@@ -5,6 +5,7 @@
 #include <array>
 #include <utility>
 
+#include "runtimeskeptic/core/schema_registry.hpp"
 #include "runtimeskeptic/core/sha256.hpp"
 
 namespace rs::vm {
@@ -64,19 +65,55 @@ constexpr std::array<std::pair<std::string_view, FallbackKind>, 6> kFallback{{
     {"unknown", FallbackKind::Unknown},
 }};
 
-std::optional<std::uint64_t> read_optional_uint(const json::Value* node) {
-    if (node == nullptr || node->is_null()) return std::nullopt;
-    if (node->type() != json::Type::UInt && node->type() != json::Type::Int) {
-        return std::nullopt;
+// Reads an optional unsigned integer. Absent or null means "not given" and is
+// fine. A value of the WRONG TYPE is a schema violation, not an absent field:
+// the old version returned nullopt for it, which silently dropped
+// `required_page_size:"16384"` (a string) and let the analysis proceed as if no
+// page size were required and pass. A negative is rejected here too, in one
+// place, so as_uint() can never fabricate a 0 or a giant unsigned from a -1.
+bool read_optional_uint(const json::Value* node, const char* label,
+                        std::optional<std::uint64_t>& out, std::string& error) {
+    if (node == nullptr || node->is_null()) {
+        out = std::nullopt;
+        return true;
     }
-    return node->as_uint();
+    if (node->type() != json::Type::UInt && node->type() != json::Type::Int) {
+        error = std::string(label) + " must be an integer";
+        return false;
+    }
+    if (node->type() == json::Type::Int && node->as_int() < 0) {
+        error = std::string(label) + " must not be negative";
+        return false;
+    }
+    out = node->as_uint();
+    return true;
+}
+
+// A negative integer in a size / count / address / page-size field is not a
+// smaller value to accept - as_uint() would turn -1 into a fabricated 0 or a
+// giant unsigned, and the report would then present a number the document never
+// gave as a PROVEN fact. Reject it with the field named. Returns false on a
+// negative, true otherwise (including absent or non-integer, which other checks
+// handle).
+bool reject_negative(const json::Value* node, const char* key,
+                     std::string& error) {
+    if (node != nullptr && node->type() == json::Type::Int &&
+        node->as_int() < 0) {
+        error = std::string(key) + " must not be negative";
+        return false;
+    }
+    return true;
 }
 
 bool read_flag(const json::Value* parent, const char* key, bool& out,
                std::string& error) {
     if (parent == nullptr) return true;
     const json::Value* node = parent->find(key);
-    if (node == nullptr || node->is_null()) return true;
+    if (node == nullptr) return true;  // absent keeps the default
+    // The schema types these flags `boolean`, not nullable: `null` is not a way
+    // to say "absent", it is a wrong type. as_bool() on a null would coerce to
+    // false, so a program that declared it needs write+execute could read as
+    // needing neither. is_bool() is false for null, so this catches it.
     if (!node->is_bool()) {
         error = std::string(key) + " must be a boolean";
         return false;
@@ -109,6 +146,61 @@ bool read_eof_access_extent(const json::Value* parent,
     }
     error = "unrecognized eof_access_extent: " + s;
     return false;
+}
+
+// A string array where the schema types it so. Present-but-not-an-array, or a
+// non-string entry, is a schema violation - the old readers skipped bad entries
+// and ignored a non-array whole, so `required_postconditions: "x"` and
+// `["a", 5]` both passed.
+bool read_string_array_field(const json::Value* node, const char* label,
+                             std::vector<std::string>& out, std::string& error) {
+    if (node == nullptr) return true;  // absent is fine; null is a wrong type
+    if (!node->is_array()) {
+        error = std::string(label) + " must be an array of strings";
+        return false;
+    }
+    for (const auto& item : node->as_array()) {
+        if (!item.is_string()) {
+            error = std::string(label) + " entries must all be strings";
+            return false;
+        }
+        out.push_back(item.as_string());
+    }
+    return true;
+}
+
+// A source location: file/symbol are strings, line a non-negative integer. The
+// old reader coerced each - a number `file`, a string `line`, a negative `line`
+// all slipped through as_string()/as_uint().
+bool read_source_location(const json::Value& v, const std::string& label,
+                          SourceLocation& out, std::string& error) {
+    if (!v.is_object()) {
+        error = label + " must be an object";
+        return false;
+    }
+    if (const json::Value* f = v.find("file"); f != nullptr && !f->is_null()) {
+        if (!f->is_string()) {
+            error = label + ".file must be a string";
+            return false;
+        }
+        out.file = f->as_string();
+    }
+    if (const json::Value* l = v.find("line"); l != nullptr && !l->is_null()) {
+        if ((l->type() != json::Type::UInt && l->type() != json::Type::Int) ||
+            (l->type() == json::Type::Int && l->as_int() < 0)) {
+            error = label + ".line must be a non-negative integer";
+            return false;
+        }
+        out.line = l->as_uint();
+    }
+    if (const json::Value* s = v.find("symbol"); s != nullptr && !s->is_null()) {
+        if (!s->is_string()) {
+            error = label + ".symbol must be a string";
+            return false;
+        }
+        out.symbol = s->as_string();
+    }
+    return true;
 }
 
 }  // namespace
@@ -328,6 +420,17 @@ std::optional<Requirement> Requirement::from_json(const json::Value& v,
         error = "requirement document must be a JSON object";
         return std::nullopt;
     }
+    // The published schema IS the contract; the whole document is validated
+    // against it here, before a single field is read. Four rounds of per-field
+    // checks below each missed a different case (a wrong type read as absent, a
+    // null container, a nested field); the schema lists every field once, so
+    // none is forgotten. A bundle validates each item through this same path, so
+    // one malformed entry is dropped, not the whole batch.
+    if (std::string schema_error;
+        !rs::schema::validate_requirement_input(v, schema_error)) {
+        error = schema_error;
+        return std::nullopt;
+    }
     const json::Value* schema = v.find("schema");
     if (schema == nullptr || !schema->is_string()) {
         error = "requirement requires a 'schema' string";
@@ -341,8 +444,22 @@ std::optional<Requirement> Requirement::from_json(const json::Value& v,
 
     Requirement r;
     r.schema = schema->as_string();
-    if (const json::Value* n = v.find("name"); n != nullptr) r.name = n->as_string();
+    // The published schema types `name` and `component` as strings. A number or
+    // object here is a schema violation, not something to coerce to "" in
+    // silence - which let a malformed document analyze on with the field gone
+    // and still return a verdict.
+    if (const json::Value* n = v.find("name"); n != nullptr) {
+        if (!n->is_string()) {
+            error = "name must be a string";
+            return std::nullopt;
+        }
+        r.name = n->as_string();
+    }
     if (const json::Value* n = v.find("component"); n != nullptr) {
+        if (!n->is_string()) {
+            error = "component must be a string";
+            return std::nullopt;
+        }
         r.component = n->as_string();
     }
 
@@ -374,6 +491,9 @@ std::optional<Requirement> Requirement::from_json(const json::Value& v,
             r.request.address = *parsed;
         } else if (addr->type() == json::Type::UInt ||
                    addr->type() == json::Type::Int) {
+            if (!reject_negative(addr, "request.address", error)) {
+                return std::nullopt;
+            }
             r.request.address = addr->as_uint();
         } else {
             error = "request.address must be a hex string";
@@ -387,6 +507,7 @@ std::optional<Requirement> Requirement::from_json(const json::Value& v,
         error = "request.size is required and must be an integer";
         return std::nullopt;
     }
+    if (!reject_negative(size, "request.size", error)) return std::nullopt;
     r.request.size = size->as_uint();
     if (r.request.size == 0) {
         error = "request.size must be greater than zero";
@@ -402,7 +523,11 @@ std::optional<Requirement> Requirement::from_json(const json::Value& v,
         return std::nullopt;
     }
 
-    r.request.required_alignment = read_optional_uint(req->find("required_alignment"));
+    if (!read_optional_uint(req->find("required_alignment"),
+                            "request.required_alignment",
+                            r.request.required_alignment, error)) {
+        return std::nullopt;
+    }
 
     auto read_optional_address = [&](const char* key,
                                      std::optional<std::uint64_t>& out) -> bool {
@@ -419,6 +544,10 @@ std::optional<Requirement> Requirement::from_json(const json::Value& v,
             return true;
         }
         if (node->type() == json::Type::UInt || node->type() == json::Type::Int) {
+            if (node->type() == json::Type::Int && node->as_int() < 0) {
+                error = std::string("request.") + key + " must not be negative";
+                return false;
+            }
             out = node->as_uint();
             return true;
         }
@@ -431,13 +560,20 @@ std::optional<Requirement> Requirement::from_json(const json::Value& v,
     if (!read_optional_address("address_max", r.request.address_max)) {
         return std::nullopt;
     }
-    r.request.max_displacement_bytes =
-        read_optional_uint(req->find("max_displacement_bytes"));
+    if (!read_optional_uint(req->find("max_displacement_bytes"),
+                            "request.max_displacement_bytes",
+                            r.request.max_displacement_bytes, error)) {
+        return std::nullopt;
+    }
     if (const json::Value* ref = req->find("displacement_reference");
         ref != nullptr && ref->is_string()) {
         r.request.displacement_reference = ref->as_string();
     }
-    r.request.required_page_size = read_optional_uint(req->find("required_page_size"));
+    if (!read_optional_uint(req->find("required_page_size"),
+                            "request.required_page_size",
+                            r.request.required_page_size, error)) {
+        return std::nullopt;
+    }
     if (const json::Value* rel = req->find("required_page_size_relation");
         rel != nullptr && !rel->is_null()) {
         if (!rel->is_string() ||
@@ -449,7 +585,17 @@ std::optional<Requirement> Requirement::from_json(const json::Value& v,
         }
     }
 
-    if (const json::Value* prot = req->find("protection"); prot != nullptr) {
+    if (const json::Value* prot = req->find("protection");
+        prot != nullptr && !prot->is_null()) {
+        // The schema types protection as an object of read/write/execute
+        // booleans. A string like "rwx" is a schema violation; left to
+        // read_flag it silently found none of the keys and the request became
+        // no-protection, so a program needing RWX read as needing nothing.
+        if (!prot->is_object()) {
+            error = "request.protection must be an object with read/write/"
+                    "execute booleans";
+            return std::nullopt;
+        }
         if (!read_flag(prot, "read", r.request.protection.read, error)) {
             return std::nullopt;
         }
@@ -478,8 +624,16 @@ std::optional<Requirement> Requirement::from_json(const json::Value& v,
                    error)) {
         return std::nullopt;
     }
-    r.request.file_length = read_optional_uint(req->find("file_length"));
-    r.request.file_offset = read_optional_uint(req->find("file_offset")).value_or(0);
+    if (!read_optional_uint(req->find("file_length"), "request.file_length",
+                            r.request.file_length, error)) {
+        return std::nullopt;
+    }
+    std::optional<std::uint64_t> file_offset;
+    if (!read_optional_uint(req->find("file_offset"), "request.file_offset",
+                            file_offset, error)) {
+        return std::nullopt;
+    }
+    r.request.file_offset = file_offset.value_or(0);
 
     if (const json::Value* a = v.find("assumptions"); a != nullptr) {
         if (!read_flag(a, "guest_host_identity_required",
@@ -490,20 +644,29 @@ std::optional<Requirement> Requirement::from_json(const json::Value& v,
                        error)) {
             return std::nullopt;
         }
-        r.assumptions.pointer_storage_width_bits =
-            read_optional_uint(a->find("pointer_storage_width_bits"));
-        r.assumptions.max_retries = read_optional_uint(a->find("max_retries"));
-    }
-
-    if (const json::Value* posts = v.find("required_postconditions");
-        posts != nullptr && posts->is_array()) {
-        for (const auto& p : posts->as_array()) {
-            if (p.is_string()) r.required_postconditions.push_back(p.as_string());
+        if (!read_optional_uint(a->find("pointer_storage_width_bits"),
+                                "assumptions.pointer_storage_width_bits",
+                                r.assumptions.pointer_storage_width_bits,
+                                error)) {
+            return std::nullopt;
+        }
+        if (!read_optional_uint(a->find("max_retries"), "assumptions.max_retries",
+                                r.assumptions.max_retries, error)) {
+            return std::nullopt;
         }
     }
 
-    if (const json::Value* fbs = v.find("permitted_fallbacks");
-        fbs != nullptr && fbs->is_array()) {
+    if (!read_string_array_field(v.find("required_postconditions"),
+                                 "required_postconditions",
+                                 r.required_postconditions, error)) {
+        return std::nullopt;
+    }
+
+    if (const json::Value* fbs = v.find("permitted_fallbacks"); fbs != nullptr) {
+        if (!fbs->is_array()) {
+            error = "permitted_fallbacks must be an array";
+            return std::nullopt;
+        }
         for (const auto& f : fbs->as_array()) {
             FallbackKind kind = FallbackKind::Unknown;
             if (!f.is_string() || !fallback_from_string(f.as_string(), kind)) {
@@ -522,39 +685,39 @@ std::optional<Requirement> Requirement::from_json(const json::Value& v,
             return std::nullopt;
         }
         if (const json::Value* d = sink->find("description"); d != nullptr) {
+            if (!d->is_string()) {
+                error = "failure_sink.description must be a string";
+                return std::nullopt;
+            }
             r.failure_sink.description = d->as_string();
         }
+        // location is anyOf[sourceLocation, null]: null ("producer could not
+        // determine one") is fine; a present non-null one must be well-typed.
         if (const json::Value* loc = sink->find("location");
-            loc != nullptr && loc->is_object()) {
+            loc != nullptr && !loc->is_null()) {
             SourceLocation sl;
-            if (const json::Value* f = loc->find("file"); f != nullptr) {
-                sl.file = f->as_string();
-            }
-            if (const json::Value* l = loc->find("line"); l != nullptr) {
-                sl.line = l->as_uint();
-            }
-            if (const json::Value* s = loc->find("symbol"); s != nullptr) {
-                sl.symbol = s->as_string();
+            if (!read_source_location(*loc, "failure_sink.location", sl, error)) {
+                return std::nullopt;
             }
             r.failure_sink.location = sl;
         }
     }
 
-    if (const json::Value* locs = v.find("source_locations");
-        locs != nullptr && locs->is_array()) {
+    if (const json::Value* locs = v.find("source_locations"); locs != nullptr) {
+        if (!locs->is_array()) {
+            error = "source_locations must be an array";
+            return std::nullopt;
+        }
+        std::size_t i = 0;
         for (const auto& item : locs->as_array()) {
-            if (!item.is_object()) continue;
             SourceLocation sl;
-            if (const json::Value* f = item.find("file"); f != nullptr) {
-                sl.file = f->as_string();
-            }
-            if (const json::Value* l = item.find("line"); l != nullptr) {
-                sl.line = l->as_uint();
-            }
-            if (const json::Value* s = item.find("symbol"); s != nullptr) {
-                sl.symbol = s->as_string();
+            if (!read_source_location(
+                    item, "source_locations[" + std::to_string(i) + "]", sl,
+                    error)) {
+                return std::nullopt;
             }
             r.source_locations.push_back(sl);
+            ++i;
         }
     }
 
@@ -567,13 +730,10 @@ std::optional<Requirement> Requirement::from_json(const json::Value& v,
         return std::nullopt;
     }
 
-    if (const json::Value* limitations = v.find("extraction_limitations");
-        limitations != nullptr && limitations->is_array()) {
-        for (const auto& item : limitations->as_array()) {
-            if (item.is_string()) {
-                r.extraction_limitations.push_back(item.as_string());
-            }
-        }
+    if (!read_string_array_field(v.find("extraction_limitations"),
+                                 "extraction_limitations",
+                                 r.extraction_limitations, error)) {
+        return std::nullopt;
     }
 
     collect_unrecognized(v, kKnownTopLevel, "", r.unrecognized_fields);

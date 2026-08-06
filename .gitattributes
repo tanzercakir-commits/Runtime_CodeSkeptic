@@ -1,0 +1,8 @@
+# Keep executable tooling runnable when a repository is cloned on Windows and
+# then entered through WSL. Without this, core.autocrlf turns bash's pipefail
+# token into "pipefail\r" and every release/guard script dies before its gate.
+* text=auto
+*.sh text eol=lf
+*.py text eol=lf
+CMakeLists.txt text eol=lf
+*.cmake text eol=lf

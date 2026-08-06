@@ -5,6 +5,7 @@
 #include <array>
 #include <utility>
 
+#include "runtimeskeptic/core/schema_registry.hpp"
 #include "runtimeskeptic/core/sha256.hpp"
 
 namespace rs::vm {
@@ -272,6 +273,15 @@ std::optional<EnvironmentProfile> EnvironmentProfile::from_json(
         error = "profile document must be a JSON object";
         return std::nullopt;
     }
+    // Gate the whole document against the published profile schema before
+    // reading any fact. A fact with a null container or a wrong-typed value used
+    // to be read as "absent", and absent is silently tolerated - so a malformed
+    // profile analysed on. The schema refuses it here, once, for every field.
+    if (std::string schema_error;
+        !rs::schema::validate_profile(v, schema_error)) {
+        error = schema_error;
+        return std::nullopt;
+    }
     const json::Value* schema = v.find("schema");
     if (schema == nullptr || !schema->is_string()) {
         error = "profile requires a 'schema' string";
@@ -299,6 +309,10 @@ std::optional<EnvironmentProfile> EnvironmentProfile::from_json(
     }
 
     if (const json::Value* name = v.find("profile_name"); name != nullptr) {
+        if (!name->is_string()) {
+            error = "profile_name must be a string";
+            return std::nullopt;
+        }
         p.profile_name = name->as_string();
     }
 
@@ -308,6 +322,8 @@ std::optional<EnvironmentProfile> EnvironmentProfile::from_json(
         error = "profile requires a 'platform' object";
         return std::nullopt;
     }
+    // A closed enum: the schema constrains the value to a fixed set, so an
+    // unrecognized string is a schema violation. Used for translation_mode.
     auto read_enum = [&](const char* key, auto parser, auto& out) -> bool {
         const json::Value* node = platform->find(key);
         if (node == nullptr) return true;  // stays Unknown
@@ -317,14 +333,34 @@ std::optional<EnvironmentProfile> EnvironmentProfile::from_json(
         }
         return true;
     };
-    if (!read_enum("os", operating_system_from_string, p.platform.os)) {
+    // An open enum: os / host_arch / process_arch are typed `string` in the
+    // schema, not `enum`, precisely because a host the tool does not model
+    // specially is still a real measurement. An unrecognized name is therefore
+    // NOT a schema violation - it maps to `other`, a known, non-absent value
+    // (distinct from an absent field, which stays `unknown`). Rejecting these
+    // was the over-strict half of review finding A2. A non-string still is a
+    // violation, because the schema types the field as a string.
+    auto read_open_enum = [&](const char* key, auto parser, auto& out,
+                              auto other) -> bool {
+        const json::Value* node = platform->find(key);
+        if (node == nullptr) return true;  // absent stays Unknown
+        if (!node->is_string()) {
+            error = std::string("platform.") + key + " must be a string";
+            return false;
+        }
+        if (!parser(node->as_string(), out)) out = other;
+        return true;
+    };
+    if (!read_open_enum("os", operating_system_from_string, p.platform.os,
+                        OperatingSystem::Other)) {
         return std::nullopt;
     }
-    if (!read_enum("host_arch", architecture_from_string, p.platform.host_arch)) {
+    if (!read_open_enum("host_arch", architecture_from_string,
+                        p.platform.host_arch, Architecture::Other)) {
         return std::nullopt;
     }
-    if (!read_enum("process_arch", architecture_from_string,
-                   p.platform.process_arch)) {
+    if (!read_open_enum("process_arch", architecture_from_string,
+                        p.platform.process_arch, Architecture::Other)) {
         return std::nullopt;
     }
     if (!read_enum("translation_mode", translation_mode_from_string,
@@ -332,16 +368,47 @@ std::optional<EnvironmentProfile> EnvironmentProfile::from_json(
         return std::nullopt;
     }
     if (const json::Value* n = platform->find("os_version"); n != nullptr) {
+        if (!n->is_string()) {
+            error = "platform.os_version must be a string";
+            return std::nullopt;
+        }
         p.platform.os_version = n->as_string();
     }
     if (const json::Value* n = platform->find("kernel_version"); n != nullptr) {
+        if (!n->is_string()) {
+            error = "platform.kernel_version must be a string";
+            return std::nullopt;
+        }
         p.platform.kernel_version = n->as_string();
     }
+    // pointer_width_bits is DERIVED from process_arch, not stored - but the
+    // schema types it (nullable) integer, so a wrong type is a schema violation
+    // to reject rather than ignore. null is how the writer records "unknown".
+    if (const json::Value* n = platform->find("pointer_width_bits");
+        n != nullptr && !n->is_null()) {
+        if (n->type() != json::Type::UInt && n->type() != json::Type::Int) {
+            error = "platform.pointer_width_bits must be an integer";
+            return std::nullopt;
+        }
+        if (n->type() == json::Type::Int && n->as_int() < 0) {
+            error = "platform.pointer_width_bits must not be negative";
+            return std::nullopt;
+        }
+    }
 
-    // -- virtual memory ----------------------------------------------------
+    // -- virtual memory (optional in the schema) --------------------------
+    // The schema does not list virtual_memory among its required fields, and
+    // "absent = unknown" means a profile that measured the platform but no
+    // memory fact is valid: it answers UNKNOWN to every memory question.
+    // Rejecting it was the over-strict half of review finding A2. An absent
+    // object is treated as an empty one, so every fact below reads its unknown
+    // default; a present non-object is still a hard schema error.
+    const json::Value empty_vm = json::Value::object();
     const json::Value* mem = v.find("virtual_memory");
-    if (mem == nullptr || !mem->is_object()) {
-        error = "profile requires a 'virtual_memory' object";
+    if (mem == nullptr) {
+        mem = &empty_vm;
+    } else if (!mem->is_object()) {
+        error = "profile 'virtual_memory' must be an object";
         return std::nullopt;
     }
 
@@ -358,6 +425,20 @@ std::optional<EnvironmentProfile> EnvironmentProfile::from_json(
         error = "virtual_memory.allocation_granularity: " + local_error;
         return std::nullopt;
     }
+    // A page size or allocation granularity of 0 is not a measurement, it is an
+    // impossibility: nothing aligns to 0, and a `size % 0` in the rules that use
+    // it silently skipped, masking a guard-page contract to SUPPORTED. Refuse it
+    // (the schema types these `minimum: 1` to match).
+    if (p.vm.page_size.is_known() && p.vm.page_size.value() == 0) {
+        error = "virtual_memory.page_size: a page size of 0 is impossible";
+        return std::nullopt;
+    }
+    if (p.vm.allocation_granularity.is_known() &&
+        p.vm.allocation_granularity.value() == 0) {
+        error = "virtual_memory.allocation_granularity: an allocation "
+                "granularity of 0 is impossible";
+        return std::nullopt;
+    }
     p.vm.min_map_address = fact_from_json<Address>(mem->find("min_map_address"),
                                                    read_address, local_error);
     if (!local_error.empty()) {
@@ -368,6 +449,22 @@ std::optional<EnvironmentProfile> EnvironmentProfile::from_json(
                                                     read_address, local_error);
     if (!local_error.empty()) {
         error = "virtual_memory.max_user_address: " + local_error;
+        return std::nullopt;
+    }
+    // A cross-field invariant the schema cannot state: when both bounds are
+    // measured, the lowest mappable address must lie below the exclusive upper
+    // bound of user space. A profile with min_map_address >= max_user_address
+    // describes an address space with no room in it; every reservation verdict
+    // derived from it would be an artefact of contradictory data, so the profile
+    // is refused here rather than analysed. (2026-08-02 re-test, verdict group.)
+    if (p.vm.min_map_address.is_known() && p.vm.max_user_address.is_known() &&
+        p.vm.min_map_address.value().value >=
+            p.vm.max_user_address.value().value) {
+        error = "virtual_memory: min_map_address (" +
+                json::to_hex(p.vm.min_map_address.value().value) +
+                ") must be below max_user_address (" +
+                json::to_hex(p.vm.max_user_address.value().value) +
+                "); the profile describes an impossible address space";
         return std::nullopt;
     }
     // Absent means UNKNOWN, which is why every hand-authored fixture predating
@@ -400,8 +497,23 @@ std::optional<EnvironmentProfile> EnvironmentProfile::from_json(
         error = "virtual_memory.exact_mapping: " + local_error;
         return std::nullopt;
     }
-    p.vm.exact_mapping_failure_codes =
-        read_string_array(mem->find("exact_mapping_failure_codes"));
+    // Schema-typed as an array of strings: a bare string or a non-string entry
+    // is a violation, not something read_string_array should quietly absorb.
+    if (const json::Value* codes = mem->find("exact_mapping_failure_codes");
+        codes != nullptr) {
+        if (!codes->is_array()) {
+            error = "virtual_memory.exact_mapping_failure_codes must be an array";
+            return std::nullopt;
+        }
+        for (const auto& item : codes->as_array()) {
+            if (!item.is_string()) {
+                error = "virtual_memory.exact_mapping_failure_codes entries "
+                        "must all be strings";
+                return std::nullopt;
+            }
+            p.vm.exact_mapping_failure_codes.push_back(item.as_string());
+        }
+    }
 
     p.vm.hinted_mapping_may_relocate = fact_from_json<bool>(
         mem->find("hinted_mapping_may_relocate"), read_bool, local_error);
@@ -448,7 +560,16 @@ std::optional<EnvironmentProfile> EnvironmentProfile::from_json(
         return std::nullopt;
     }
 
-    if (const json::Value* prot = mem->find("protection"); prot != nullptr) {
+    if (const json::Value* prot = mem->find("protection");
+        prot != nullptr && !prot->is_null()) {
+        // The schema types protection as an object of facts. A string like
+        // "rwx" made every prot->find(key) return null - so all protection
+        // facts read unknown and the document was accepted, a JIT's W^X needs
+        // silently lost.
+        if (!prot->is_object()) {
+            error = "virtual_memory.protection must be an object";
+            return std::nullopt;
+        }
         auto read_prot_bool = [&](const char* key, Fact<bool>& out) -> bool {
             out = fact_from_json<bool>(prot->find(key), read_bool, local_error);
             if (!local_error.empty()) {
@@ -487,6 +608,10 @@ std::optional<EnvironmentProfile> EnvironmentProfile::from_json(
 
     // -- run metadata (optional) ------------------------------------------
     if (const json::Value* run = v.find("probe_run"); run != nullptr) {
+        if (!run->is_object()) {
+            error = "profile 'probe_run' must be an object";
+            return std::nullopt;
+        }
         auto str = [&](const char* key) -> std::string {
             const json::Value* n = run->find(key);
             return n == nullptr ? std::string() : n->as_string();
@@ -501,7 +626,22 @@ std::optional<EnvironmentProfile> EnvironmentProfile::from_json(
         }
         p.run.warnings = read_string_array(run->find("warnings"));
     }
-    p.notes = read_string_array(v.find("notes"));
+    // The schema types notes as an array of strings. read_string_array would
+    // quietly accept a bare string or drop non-string entries; here a wrong
+    // shape is a schema violation, named.
+    if (const json::Value* notes = v.find("notes"); notes != nullptr) {
+        if (!notes->is_array()) {
+            error = "profile 'notes' must be an array of strings";
+            return std::nullopt;
+        }
+        for (const auto& item : notes->as_array()) {
+            if (!item.is_string()) {
+                error = "profile 'notes' entries must all be strings";
+                return std::nullopt;
+            }
+            p.notes.push_back(item.as_string());
+        }
+    }
 
     return p;
 }

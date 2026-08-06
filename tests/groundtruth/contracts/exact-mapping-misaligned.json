@@ -1,0 +1,36 @@
+{
+  "schema": "runtime-skeptic.application-requirements.v1",
+  "name": "Exact mapping at a base misaligned on every measured host",
+  "component": "ground-truth pairing for RS-VM-0004",
+  "operation": "virtual_memory_map",
+  "request": {
+    "address": "0x7000000800",
+    "size": 131072,
+    "exact_address_required": true,
+    "protection": {"read": true, "write": true, "execute": false},
+    "file_backed": false
+  },
+  "assumptions": {
+    "guest_host_identity_required": false,
+    "translation_layer_available": false,
+    "retries_on_failure": false
+  },
+  "required_postconditions": [
+    "the mapping is placed exactly at 0x7000000800 and is usable"
+  ],
+  "permitted_fallbacks": [],
+  "failure_sink": {
+    "kind": "error_return",
+    "location": {
+      "file": "tests/groundtruth/cases/exact_mapping_alignment.c",
+      "line": 1,
+      "symbol": "attempt"
+    },
+    "description": "the exact mmap is rejected because the base is not page or allocation-granularity aligned"
+  },
+  "assumption_evidence": "specified_guarantee",
+  "extraction_limitations": [
+    "The address is above low-address policy and below the measured ceiling; only its 0x800 offset is load-bearing."
+  ],
+  "x_groundtruth": "0x7000000800 is offset by 2048 bytes: misaligned to Linux 4 KiB pages, Apple Silicon 16 KiB pages and Windows 64 KiB allocation granularity. The dedicated program first proves the aligned neighbouring page is usable, then requires the otherwise-identical target request to fail with EINVAL."
+}

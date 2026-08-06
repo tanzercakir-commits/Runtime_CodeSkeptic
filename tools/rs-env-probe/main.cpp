@@ -30,16 +30,23 @@ OPTIONS
   --name NAME            human label stored in the profile; it is NOT part of
                          the profile_id, so renaming never changes identity
   --no-scan              skip the address-space scan
-  --no-faulting-tests    skip tests that fault in a forked child
+  --no-faulting-tests    skip tests that deliberately fault in an isolated child
   --pretty               indented JSON (default)
   --canonical            byte-exact canonical JSON, the form that is hashed
   -h, --help             show this help
 
+PLATFORMS
+  Linux, macOS and Windows are measured directly. On a platform with no probe,
+  the profile is schema-valid with every fact unknown, and exit is still 0; use
+  `rs-profile verify` to see how much it actually established.
+
 SAFETY
-  This probe never uses MAP_FIXED, which would destroy existing mappings. It
-  only requests exact placement through MAP_FIXED_NOREPLACE, and only after
-  verifying that the kernel honours that flag. Tests that can fault run in a
-  forked child with an alarm timeout.
+  The probe never destroys an existing mapping on any platform. Where it tests
+  exact placement it uses only non-destructive primitives - on Linux
+  MAP_FIXED_NOREPLACE, never MAP_FIXED, and only after verifying the kernel
+  honours the flag; macOS and Windows use their platforms' non-clobbering
+  equivalents. Tests that can fault run in an isolated child process with a
+  timeout, so a fault cannot bring down the probe.
 )";
 }
 

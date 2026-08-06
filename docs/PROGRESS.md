@@ -16,6 +16,741 @@ re-litigated; a mistake recorded here does not need to be re-made.
 
 ---
 
+## 2026-08-06 - RuntimeSkeptic became a standalone v0.2 product
+
+**Changed.** The owner accepted
+`docs/decisions/0001-standalone-product-boundary.md`: the v0.2 product closes
+at Phase 4 and has no CodeSkeptic dependency. T-011 was consumed as not
+applicable, not completed. T-023, T-033, T-034, T-035 and T-036 left the
+current queue with roadmap Phases 5-10; reopening any of them requires an
+owner-accepted Plan v2. Frozen `plan.md` and `ROADMAP.md` remain unchanged.
+
+**Evidence.** A hash-pinned ADR and
+`tools/guards/check_standalone_boundary.py` reject copied or vendored source,
+submodules, prebuilt dependency archives, build-time fetch/link wiring and
+direct or indirect CodeSkeptic invocation. The adversarial guard suite covers
+each bypass family; `check_non_goals.py` no longer has a dated exception.
+
+**Learned.** A public release claim must distinguish source availability from
+a permanent binary release. RuntimeSkeptic is source-first: users can clone and
+build it with C++20 and CMake. Linux and Apple Silicon archives are CI evidence,
+not permanent GitHub Release assets; Windows remains source-only.
+
+**Next.** Keep the standalone boundary closed. New scope starts in Plan v2,
+never as an implicit dependency or a resurrected TODO item.
+
+---
+
+## 2026-08-06 - T-009 was consumed and Phase 4 closed on native CI evidence
+
+**Changed.** T-009 left the consumable queue and Phase 4 moved from partial to
+done in the mutable plan. The frozen `plan.md` and `ROADMAP.md` remain
+byte-unchanged. The public result is RuntimeSkeptic v0.2.0: a stable C ABI,
+semantics-preserving POSIX/Windows wrappers, bounded canonical trace/replay,
+installed CMake SDK, sample, schema-valid benchmark and verified native
+presentation packages.
+
+**Evidence.** Commit `95421a99672c5ab504fbcd5e6ac5dbad13e843ee`
+completed CI run 31059244690 (#156) with all seven jobs green. Linux/GCC,
+Linux/Clang and AppleClang passed 23/23 tests; MSVC passed 24/24 including the
+Windows reserve/commit case. The Linux archive reproduced at SHA-256
+`bf37d5cf335ab705f5462a352d9b0595b75b59fad310359bf78ff62b7b0c7845`;
+the Apple Silicon archive reproduced at SHA-256
+`f95918a8b1960bfb569eb99a35c3da2ee1e6f4040288b48cbcbabd206908aa0f`.
+Both were uploaded as non-expired workflow artifacts, and aggregate execution
+coverage succeeded. The final independent audit reported no actionable P0/P1.
+
+**Learned.** `ZERO_AR_DATE=1` was confirmed by the next native run rather than
+promoted from hypothesis by prose: both changing `.a` files stabilized while
+Mach-O build UUIDs remained intact. Reproducibility now has both a byte-level
+gate and bounded member attribution if it ever regresses.
+
+**Next.** Phase 5 / T-011 is the first remaining dependency gate. Do not modify
+CodeSkeptic or promote Phases 6-10 until the owner explicitly lifts that
+standing restriction; report the project as maximally complete under the
+current authority.
+
+---
+
+
+## 2026-08-06 - macOS nondeterminism was isolated to two archive files
+
+**Changed.** The macOS release builder now exports `ZERO_AR_DATE=1` before
+CMake invokes Apple's static-archive tools. The release-consistency guard
+requires that environment contract before the first CMake command. Negative
+guard selftests remove it and move it after configure; both prove the
+repository fails closed. The guard selftest is now 119/119.
+
+**Evidence.** CI run 31058058088 rebuilt and functionally verified the complete
+macOS package twice. The bounded comparator reported exactly two changing tar
+members: `lib/librs_core.a` and `lib/librs_trace.a`. Their content hashes
+changed; every executable, dylib, header and outer tar metadata record remained
+identical. This confines the measured drift to two static archive files; it
+does not distinguish their archive headers from object-member bytes.
+
+**Learned.** `ZERO_AR_DATE` is the next measured hypothesis for these two
+archive files, not a proven diagnosis and not a linker UUID workaround. Testing
+it preserves Mach-O build UUIDs and crash/debug identity. A cheap ordered source
+guard prevents a future edit from silently moving the environment input after
+the archive tools have already run.
+
+**Next.** Run this exact head through the full CI matrix. If the two independent
+macOS archives now have one SHA-256 and every other job remains green, consume
+T-009 and mark Phase 4 done in the mutable plan.
+
+---
+
+
+## 2026-08-05 - macOS release drift became attributable evidence
+
+**Changed.** CI now preserves both independently built release archives before
+the second build overwrites the package path, then invokes a member-level
+comparator on mismatch. The comparator has explicit compressed-size, logical
+payload, member-count, text-field, pax-field and output-count limits. Its
+adversarial selftest proves valid equal archives pass; content and metadata
+drift are attributed; corrupt input fails closed; byte-identical archives
+cannot bypass member, logical-size, text or pax limits; and a 150-difference
+input cannot exceed the 100-line report boundary.
+
+**Evidence.** Exact-head CI run 31056411069 passed all 23 CTest cases on Apple
+Clang and MSVC, with Linux/GCC and Linux/Clang also green. The macOS package
+passed its install-name, ABI-version, out-of-tree SDK consumer, analyzer,
+runtime replay and benchmark checks twice; only its final archive hashes
+differed. That isolates the remaining failure to packaged bytes, but the run
+did not preserve both archives and therefore cannot identify a responsible
+member. Linux's two clean release builds remain byte-identical at SHA-256
+`3b8ef599dfe404612de885d5eefc9728186079d56060b278f7193aab3422432a`.
+
+**Learned.** A whole-archive hash proves disagreement, not cause. Apple's
+linker uses a content-derived build UUID by default, so removing `LC_UUID`
+would discard crash/debug identity without evidence that it caused this
+mismatch. The next run must measure member content and metadata before any
+build flag is changed.
+
+**Next.** Run this exact head on physical Apple Silicon and read the emitted
+member/field attribution. Fix only the measured nondeterministic input, rerun
+the full matrix, then consume T-009 when every job is green.
+
+---
+
+## 2026-08-05 - Mach-O loader versions preserve the ABI-v1 ordering invariant
+
+**Changed.** The final second-agent audit found that generic CMake `VERSION
+0.2.0` plus `SOVERSION 1` would encode Mach-O `current_version 0.2.0` below
+`compatibility_version 1.0.0`. Apple targets now decouple loader metadata as
+current 1.2.0 / compatibility 1.0.0 while filenames and install names remain
+public release 0.2.0 / ABI 1. The macOS package gate inspects both values with
+`otool -L` in addition to its install-name check.
+
+**Evidence.** CMake documents that the Mach-O-specific target properties
+override embedded versions without changing the `VERSION`/`SOVERSION` file and
+install-name behavior. The exact native check is now part of the Apple Silicon
+release job. Linux remains green with SONAME `libruntimeskeptic.so.1`; two
+independent build directories produced final package SHA-256
+`3b8ef599dfe404612de885d5eefc9728186079d56060b278f7193aab3422432a`.
+
+**Learned.** Loader ABI numbers and pre-1.0 product versions are different
+number spaces. Reusing the product version as Mach-O `current_version` can
+create an invalid ordering even when filenames and link-time compilation look
+correct.
+
+**Next.** Obtain an exact-head Apple Clang package build/load plus Linux and
+MSVC CI evidence, then consume T-009 only when the complete matrix is green.
+
+---
+
+## 2026-08-05 - v0.2 became an executable, reproducible presentation package
+
+**Changed.** The public version is now 0.2.0. Linux and Apple Silicon packages
+contain the five analyzer tools plus the installed runtime/trace SDK, headers,
+versioned CMake targets, C sample, benchmark, quickstart and release notes.
+Package verification executes the Redis contradiction demo, records and purely
+replays a real runtime trace, checks replay status, schema-validates the
+benchmark and links/runs an out-of-tree consumer against the exact RuntimeSDK
+component. Adversarial verifier tests reject success-looking/nonzero replay and
+malformed nonempty benchmark output. CI rebuilds each archive from two
+independent build directories and rejects a byte-level SHA-256 mismatch.
+
+CI run 31053293069 supplied the native evidence local Linux could not: Apple
+Clang passed the runtime suite before the installed consumer failed, and MSVC
+exposed Windows API-header ordering plus a reset case that supplied an invalid
+protection. The exported trace target now propagates C++20, the writer emits
+the exact platform API order, and the reset case uses a page-sized range with
+`PAGE_NOACCESS`.
+
+**Evidence.** The combined warnings-as-errors WSL build passes all 23 CTest
+cases, including a clean out-of-tree installed consumer. The packaged Linux
+binaries pass the analyzer, trace replay and benchmark verifier. Two successive
+builds from the same source produced identical SHA-256
+`54a0703352452e1f63c7e47e64bb2d3b461d5014bac9f5d8bd96fec8f6f5937e`.
+
+**Learned.** A library can pass its in-tree tests and still ship an unusable
+public header when transitive language requirements are absent. Cross-platform
+tests must obey the native API's validity preconditions, and a reproducible
+archive claim needs a repeated byte comparison rather than normalized-looking
+tar flags.
+
+**Next.** Push this exact tree through Linux/GCC, Linux/Clang, physical
+macOS/Apple-Clang and Windows/MSVC. Consume T-009 and mark Phase 4 done only
+after the fixed head and both presentation packages are green.
+
+---
+
+## 2026-08-05 - Independent Phase 4 audit closed the evidence-model gaps
+
+**Changed.** A read-only second-agent audit found no P0 and nine P1 gaps in the
+first runtime cut. This follow-up gates callbacks strictly to report mode,
+records native page-rounded effective ranges separately from requested bytes,
+tracks Windows reservation identity, represents reset/reset-undo without
+inventing commit transitions, and rejects platform-incompatible API headers,
+declared-capacity lies, inconsistent semantic flags and narrowing overflow.
+The MinGW guard now compiles the Windows source with its real DLL-build
+definition, and the POSIX product target links its pthread dependency.
+
+The installed SDK now includes the runtime and trace libraries, versioned CMake
+targets and a package config. Its test installs to a clean prefix, configures an
+out-of-tree consumer and links both public APIs; release packaging can consume
+the same installation boundary.
+
+**Evidence.** The revised warnings-as-errors Linux/GCC build succeeds and all
+23 CTest cases pass. New adversarial tests exercise sub-page mappings followed
+by page-sized protection, adjacent Windows reservations, interior release,
+reset as a non-lifecycle operation, callback mode isolation, exact platform API
+sets, header capacity and 32-bit wire bounds. The external installed-package
+consumer configures and links from the staged prefix.
+
+**Learned.** Requested byte lengths are not native lifecycle extents. Windows
+reservations need an identity even when ranges are adjacent, and a public
+header is not shipped functionality unless an independent downstream consumer
+can link it. Cross-compile guards must reproduce target definitions, not merely
+the compiler and warning flags.
+
+**Next.** Run the full guard suite, commit and obtain an exact-head green
+Linux/GCC, Linux/Clang, physical macOS/Apple-Clang and Windows/MSVC matrix.
+Then consume T-009 and publish the v0.2 presentation package.
+
+---
+
+## 2026-08-05 - Phase 4 gained a transparent runtime boundary and pure replay
+
+**Changed.** This commit implements T-009's first complete cut:
+`libruntimeskeptic` exposes a versioned pure-C ABI for selected POSIX and
+Windows VM calls; checked allocation variants carry explicit exact-address
+intent; a fixed preallocated recorder preserves the native result and
+post-call error state; canonical JSONL writer, bounded reader and pure
+lifecycle replay keep POSIX and Windows state models distinct. Compile-time and
+runtime disable modes, report/assert behavior, C samples, install rules and a
+five-mode versioned overhead benchmark are executable.
+
+The trace and benchmark schemas are embedded. The internal schema validator now
+implements `oneOf`, array bounds and uniqueness rather than ignoring those
+keywords. `validate_schemas.py` fails on unknown RuntimeSkeptic schema ids and
+validates freshly emitted trace and benchmark artifacts. A new structural
+guard proves one native call per wrapper, capture/record/restore ordering, a
+bounded allocation-free recorder and replay code with no native VM calls; four
+adversarial fixtures make those protections fail on demand, taking guard
+selftests to 114/114.
+
+**Evidence.** Linux/GCC with warnings as errors builds the shared library,
+trace library, C headers, sample, replay tool and benchmark. Runtime
+conformance covers native success/failure parity, `errno` preservation,
+compile/runtime disable, exact relocation, report callbacks, assertion abort,
+recursion, overflow, concurrency and fork-child safety. Trace tests cover
+deterministic double flush, both lifecycle models, boundary-violation
+recomputation, truncation, unknown versions, noncanonical input, reordering,
+digest tamper, incomplete evidence and size limits. The POSIX C sample wrote
+three events and `rs-replay trace` reproduced them without OS calls; the fresh
+benchmark artifact validated against `runtime-overhead.v1`.
+
+CI run 31048456187 closed the earlier clang bottleneck: Linux/Clang, macOS,
+Windows and determinism passed. Linux/GCC failed only because a comment update
+to the Windows probe correctly made its committed measurement older than its
+instrument. The path-triggered physical Windows workflow passed and published
+`refs/measurements/a7d7f533.../windows-x86_64`; that fresh measured profile is
+committed here instead of weakening the freshness rule.
+
+**Learned.** Transparent observation needs two truth channels: application
+semantics fail open, while incomplete evidence fails closed. Raw allocation
+APIs cannot reveal caller intent, so intent belongs in a checked variant rather
+than an inference. A runtime event is an observation, not an invariant. Schema
+keywords and safety properties that the validator or tests silently ignore are
+the same false-green class as an unexecuted rule.
+
+**Next.** Push this implementation through Linux/GCC, Linux/Clang, physical
+macOS/Apple-Clang and Windows/MSVC. Fix every disagreement from its log, then
+consume T-009 and mark Phase 4 complete only after the exact-head matrix and
+full guard suite are green.
+
+---
+
+## 2026-08-05 - Phase 3 closeout survived an independent fail-open audit
+
+**Changed.** Commit `05670f3` replaced finding-count coverage with 24
+case-specific ground-truth oracles (23 direct plus a bounded cgroup lane),
+mechanically bound manifest argv to analyzed contracts, and made the aggregate
+fail while synthetic-only backlog remains. This closeout consumes T-012 and
+T-021, marks all seven Phase 3 demonstrations complete, and promotes T-009 as
+the sole active Phase 4 item.
+
+The independent audit found two process fail-opens before sign-off. Registry
+coverage counted any textual `ids::k*` reference as an emission; it now
+follows a constructed `Finding` through `start(...)` into `emit(...)` and
+ignores comments and dead references. Substantive commits could also leave
+`docs/PROGRESS.md` unchanged when no TODO id moved; the history guard now
+requires a newest-first block for every substantive tracked or untracked
+change. Adversarial guard coverage is 110/110. CI runs repository-wide guards
+once on gcc while clang retains an independent build, tests and execution
+ledger, avoiding a duplicate mingw install and 639-case boundary sweep.
+
+**Evidence.** Local WSL validation passes 16/16 CTest, all project guards, a
+639-case schema boundary matrix with zero divergences, 25/25 pairing selftests,
+and 23 direct kernel cases with zero contradictions. CI run 31046034092 passed
+Windows/MSVC, physical macOS, Linux/gcc, determinism, compatibility, and both
+worker-only T-012 pressure controls; the exact gcc/clang/macOS strict aggregate
+remains the mandatory merge gate for this closeout commit. Dead-reference,
+comment-only emission and source-change-without-PROGRESS fixtures all fail as
+designed.
+
+**Learned.** Finding presence is not rule execution; CONDITIONAL and UNKNOWN
+rows are observations, not held predictions. A symbol reference is likewise
+not an emission, and a changed TODO is not a reliable proxy for a working
+session. Redundant validation can reduce assurance when it blocks the
+compiler-specific evidence that follows it.
+
+**Next.** Require the closeout commit's full GitHub matrix to pass, then freeze
+the Phase 4 C ABI and semantic-event schema before implementing wrappers.
+
+---
+
+## 2026-08-05 - The POSIX reserve/commit mismatch gained a cgroup boundary
+
+**Changed.** A Linux-only pressure worker and transient-systemd lane now target
+the remaining half of T-012. Only the worker enters a 64 MiB cgroup-v2
+`MemoryMax` service with swap disabled. It reserves 256 MiB with `PROT_NONE`,
+makes the range writable, records both successes, and starts touching pages.
+The lane passes only if systemd reports `oom-kill`, the worker dies by SIGKILL,
+and that leaf's `memory.events.local` increments `oom_kill`. It then writes a
+normal execution ledger row whose RS-VM-0012 oracle is
+`oom-killed-after-touch`; the ordinary harness explicitly skips this external
+case so it can never run without containment.
+
+**Evidence.** The worker compiles on Linux with all warnings as errors; both
+shell entry points pass the bash-3.2 portability and dead-variable guards. The
+new contract validates against the published requirement schema and produces
+`CONDITIONALLY_SUPPORTED` with RS-VM-0012 against a measured POSIX-lazy
+profile. CI run 31037477215 independently proved the preceding ledger design:
+Linux gcc/clang, macOS, Windows, the aggregate execution-coverage job and every
+existing gate all passed.
+
+**Learned.** The safe unit is a transient service, not the runner process and
+not a shell moved into a hand-built cgroup. systemd owns creation and cleanup;
+the test reads the leaf-local kernel counter before resetting the failed unit.
+That makes the containment claim independently inspectable instead of inferred
+from exit 137.
+
+**Next.** Run the new lane on GitHub's passwordless-sudo Ubuntu VM. If its
+kernel evidence holds, consume T-012 and remove RS-VM-0012 from the execution
+backlog; if it fails, preserve the service status and local memory events in
+the CI diagnostics before changing the mechanism.
+
+---
+
+## 2026-08-05 - Execution coverage became an oracle, not a finding count
+
+**Changed.** T-021 is now the active closeout item. The ground-truth harness
+writes a versioned JSONL ledger containing the measured profile id, actual
+kernel outcome, whole-contract pairing and exact analyzer finding ids.
+`groundtruth_execution_coverage.py` counts a rule branch only when its registered
+case-specific outcome occurs, rejects malformed or contradictory evidence, and
+is selftested with deliberately false ledgers. CI now emits unconstrained-Linux,
+constrained-Linux and macOS ledgers and adds an aggregate coverage gate.
+
+A separate, RuntimeSkeptic-free Windows CTest supplies the bounded control half
+of T-012. Only its worker enters a 64 MiB Job Object; 256 MiB `MEM_RESERVE`
+succeeds, 128 MiB `MEM_COMMIT` fails synchronously with native error 1455
+(`ERROR_COMMITMENT_LIMIT`), and a timeout plus `KILL_ON_JOB_CLOSE` bounds it.
+
+**Evidence.** The changed Linux harness was rebuilt with warnings as errors and
+ran 16 real cases in WSL: 14 asserted pairings held, zero were contradicted and
+two conditional rows remained explicitly unasserted. The new ledger grader
+accepted 16 rows and confirmed seven rule branches from actual outcomes on that
+host. Its adversarial selftest proves that a wrong outcome is not counted and
+that malformed JSON or a contradicted pairing fails closed. The Windows suite
+passes 17/17, including the new Job Object control.
+
+**Learned.** The former coverage number was flattering and unsound: it counted
+any finding emitted for any contract/profile pair, never ran the case, silently
+ignored tool errors and counted rows the harness called `not asserted`.
+`RLIMIT_AS` is also the wrong instrument for RS-VM-0012 because it moves failure
+back to a checked mapping call. The missing POSIX evidence needs a cgroup-v2
+worker leaf where reservation and `mprotect` succeed and first touch alone is
+OOM-killed.
+
+**Next.** Add that cgroup first-touch lane, then consume the remaining T-021
+backlog with isolated oracles for RS-VM-0004/0005/0015/0020/0022/0023 and
+policy lanes for RS-VM-0010/0019. The macOS aggregate should independently
+supply RS-VM-0001/0006/0009/0011; T-012 remains blocked until the Linux half
+runs under a proven containment boundary.
+
+---
+
+## 2026-08-05 - CI freshness gate closed with real measurements
+
+**Changed.** The first draft-PR matrix built and tested successfully on Linux,
+macOS, and Windows, but both Linux jobs stopped at the profile-freshness guard.
+The shared arena walk had changed after the committed macOS profiles were
+measured. Native arm64 and Rosetta x86-64 profiles were therefore regenerated
+by the macOS measurement workflow at commit ecd0c9c; the Windows profile was
+regenerated by its real-host workflow at the same commit. The freshness map now
+also lists the shared arena header and implementation for Windows, whose probe
+already consumes both. Its existing stale-profile selftest now exercises that
+Windows dependency, keeping the frozen PLAN contract at 101 cases.
+
+**Evidence.** macOS measurement run 31033243570 passed native and Rosetta
+builds, tests, cross-process reproducibility, architecture checks, and both
+ground-truth lanes. Native remained
+sha256:6da82372a956e56a178dd60254590084dad46d424f37c5bd2ee5c7f311f5f180;
+Rosetta remained
+sha256:2a9fab9cd132d9bb3d132872fe4226f0d4e03d39b4b11e07b753802d92836888.
+Windows measurement run 31033474577 passed MSVC build and tests, the
+real-Windows provenance check, two-process reproducibility, and the ETW
+false-positive campaign. Its profile remained
+sha256:81852896cb15a45ac8cdd79044addc9181e957849d1eaad17b045b1fc12568bc.
+All three replacement files are normalized-content identical to their
+published workflow artifacts. The guard selftest remains 101/101.
+
+**Learned.** The macOS failure was an honest stale-measurement finding, not a
+compiler failure. A follow-up commit that merely restores a shared source file
+would still be newer by this guard's last-touch rule and would not fix the
+evidence gap. Regenerating the profiles proved the stronger fact: all three
+profile ids stayed byte-for-byte stable. The audit also found that Windows had
+silently escaped the same rule because its shared dependency was missing from
+the map.
+
+**Next.** Commit and push this evidence-only freshness closure, then require
+both Linux compiler lanes and every other draft-PR check to pass before merge.
+
+
+## 2026-08-05 - WSL2 closes the static Linux release lane
+
+**Changed.** `dist/build-linux-release.sh` now builds the five shipped tools
+with a static link, rejects any ELF carrying an `INTERP` segment, verifies the
+packaged Redis verdict, and normalizes archive timestamps, ownership, modes,
+and gzip metadata. The Linux probe now walks the deterministic ET_DYN-to-mmap
+allocation corridor with initial windows capped at 1 GiB and at the largest
+reservation the host actually granted. Any collision or refusal is recursively
+subdivided to page granularity before it becomes a fact. If a hard
+262,144-attempt budget is exhausted, all partial arena facts are discarded and
+the arena remains UNKNOWN. The conformance test requires a
+successful direct `mmap(NULL, ...)` to query as SUPPORTED.
+
+The first WSL2 static run found a product bug rather than a packaging bug: the
+probe assumed a 28-bit mmap-randomization neighbourhood and left a large gap
+between two fixed 4 TiB arenas. A static process allocated at
+`0x78386f0f4000`, inside that gap, so the profile honestly returned UNKNOWN.
+An initial contiguous 64 GiB-window fix made the regression green, but an
+independent audit rejected it: ENOMEM can describe the requested size rather
+than every address in the window, and EEXIST proves only that some part of a
+large request overlaps a VMA. Adaptive subdivision removes both invalid
+generalizations and tiles the final short window without overlap.
+
+**Evidence.** On Ubuntu 24.04 under WSL2, GCC 13.3 built every target with
+warnings-as-errors and a static link; `file` reported statically linked and
+`ldd` reported no dynamic executable. CTest passed 16/16, and `test_probe`
+passed 15/15 under both 4 GiB and 1 GiB `RLIMIT_AS`; the latter reduced the
+measured single reservation to 512 MiB and still passed the direct-mmap
+SUPPORTED assertion. Five separate probe processes agreed on profile id
+`sha256:26330ed2cd12e4cb6fe7414e4b632bbf371455a101e25b9663856d2008beeb61`.
+The 1 GiB constrained campaign held 13 asserted pairings with zero
+contradictions; three conditional cases were correctly not asserted.
+The complete guard gate passed: 101/101 guard selftests and all 639 boundary
+cases with zero disagreement. Release builds started under `umask 077` and
+`umask 002` produced byte-identical archives with SHA-256
+`759711cc5d4a904a0699df09ba5e5a745e0d96dc09b6a814c512f9aee965e384`.
+
+**Learned.** WSL2 is a valid Linux release instrument and a useful independent
+host. A large reservation failure is not an address-range fact, and a large
+collision is not proof about bytes outside the colliding page. Adaptive work
+must also be bounded: if measurement cannot finish within its explicit budget,
+UNKNOWN is the only deterministic result for the entire partially walked arena.
+Measuring the deterministic
+corridor this way removes the guessed ASLR bound without deriving facts from
+this process's layout. `.gitattributes` pins shell tooling to LF so a Windows
+clone remains directly runnable from WSL.
+
+**Next.** Push the branch and let the final GitHub Actions matrix gate a draft
+PR. The Linux and macOS archives remain local evidence artifacts until release
+publication is explicitly approved.
+
+
+## 2026-08-05 - physical Apple Silicon package verified (T-033)
+
+**Changed.** Commit 29d3b13 was cloned from `codex/presentation-ready` into a
+fresh checkout on a physical Apple M1 MacBook Air. Running
+`./dist/build-macos-release.sh` passed the packaged Redis verdict check and
+produced `dist/runtimeskeptic-v0.1.0-macos-arm64.tar.gz`.
+
+**Evidence.** The package verifier reported `UNSUPPORTED` via `RS-VM-0006`, then
+the builder emitted SHA-256
+`990c1d9787168dfb5b5bbea92358e9b51f919bb4161e72d7936d537f75a5bdd6`.
+This closes the physical Apple Silicon release-evidence gap.
+
+**Learned.** The native-architecture guard, complete package manifest, and
+fail-closed demo check all held in a fresh clone rather than only in the Windows
+fixture used during development.
+
+**Next.** Add a reproducible Linux static-package builder, then open a draft PR
+and let the final GitHub Actions matrix gate merge. The macOS archive remains a
+local evidence artifact until release publication is explicitly approved.
+
+
+## 2026-08-05 - presentation integration becomes fail-closed (T-033)
+
+**Changed.** On local branch codex/presentation-ready, the 21-commit input and
+replay hardening line is now the release base instead of vulnerable main. The
+v0.1 package material was applied on top. Its macOS self-check no longer ends in
+a catch-all success: dist/verify-package.sh checks the packaged files, runs the
+packaged Redis demo, requires exit 1, and requires both UNSUPPORTED and
+RS-VM-0006. Quickstart wording now distinguishes static Linux from macOS
+system-library linking. The temporary hardening-branch CI trigger is removed.
+
+The process contract is mechanical now too. check_progress_history.py compares
+the working tree to HEAD (or a clean committed tree to the first parent) and
+allows only a new session block immediately below this file's front matter. Any
+edit, deletion, or reorder of prior history fails. Two deliberate-failure
+selftests pin both directions. TODO stopped restating guard and completed-item
+counts, the exact drift class its own history documents.
+
+The immutable record model is explicit: root plan.md is hash-pinned and never
+carries status; docs/TODO.md is consumed, while docs/PROGRESS.md is append-only.
+Three process-contract selftests pin the presence, success, and failure paths.
+
+**Learned.** A release test that ignores the tool exit code is worse than no
+test: it publishes confidence while accepting a missing binary, a crash, or the
+wrong verdict. The same principle applies to project memory: append-only prose
+protects nothing until old bytes are compared with git.
+
+**Verified.** Windows MSVC Release built with 0 warnings and 0 errors; CTest was
+16/16. The 639-mutation boundary matrix had zero divergence, false-green,
+over-strict, crash, golden-verdict, or integrity mismatches. Guard selftests were
+101/101 and the complete repository guard gate passed. The release verifier
+passed on a real packaged layout and rejected a missing package as required.
+Independent review found four P1 gaps; native arm64 packaging, complete package
+contents, historical plan immutability, and TODO-to-PROGRESS consumption are now
+all fail-closed and covered by negative tests.
+
+**Next.** Build and verify the release archive on a physical Apple Silicon Mac,
+then run one final GitHub Actions matrix and create the release candidate. This
+local branch remains uncommitted and unpushed for owner review.
+
+## 2026-08-02 — round 4: stop hand-checking, read the schema (T-030/T-031/T-032)
+
+**Changed.** The fourth re-test confirmed round 3 held (CI green 6/6 on `58f6851`)
+and then found the class four rounds of hand-written checks kept leaking: a
+null/container matrix accepted **36/36** schema-invalid documents
+(`assumptions:null`, a null `page_size` fact, `source_locations[].line:null`), a
+replay matrix accepted **28/111** manifests with wrong or missing NESTED fields,
+more verdict false-greens, and the guard itself was fail-OPEN. The decisive move
+was to stop hand-checking types field by field and validate every input against
+the published schema itself — code that reads `schemas/*.json` cannot forget a
+field, a null, or a nested one.
+
+### What was wrong
+
+- **The parsers checked the fields someone remembered (T-030).** Every round
+  fixed the named examples and the next re-test found the next unguarded field.
+  It is not a sequence of oversights; it is the method. A hand check enforces a
+  list, and the list is always shorter than the schema.
+- **Two verdicts were wrong at the edges (T-031).** A profile with
+  `min_map_address >= max_user_address` — an address space with no room in it —
+  loaded and `verify`ed with exit 0. A profile whose stored `profile_id` no
+  longer matched its own facts (edited after signing) also verified 0.
+- **The guard could pass by not running (T-032).** `boundary_matrix.py` returned
+  0 when its binary or `jsonschema` was missing, `_bin` never looked in
+  `build/bin/Release`, exit 70 / a crash counted as "accepted", and the CI
+  `jsonschema` install ended in `|| true`. Every one of those is a way for the
+  contract check to be green without having checked anything.
+
+### The fix, measured
+
+| | |
+|---|---|
+| **+** | **T-030: a real JSON Schema validator** — `src/core/schema.{hpp,cpp}`, the subset our schemas use (type incl arrays+`null`+`integer`, required, properties, additionalProperties, enum, const, items, local AND cross-file `$ref`, pattern, min/max, anyOf, allOf, if/then/else). Schemas embedded at build by `configure_file` (no runtime file, no Python). It gates the two DOMAIN entry points — `Requirement::from_json` and `EnvironmentProfile::from_json` — so rs-check, rs-profile and rs-mcp are covered at once, and the `rs-replay` manifest through `validate_analysis_manifest`. A bundle still validates each item through the same path, so one bad entry is dropped, not the batch |
+| **+** | **the proof it is faithful** — a new dev tool `rs-validate` exposes the validator so `boundary_matrix.py` compares it to Python's `jsonschema` for EVERY mutation. Extended with a null/container sweep on every field and a manifest matrix: **639 mutations, 0 divergences** (C++ validator == jsonschema), **0 false-greens, 0 over-strict, 0 crashes**, golden verdicts 0, verify-integrity 0 |
+| **+** | **T-031** — `min_map_address >= max_user_address` refused in `from_json` (every consumer, not just verify); a stored `profile_id` that does not match the recompute refused by `rs-profile verify`. Locked by a golden `VERIFY INTEGRITY` section and `test_profile.cpp` |
+| **+** | **T-032** — `RS_MATRIX_REQUIRE=1` makes a missing binary or oracle a FAILURE, not a skip (wired into `ci.yml`, which also drops the `jsonschema` install's `|| true`); `_bin` finds every CI config; exit 70 / a crash counts as NOT accepted |
+| **+** | the one cross-field rule the parser always enforced — a request that demands an exact address must carry one — is now IN the schema as `if/then`, so `jsonschema == validator == tool` instead of the tool being silently stricter than its own contract |
+| **−** | the lesson, a fifth time, and the reason this fix is different: rounds 1-4 were each systematic about a DIMENSION (named examples, types, verdict, nesting) and the schema always had one more. This validator is complete BY CONSTRUCTION — it reads the schema — and the matrix PROVES it equals the oracle, so "gate the tools through it" is a guarantee, not another list. What it does NOT close: a bug in the schema itself. The validator faithfully enforces whatever the schema says, right or wrong — which is exactly why the golden verdicts and the verify-integrity checks (semantic, cross-field, un-expressible in the schema) stay, and why the `if/then` rule had to be added rather than assumed |
+
+New `tests/unit/test_schema.cpp` (validator, keyword by keyword + the exact
+round-4 findings, no external oracle). 16/16 CTest, all guards pass, clean `/WX`
+build, clean from-scratch configure+build.
+
+### What to do next
+
+Round 4 is complete and awaiting the reviewer's re-test. Push, get CI green on
+the SHA over all six jobs, then notify — not before. Nothing merged to `main`;
+LinkedIn still on hold by the owner's standing NO-GO. When the branch eventually
+lands, drop it from `ci.yml` `on.push`.
+
+## 2026-08-02 — round 3: the matrix measured acceptance, not truth (T-027/T-028/T-029)
+
+**Changed.** The third re-test confirmed round 2 held and CI was green 6/6, then
+found the round-2 matrix's blind spots: it checked only "schema accepted ==
+parser accepted", never the VERDICT, never the nested fields, never the bundle's
+file integrity. All three closed, and the harness expanded so the blind spots
+are now measured.
+
+### What was wrong
+
+- **Verdict (T-027).** `file_offset + size` overflowing uint64 bare-`return`ed in
+  `rule_file_mapping_beyond_eof` ("caught elsewhere" - it was not), so
+  `file_offset=UINT64_MAX` came out SUPPORTED while offset 0 on the same
+  contract was PROVEN UNSUPPORTED. And `allocation_granularity`/`page_size` of 0
+  was schema-valid and accepted, silently masking a guard-page contract to
+  SUPPORTED.
+- **Nested fields (T-028).** The matrix reached only top-level fields. Extended
+  into the containers it found 22 disagreements: `failure_sink.description`,
+  `failure_sink.location` sub-fields, `source_locations` items,
+  `required_postconditions` / `permitted_fallbacks` / `extraction_limitations`,
+  `exact_mapping_failure_codes`, and a non-object `protection` - all skipped or
+  coerced wrong types instead of rejecting.
+- **Bundle integrity (T-029), the serious one.** `check_hash` hashed the file
+  NAMED IN THE MANIFEST while the analysis read the fixed
+  `application_requirements.json`. So a tampered requirement passed when the
+  manifest pointed the hash at a pristine copy (proven: a metadata-only edit
+  replayed `reproduced / 0`), and `../outside_req.json` escaped the bundle.
+
+### The fix, measured
+
+| | |
+|---|---|
+| **+** | the harness now checks GOLDEN VERDICTS (contract × profile → expected exit), not just accept/reject, and mutates the nested/container fields. `tools/audit/boundary_matrix.py`: 0 of 310 type cases + 0 verdict mismatches (was 22 + the verdict bugs). Still a guard |
+| **+** | T-027: `mapping_end` saturates on overflow so the beyond-EOF finding fires; a `page_size`/`allocation_granularity` of 0 is refused at parse and the schema types them `minimum: 1` |
+| **+** | T-028: strict readers - `read_string_array_field` and `read_source_location` - and non-object `protection` rejected; the schema types `permitted_fallbacks` items and `operation` as enums so the two agree |
+| **+** | T-029: `rs-replay` hashes the SAME fixed files it analyses and refuses any manifest `file` that is not the canonical basename (closes indirection AND `../`); the full `analysis-bundle.v1` manifest is enforced by type, and sha256 must be 64 hex |
+| **−** | the lesson, a third time: a check is only as good as the dimension it measures. Round 1 trusted named examples; round 2 trusted a type matrix; both were systematic about the WRONG thing. The harness now spans type, verdict, nesting and bundle integrity - and will still miss a dimension nobody has thought to add |
+
+Regressions in `test_profile.cpp` (41 cases) and `test_evidence_bundle.cpp` (11).
+15/15 CTest, 19 guards, clean `/WX` build.
+
+### What to do next
+
+Round 3 is complete and awaiting the reviewer's re-test. Push, get CI green on
+the SHA, then notify - not before. When the branch lands, drop it from `ci.yml`
+`on.push`. Nothing merged to `main`.
+
+## 2026-08-02 — honest docs, and CI green on the fixed SHA (T-026)
+
+**Changed.** The re-test's secondary findings, one drift the re-test exposed in
+my own round-1 docs, and the piece that had been missing all along: CI actually
+running on the fix.
+
+- README dropped the false "60 seconds" (209 s on Windows); MCP/probe help text
+  no longer says "Only Linux is implemented" (Linux, macOS and Windows all
+  measure — the Windows probe is 1204 lines of VirtualQuery/VirtualAlloc, and my
+  own round-1 problem_statement edit had wrongly called it "a stub"); the
+  `docs/integrations.md` CI snippet now captures `$?` with `|| code=$?` so it
+  works under Actions' default `bash -eo pipefail`; the review doc's premature
+  "all FIXED" became the honest two-round account.
+- `ci.yml` gained `fix/review-hardening` in `on.push` (temporary, no merge) so
+  the round-2 fixes are exercised. **CI run #137 on `681b048` is green on all
+  six jobs** — `linux-gcc`, `linux-clang`, `macos-apple-clang`, `windows-msvc`,
+  `compatibility-gate`, `determinism` — and the guards step that runs the
+  boundary matrix passed with it. `refs/status/681b048…/*` are all `/success`.
+
+**Learned.** The re-test was right that "no CI on the SHA" is not a footnote: a
+fix is not verified until the instrument the project trusts has run on it.
+`api.github.com` still answers unauthenticated queries with `total_count: 0`
+(hence the re-test's finding); the git-protocol `refs/status/*` channel is the
+one that works, and it now carries a green result for the fixed SHA.
+
+**Next.** The round-2 hardening is complete and awaiting the reviewer's re-test.
+When the branch lands, drop it from `ci.yml` `on.push`. Nothing merged to `main`.
+
+## 2026-08-02 — the evidence bundle stops certifying an incomplete run (T-025)
+
+**Changed.** Two bundle false-greens from the re-test, closed. `rs-check` no
+longer writes an evidence bundle when any requirement in the input could not be
+evaluated, and `rs-replay` now rejects a manifest missing any field
+`analysis-bundle.v1` requires — not just the inputs/outputs hash nodes the
+round-1 fix checked.
+
+### What was wrong
+
+- A bundle with one valid and one invalid requirement: `rs-check` exited 65 and
+  said "incomplete", **but still wrote a self-certified bundle** ("replay:
+  reproduced"), and `rs-replay` then reported it `reproduced / 0`. An incomplete
+  analysis could be handed on as a clean, replayable proof.
+- A manifest stripped of six required sections (`tool_version`,
+  `schema_versions`, `host`, `process_architecture`, `analysis_options`,
+  `replay`) still replayed `reproduced / 0`: the round-1 completeness check
+  required only `inputs`/`outputs`, so the tamper check never looked at the
+  fields that were gone.
+
+### The fix
+
+| | |
+|---|---|
+| **+** | `tools/rs-check/main.cpp`: the bundle is written only when `bundle->rejected` is empty; otherwise it says why it wrote nothing, and the exit code is 65. A clean single/whole bundle is unaffected |
+| **+** | `src/reports/bundle.cpp` `replay_bundle`: requires every top-level field `analysis-bundle.v1` lists (`tool_version`, `schema_versions`, `host`, `process_architecture`, `analysis_options`, `inputs`, `outputs`, `overall`, `finding_ids`, `replay`) before the tamper check runs. A gutted manifest is rejected as incomplete, naming the first missing field |
+| **−** | same lesson as T-024, one layer up: the round-1 check required only the fields it happened to think of. The list now comes from the schema's own `required`, so it cannot fall behind it silently |
+
+Regression: `a_manifest_missing_a_required_top_level_field_is_rejected` in
+`tests/unit/test_evidence_bundle.cpp`. Verified by hand: mixed bundle → no
+bundle, exit 65; stripped manifest → `rs-replay` 65; a good bundle still
+replays 0. 15/15 CTest, 19 guards.
+
+### What to do next
+
+Only **T-026** remains before the next re-test: the README "60 seconds" claim
+(209 s on Windows), the "Only Linux" MCP/probe help text against a shipped
+Windows probe, the `set -e`-unreachable `docs/integrations.md` CI snippet, an
+honest rewrite of the review doc, and getting CI to actually run on the branch
+(`d42fe30`+ has no run). Do NOT report ready until the matrix is green in CI.
+
+## 2026-08-02 — the re-test: a false-green class the first fixes never reached (T-024)
+
+**Changed.** Every CLI input reader now rejects a wrong TYPE instead of reading
+it as an absent field, the published schemas were tightened to forbid exactly
+what the tool's uint64 model cannot hold, and an address+size overflow now
+changes the verdict. A checked-in boundary matrix proves it, and runs as a
+guard. The false-green blockers A1/A2/A5 are, this time, closed at the root.
+
+### What was wrong, and how the first round missed it
+
+The 2026-08-02 independent re-test (branch `fix/review-hardening`, `d42fe30`)
+ran a **300-case boundary matrix** and found the first round of review fixes had
+patched the *named examples* and nothing else. `required_page_size: "16384"` (a
+string) was read as "no page-size requirement" and a 16 KiB-page program passed
+on a 4 KiB host — `SUPPORTED / 0`. The root cause was one shape repeated across
+~20 fields: `read_optional_uint` (and the profile's `os_version`, `notes`,
+`probe_run`, fact-value readers) returned "absent" for a wrong type instead of
+an error. Localized patches for `name`/`protection`/one `reject_negative` could
+never cover it; only a check driven by the schema could.
+
+### The fix, measured not guessed
+
+| | |
+|---|---|
+| **+** | `tools/audit/boundary_matrix.py`: mutates a base requirement and profile against every field, asks jsonschema "valid?" and the tool "accepted?", and reports the two disagreements — schema-invalid ACCEPTED (false-green) and schema-valid REJECTED (over-strict). Baseline **89**; now **0** across 249 cases. Wired into `run_all.sh` (skips if unbuilt) |
+| **+** | readers reject wrong types: `read_optional_uint` errors on a non-integer and folds in the negative check; `read_flag` rejects `null`; `read_address`/`read_uint` reject negatives; a fact requires its `value` key; a range start/end must be a hex string; the profile rejects non-string `os_version`/`kernel_version`, non-object `probe_run`, non-array `notes`, wrong-typed `pointer_width_bits` |
+| **+** | schemas tightened so the OVER-STRICT rejections become agreement, not divergence: every integer field gains `minimum: 0` (size keeps 1) and `maximum: 2⁶⁴-1`; address fields gain the hex `pattern`; `operation` drops `"unknown"`; a range's evidence may not be `unknown`; fact values are typed. `tools/audit/tighten_schemas.py` records exactly what changed. All 65 shipped artifacts still validate |
+| **+** | `address + size` overflow is a **proven UNSUPPORTED** finding, not an analyzer limitation — it was leaving the verdict SUPPORTED for a region that wraps the 64-bit space (`src/vm/analyzer.cpp`) |
+| **−** | the lesson, again: a systematic defect needs a systematic check. The first round trusted the named examples; the matrix is now the instrument, and status follows it. It also caught two of its OWN bad cases (an inverted range, a value past a default `end`) — a check that is not itself checked lies too |
+
+### What to do next
+
+T-024 is done (matrix 0, 36 profile cases, 15/15 ctest, 19 guards). Still open
+before the next re-test can be asked for: **T-025** — the evidence bundle is
+still written for an incomplete run and `rs-replay` still certifies a
+manifest with six sections stripped (`rs-check` main + `replay_bundle`).
+**T-026** — the README "60 seconds" (209 s on Windows), the "Only Linux"
+help text against a shipped Windows probe, the `set -e`-unreachable
+integrations snippet, the review doc's premature "all FIXED", and getting CI to
+actually run on the branch (`d42fe30` has no run — `ci.yml` triggers on `main`
+and PRs only). Do NOT tell the user it is ready until the matrix is green in CI.
+
 ## 2026-08-01 — a committed measurement outlived its instrument (found by an external run)
 
 **Changed.** Both committed macOS profiles regenerated from the current CI

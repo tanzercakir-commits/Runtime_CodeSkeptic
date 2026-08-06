@@ -169,11 +169,11 @@ def main() -> int:
     for path in sorted(ROOT.rglob("*.md")):
         if ".git" in path.parts:
             continue
-        rel = str(path.relative_to(ROOT))
+        rel = path.relative_to(ROOT).as_posix()
         if rel in KNOWN:
             continue
         scanned += 1
-        lines = path.read_text().splitlines()
+        lines = path.read_text(encoding="utf-8").splitlines()
         for i, line in enumerate(lines):
             has_path_claim = PATH_CLAIM.search(line)
             has_absence = ABSENCE.search(line)

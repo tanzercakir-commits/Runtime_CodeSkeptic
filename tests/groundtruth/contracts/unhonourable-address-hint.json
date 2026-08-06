@@ -1,0 +1,36 @@
+{
+  "schema": "runtime-skeptic.application-requirements.v1",
+  "name": "Relocatable mapping with an unavailable low-address hint",
+  "component": "ground-truth pairing for RS-VM-0020",
+  "operation": "virtual_memory_map",
+  "request": {
+    "address": "0x800",
+    "size": 131072,
+    "exact_address_required": false,
+    "protection": {"read": true, "write": true, "execute": false},
+    "file_backed": false
+  },
+  "assumptions": {
+    "guest_host_identity_required": false,
+    "translation_layer_available": false,
+    "retries_on_failure": false
+  },
+  "required_postconditions": [
+    "a writable anonymous mapping succeeds; relocation is acceptable"
+  ],
+  "permitted_fallbacks": ["relocate"],
+  "failure_sink": {
+    "kind": "error_return",
+    "location": {
+      "file": "tests/groundtruth/cases/hinted_mapping_at.c",
+      "line": 1,
+      "symbol": "attempt"
+    },
+    "description": "the case accepts a successful relocated mapping and records that the requested hint had no effect"
+  },
+  "assumption_evidence": "specified_guarantee",
+  "extraction_limitations": [
+    "The dedicated program passes the contract's literal 0x800 hint to mmap; unlike hinted_relocation.c it does not substitute a runtime-selected address."
+  ],
+  "x_groundtruth": "The request is supportable because relocation is explicitly permitted. The real outcome must be satisfied-relocated: that is both whole-contract success and a direct witness that the unavailable hint cannot be honoured."
+}

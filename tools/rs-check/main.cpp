@@ -26,8 +26,9 @@ USAGE
 REQUIREMENT.json is either a single
 runtime-skeptic.application-requirements.v1 document, or a
 runtime-skeptic.application-requirements-bundle.v1 containing many - the
-shape CodeSkeptic's --runtime-assumptions mode emits. Every requirement in a
-bundle is evaluated, and the run's verdict is the worst of them.
+producer-neutral shape accepted from any schema-valid source. Every
+requirement in a bundle is evaluated, and the run's verdict is the worst of
+them.
 
 OPTIONS
   --profile FILE       environment profile from rs-env-probe (required)
@@ -217,7 +218,18 @@ int main(int argc, char** argv) {
     // what the host actually produced. The bundle re-runs the analysis itself to
     // self-certify - the same code path, so its verdict cannot disagree with the
     // one just printed.
-    if (!bundle_dir.empty()) {
+    // An evidence bundle certifies a COMPLETE run. If any requirement in the
+    // input could not be evaluated, writing one would seal a partial analysis as
+    // though it were the whole - and rs-replay would then report it "reproduced".
+    // Refuse to write it; the exit code below already says the run was incomplete.
+    if (!bundle_dir.empty() && !bundle->rejected.empty()) {
+        std::cerr << "rs-check: not writing an evidence bundle to '" << bundle_dir
+                  << "': " << bundle->rejected.size()
+                  << " requirement(s) could not be evaluated, so the run is "
+                     "incomplete and a bundle would certify a partial analysis "
+                     "as a whole one\n";
+    }
+    if (!bundle_dir.empty() && bundle->rejected.empty()) {
         std::string req_text, prof_text;
         if (auto t = io::read_file(requirement_path, error)) {
             req_text = std::move(*t);
@@ -254,6 +266,22 @@ int main(int argc, char** argv) {
             std::cerr << "rs-check: " << replay.detail << "\n";
             return reports::exit_code::kInternal;
         }
+    }
+
+    // A bundle with any requirement the reader could not parse was NOT fully
+    // evaluated, whatever the parsed ones came to. The help promises "every
+    // requirement in a bundle is evaluated"; when one was skipped, a clean exit
+    // would tell a CI watching only the code that all requirements passed. The
+    // skips were named on stderr above; here they decide the exit. Reported
+    // even when the parsed requirements were themselves UNSUPPORTED, because
+    // "some could not be checked" is a different, and worse, fact than "checked
+    // and refused".
+    if (!bundle->rejected.empty()) {
+        std::cerr << "rs-check: " << bundle->rejected.size()
+                  << " requirement(s) in the bundle could not be evaluated; the "
+                     "run is incomplete and its exit code says so (not a clean "
+                     "pass)\n";
+        return reports::exit_code::kInput;
     }
 
     return reports::exit_code_for(overall);

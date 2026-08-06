@@ -210,4 +210,112 @@ ArenaWalk walk_arena(const std::string& what, std::uint64_t bottom,
     return out;
 }
 
+ArenaWalk walk_arena_adaptive(const std::string& what,
+                              std::uint64_t bottom, std::uint64_t top,
+                              std::uint64_t page_size,
+                              std::uint64_t max_window_size,
+                              std::size_t max_attempts,
+                              const ArenaProbe& probe) {
+    ArenaWalk out;
+    if (page_size == 0 || max_window_size == 0 || bottom >= top) return out;
+    if (bottom % page_size != 0 || top % page_size != 0 ||
+        max_window_size % page_size != 0 || !probe.place || !probe.describe) {
+        return out;
+    }
+    if (max_attempts == 0) {
+        out.budget_exhausted = true;
+        return out;
+    }
+
+    const std::string available_note =
+        "inside the " + what +
+        ", established by exact placements with adaptive subdivision down to "
+        "page granularity. Every byte in this range was covered by a placement "
+        "that succeeded or by a page already mapped in this process. Large "
+        "held or refused attempts were subdivided and never generalized";
+
+    auto append = [](std::vector<ClassifiedRange>& ranges,
+                     std::uint64_t start, std::uint64_t end,
+                     const std::string& note) {
+        if (start >= end) return;
+        if (!ranges.empty() && ranges.back().range.end == start &&
+            ranges.back().note == note) {
+            ranges.back().range.end = end;
+            return;
+        }
+        ClassifiedRange range;
+        range.range = AddressRange{start, end};
+        range.evidence = EvidenceClass::MeasuredCapability;
+        range.note = note;
+        ranges.push_back(range);
+    };
+
+    std::function<void(std::uint64_t, std::uint64_t)> visit;
+    visit = [&](std::uint64_t base, std::uint64_t size) {
+        if (out.attempts >= max_attempts) {
+            out.budget_exhausted = true;
+            return;
+        }
+        ++out.attempts;
+        const ArenaPlacement placement = probe.place(base, size);
+        if (placement == ArenaPlacement::Placed) {
+            ++out.placed;
+            append(out.available, base, base + size, available_note);
+            return;
+        }
+
+        // EEXIST proves only that SOME page in a multi-page request overlaps an
+        // existing VMA. Likewise ENOMEM may describe the requested SIZE (for
+        // example RLIMIT_AS), not every address in it. Neither result can be
+        // promoted to a fact about the whole tile.
+        if (size > page_size) {
+            const std::uint64_t page_count = size / page_size;
+            const std::uint64_t left_size = (page_count / 2) * page_size;
+            visit(base, left_size);
+            if (!out.budget_exhausted) {
+                visit(base + left_size, size - left_size);
+            }
+            return;
+        }
+
+        if (placement == ArenaPlacement::HeldByProbe) {
+            ++out.held_by_probe;
+            append(out.available, base, base + page_size, available_note);
+            return;
+        }
+
+        const ArenaEntry entry = probe.describe(base);
+        if (entry.covers) {
+            ++out.held_no_access;
+            append(out.available, base, base + page_size, available_note);
+            return;
+        }
+
+        ++out.refused;
+        const std::string detail = entry.text.empty()
+                                       ? "the platform reported a structural refusal"
+                                       : entry.text;
+        append(out.unavailable, base, base + page_size,
+               "exact page placement refused inside the " + what + "; " +
+                   detail);
+    };
+
+    for (std::uint64_t base = bottom;
+         base < top && !out.budget_exhausted;) {
+        const std::uint64_t remaining = top - base;
+        const std::uint64_t size =
+            remaining < max_window_size ? remaining : max_window_size;
+        visit(base, size);
+        base += size;
+    }
+    if (out.budget_exhausted) {
+        // A partial prefix would depend on how this process's ASLR layout spent
+        // the recursion budget. Keep the counters for diagnostics, but keep all
+        // partially measured ranges out of host facts and profile_id.
+        out.available.clear();
+        out.unavailable.clear();
+    }
+    return out;
+}
+
 }  // namespace rs::probe

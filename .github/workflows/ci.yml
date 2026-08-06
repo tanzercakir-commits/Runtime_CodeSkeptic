@@ -92,15 +92,62 @@ jobs:
         id: test
         run: ctest --test-dir build --build-config RelWithDebInfo --output-on-failure
 
+      - name: Verify v0.2 Linux presentation package
+        if: matrix.cc == 'gcc'
+        run: |
+          RS_BUILD_DIR="$PWD/build-release-static" \
+          RS_SDK_BUILD_DIR="$PWD/build-release-sdk" \
+          RS_JOBS=2 ./dist/build-linux-release.sh
+          first_sha="$(sha256sum dist/runtimeskeptic-v0.2.0-linux-x86_64.tar.gz | awk '{print $1}')"
+          cp dist/runtimeskeptic-v0.2.0-linux-x86_64.tar.gz \
+            "$RUNNER_TEMP/runtimeskeptic-linux-first.tar.gz"
+          RS_BUILD_DIR="$PWD/build-release-static-2" \
+          RS_SDK_BUILD_DIR="$PWD/build-release-sdk-2" \
+          RS_JOBS=2 ./dist/build-linux-release.sh
+          second_sha="$(sha256sum dist/runtimeskeptic-v0.2.0-linux-x86_64.tar.gz | awk '{print $1}')"
+          test "$first_sha" = "$second_sha" || {
+            echo "::error::v0.2 Linux package is not byte-reproducible"
+            python3 dist/compare_release_archives.py \
+              "$RUNNER_TEMP/runtimeskeptic-linux-first.tar.gz" \
+              dist/runtimeskeptic-v0.2.0-linux-x86_64.tar.gz || true
+            exit 1
+          }
+          echo "reproducible package sha256: $second_sha"
+
+      - name: Upload v0.2 Linux presentation package
+        if: matrix.cc == 'gcc'
+        uses: actions/upload-artifact@v4
+        with:
+          name: runtimeskeptic-v0.2.0-linux-x86_64
+          path: dist/runtimeskeptic-v0.2.0-linux-x86_64.tar.gz
+          if-no-files-found: error
+
       # Project rules that can be checked mechanically. These matter as much as
       # the behavioural tests: a repository that has started lying about itself
       # passes every test right up until someone trusts a document.
       # tools/guards/run_all.sh records what each guard caught.
+      # These repository-wide guards are compiler-independent. Run them once
+      # on gcc; clang still builds, tests and emits an independent execution
+      # ledger. Duplicating the mingw install and 639-case boundary sweep held
+      # the clang lane inside this step long after every native test was green.
       - name: Project guards
+        if: matrix.cc == 'gcc'
+        timeout-minutes: 20
         id: guards
+        env:
+          # The boundary matrix is the schema-conformance check, and this is the
+          # one place it runs authoritatively: jsonschema (its oracle) and the
+          # freshly built binaries are both present here. RS_MATRIX_REQUIRE=1
+          # turns a missing oracle or a missing binary into a FAILURE, not the
+          # silent skip that would let a false-green regression through - the very
+          # fail-open the 2026-08-02 re-test found in the guard itself.
+          RS_MATRIX_REQUIRE: "1"
         run: |
+          # jsonschema is required here (see RS_MATRIX_REQUIRE above), so NO
+          # `|| true` on the install: if neither attempt succeeds the matrix
+          # cannot run, and that must fail the step rather than pass as a skip.
           python3 -m pip install --quiet --break-system-packages jsonschema \
-            || python3 -m pip install --quiet jsonschema || true
+            || python3 -m pip install --quiet jsonschema
           # A 1x Linux second standing in for a 2x Windows minute:
           # check_windows_compiles.py builds the Windows-only translation units
           # with the project's own flags. Without this it SKIPS - loudly, but it
@@ -141,7 +188,8 @@ jobs:
           # tee, not >: the output belongs in the job log AND in a file, because
           # the file is what gets published to refs/measurements/*. pipefail so
           # tee's success cannot mask the harness's exit code.
-          bash tests/groundtruth/run.sh /tmp/meas/gt-host.json 2>&1 \
+          GT_LEDGER=/tmp/meas/gt-host.ledger.jsonl \
+            bash tests/groundtruth/run.sh /tmp/meas/gt-host.json 2>&1 \
             | tee /tmp/meas/gt_run.txt
 
       # A SECOND HOST, MADE RATHER THAN WAITED FOR.
@@ -163,28 +211,46 @@ jobs:
         run: |
           set -o pipefail
           mkdir -p /tmp/meas
-          bash tools/campaign/constrained_lane.sh 2>&1 \
+          GT_LEDGER=/tmp/meas/constrained.ledger.jsonl \
+            bash tools/campaign/constrained_lane.sh 2>&1 \
             | tee /tmp/meas/gt_constrained.txt
 
-      # THE COVERAGE NUMBER, MEASURED ON EVERY PUSH RATHER THAN BY HAND.
+      # The dangerous half of reserve/commit is not another RLIMIT_AS case:
+      # RLIMIT_AS fails at mmap. This worker alone enters a 64 MiB cgroup-v2
+      # leaf, so mmap+mprotect succeed and the shortage can move to first touch
+      # without exposing the runner or any sibling process to the OOM killer.
+      - name: Reserve/commit pressure moves to first touch (cgroup v2)
+        id: gt_commit_pressure
+        if: runner.os == 'Linux' && matrix.cc == 'gcc'
+        run: |
+          set -o pipefail
+          bash tools/campaign/cgroup_reserve_commit_lane.sh \
+            /tmp/meas/gt-host.json /tmp/meas/cgroup.ledger.jsonl 2>&1 \
+            | tee /tmp/meas/gt_commit_pressure.txt
+
+      # EXECUTION COVERAGE, GRADED FROM THE CASE OUTCOME.
       #
-      # "10 of 23 rules executed" was a claim that lived in two documents and was
-      # stale in both within a day of being written, because the only thing that
-      # recomputed it was a human remembering to run the tool. It runs here now,
-      # over BOTH hosts this job already produces - the unconstrained one and the
-      # RLIMIT_AS-constrained one - because RS-VM-0026 fires only on the second,
-      # and feeding one profile under-reported it as backlog for a day.
+      # The legacy counter treated an emitted finding id as execution. That
+      # counted CONDITIONAL/UNKNOWN rows the harness explicitly did not assert
+      # and ignored whether the case reached the rule-specific bad outcome.
+      # These ledgers carry the actual kernel outcome plus the exact findings;
+      # the grader counts only a registered rule/outcome oracle and fails closed.
       - name: Rule coverage by execution
         id: coverage
         if: runner.os == 'Linux'
         run: |
           set -o pipefail
-          ( ulimit -v 4194304
-            build/bin/rs-env-probe vm --name constrained \
-              --output /tmp/meas/constrained-host.json )
-          python3 tools/campaign/groundtruth_coverage.py \
-            /tmp/meas/gt-host.json /tmp/meas/constrained-host.json 2>&1 \
-            | tee /tmp/meas/coverage.txt
+          python3 tools/campaign/groundtruth_execution_coverage.py \
+            /tmp/meas/*.ledger.jsonl \
+            2>&1 | tee /tmp/meas/coverage.txt
+
+      - name: Upload execution ledger
+        if: runner.os == 'Linux'
+        uses: actions/upload-artifact@v4
+        with:
+          name: groundtruth-ledger-${{ matrix.os }}-${{ matrix.cc }}
+          path: /tmp/meas/*.ledger.jsonl
+          if-no-files-found: error
 
       # The evidence bundle, end to end: emit one from a real measured profile,
       # then REPLAY IT with a different binary invocation reading only the
@@ -336,6 +402,9 @@ jobs:
           cp /tmp/meas/coverage.txt /tmp/diag/coverage.txt 2>/dev/null \
             || echo "(the coverage step did not run)" \
                  > /tmp/diag/coverage.txt
+          cp /tmp/meas/gt_commit_pressure.txt /tmp/diag/gt_commit_pressure.txt 2>/dev/null \
+            || echo "(the cgroup pressure step did not run)" \
+                 > /tmp/diag/gt_commit_pressure.txt
           # The PROFILE, which the diagnostics did not carry - on a project whose
           # subject is what a probe measured, that is an odd thing to omit. When
           # ctest fails before the ground-truth step there is no profile in
@@ -443,6 +512,32 @@ jobs:
         id: test
         run: ctest --test-dir build --build-config RelWithDebInfo --output-on-failure
 
+      - name: Verify v0.2 macOS presentation package
+        if: runner.os == 'macOS'
+        run: |
+          ./dist/build-macos-release.sh
+          first_sha="$(shasum -a 256 dist/runtimeskeptic-v0.2.0-macos-arm64.tar.gz | awk '{print $1}')"
+          cp dist/runtimeskeptic-v0.2.0-macos-arm64.tar.gz \
+            "$RUNNER_TEMP/runtimeskeptic-macos-first.tar.gz"
+          RS_BUILD_DIR="$PWD/build-release-macos-2" ./dist/build-macos-release.sh
+          second_sha="$(shasum -a 256 dist/runtimeskeptic-v0.2.0-macos-arm64.tar.gz | awk '{print $1}')"
+          test "$first_sha" = "$second_sha" || {
+            echo "::error::v0.2 macOS package is not byte-reproducible"
+            python3 dist/compare_release_archives.py \
+              "$RUNNER_TEMP/runtimeskeptic-macos-first.tar.gz" \
+              dist/runtimeskeptic-v0.2.0-macos-arm64.tar.gz || true
+            exit 1
+          }
+          echo "reproducible package sha256: $second_sha"
+
+      - name: Upload v0.2 macOS presentation package
+        if: runner.os == 'macOS'
+        uses: actions/upload-artifact@v4
+        with:
+          name: runtimeskeptic-v0.2.0-macos-arm64
+          path: dist/runtimeskeptic-v0.2.0-macos-arm64.tar.gz
+          if-no-files-found: error
+
       # T-014 named this as the gap its own completion did not close: the arena's
       # bounds are constants, so two processes SHOULD agree - and "should" is the
       # word this project does not accept. `macos-probe.yml` checks it, but only on
@@ -469,8 +564,26 @@ jobs:
           set -o pipefail
           mkdir -p /tmp/meas
           build/bin/rs-env-probe vm --name gt-host --output /tmp/meas/gt-host.json
-          bash tests/groundtruth/run.sh /tmp/meas/gt-host.json 2>&1 \
+          GT_LEDGER=/tmp/meas/gt-host.ledger.jsonl \
+            bash tests/groundtruth/run.sh /tmp/meas/gt-host.json 2>&1 \
             | tee /tmp/meas/gt_run.txt
+
+      - name: Rule coverage by observed outcome
+        id: coverage
+        if: runner.os == 'macOS'
+        run: |
+          set -o pipefail
+          python3 tools/campaign/groundtruth_execution_coverage.py \
+            /tmp/meas/gt-host.ledger.jsonl 2>&1 \
+            | tee /tmp/meas/coverage.txt
+
+      - name: Upload execution ledger
+        if: runner.os == 'macOS'
+        uses: actions/upload-artifact@v4
+        with:
+          name: groundtruth-ledger-macos-apple-clang
+          path: /tmp/meas/*.ledger.jsonl
+          if-no-files-found: error
 
       # Publish the outcome as a namespaced ref, so it is readable from a
       # development sandbox that can reach this repository over the git protocol
@@ -607,6 +720,45 @@ jobs:
           git commit -q --allow-empty -m "${slug} ${state} @ ${{ github.sha }}"
           git push --force origin \
             "HEAD:refs/status/${{ github.sha }}/${slug}/${state}"
+
+  execution-coverage:
+    name: execution coverage / aggregate
+    needs: [build-and-test, expensive-platforms]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: groundtruth-ledger-*
+          path: coverage-ledgers
+
+      - name: Aggregate rule-specific execution evidence
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          required=(
+            groundtruth-ledger-ubuntu-latest-gcc
+            groundtruth-ledger-ubuntu-latest-clang
+            groundtruth-ledger-macos-apple-clang
+          )
+          ledgers=()
+          for artifact in "${required[@]}"; do
+            files=("coverage-ledgers/$artifact"/*.jsonl)
+            if [ "${#files[@]}" -eq 0 ]; then
+              echo "::error::missing execution ledger artifact: $artifact"
+              exit 1
+            fi
+            ledgers+=("${files[@]}")
+          done
+          python3 tools/campaign/groundtruth_execution_coverage.py \
+            --require-complete "${ledgers[@]}" | tee execution-coverage.txt
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: execution-coverage-aggregate
+          path: execution-coverage.txt
+          if-no-files-found: error
 
   compatibility-gate:
     name: compatibility gate (linux)

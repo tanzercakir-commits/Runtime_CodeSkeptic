@@ -213,6 +213,15 @@ RuntimeSkeptic:  Can the selected environment satisfy that assumption?
 
 Static C/C++ semantic analysis, dataflow, contract extraction, error-path analysis, fatal-sink identification and semantic API comparison stay in CodeSkeptic. RuntimeSkeptic consumes its summaries as versioned artifacts, not as a source dependency, and the repositories stay separate.
 
+The owner made this a permanent v0.2 product boundary on 2026-08-06 in
+[`docs/decisions/0001-standalone-product-boundary.md`](decisions/0001-standalone-product-boundary.md).
+RuntimeSkeptic does not copy or vendor CodeSkeptic, add it as a submodule,
+fetch or link it in the build, import its headers, or invoke its CLI. A future
+producer may supply the same public, versioned requirement artifact as any
+other independent producer, but it is not a RuntimeSkeptic dependency or core
+integration. Changing that boundary requires a superseding owner decision and
+plan; the old dated-exception escape hatch is closed.
+
 The seam is already visible in the code: `Requirement::assumption_evidence` records whether a requirement was hand-authored (`specified_guarantee` — a human declaring intent) or statically inferred (`statically_inferred` — an inference that can be wrong). The second ceilings any finding built on it at `COUNTEREXAMPLE`, which is the honest consequence of not having asked a human.
 
 **If you need static analysis of C/C++ semantics, use:** CodeSkeptic, or clang-tidy, clang static analyzer, cppcheck, PVS-Studio or Coverity. RuntimeSkeptic accepts a hand-written requirement document from any of them, or from you.

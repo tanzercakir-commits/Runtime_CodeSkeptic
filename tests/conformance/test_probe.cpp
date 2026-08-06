@@ -14,6 +14,10 @@
 #include <string>
 #include <vector>
 
+#if defined(__linux__)
+#include <sys/mman.h>
+#endif
+
 #include "runtimeskeptic/core/json.hpp"
 #include "test_support.hpp"
 
@@ -439,25 +443,53 @@ RS_TEST(the_scan_covers_where_this_process_is_actually_mapped) {
     const auto heap = std::make_unique<char[]>(1 << 20);
     const auto heap_addr = reinterpret_cast<std::uint64_t>(heap.get());
 
-    const char* which[] = {"code", "heap"};
-    int i = 0;
-    for (std::uint64_t addr : {code_addr, heap_addr}) {
-        const std::uint64_t page = addr & ~std::uint64_t{0xfff};
+    struct LiveAddress {
+        const char* which;
+        std::uint64_t address;
+        bool must_be_supported;
+    };
+    std::vector<LiveAddress> live = {
+        {"code", code_addr, false}, {"heap", heap_addr, false}};
+#if defined(__linux__)
+    void* direct_mapping =
+        ::mmap(nullptr, 1 << 20, PROT_NONE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    RS_CHECK_MESSAGE(direct_mapping != MAP_FAILED,
+                     "the direct mmap used by the Linux coverage regression "
+                     "failed, so the allocation path was not tested");
+    if (direct_mapping != MAP_FAILED) {
+        live.push_back({"direct mmap",
+                        reinterpret_cast<std::uint64_t>(direct_mapping), true});
+    }
+#endif
+
+    for (const auto& item : live) {
+        const std::uint64_t page = item.address & ~std::uint64_t{0xfff};
         const RangeVerdict verdict =
             result.profile.query_range(AddressRange{page, page + 4096});
-        // Deliberately NOT asserting Supported: an address may legitimately
-        // sit in a structurally refused band on some host. Asserting the
-        // profile has SOMETHING to say, because saying nothing is the failure
-        // this test exists for.
-        RS_CHECK_MESSAGE(verdict.level != SupportLevel::Unknown,
-                         std::string(
-                             "the profile establishes nothing about an address "
-                             "this process is executing from or allocating in; "
-                             "the scan is looking in the wrong part of the "
-                             "address space") +
-                             coverage_diagnosis(result.profile, which[i], page));
-        ++i;
+        if (item.must_be_supported) {
+            RS_CHECK_MESSAGE(
+                verdict.level == SupportLevel::Supported,
+                std::string("a mapping that just succeeded was not classified "
+                            "SUPPORTED; a large-window refusal was probably "
+                            "generalized to its address") +
+                    coverage_diagnosis(result.profile, item.which, page));
+            continue;
+        }
+
+        // Code or allocator state can legitimately sit in a structurally
+        // refused band on an unusual host. The profile must still establish a
+        // verdict; the successful direct mmap above has the stronger contract.
+        RS_CHECK_MESSAGE(
+            verdict.level != SupportLevel::Unknown,
+            std::string("the profile establishes nothing about an address "
+                        "this process is executing from or allocating in; "
+                        "the scan is looking in the wrong part of the "
+                        "address space") +
+                coverage_diagnosis(result.profile, item.which, page));
     }
+#if defined(__linux__)
+    if (direct_mapping != MAP_FAILED) ::munmap(direct_mapping, 1 << 20);
+#endif
 }
 
 RS_TEST(probe_leaves_the_process_address_space_usable) {

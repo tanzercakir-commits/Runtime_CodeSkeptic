@@ -1,0 +1,37 @@
+{
+  "schema": "runtime-skeptic.application-requirements.v1",
+  "name": "Three attempts at a structurally impossible exact mapping",
+  "component": "ground-truth pairing for RS-VM-0015",
+  "operation": "virtual_memory_map",
+  "request": {
+    "address": "0x800",
+    "size": 131072,
+    "exact_address_required": true,
+    "protection": {"read": true, "write": true, "execute": false},
+    "file_backed": false
+  },
+  "assumptions": {
+    "guest_host_identity_required": false,
+    "translation_layer_available": false,
+    "retries_on_failure": true,
+    "max_retries": 3
+  },
+  "required_postconditions": [
+    "the exact mapping eventually succeeds within three attempts"
+  ],
+  "permitted_fallbacks": [],
+  "failure_sink": {
+    "kind": "error_return",
+    "location": {
+      "file": "tests/groundtruth/cases/exact_mapping_retry.c",
+      "line": 1,
+      "symbol": "attempt"
+    },
+    "description": "all three attempts return the same permanent refusal and the operation never progresses"
+  },
+  "assumption_evidence": "specified_guarantee",
+  "extraction_limitations": [
+    "The oracle checks that every attempt reaches the same errno so contention or a changing resource state cannot masquerade as the permanent-error branch."
+  ],
+  "x_groundtruth": "The loop executes for real. 0x800 is below every measured host's minimum exact mapping address, so repeating the same request cannot change its structural precondition."
+}

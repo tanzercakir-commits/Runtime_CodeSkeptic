@@ -64,8 +64,9 @@ models and one of them lacks a primitive the other's programs assume.
 ## What RuntimeSkeptic would need
 
 `reserve_then_commit` on the request against
-`virtual_memory.reserve_commit_model`. `RS-VM-0012` is the rule; it is also
-the rule this project has never confirmed by execution.
+`virtual_memory.reserve_commit_model`. `RS-VM-0012` is the rule. It is
+confirmed by the Windows Job Object synchronous-commit control and the
+Linux cgroup-v2 first-touch OOM control (CI run 31046034092).
 
 ## Remediation classes
 

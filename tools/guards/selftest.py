@@ -44,6 +44,17 @@ These are commitments, not a description of current limitations.
 Reserved for CodeSkeptic: contract extraction, fatal-sink identification.
 """
 
+STANDALONE_ADR_OK = """# ADR-0001 — RuntimeSkeptic remains standalone
+
+<!-- STANDALONE-BOUNDARY: accepted 2026-08-06 -->
+
+**Status:** Accepted
+
+The product is standalone. CodeSkeptic source is not copied or vendored,
+submoduled, fetched, linked, imported or invoked. An optional future adapter is
+disabled by default and communicates only through versioned artifacts.
+"""
+
 # A todo list that satisfies every shape rule, so a case about ONE rule fails
 # for that rule and not for a missing prerequisite.
 TODO_OK = """# TODO
@@ -96,7 +107,7 @@ class Case:
                     for rel, content in files.items():
                         target = root / rel
                         target.parent.mkdir(parents=True, exist_ok=True)
-                        target.write_text(content)
+                        target.write_text(content, encoding="utf-8", newline="")
                     self._git(root, "add", "-A")
                     self._git(root, "commit", "-q", "-m", "selftest", when=when)
 
@@ -106,7 +117,7 @@ class Case:
                 if content is None:          # a directory, or an empty file
                     target.mkdir(parents=True, exist_ok=True)
                 else:
-                    target.write_text(content)
+                    target.write_text(content, encoding="utf-8", newline="")
             proc = subprocess.run(
                 [sys.executable, str(root / "tools" / "guards" / self.guard)],
                 capture_output=True, text=True)
@@ -197,10 +208,266 @@ def _sha(text: str) -> str:
     return _hashlib.sha256(text.encode()).hexdigest()
 
 
+STANDALONE_PIN_OK = (
+    _sha(STANDALONE_ADR_OK)
+    + "  docs/decisions/0001-standalone-product-boundary.md\n"
+)
+
+
 ROADMAP_OK = "# Spec\n\n## Phase 0 — begin\n\n## Phase 1 — continue\n"
 PLAN_MIRROR_OK = "# Plan\n\nPhase 0  begin  DONE\nPhase 1  continue  OPEN\n"
+PROGRESS_OK = "# Progress\n\nAppend-only. Newest first.\n\n---\n\n## 2026-08-01 - old\n\nKept.\n"
+PROCESS_PLAN_OK = "# Stable project plan\n"
+PROCESS_PIN_OK = _sha(PROCESS_PLAN_OK) + "  plan.md\n"
+PROCESS_PLAN_V2 = PROCESS_PLAN_OK + "changed together with its pin\n"
+PROCESS_PIN_V2 = _sha(PROCESS_PLAN_V2) + "  plan.md\n"
+TODO_WITH_ITEM = "# TODO\n\n## Now\n\n### T-001 - ship\n"
+TODO_EMPTY = "# TODO\n\n## Now\n"
+
+REGISTRY_HEADER = 'inline constexpr const char* kOne = "RS-VM-0001";\n'
+REGISTRY_IMPL = "auto definition = ids::kOne;\n"
+REGISTRY_ANALYZER = """void Analysis::rule_one() {
+    Finding f = start(ids::kOne, Confidence::Proven, SupportLevel::Unsupported);
+    emit(std::move(f));
+}
+"""
+REGISTRY_ANALYZER_DEAD = """void Analysis::rule_one() {
+    auto dead_reference = ids::kOne;
+}
+"""
+REGISTRY_ANALYZER_COMMENT = """void Analysis::rule_one() {
+    // Finding f = start(ids::kOne, Confidence::Proven, SupportLevel::Unsupported);
+    // emit(std::move(f));
+}
+"""
+REGISTRY_OK = """# Registry
+
+The 1 registered `RS-VM-*` finding IDs are documented here.
+
+**Status:** All 1 IDs are declared, defined, and emitted.
+
+## 2. The registry
+
+| ID | Title | Default severity | Taxonomy category | Typical confidence | Support impact | Summary |
+| --- | --- | --- | --- | --- | --- | --- |
+| RS-VM-0001 | One | high | category | PROVEN | UNSUPPORTED | Summary. |
+
+### 2.1 Which rule emits which ID
+
+| ID | Emitting rule | Deciding profile fact |
+| --- | --- | --- |
+| RS-VM-0001 | `rule_one()` | `fact` |
+
+### 2.2 Findings that do not consult the profile
+
+## Added after the July 2026 real-world campaign
+
+These zero IDs were added by the campaign.
+
+| ID | Title | Severity | Why it exists |
+| --- | --- | --- | --- |
+
+### Two ids whose meaning changed
+"""
+
+REGISTRY_FILES = {
+    "include/runtimeskeptic/vm/finding.hpp": REGISTRY_HEADER,
+    "src/vm/finding.cpp": REGISTRY_IMPL,
+    "src/vm/analyzer.cpp": REGISTRY_ANALYZER,
+    "docs/findings/registry.md": REGISTRY_OK,
+}
+
+RUNTIME_COMMON = """rs_runtime_initialize_v1 rs_runtime_set_enabled_v1
+rs_runtime_snapshot_v1 rs_runtime_flush_trace_v1
+rs_runtime_after_fork_child_v1 rs_runtime_shutdown_v1
+"""
+RUNTIME_POSIX_H = """RS_MONITOR_COMPILE_DISABLED
+#define rs_mmap_v1 mmap
+#define rs_mprotect_v1 mprotect
+#define rs_munmap_v1 munmap
+"""
+RUNTIME_WINDOWS_H = """RS_MONITOR_COMPILE_DISABLED
+#define rs_virtual_alloc_v1 VirtualAlloc
+#define rs_virtual_protect_v1 VirtualProtect
+#define rs_virtual_free_v1 VirtualFree
+"""
+RUNTIME_RECORDER = """std::array<Slot, RS_RUNTIME_EVENT_CAPACITY_MAX_V1> slots;
+void record_event() { g_inside_recorder; fetch_add(); published.store(); }
+"""
+RUNTIME_POSIX = """void* mmap_once() { auto result=mmap(); auto native_error=errno;
+record_event(); errno = native_error; return result; }
+int rs_mprotect_v1() { auto result=mprotect(); auto native_error=errno;
+record_event(); errno = native_error; return result; }
+int rs_munmap_v1() { auto result=munmap(); auto native_error=errno;
+record_event(); errno = native_error; return result; }
+"""
+RUNTIME_WINDOWS = """void* virtual_alloc_once() { auto result=VirtualAlloc(); auto native_error=GetLastError();
+record_event(); SetLastError(native_error); return result; }
+int rs_virtual_protect_v1() { auto result=VirtualProtect(); auto native_error=GetLastError();
+record_event(); SetLastError(native_error); return result; }
+int rs_virtual_free_v1() { auto result=VirtualFree(); auto native_error=GetLastError();
+record_event(); SetLastError(native_error); return result; }
+"""
+RUNTIME_TRACE = """// missing its header or footer
+// sequence gap or reordering
+// digest mismatch
+// incomplete runtime trace
+void replay() {}
+"""
+RUNTIME_FILES = {
+    "include/runtimeskeptic/runtime/runtime.h": RUNTIME_COMMON,
+    "include/runtimeskeptic/runtime/runtime_posix.h": RUNTIME_POSIX_H,
+    "include/runtimeskeptic/runtime/runtime_windows.h": RUNTIME_WINDOWS_H,
+    "src/runtime/runtime.cpp": RUNTIME_RECORDER,
+    "src/runtime/posix.cpp": RUNTIME_POSIX,
+    "src/runtime/windows.cpp": RUNTIME_WINDOWS,
+    "src/runtime/trace.cpp": RUNTIME_TRACE,
+}
 
 CASES = [
+    # ---- check_release_consistency: one public version, one package set ---
+    Case("check_release_consistency.py", "release declarations agree",
+         {"CMakeLists.txt": "project(RuntimeSkeptic\n    VERSION 0.2.0)\n",
+          "include/runtimeskeptic/version.hpp":
+              'constexpr auto kToolVersion = "runtimeskeptic/0.2.0";\n',
+          "dist/build-linux-release.sh":
+              'V=0.2.0\ncp "$ROOT/dist/RELEASE-v$V.md" "$D/RELEASE.md"\n',
+          "dist/build-macos-release.sh":
+              'V=0.2.0\nexport ZERO_AR_DATE=1\n'
+              'cmake -S . -B build\n'
+              'cp "dist/RELEASE-v$V.md" "$D/RELEASE.md"\n',
+          "dist/QUICKSTART.md": "# RuntimeSkeptic v0.2.0 - quickstart\n",
+          "dist/RELEASE-v0.2.0.md": "# RuntimeSkeptic v0.2.0\n",
+          ".github/workflows/ci.yml":
+              ("runtimeskeptic-v0.2.0-linux-x86_64.tar.gz\n" * 2
+               + "runtimeskeptic-v0.2.0-macos-arm64.tar.gz\n" * 2)},
+         expect_fail=False),
+
+    Case("check_release_consistency.py", "tool version drift fails",
+         {"CMakeLists.txt": "project(RuntimeSkeptic VERSION 0.2.0)\n",
+          "include/runtimeskeptic/version.hpp":
+              'constexpr auto kToolVersion = "runtimeskeptic/0.1.0";\n',
+          "dist/build-linux-release.sh":
+              'V=0.2.0\ncp "$ROOT/dist/RELEASE-v$V.md" "$D/RELEASE.md"\n',
+          "dist/build-macos-release.sh":
+              'V=0.2.0\nexport ZERO_AR_DATE=1\n'
+              'cmake -S . -B build\n'
+              'cp "dist/RELEASE-v$V.md" "$D/RELEASE.md"\n',
+          "dist/QUICKSTART.md": "# RuntimeSkeptic v0.2.0 - quickstart\n",
+          "dist/RELEASE-v0.2.0.md": "# RuntimeSkeptic v0.2.0\n",
+          ".github/workflows/ci.yml":
+              ("runtimeskeptic-v0.2.0-linux-x86_64.tar.gz\n" * 2
+               + "runtimeskeptic-v0.2.0-macos-arm64.tar.gz\n" * 2)},
+         expect_fail=True, expect_text="version.hpp has 0.1.0"),
+
+    Case("check_release_consistency.py", "missing exact CI archive fails",
+         {"CMakeLists.txt": "project(RuntimeSkeptic VERSION 0.2.0)\n",
+          "include/runtimeskeptic/version.hpp":
+              'constexpr auto kToolVersion = "runtimeskeptic/0.2.0";\n',
+          "dist/build-linux-release.sh":
+              'V=0.2.0\ncp "$ROOT/dist/RELEASE-v$V.md" "$D/RELEASE.md"\n',
+          "dist/build-macos-release.sh":
+              'V=0.2.0\nexport ZERO_AR_DATE=1\n'
+              'cmake -S . -B build\n'
+              'cp "dist/RELEASE-v$V.md" "$D/RELEASE.md"\n',
+          "dist/QUICKSTART.md": "# RuntimeSkeptic v0.2.0 - quickstart\n",
+          "dist/RELEASE-v0.2.0.md": "# RuntimeSkeptic v0.2.0\n",
+          ".github/workflows/ci.yml":
+              ("runtimeskeptic-v0.2.0-linux-x86_64.tar.gz\n" * 2
+               + "runtimeskeptic-v0.1.0-macos-arm64.tar.gz\n" * 2)},
+         expect_fail=True, expect_text="macos-arm64"),
+
+    Case("check_release_consistency.py",
+         "missing deterministic macOS archive environment fails",
+         {"CMakeLists.txt": "project(RuntimeSkeptic VERSION 0.2.0)\n",
+          "include/runtimeskeptic/version.hpp":
+              'constexpr auto kToolVersion = "runtimeskeptic/0.2.0";\n',
+          "dist/build-linux-release.sh":
+              'V=0.2.0\ncp "$ROOT/dist/RELEASE-v$V.md" "$D/RELEASE.md"\n',
+          "dist/build-macos-release.sh":
+              'V=0.2.0\ncmake -S . -B build\n'
+              'cp "dist/RELEASE-v$V.md" "$D/RELEASE.md"\n',
+          "dist/QUICKSTART.md": "# RuntimeSkeptic v0.2.0 - quickstart\n",
+          "dist/RELEASE-v0.2.0.md": "# RuntimeSkeptic v0.2.0\n",
+          ".github/workflows/ci.yml":
+              ("runtimeskeptic-v0.2.0-linux-x86_64.tar.gz\n" * 2
+               + "runtimeskeptic-v0.2.0-macos-arm64.tar.gz\n" * 2)},
+         expect_fail=True, expect_text="ZERO_AR_DATE=1"),
+
+    Case("check_release_consistency.py",
+         "late macOS archive environment fails",
+         {"CMakeLists.txt": "project(RuntimeSkeptic VERSION 0.2.0)\n",
+          "include/runtimeskeptic/version.hpp":
+              'constexpr auto kToolVersion = "runtimeskeptic/0.2.0";\n',
+          "dist/build-linux-release.sh":
+              'V=0.2.0\ncp "$ROOT/dist/RELEASE-v$V.md" "$D/RELEASE.md"\n',
+          "dist/build-macos-release.sh":
+              ('V=0.2.0\ncmake -S . -B build\n'
+               'export ZERO_AR_DATE=1\n'
+               'cp "dist/RELEASE-v$V.md" "$D/RELEASE.md"\n'),
+          "dist/QUICKSTART.md": "# RuntimeSkeptic v0.2.0 - quickstart\n",
+          "dist/RELEASE-v0.2.0.md": "# RuntimeSkeptic v0.2.0\n",
+          ".github/workflows/ci.yml":
+              ("runtimeskeptic-v0.2.0-linux-x86_64.tar.gz\n" * 2
+               + "runtimeskeptic-v0.2.0-macos-arm64.tar.gz\n" * 2)},
+         expect_fail=True, expect_text="before its first CMake"),
+
+    # ---- runtime safety: wrapper transparency and pure replay ------------
+    Case("check_runtime_safety.py", "the bounded one-call boundary passes",
+         RUNTIME_FILES, expect_fail=False),
+    Case("check_runtime_safety.py", "allocation in record_event fails",
+         {**RUNTIME_FILES,
+          "src/runtime/runtime.cpp": RUNTIME_RECORDER.replace(
+              "published.store();", "published.store(); malloc();")},
+         expect_fail=True, expect_text="allocation/locking token"),
+    Case("check_runtime_safety.py", "replay issuing mmap fails",
+         {**RUNTIME_FILES,
+          "src/runtime/trace.cpp": RUNTIME_TRACE + "void bad() { mmap(); }\n"},
+         expect_fail=True, expect_text="reissues an OS call"),
+    Case("check_runtime_safety.py", "a wrapper making two native calls fails",
+         {**RUNTIME_FILES,
+          "src/runtime/posix.cpp": RUNTIME_POSIX.replace(
+              "auto result=mmap();", "auto result=mmap(); mmap();")},
+         expect_fail=True, expect_text="exactly once"),
+    # ---- check_registry: code, tables, and prose are one interface ------
+    Case("check_registry.py", "a complete one-ID registry passes",
+         REGISTRY_FILES,
+         expect_fail=False),
+
+    Case("check_registry.py", "a dead ID reference is not an emission",
+         {**REGISTRY_FILES, "src/vm/analyzer.cpp": REGISTRY_ANALYZER_DEAD},
+         expect_fail=True, expect_text="analyzer.cpp never emits it"),
+
+    Case("check_registry.py", "a commented emission shape is ignored",
+         {**REGISTRY_FILES, "src/vm/analyzer.cpp": REGISTRY_ANALYZER_COMMENT},
+         expect_fail=True, expect_text="analyzer.cpp never emits it"),
+
+    Case("check_registry.py", "the status count must match declarations",
+         {**REGISTRY_FILES,
+          "docs/findings/registry.md": REGISTRY_OK.replace(
+              "All 1 IDs", "All 2 IDs")},
+         expect_fail=True, expect_text="registry status says"),
+
+    Case("check_registry.py", "the main table must contain every declared ID",
+         {**REGISTRY_FILES,
+          "docs/findings/registry.md": REGISTRY_OK.replace(
+              "| RS-VM-0001 | One | high | category | PROVEN | "
+              "UNSUPPORTED | Summary. |\n",
+              "")},
+         expect_fail=True, expect_text="registry table ID drift"),
+
+    Case("check_registry.py", "an emitted ID must name its emitting rule",
+         {**REGISTRY_FILES,
+          "docs/findings/registry.md": REGISTRY_OK.replace(
+              "`rule_one()`", "none")},
+         expect_fail=True, expect_text="emitting-rule table has no rule"),
+
+    Case("check_registry.py", "campaign prose count must match its table",
+         {**REGISTRY_FILES,
+          "docs/findings/registry.md": REGISTRY_OK.replace(
+              "These zero IDs", "These 2 IDs")},
+         expect_fail=True, expect_text="campaign prose says"),
+
     # ---- check_docs: check 3, named paths must exist -------------------
     Case("check_docs.py", "a doc naming a path that is not there fails",
          {"docs/x.md": "The extractor lives in `tools/rs-extract` and works.\n",
@@ -303,15 +570,181 @@ CASES = [
           "tools/rs-contract-extractor/main.cpp": "int main(){}\n"},
          expect_fail=True, expect_text="extractor growing back"),
 
-    Case("check_non_goals.py", "a dated section-18 exception permits it",
+    Case("check_non_goals.py", "a dated section-18 exception no longer permits it",
          {"docs/non_goals.md": BASE_NON_GOALS +
                                "\nNON-GOAL-18-EXCEPTION: 2026-07-25\n",
           "tools/rs-contract-extractor/main.cpp": "int main(){}\n"},
-         expect_fail=False, expect_text="reconciled"),
+         expect_fail=True, expect_text="no longer overrides"),
 
     Case("check_non_goals.py", "deleting section 18 is not a resolution",
          {"docs/non_goals.md": "# Non-goals\n\nNothing here.\n"},
          expect_fail=True, expect_text="no longer contains section 18"),
+
+    # ---- standalone boundary: no hidden or renamed dependency edge -----
+    Case("check_standalone_boundary.py", "accepted artifact-only boundary passes",
+         {"docs/decisions/0001-standalone-product-boundary.md": STANDALONE_ADR_OK,
+          "tools/guards/standalone-boundary.sha256": STANDALONE_PIN_OK,
+          "docs/history.md": "CodeSkeptic remains a separate project.\n",
+          "contracts/producer-neutral.json": '{"schema_version":"v1"}\n'},
+         expect_fail=False),
+
+    Case("check_standalone_boundary.py", "missing ADR and pin fail closed",
+         {}, expect_fail=True, expect_text="accepted standalone ADR is missing"),
+
+    Case("check_standalone_boundary.py", "edited ADR fails its hash pin",
+         {"docs/decisions/0001-standalone-product-boundary.md":
+              STANDALONE_ADR_OK.replace("disabled by default", "enabled by default"),
+          "tools/guards/standalone-boundary.sha256": STANDALONE_PIN_OK},
+         expect_fail=True, expect_text="changed without an explicit pin update"),
+
+    Case("check_standalone_boundary.py", "renamed vendored source fails",
+         {"docs/decisions/0001-standalone-product-boundary.md": STANDALONE_ADR_OK,
+          "tools/guards/standalone-boundary.sha256": STANDALONE_PIN_OK,
+          "vendor/analysis-core/copied.cpp": "int copied;\n"},
+         expect_fail=True, expect_text="vendored dependency content"),
+
+    Case("check_standalone_boundary.py", "renamed prebuilt archive fails",
+         {"docs/decisions/0001-standalone-product-boundary.md": STANDALONE_ADR_OK,
+          "tools/guards/standalone-boundary.sha256": STANDALONE_PIN_OK,
+          "lib/analysis-core.a": "not really an archive\n"},
+         expect_fail=True, expect_text="tracked prebuilt library/archive"),
+
+    Case("check_standalone_boundary.py", "renamed submodule fork fails",
+         {"docs/decisions/0001-standalone-product-boundary.md": STANDALONE_ADR_OK,
+          "tools/guards/standalone-boundary.sha256": STANDALONE_PIN_OK,
+          ".gitmodules": "[submodule \"analysis-core\"]\n"
+                         "  path = modules/analysis-core\n"
+                         "  url = https://example.invalid/fork.git\n"},
+         expect_fail=True, expect_text="no source submodule"),
+
+    Case("check_standalone_boundary.py", "FetchContent edge fails",
+         {"docs/decisions/0001-standalone-product-boundary.md": STANDALONE_ADR_OK,
+          "tools/guards/standalone-boundary.sha256": STANDALONE_PIN_OK,
+          "CMakeLists.txt": "FetchContent_Declare(CodeSkeptic URL x)\n"},
+         expect_fail=True, expect_text="fetches, links, imports or invokes"),
+
+    Case("check_standalone_boundary.py", "indirect ExternalProject edge fails",
+         {"docs/decisions/0001-standalone-product-boundary.md": STANDALONE_ADR_OK,
+          "tools/guards/standalone-boundary.sha256": STANDALONE_PIN_OK,
+          "CMakeLists.txt": "set(PRODUCER CodeSkeptic)\nExternalProject_Add(${PRODUCER})\n"},
+         expect_fail=True, expect_text="fetches, links, imports or invokes"),
+
+    Case("check_standalone_boundary.py", "indirect add_subdirectory edge fails",
+         {"docs/decisions/0001-standalone-product-boundary.md": STANDALONE_ADR_OK,
+          "tools/guards/standalone-boundary.sha256": STANDALONE_PIN_OK,
+          "CMakeLists.txt": "set(CS_DIR CodeSkeptic)\nadd_subdirectory(${CS_DIR})\n"},
+         expect_fail=True, expect_text="fetches, links, imports or invokes"),
+
+    Case("check_standalone_boundary.py", "indirect link edge fails",
+         {"docs/decisions/0001-standalone-product-boundary.md": STANDALONE_ADR_OK,
+          "tools/guards/standalone-boundary.sha256": STANDALONE_PIN_OK,
+          "CMakeLists.txt": "set(CS_LIB CodeSkeptic)\ntarget_link_libraries(rs PRIVATE ${CS_LIB})\n"},
+         expect_fail=True, expect_text="fetches, links, imports or invokes"),
+
+    Case("check_standalone_boundary.py", "workflow clone edge fails",
+         {"docs/decisions/0001-standalone-product-boundary.md": STANDALONE_ADR_OK,
+          "tools/guards/standalone-boundary.sha256": STANDALONE_PIN_OK,
+          ".github/workflows/ci.yml": "steps:\n  - run: git clone https://x/CodeSkeptic\n"},
+         expect_fail=True, expect_text="fetches, links, imports or invokes"),
+
+    Case("check_standalone_boundary.py", "Python process invocation fails",
+         {"docs/decisions/0001-standalone-product-boundary.md": STANDALONE_ADR_OK,
+          "tools/guards/standalone-boundary.sha256": STANDALONE_PIN_OK,
+          "tools/bridge.py": "import subprocess\nsubprocess.run(['codeskeptic', '--scan'])\n"},
+         expect_fail=True, expect_text="fetches, links, imports or invokes"),
+
+    Case("check_standalone_boundary.py", "native process invocation fails",
+         {"docs/decisions/0001-standalone-product-boundary.md": STANDALONE_ADR_OK,
+          "tools/guards/standalone-boundary.sha256": STANDALONE_PIN_OK,
+          "src/bridge.cpp": 'int x = system("CodeSkeptic --scan");\n'},
+         expect_fail=True, expect_text="fetches, links, imports or invokes"),
+
+    Case("check_standalone_boundary.py", "direct source include fails",
+         {"docs/decisions/0001-standalone-product-boundary.md": STANDALONE_ADR_OK,
+          "tools/guards/standalone-boundary.sha256": STANDALONE_PIN_OK,
+          "src/bridge.cpp": "#include <codeskeptic/api.h>\n"},
+         expect_fail=True, expect_text="fetches, links, imports or invokes"),
+
+
+    Case("check_standalone_boundary.py", "CLI invocation without flags fails",
+         {"docs/decisions/0001-standalone-product-boundary.md": STANDALONE_ADR_OK,
+          "tools/guards/standalone-boundary.sha256": STANDALONE_PIN_OK,
+          "tools/bridge.sh": "CodeSkeptic input.json\n"},
+         expect_fail=True, expect_text="fetches, links, imports or invokes"),
+
+    Case("check_standalone_boundary.py", "copy-pastable docs invocation fails",
+         {"docs/decisions/0001-standalone-product-boundary.md": STANDALONE_ADR_OK,
+          "tools/guards/standalone-boundary.sha256": STANDALONE_PIN_OK,
+          "docs/integrations.md": "```console\n$ CodeSkeptic input.json\n```\n"},
+         expect_fail=True, expect_text="documentation boundary"),
+
+    Case("check_standalone_boundary.py", "versioned shared library fails",
+         {"docs/decisions/0001-standalone-product-boundary.md": STANDALONE_ADR_OK,
+          "tools/guards/standalone-boundary.sha256": STANDALONE_PIN_OK,
+          "lib/libanalysis.so.1": "not really a library\n"},
+         expect_fail=True, expect_text="tracked prebuilt library/archive"),
+
+    Case("check_standalone_boundary.py", "extensionless binary fails",
+         {"docs/decisions/0001-standalone-product-boundary.md": STANDALONE_ADR_OK,
+          "tools/guards/standalone-boundary.sha256": STANDALONE_PIN_OK,
+          "bin/analysis-core": "not really an executable\n"},
+         expect_fail=True, expect_text="tracked prebuilt library/archive"),
+
+    Case("check_standalone_boundary.py", "first-party release archive passes",
+         {"docs/decisions/0001-standalone-product-boundary.md": STANDALONE_ADR_OK,
+          "tools/guards/standalone-boundary.sha256": STANDALONE_PIN_OK,
+          "dist/runtime-skeptic-source.zip": "first-party release fixture\n"},
+         expect_fail=False),
+
+
+    Case("check_standalone_boundary.py", "POSIX path-prefixed CLI fails",
+         {"docs/decisions/0001-standalone-product-boundary.md": STANDALONE_ADR_OK,
+          "tools/guards/standalone-boundary.sha256": STANDALONE_PIN_OK,
+          "tools/bridge.sh": "./CodeSkeptic input.json\n"},
+         expect_fail=True, expect_text="fetches, links, imports or invokes"),
+
+    Case("check_standalone_boundary.py", "Windows path-prefixed docs CLI fails",
+         {"docs/decisions/0001-standalone-product-boundary.md": STANDALONE_ADR_OK,
+          "tools/guards/standalone-boundary.sha256": STANDALONE_PIN_OK,
+          "docs/integrations.md": "```powershell\n.\\CodeSkeptic.exe input.json\n```\n"},
+         expect_fail=True, expect_text="documentation boundary"),
+
+    Case("check_standalone_boundary.py", "PowerShell call operator CLI fails",
+         {"docs/decisions/0001-standalone-product-boundary.md": STANDALONE_ADR_OK,
+          "tools/guards/standalone-boundary.sha256": STANDALONE_PIN_OK,
+          "tools/bridge.ps1": "& .\\CodeSkeptic.exe input.json\n"},
+         expect_fail=True, expect_text="fetches, links, imports or invokes"),
+
+    Case("check_standalone_boundary.py", "Python module invocation fails",
+         {"docs/decisions/0001-standalone-product-boundary.md": STANDALONE_ADR_OK,
+          "tools/guards/standalone-boundary.sha256": STANDALONE_PIN_OK,
+          "README.md": "```console\n$ python -m CodeSkeptic input.json\n```\n"},
+         expect_fail=True, expect_text="documentation boundary"),
+
+    Case("check_standalone_boundary.py", "named executable outside docs fails",
+         {"docs/decisions/0001-standalone-product-boundary.md": STANDALONE_ADR_OK,
+          "tools/guards/standalone-boundary.sha256": STANDALONE_PIN_OK,
+          "tools/CodeSkeptic.exe": "not really an executable\n"},
+         expect_fail=True, expect_text="CodeSkeptic-named content"),
+
+    Case("check_standalone_boundary.py", "renamed Windows binary in bin fails",
+         {"docs/decisions/0001-standalone-product-boundary.md": STANDALONE_ADR_OK,
+          "tools/guards/standalone-boundary.sha256": STANDALONE_PIN_OK,
+          "bin/analysis-core.exe": "not really an executable\n"},
+         expect_fail=True, expect_text="tracked prebuilt library/archive"),
+
+
+    Case("check_standalone_boundary.py", "executable hidden under docs fails",
+         {"docs/decisions/0001-standalone-product-boundary.md": STANDALONE_ADR_OK,
+          "tools/guards/standalone-boundary.sha256": STANDALONE_PIN_OK,
+          "docs/CodeSkeptic.exe": "not really an executable\n"},
+         expect_fail=True, expect_text="CodeSkeptic-named content"),
+
+    Case("check_standalone_boundary.py", "source hidden under docs fails",
+         {"docs/decisions/0001-standalone-product-boundary.md": STANDALONE_ADR_OK,
+          "tools/guards/standalone-boundary.sha256": STANDALONE_PIN_OK,
+          "docs/CodeSkeptic.cpp": "int copied_source;\n"},
+         expect_fail=True, expect_text="CodeSkeptic-named content"),
 
     # ---- check_plan: a [done] is a claim and needs evidence -------------
     Case("check_plan.py", "a [done] with no evidence fails",
@@ -424,20 +857,20 @@ CASES = [
          expect_fail=True, expect_text="too far for a timezone artifact"),
 
     # ---- check_profiles_fresh: a measurement older than its instrument -
-    # An external reviewer found a committed macOS profile carrying a ceiling
-    # bug two later commits had already fixed - the profile was never
-    # regenerated, and no guard asked whether a measurement still matches the
-    # probe that made it.
+    # An external reviewer found a committed profile older than its probe. The
+    # same class recurred when arena_walk was omitted from the Windows mapping:
+    # macOS went stale while Windows silently passed even though all three
+    # implementations consume the shared walk.
     Case("check_profiles_fresh.py",
-         "a profile older than the probe that makes it is stale",
+         "a Windows profile older than the shared arena walk is stale",
          {},
          commits=[("2026-07-25T12:00:00+00:00",
                    {"profiles/measured/x.measured.json":
-                        '{"platform":{"os":"macos"},"virtual_memory":{}}',
-                    "src/probe/vm_probe_macos.cpp": "// probe v1\n"}),
+                        '{"platform":{"os":"windows"},"virtual_memory":{}}',
+                    "src/probe/arena_walk.cpp": "// shared walk v1\n"}),
                   ("2026-07-27T12:00:00+00:00",
-                   {"src/probe/vm_probe_macos.cpp":
-                        "// probe v2 - ceiling measured correctly now\n"})],
+                   {"src/probe/arena_walk.cpp":
+                        "// shared walk v2 - range semantics changed\n"})],
          expect_fail=True, expect_text="STALE"),
 
     Case("check_profiles_fresh.py",
@@ -652,20 +1085,20 @@ CASES = [
           "docs/PLAN.md": "# Plan\n\n## Phase 1\n\n- `[done]` nothing\n"},
          expect_fail=True, expect_text="is an excuse"),
 
-    Case("check_todo.py", "a done item the progress log never mentions fails",
+    Case("check_todo.py", "a done item must be consumed from the queue",
          {"docs/TODO.md": "# TODO\n\n## Done\n\n### T-001 — finished `[done]`\n\n"
                           "**Done when:** it ran\n",
           "docs/PLAN.md": "# Plan\n\n## Phase 1\n\n- `[done]` nothing\n",
           "docs/PROGRESS.md": "# Progress\n\nNothing about it.\n"},
-         expect_fail=True, expect_text="never mentions it"),
+         expect_fail=True, expect_text="must be consumed"),
 
-    Case("check_todo.py", "the same item, recorded in the log, passes",
+    Case("check_todo.py", "progress evidence does not excuse a stale done item",
          {"docs/TODO.md": "# TODO\n\n## Done\n\n### T-001 — finished `[done]`\n\n"
                           "**Done when:** it ran\n",
           "docs/PLAN.md": "# Plan\n\n## Phase 1\n\n- `[done]` nothing\n",
           "docs/PROGRESS.md": "# Progress\n\nT-001 shipped, and here is what "
                               "it taught.\n"},
-         expect_fail=False),
+         expect_fail=True, expect_text="must be consumed"),
 
     Case("check_todo.py", "a [now] item under ## Next fails",
          {"docs/TODO.md": "# TODO\n\n## Now\n\n## Next\n\n"
@@ -688,6 +1121,27 @@ CASES = [
                           "**Done when:** `ctest` passes.\n",
           "docs/PLAN.md": "# Plan\n\n## Phase 1\n\n- `[done]` nothing\n"},
          expect_fail=False),
+
+
+    Case("check_todo.py", "duplicate section headings fail",
+         {"docs/TODO.md": "# TODO\n\n## Now\n\n## Later\n\n## Later\n\n"
+                          "### T-001 — scoped `[later]`\n\n"
+                          "**Done when:** `ctest` passes.\n"},
+         expect_fail=True, expect_text="duplicate section heading"),
+
+    Case("check_todo.py", "malformed task heading fails",
+         {"docs/TODO.md": "# TODO\n\n## Later\n\n"
+                          "### T-001 —### T-001 — scoped `[later]`\n\n"
+                          "**Done when:** `ctest` passes.\n"},
+         expect_fail=True, expect_text="malformed task heading"),
+
+    Case("check_todo.py", "duplicate task ids fail",
+         {"docs/TODO.md": "# TODO\n\n## Later\n\n"
+                          "### T-001 — first `[later]`\n\n"
+                          "**Done when:** `ctest` passes.\n\n"
+                          "### T-001 — second `[later]`\n\n"
+                          "**Done when:** `ctest` passes.\n"},
+         expect_fail=True, expect_text="duplicate TODO id"),
 
     Case("check_todo.py", "(untracked) needs a section that justifies it",
          {"docs/TODO.md": "# TODO\n\n## Now\n\n### T-001 — a thing `[now]`\n\n"
@@ -781,6 +1235,38 @@ CASES = [
                                  "--build-config Debug")},
          expect_fail=True, expect_text="which no -DCMAKE_BUILD_TYPE="),
 
+    # ---- check_process_contract: stable plan, live working records -------
+    Case("check_process_contract.py", "the three-record contract passes",
+         {"plan.md": PROCESS_PLAN_OK,
+          "tools/guards/plan.sha256": PROCESS_PIN_OK,
+          "docs/TODO.md": TODO_OK,
+          "docs/PROGRESS.md": PROGRESS_OK},
+         expect_fail=False),
+
+    Case("check_process_contract.py", "editing the immutable plan fails",
+         {"plan.md": PROCESS_PLAN_OK + "mutable status\n",
+          "tools/guards/plan.sha256": PROCESS_PIN_OK,
+          "docs/TODO.md": TODO_OK,
+          "docs/PROGRESS.md": PROGRESS_OK},
+         expect_fail=True, expect_text="immutable project plan"),
+
+    Case("check_process_contract.py", "missing working records fail",
+         {"plan.md": PROCESS_PLAN_OK,
+          "tools/guards/plan.sha256": PROCESS_PIN_OK},
+         expect_fail=True, expect_text="missing consumable TODO"),
+
+    Case("check_process_contract.py", "plan and pin cannot move together",
+         {"plan.md": PROCESS_PLAN_V2,
+          "tools/guards/plan.sha256": PROCESS_PIN_V2,
+          "docs/TODO.md": TODO_OK,
+          "docs/PROGRESS.md": PROGRESS_OK},
+         expect_fail=True, expect_text="committed baseline",
+         commits=[("2026-08-01T12:00:00+00:00",
+                   {"plan.md": PROCESS_PLAN_OK,
+                    "tools/guards/plan.sha256": PROCESS_PIN_OK,
+                    "docs/TODO.md": TODO_OK,
+                    "docs/PROGRESS.md": PROGRESS_OK})]),
+
     # ---- check_roadmap: the spec is frozen, the map mirrors it ----------
     Case("check_roadmap.py", "the real risk: ROADMAP edited under a stale hash",
          {"ROADMAP.md": ROADMAP_OK + "a quiet extra promise\n",
@@ -807,6 +1293,61 @@ CASES = [
           "docs/PLAN.md": "# Plan\n\nPhase 0  begin  DONE\n"},
          expect_fail=True, expect_text="Phase 1"),
 
+    # ---- check_progress_history: additions survive, history is immutable --
+    Case("check_progress_history.py", "editing an old progress entry fails",
+         {"docs/PROGRESS.md": PROGRESS_OK.replace("Kept.", "Rewritten.")},
+         expect_fail=True, expect_text="old PROGRESS content was edited",
+         commits=[("2026-08-01T12:00:00+00:00",
+                   {"docs/PROGRESS.md": PROGRESS_OK})]),
+
+    Case("check_progress_history.py", "a newest-first session prepend passes",
+         {"docs/PROGRESS.md": PROGRESS_OK.replace(
+             "---\n", "---\n\n## 2026-08-02 - new\n\nAdded only.\n", 1)},
+         expect_fail=False,
+         commits=[("2026-08-01T12:00:00+00:00",
+                   {"docs/PROGRESS.md": PROGRESS_OK})]),
+
+    Case("check_progress_history.py",
+         "substantive work without a session entry fails",
+         {"src/engine.cpp": "int answer() { return 42; }\n",
+          "docs/PROGRESS.md": PROGRESS_OK},
+         expect_fail=True, expect_text="substantive change(s)",
+         commits=[("2026-08-01T12:00:00+00:00",
+                   {"src/engine.cpp": "int answer() { return 0; }\n",
+                    "docs/PROGRESS.md": PROGRESS_OK})]),
+
+    Case("check_progress_history.py",
+         "substantive work with a newest-first session entry passes",
+         {"src/engine.cpp": "int answer() { return 42; }\n",
+          "docs/PROGRESS.md": PROGRESS_OK.replace(
+              "---\n", "---\n\n## 2026-08-02 - engine\n\nImplemented it.\n", 1)},
+         expect_fail=False,
+         commits=[("2026-08-01T12:00:00+00:00",
+                   {"src/engine.cpp": "int answer() { return 0; }\n",
+                    "docs/PROGRESS.md": PROGRESS_OK})]),
+
+    Case("check_progress_history.py", "consumed TODO needs new progress evidence",
+         {"docs/TODO.md": TODO_EMPTY,
+          "docs/PROGRESS.md": PROGRESS_OK},
+         expect_fail=True, expect_text="consumed without a new PROGRESS block",
+         commits=[("2026-08-01T12:00:00+00:00",
+                   {"docs/TODO.md": TODO_WITH_ITEM,
+                    "docs/PROGRESS.md": PROGRESS_OK})]),
+
+    Case("check_progress_history.py", "consumed TODO named in new progress passes",
+         {"docs/TODO.md": TODO_EMPTY,
+          "docs/PROGRESS.md": PROGRESS_OK.replace(
+              "---\n", "---\n\n## 2026-08-02 - consume T-001\n\nCompleted T-001.\n", 1)},
+         expect_fail=False,
+         commits=[("2026-08-01T12:00:00+00:00",
+                   {"docs/TODO.md": TODO_WITH_ITEM,
+                    "docs/PROGRESS.md": PROGRESS_OK})]),
+
+    Case("check_progress_history.py", "shallow history fails closed",
+         {"docs/PROGRESS.md": PROGRESS_OK,
+          ".git/shallow": "0000000000000000000000000000000000000000\n"},
+         expect_fail=True, expect_text="shallow checkout"),
+
     # The line continuation matters: the flag is usually on the NEXT line.
     Case("check_workflow_ctest.py", "a flag on a continuation line still counts",
          {".github/workflows/ci.yml":
@@ -823,13 +1364,15 @@ CASES = [
     # they are the real thing.
     Case("check_windows_compiles.py", "the real bug: a shadowed local, C4456",
          {"CMakeLists.txt": CMAKE_WARNINGS,
-          "src/probe/vm_probe_windows.cpp": WINDOWS_TU_SHADOWED},
+          "src/probe/vm_probe_windows.cpp": WINDOWS_TU_SHADOWED,
+          "src/runtime/windows.cpp": WINDOWS_TU_OK},
          expect_fail=SHADOW_IS_CHECKABLE,
          expect_text="shadows" if SHADOW_IS_CHECKABLE else "windows cross-compile"),
 
     Case("check_windows_compiles.py", "the corrected translation unit passes",
          {"CMakeLists.txt": CMAKE_WARNINGS,
-          "src/probe/vm_probe_windows.cpp": WINDOWS_TU_OK},
+          "src/probe/vm_probe_windows.cpp": WINDOWS_TU_OK,
+          "src/runtime/windows.cpp": WINDOWS_TU_OK},
          expect_fail=False),
 
     # THE POINT OF THE GUARD, not an incidental feature. The push that provoked
@@ -857,7 +1400,7 @@ def plan_agrees() -> str:
     plan = ROOT / "docs" / "PLAN.md"
     if not plan.exists():
         return ""
-    m = re.search(r"tools/guards/selftest\.py`,\s*(\d+)\s*cases", plan.read_text())
+    m = re.search(r"tools/guards/selftest\.py`,\s*(\d+)\s*cases", plan.read_text(encoding="utf-8"))
     if not m:
         return ("docs/PLAN.md no longer states a case count for "
                 "`tools/guards/selftest.py`; either restore it or drop this "

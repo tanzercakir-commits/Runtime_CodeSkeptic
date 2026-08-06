@@ -35,14 +35,14 @@ def main() -> int:
     checked = 0
     prose = ""
     if DOCS.exists():
-        prose = "\n".join(p.read_text() for p in DOCS.rglob("*.md"))
+        prose = "\n".join(p.read_text(encoding="utf-8") for p in DOCS.rglob("*.md"))
 
     for result in sorted(DATA.rglob("*.json")):
         if result.name.endswith(".host.json"):
             continue
-        rel = str(result.relative_to(ROOT))
+        rel = result.relative_to(ROOT).as_posix()
         try:
-            data = json.loads(result.read_text())
+            data = json.loads(result.read_text(encoding="utf-8"))
         except json.JSONDecodeError as exc:
             problems.append(f"{rel}: not valid JSON ({exc})")
             continue

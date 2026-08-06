@@ -25,6 +25,17 @@ a fixture's W^X claim on the Rosetta lane.
 |---|---|---|
 | `macos-14-arm64-native.measured.json` | macOS 14.8.7, Apple Silicon, native arm64 | `.github/workflows/macos-probe.yml`, job `native-arm64`, commit `67dfbd8` |
 | `macos-14-arm64-rosetta-x86_64.measured.json` | macOS 14.8.7, Apple Silicon, x86-64 under Rosetta 2 | same workflow, job `rosetta-x86_64`, commit `67dfbd8` |
+| `windows-server-2025-x86_64.measured.json` | Windows Server 2025 (10.0.26100), x86-64 native | `.github/workflows/windows-probe.yml`, job `windows x86_64` |
+| `wine-9.0-on-linux-x86_64.measured.json` | Wine 9.0 on a Linux x86-64 host — **not Windows**; the facts were measured through Wine's `ntdll`, so it does not count as the Windows platform family | `docs/real-world-test-playbook.md` |
+
+The provenance run-metadata is best-effort and partial in v0.1, and the files
+say so rather than pretend otherwise: `run_id` is recorded on the macOS lanes
+and empty on the Windows and Wine ones, and `probe_binary_hash` is empty on all
+of them — the probe does not yet hash its own image. None of these fields is
+part of `profile_id` (they are excluded by design, see
+`docs/architecture/determinism.md`), so their absence changes no identity and no
+verdict; it only means the "which probe binary took this" link is not yet
+populated. <!-- checked: 2026-08-02 -->
 
 An earlier pair taken at `2d9ea6c` was withdrawn rather than corrected. They
 carried a `min_map_address` that was really the ASLR slide of the probe's own

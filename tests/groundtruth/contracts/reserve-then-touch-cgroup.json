@@ -1,0 +1,36 @@
+{
+  "schema": "runtime-skeptic.application-requirements.v1",
+  "name": "256 MiB lazily reserved and made writable before unchecked first touch",
+  "component": "bounded cgroup-v2 ground-truth pairing for RS-VM-0012",
+  "operation": "virtual_memory_reserve",
+  "request": {
+    "size": 268435456,
+    "exact_address_required": false,
+    "protection": {"read": true, "write": true, "execute": false},
+    "reserve_then_commit": true,
+    "commit_is_checked_call": false
+  },
+  "assumptions": {
+    "guest_host_identity_required": false,
+    "translation_layer_available": false,
+    "retries_on_failure": false
+  },
+  "required_postconditions": [
+    "reservation and commitment are distinct observable states and resource shortage is reported at a checked commit call rather than an unchecked access"
+  ],
+  "permitted_fallbacks": [],
+  "failure_sink": {
+    "kind": "unchecked",
+    "location": {
+      "file": "tests/groundtruth/linux/reserve_commit_pressure.c",
+      "line": 1,
+      "symbol": "main"
+    },
+    "description": "the process is killed on first touch after mmap and mprotect both reported success"
+  },
+  "assumption_evidence": "specified_guarantee",
+  "extraction_limitations": [
+    "This contract is executed only by the cgroup-v2 lane because an ordinary shared-runner case has no safe memory-pressure boundary."
+  ],
+  "x_groundtruth": "The worker alone enters a 64 MiB MemoryMax cgroup, reserves and mprotects 256 MiB, records both successes, then touches pages until memory.events.local records oom_kill."
+}

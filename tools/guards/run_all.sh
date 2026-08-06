@@ -19,6 +19,8 @@
 #                    life, so no third party could check an artifact
 #   check_plan       a [done] with no evidence is just a claim
 #   check_non_goals  a normative commitment was broken inside one session
+#   check_standalone the accepted product boundary must not acquire a copied,
+#                    renamed, submodule, fetched, linked or invoked dependency
 #   check_dates      the author is a language model that saw three different
 #                    dates for one day in a single session, and a
 #                    `<!-- checked: -->` marker is worthless if the date in it
@@ -71,6 +73,13 @@
 #                    change with the work. ROADMAP is frozen by hash (edited
 #                    exactly once in its life: the commit that created it), and
 #                    PLAN must keep mirroring every phase it defines
+#   check_progress   PROGRESS called itself append-only, but no check stopped an
+#                    old lesson being edited or deleted. Newest-first means new
+#                    sessions are prepended after the header; every older byte
+#                    must survive unchanged
+#   check_release    v0.2 introduced four independent version declarations and
+#                    two CI archive names; a package built under one version and
+#                    documented under another is a false-green release
 #
 # `selftest` runs FIRST and is not one of them. Every other guard here passes on
 # a repository that has already been fixed - and so would a guard whose patterns
@@ -96,12 +105,25 @@ run() {
 }
 
 run "guards themselves"     python3 "$HERE/selftest.py"
+run "process records"       python3 "$HERE/check_process_contract.py"
 run "plan structure"        python3 "$HERE/check_plan.py"
 run "documentation drift"   python3 "$HERE/check_docs.py"
 run "finding registry"      python3 "$HERE/check_registry.py"
 run "schemas vs code"       python3 "$HERE/validate_schemas.py"
+run "runtime boundary safety" python3 "$HERE/check_runtime_safety.py"
+run "release version consistency" python3 "$HERE/check_release_consistency.py"
+run "package verifier fail-closed" python3 "$HERE/../../dist/verify_package_selftest.py"
+run "archive reproducibility diagnosis" \
+    python3 "$HERE/../../dist/compare_release_archives_selftest.py"
+run "execution coverage ledger" \
+    python3 "$HERE/../campaign/groundtruth_execution_coverage_selftest.py"
+run "cgroup launcher fail-closed" \
+    bash "$HERE/../../tests/groundtruth/cgroup_launcher_selftest.sh"
+run "input boundary matrix" python3 "$HERE/../audit/boundary_matrix.py"
+run "standalone product boundary" python3 "$HERE/check_standalone_boundary.py"
 run "normative non-goals"   python3 "$HERE/check_non_goals.py"
 run "dates against git"     python3 "$HERE/check_dates.py"
+run "progress is append-only" python3 "$HERE/check_progress_history.py"
 run "compass vs map"        python3 "$HERE/check_todo.py"
 run "published numbers"     python3 "$HERE/check_campaign.py"
 run "corpus rules"          python3 "$HERE/check_corpus.py"

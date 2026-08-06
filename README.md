@@ -2,26 +2,44 @@
 
 **Predict runtime failures before they become crashes.**
 
-RuntimeSkeptic compares what a program *assumes* about its execution
-environment against what that environment *measurably provides*, and answers
-with an evidence chain: supported here, refused here, or conditionally — before
-the program runs there. v0.1 covers virtual memory.
+RuntimeSkeptic is a standalone, open-source virtual-memory compatibility
+analyzer and runtime monitor. It compares what a program *assumes* about its
+execution environment against what that environment *measurably provides*, then
+returns an evidence chain: supported here, refused here, or conditionally —
+before the program runs there. It does not require or integrate CodeSkeptic.
 
 Full pitch: [docs/problem_statement.md](docs/problem_statement.md) ·
+product boundary: [ADR-0001](docs/decisions/0001-standalone-product-boundary.md) ·
 what this deliberately is not: [docs/non_goals.md](docs/non_goals.md) ·
 plan: [ROADMAP.md](ROADMAP.md)
 
 ---
 
-## Try it in 60 seconds
+## Try it
 
-A C++20 compiler and CMake 3.20 are enough — no external dependencies, no
-network access, nothing to configure.
+This is a source-first release: clone the repository and build it with a C++20
+compiler and CMake 3.20. There are no external build or runtime dependencies.
+The one-time build takes a minute or two (longer on Windows/MSVC); after that,
+every query below is instant. CI packages are verification artifacts, not a
+permanent no-build GitHub Release. Windows is source-only in v0.2.
 
 ```console
 $ git clone https://github.com/tanzercakir-commits/Runtime_CodeSkeptic && cd Runtime_CodeSkeptic
 $ cmake -S . -B build && cmake --build build -j
 ```
+
+> **On Windows (PowerShell):** `&&` and the trailing `\` line-continuation below
+> are POSIX shell, not PowerShell 5.1. Run each command on its own line, build a
+> named configuration, and note that the Visual Studio generator writes to a
+> per-configuration subdirectory — `build\bin\Release\`, or `build\bin\Debug\`
+> when no `--config` is given:
+>
+> ```powershell
+> git clone https://github.com/tanzercakir-commits/Runtime_CodeSkeptic; cd Runtime_CodeSkeptic
+> cmake -S . -B build
+> cmake --build build --config Release
+> build\bin\Release\rs-check.exe contracts\campaign\redis-jemalloc-page-size-lg12.json --profile profiles\measured\macos-14-arm64-native.measured.json
+> ```
 
 Now ask a real question — *why does Redis refuse to start on an Apple Silicon
 Mac?* You do not need a Mac; the repository ships that host's measured profile.
@@ -61,6 +79,25 @@ Exit codes are CI-ready: `0` SUPPORTED · `1` UNSUPPORTED ·
 [docs/integrations.md](docs/integrations.md). More one-command cases:
 [docs/diagnosis-cards.md](docs/diagnosis-cards.md).
 
+## Observe a real call
+
+Phase 4 adds `libruntimeskeptic`, a stable C ABI around selected POSIX and
+Windows virtual-memory calls. The wrapper preserves the native result and
+post-call error state, records into a fixed allocation-free buffer, and emits a
+sealed canonical JSONL trace:
+
+```console
+$ build/bin/rs-runtime-sample runtime_trace.jsonl
+$ build/bin/rs-replay trace runtime_trace.jsonl
+$ build/bin/rs-runtime-benchmark --iterations 128 --output overhead.json
+```
+
+On Visual Studio generators use `build\bin\Release\`. Raw wrappers are
+native-compatible; checked allocation wrappers accept an explicit caller
+expectation and detect successful relocation at the call boundary. Monitoring
+can be removed at compile time or disabled at runtime. API, safety guarantees,
+trace rejection rules and limitations: [docs/runtime-monitor.md](docs/runtime-monitor.md).
+
 ## The full output
 
 The verdict above is the short form. Every finding also carries the chain that
@@ -98,26 +135,30 @@ a range the probe never tested answers `UNKNOWN` rather than
 
 ## Measured environments
 
-| OS | CPU | Translation |
-|---|---|---|
-| Linux | x86-64 | — |
-| macOS | ARM64 (Apple Silicon) | — |
-| macOS | x86-64 | Rosetta 2 |
-| Windows | x86-64 | — |
-| Windows (Wine on Linux) | x86-64 | Wine |
+| OS | CPU | Translation | Where the profile is |
+|---|---|---|---|
+| macOS | ARM64 (Apple Silicon) | — | [`profiles/measured/`](profiles/measured/) |
+| macOS | x86-64 | Rosetta 2 | [`profiles/measured/`](profiles/measured/) |
+| Windows | x86-64 | — | [`profiles/measured/`](profiles/measured/) |
+| Windows (Wine on Linux) | x86-64 | Wine | [`profiles/measured/`](profiles/measured/) |
+| Linux | x86-64 | — | measured by CI each run, not checked in |
 
-Profiles live in [profiles/measured/](profiles/measured/); each fact records
-how it was measured.
+The four macOS and Windows profiles are checked in under
+[profiles/measured/](profiles/measured/), each fact recording how it was
+measured. The Linux profile is *not* shipped: the CI probe measures the runner
+on every run and publishes the result to `refs/measurements/*` (the working copy
+lands in the git-ignored `profiles/generated/`), so it is always fresh rather
+than a snapshot. Measure your own with `rs-env-probe`, as above.
 
 ## System architecture
 
 ```text
                         ┌────────────────────────────┐
-                        │ Static Program Analyzer    │
-                        │ CodeSkeptic integration    │
+                        │ Requirement Documents      │
+                        │ Hand-authored / versioned  │
                         └──────────────┬─────────────┘
                                        │
-                                       │ extracted assumptions
+                                       │ stated assumptions
                                        ▼
 ┌─────────────────────┐     ┌────────────────────────────┐
 │ Environment Probes  │────▶│ Runtime Semantic IR        │
@@ -145,11 +186,11 @@ how it was measured.
                                └──────────────────────────┘
 ```
 
-The full architecture, component by component: [ROADMAP.md](ROADMAP.md)
-sections 9–10. Not every box exists yet — v0.1 ships the probes, the contracts,
-the analysis engine and the evidence reports; the static extractor is a later
-phase and belongs to CodeSkeptic
-([docs/non_goals.md](docs/non_goals.md)). Project docs — compass, map, history,
+The full historical architecture is in [ROADMAP.md](ROADMAP.md) sections 9–10.
+The accepted v0.2 product ships the probes, contracts, analysis engine, evidence
+reports, runtime wrappers and pure trace replay. Static source analysis is
+outside this product boundary; any future adapter requires an accepted Plan v2
+and remains separate and optional. Project docs — compass, map, history,
 campaigns — start at [docs/TODO.md](docs/TODO.md).
 
 ## License

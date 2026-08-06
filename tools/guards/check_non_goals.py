@@ -15,18 +15,10 @@ from C/C++ source. That is the reserved list, and the conflict is real
 regardless of how carefully the tool describes itself as "bounded" and "a
 reference implementation".
 
-This guard does not decide the question - it is the owner's to decide. It
-fails while the question is open, so it cannot be forgotten, and it is
-satisfied by ANY of the three resolutions recorded in docs/PLAN.md:
-
-  1. remove rs-extract
-  2. amend non_goals.md section 18 with a stated exception and an expiry
-  3. rename it so it makes no claim to being an extractor
-
-Resolution 2 is recognised by the marker `NON-GOAL-18-EXCEPTION:` appearing in
-docs/non_goals.md with a date.
-
-The owner chose resolution 1 on 2026-07-25, and that produced a SECOND check.
+The owner chose removal on 2026-07-25 and accepted the permanent standalone
+boundary in ADR-0001 on 2026-08-06. A dated exception is no longer a valid
+escape hatch: changing the boundary requires a superseding owner decision and
+plan. The removal produced a SECOND check.
 Deleting the code did not delete the claims about it: a JSON schema still said
 requirements could be "written by rs-extract", and the shadPS4 case study still
 said the tool "now recovers a bounded subset from source text" - both describing
@@ -71,11 +63,11 @@ def check_removed_names() -> list:
             continue
         if SKIP_DIRS & set(path.parts):
             continue
-        rel = str(path.relative_to(ROOT))
+        rel = path.relative_to(ROOT).as_posix()
         if rel in REMEMBERS or rel.startswith(REMEMBERS_DIRS):
             continue
         try:
-            lines = path.read_text().splitlines()
+            lines = path.read_text(encoding="utf-8").splitlines()
         except UnicodeDecodeError:
             continue
         for i, line in enumerate(lines, 1):
@@ -97,24 +89,22 @@ EXTRACT_GLOBS = ("tools/*extract*", "src/*extract*", "include/**/*extract*",
 
 def main() -> int:
     problems = []
-    text = NON_GOALS.read_text() if NON_GOALS.exists() else ""
+    text = NON_GOALS.read_text(encoding="utf-8") if NON_GOALS.exists() else ""
 
     if not NON_GOALS.exists():
         print("docs/non_goals.md is missing; it is normative", file=sys.stderr)
         return 1
 
-    exception = re.search(r"NON-GOAL-18-EXCEPTION:\s*(\d{4}-\d{2}-\d{2})", text)
-    found = sorted({str(p.relative_to(ROOT))
+    found = sorted({p.relative_to(ROOT).as_posix()
                     for g in EXTRACT_GLOBS for p in ROOT.glob(g)})
 
-    if found and not exception:
+    if found:
         problems.append(
             "docs/non_goals.md section 18 reserves contract extraction and "
             "fatal-sink identification for CodeSkeptic. These paths look like "
             "an extractor growing back here: " + ", ".join(found) +
-            ". Resolve it: remove them, or add "
-            "`NON-GOAL-18-EXCEPTION: YYYY-MM-DD` to docs/non_goals.md with the "
-            "reasoning and an expiry. One was removed on 2026-07-25; see "
+            ". Remove them. A dated exception no longer overrides accepted "
+            "ADR-0001. One was removed on 2026-07-25; see "
             "docs/PROGRESS.md for what it learned, so a future extractor in "
             "the right repository does not have to rediscover it.")
 
@@ -132,9 +122,7 @@ def main() -> int:
         for p in problems + stale:
             print(f"  - {p}", file=sys.stderr)
         return 1
-    print("non-goals: no conflicts, no stale names"
-          if not exception else
-          "non-goals: section 18 reconciled, no stale names")
+    print("non-goals: no conflicts, no stale names")
     return 0
 
 

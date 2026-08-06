@@ -24,7 +24,7 @@
       "lpMaximumApplicationAddress is INCLUSIVE: VirtualQuery(0x7ffffffef000) succeeded reporting MEM_FREE over 4096 bytes, so the address is part of this process's space, and a one-page reservation there failed with ERROR_INVALID_ADDRESS - consistent with the system's top-of-space guard region, which is why the reservation is not what decides this"
     ]
   },
-  "profile_id": "sha256:b6bd1d2e7843d9703d2957c51361f941a150082f12459c8afa43a6ba503bfaa0",
+  "profile_id": "sha256:ce95c1d54e1e7887eb1cf49251dec4e14dd05030b21165288262dcb7ac413d4c",
   "profile_name": "wine-on-posix-x86_64",
   "schema": "runtime-skeptic.environment-profile.v1",
   "virtual_memory": {

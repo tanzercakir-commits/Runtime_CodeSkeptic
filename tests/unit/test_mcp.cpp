@@ -21,7 +21,7 @@ json::Value call(const std::string& line) {
 }
 
 // Tool payloads arrive as a JSON string inside content[0].text - the
-// CodeSkeptic convention. This unwraps that envelope.
+// protocol convention. This unwraps that envelope.
 json::Value tool_payload(const json::Value& response) {
     const json::Value* result = response.find("result");
     if (result == nullptr) return json::Value();
@@ -120,7 +120,7 @@ RS_TEST(tools_list_advertises_every_tool_with_a_schema) {
 }
 
 RS_TEST(every_advertised_property_is_a_string_type) {
-    // The CodeSkeptic convention: booleans and lists cross as strings, so
+    // The protocol convention: booleans and lists cross as strings, so
     // clients that flatten arguments still work.
     const auto response =
         call(R"({"jsonrpc":"2.0","id":1,"method":"tools/list"})");
@@ -285,6 +285,74 @@ RS_TEST(responses_are_single_line) {
                          std::string("response contains a raw newline: ") +
                              request);
     }
+}
+
+// ---------------------------------------------------------------------------
+// Independent review 2026-08-02, B4d: the MCP surface accepted invalid JSON-RPC
+// envelopes and coerced bad tool arguments in silence. The named example -
+// report_unknowns:"treu" quietly becoming false and suppressing the findings an
+// agent asked to see - is the false-green: a typo changed the answer and
+// nothing said so. These pin the strictness shut, in both directions.
+// ---------------------------------------------------------------------------
+
+RS_TEST(a_misspelled_boolean_argument_is_rejected_not_coerced) {
+    // "treu" is not "true"; the old reader turned it into false. It must now be
+    // a -32602 invalid-params error that names the offending argument.
+    const auto response = call(
+        R"({"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"probe_host","arguments":{"scan_address_space":"treu"}}})");
+    RS_CHECK_EQ(error_code(response), -32602);
+    RS_CHECK(response.find("error")->find("message")->as_string().find(
+                 "scan_address_space") != std::string::npos);
+}
+
+RS_TEST(report_unknowns_still_honours_a_well_formed_value) {
+    // The other direction: a valid "false" must keep working AND actually
+    // change the output, or the option is inert and the strictness is theatre.
+    auto count = [](const char* ru) {
+        const std::string req = std::string(
+            R"({"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"check_requirement","arguments":{"report_unknowns":")") +
+            ru +
+            R"(","requirement_json":"{\"schema\":\"runtime-skeptic.application-requirements.v1\",\"operation\":\"virtual_memory_map\",\"assumption_evidence\":\"specified_guarantee\",\"request\":{\"size\":4096}}",)"
+            R"("profile_json":"{\"schema\":\"runtime-skeptic.environment-profile.v1\",\"origin\":\"measured\",\"platform\":{\"os\":\"linux\",\"process_arch\":\"x86_64\"},\"virtual_memory\":{}}"}}})";
+        return tool_payload(call(req)).find("finding_count")->as_uint();
+    };
+    RS_CHECK_MESSAGE(count("true") > count("false"),
+                     "report_unknowns did not change the finding count");
+}
+
+RS_TEST(an_unknown_report_format_is_rejected) {
+    const std::string req =
+        R"({"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"check_requirement","arguments":{"format":"xml",)"
+        R"("requirement_json":"{\"schema\":\"runtime-skeptic.application-requirements.v1\",\"operation\":\"virtual_memory_map\",\"assumption_evidence\":\"specified_guarantee\",\"request\":{\"size\":4096}}",)"
+        R"("profile_json":"{\"schema\":\"runtime-skeptic.environment-profile.v1\",\"origin\":\"measured\",\"platform\":{\"os\":\"linux\",\"process_arch\":\"x86_64\"},\"virtual_memory\":{}}"}}})";
+    RS_CHECK_EQ(error_code(call(req)), -32602);
+}
+
+RS_TEST(a_wrong_or_missing_jsonrpc_version_is_rejected) {
+    RS_CHECK_EQ(error_code(call(R"({"jsonrpc":"1.0","id":1,"method":"ping"})")),
+                -32600);
+    // Missing entirely, on a request, is equally invalid.
+    RS_CHECK_EQ(error_code(call(R"({"id":1,"method":"ping"})")), -32600);
+}
+
+RS_TEST(a_malformed_id_type_is_rejected_with_a_null_id) {
+    // JSON-RPC 2.0: id must be a string, number, or null. An object id is
+    // malformed, and the reply cannot echo it, so it answers with a null id.
+    const auto response =
+        call(R"({"jsonrpc":"2.0","id":{"oops":1},"method":"ping"})");
+    RS_CHECK_EQ(error_code(response), -32600);
+    RS_CHECK(response.find("id")->is_null());
+    // A boolean id is malformed too.
+    RS_CHECK_EQ(
+        error_code(call(R"({"jsonrpc":"2.0","id":true,"method":"ping"})")),
+        -32600);
+}
+
+RS_TEST(a_notification_with_a_bad_version_still_gets_no_reply) {
+    // A notification never gets a response, even when its envelope is wrong.
+    RS_CHECK(server::handle_mcp_message(
+                 R"({"jsonrpc":"1.0","method":"notifications/initialized"})")
+                 .empty());
 }
 
 RS_TEST_MAIN("mcp")

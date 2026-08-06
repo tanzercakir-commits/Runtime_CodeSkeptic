@@ -34,11 +34,14 @@ mkdir -p "$WORK/cases" "$WORK/contracts"
 # this directory allowed to lie about what a host did; everything else measures.
 cat > "$WORK/cases/stub.c" <<'STUB'
 #include <stdio.h>
+#include <string.h>
 int main(int argc, char** argv) {
     if (argc < 3) return 64;
     if (argv[2][0] == '-') return 1;   /* "-" means: print nothing, exit 1 */
+    const int wrong_case = strcmp(argv[2], "wrong-case") == 0;
     printf("{\"case\":\"%s\",\"outcome\":\"%s\",\"detail\":\"stub\"}\n",
-           argv[1], argv[2]);
+           wrong_case ? "another-case" : argv[1],
+           wrong_case ? "satisfied" : argv[2]);
     return 0;
 }
 STUB
@@ -95,6 +98,9 @@ want_for() {
     case "$1" in
         supported)   echo "page-size-at-most-64kib:SUPPORTED" ;;
         unsupported) echo "file-map-beyond-eof:UNSUPPORTED" ;;
+        supported-relocate)
+                     echo "unhonourable-address-hint:SUPPORTED" ;;
+        conditional) echo "strong-reservation-alignment:CONDITIONAL" ;;
         unknown)     echo "exact-mapping-in-carveout:UNKNOWN" ;;
         *) echo "" ;;
     esac
@@ -107,7 +113,7 @@ profile_for() {
         *)       echo "$MEASURED" ;;   # needs real facts to predict at all
     esac
 }
-WANT_KEYS="supported unsupported unknown"
+WANT_KEYS="supported supported-relocate unsupported conditional unknown"
 
 verdict_of() {
     case "$1" in
@@ -138,18 +144,27 @@ done
 ROWS=(
     "supported|satisfied|held"
     "supported|refused|CONTRADICTED"
-    "supported|relocated|CONTRADICTED"
-    "supported|faulted|CONTRADICTED"
-    "supported|lost|CONTRADICTED"
+    "supported|satisfied-relocated|CASE BROKEN"
+    "supported|relocated|CASE BROKEN"
+    "supported|faulted|CASE BROKEN"
+    "supported|lost|CASE BROKEN"
+    "supported|bananas|CASE BROKEN"
+    "supported|wrong-case|CASE BROKEN"
     "supported|skipped|skipped"
     "supported|-|CASE BROKEN"
+    "supported-relocate|satisfied-relocated|held"
+    "supported-relocate|satisfied|held"
+    "supported-relocate|refused|CONTRADICTED"
     "unsupported|refused|held"
-    "unsupported|relocated|held"
     "unsupported|faulted|held"
-    "unsupported|lost|held"
     "unsupported|satisfied|CONTRADICTED"
+    "unsupported|relocated|CASE BROKEN"
+    "unsupported|lost|CASE BROKEN"
     "unsupported|skipped|skipped"
     "unsupported|-|CASE BROKEN"
+    "unsupported|satisfied-relocated|CASE BROKEN"
+    "conditional|misaligned|not asserted"
+    "conditional|satisfied|not asserted"
     "unknown|satisfied|not asserted"
     "unknown|refused|not asserted"
 )
@@ -162,17 +177,42 @@ for row in "${ROWS[@]}"; do
     IFS='|' read -r key outcome expected <<<"$row"
     name="$(want_for "$key")"; name="${name%%:*}"
 
-    python3 - "$WORK/manifest.json" "$name" "$outcome" <<'PY'
+    python3 - "$WORK/manifest.json" "$WORK/oracles.json" \
+        "$name" "$outcome" <<'PY'
 import json, sys
-out = sys.argv[3]
+manifest_path, oracle_path, source_case, out = sys.argv[1:]
 json.dump({"schema": "runtime-skeptic.groundtruth-manifest.v1", "cases": [{
-    "case": "selftest", "contract": f"contracts/{sys.argv[2]}.json",
+    "case": "selftest", "contract": f"contracts/{source_case}.json",
     "program": "stub", "args": [out], "why": "harness selftest",
     # The selftest is testing the comparison table, so its rows must be
     # assertable; without this every row becomes RECORD-ONLY and the selftest
     # silently stops testing anything.
     "verifies_all_postconditions": True}]},
-    open(sys.argv[1], "w"))
+    open(manifest_path, "w"))
+specs = {
+    "page-size-at-most-64kib": {
+        "outcomes": ["satisfied", "refused"],
+        "held_when": {"SUPPORTED": ["satisfied"], "UNSUPPORTED": ["refused"]}},
+    "file-map-beyond-eof": {
+        "outcomes": ["satisfied", "refused", "faulted"],
+        "held_when": {"SUPPORTED": ["satisfied"],
+                      "UNSUPPORTED": ["refused", "faulted"]}},
+    "unhonourable-address-hint": {
+        "outcomes": ["satisfied", "satisfied-relocated", "refused", "faulted"],
+        "held_when": {"SUPPORTED": ["satisfied", "satisfied-relocated"],
+                      "UNSUPPORTED": ["refused", "faulted"]}},
+    "strong-reservation-alignment": {
+        "outcomes": ["satisfied", "misaligned"],
+        "held_when": {"SUPPORTED": ["satisfied"],
+                      "UNSUPPORTED": ["misaligned"]}},
+    "exact-mapping-in-carveout": {
+        "outcomes": ["satisfied", "refused", "faulted"],
+        "held_when": {"SUPPORTED": ["satisfied"],
+                      "UNSUPPORTED": ["refused", "faulted"]}},
+}
+json.dump({"schema": "runtime-skeptic.groundtruth-pairing-oracles.v1",
+           "cases": {"selftest": specs[source_case]}},
+          open(oracle_path, "w"))
 PY
 
     # CC DELIBERATELY CARRIES A FLAG, so the multi-word path is exercised on every
@@ -188,8 +228,8 @@ PY
     # single word - which is every path except the only one that can observe a
     # translated address space. `-O0` here is not about optimisation; it is about
     # there being a second word at all.
-    got=$(GT_MANIFEST="$WORK/manifest.json" GT_CASES="$WORK/cases" \
-          GT_BIN="$WORK/bin" GT_CONTRACT_ROOT="$WORK" \
+    got=$(GT_MANIFEST="$WORK/manifest.json" GT_ORACLES="$WORK/oracles.json" \
+          GT_CASES="$WORK/cases" GT_BIN="$WORK/bin" GT_CONTRACT_ROOT="$WORK" \
           CC="${CC:-cc} -O0" \
           bash "$HERE/run.sh" "$(profile_for "$key")" 2>/dev/null \
           | awk '/^selftest /{ $1=""; $2=""; $3=""; sub(/^ +/,""); print }' | head -1)

@@ -156,6 +156,22 @@ int command_verify(const std::string& path) {
         return rs::reports::exit_code::kInput;
     }
 
+    // Integrity: profile_id is a SHA-256 over the canonical facts, so a stored
+    // id that no longer matches the recomputed one means the facts were edited
+    // after the profile was written. The schema guarantees the id is well-formed
+    // (sha256:<64 hex>); verify is where a well-formed but WRONG id is caught -
+    // a signed profile whose contents were changed must not verify. (2026-08-02
+    // re-test, verdict group: a tampered profile_id verified with exit 0.)
+    if (const Value* stored = document->find("profile_id");
+        stored != nullptr && stored->is_string() &&
+        stored->as_string() != profile->profile_id()) {
+        std::cerr << "rs-profile: profile_id does not match the profile's facts: "
+                     "stored "
+                  << stored->as_string() << ", recomputed " << profile->profile_id()
+                  << ". The profile was edited after it was written.\n";
+        return rs::reports::exit_code::kInput;
+    }
+
     // Round-trip: parse -> serialize -> parse -> serialize must be stable.
     // This is what makes profile_id meaningful.
     const Value rebuilt = profile->to_json();

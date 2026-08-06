@@ -1091,8 +1091,39 @@ void Analysis::rule_range_availability() {
 
     const auto range = req_.request.range();
     if (!range) {
-        result_.analyzer_limitations.push_back(
-            "requested range wraps past the end of the address space");
+        // address + size overflows uint64: the requested region wraps past the
+        // end of the 64-bit address space, so no host can place it. That is a
+        // proven impossibility, not a gap in the analysis - recording it as only
+        // a limitation left the verdict SUPPORTED for a request that can never
+        // be satisfied (independent review, A5 overflow). Exact placement is
+        // required on this path (checked above), so the wrap is load-bearing.
+        Finding f = start(ids::kAddressAboveUserSpace, Confidence::Proven,
+                          SupportLevel::Unsupported);
+        f.structural_impossibility = true;
+        f.required = "mapping of " + dec(req_.request.size) + " bytes placed at " +
+                     json::to_hex(*req_.request.address);
+        f.host_capability =
+            "the requested range wraps past the end of the 64-bit address space: "
+            + json::to_hex(*req_.request.address) + " + " +
+            dec(req_.request.size) + " bytes exceeds 2^64";
+        f.modeled_fallback =
+            "no mapping can be placed; a region that wraps the address space "
+            "does not exist, so the call fails outright";
+        f.conclusion =
+            "No execution satisfying all constraints exists on any host: a region "
+            "that wraps the 64-bit address space cannot be mapped.";
+        add_application_claim(f, "program requires an exact mapping at " +
+                                     json::to_hex(*req_.request.address) + " of " +
+                                     dec(req_.request.size) + " bytes");
+        f.evidence.add(Layer::OperatingSystem, EvidenceClass::SpecifiedGuarantee,
+                       "address + size exceeds the 64-bit address space",
+                       profile_.profile_name.empty() ? result_.profile_id
+                                                      : profile_.profile_name);
+        f.remediations.push_back(
+            {RemediationClass::ChooseDifferentBaseAddress, ""});
+        f.remediations.push_back(
+            {RemediationClass::RelaxExactAddressRequirement, ""});
+        emit(std::move(f));
         return;
     }
 
@@ -1653,8 +1684,15 @@ void Analysis::rule_file_mapping_beyond_eof() {
 
     const std::uint64_t file_length = *req_.request.file_length;
     const std::uint64_t offset = req_.request.file_offset;
-    if (offset > UINT64_MAX - req_.request.size) return;  // caught elsewhere
-    const std::uint64_t mapping_end = offset + req_.request.size;
+    // offset + size can overflow uint64. When it does, the mapping runs
+    // astronomically past the file - the offset alone dwarfs any file_length -
+    // so it is beyond EOF by definition. A bare `return` here (the "caught
+    // elsewhere" was untrue for a file mapping) left file_offset=UINT64_MAX
+    // SUPPORTED while offset 0 on the same contract was UNSUPPORTED. Saturate
+    // the end so the beyond-EOF logic below still fires.
+    const std::uint64_t mapping_end =
+        (offset > UINT64_MAX - req_.request.size) ? UINT64_MAX
+                                                  : offset + req_.request.size;
     if (mapping_end <= file_length) return;
 
     const std::uint64_t overhang = mapping_end - file_length;

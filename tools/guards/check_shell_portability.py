@@ -176,7 +176,7 @@ def main() -> int:
         if ".git" in path.parts or "build" in path.parts:
             continue
         scanned += 1
-        rel = str(path.relative_to(ROOT))
+        rel = path.relative_to(ROOT).as_posix()
         for line, what, instead, text in scan(path):
             problems.append(
                 f"{rel}:{line}: uses {what}. macOS ships bash 3.2 and BSD "

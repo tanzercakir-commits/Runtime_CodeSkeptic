@@ -59,11 +59,12 @@ where a silent assumption meets a platform that does not honour it.
 
 ## The finding that changes the plan
 
-The owner's Scenario 1 ends with `Confidence: PROVEN`, and the closing vision is
-a pipeline where CodeSkeptic extracts a requirement from source, RuntimeSkeptic
-judges it, and an AI writes the report. **Both are right, but they cannot be
-right at the same time**, and the reason is a rule this project already
-enforces.
+The owner's Scenario 1 ends with `Confidence: PROVEN`, while its closing
+vision imagines a separate source analyzer producing a requirement for
+RuntimeSkeptic. **Both are useful, but they cannot carry the same confidence**,
+and the reason is a rule this project already enforces. The standalone v0.2
+product does not ship or invoke that analyzer; it only accepts
+producer-neutral, schema-valid artifacts supplied by the caller.
 
 `confidence_ceiling()` in `include/runtimeskeptic/core/evidence.hpp` caps a
 verdict by the *weakest* evidence in its chain. `statically_inferred` — which is
@@ -102,8 +103,8 @@ The honest version of the closing vision is therefore:
 
 ```
 C/C++ source
-    -> CodeSkeptic            (statically_inferred)
-    -> requirement bundle
+    -> external analyzer      (separate; statically_inferred)
+    -> producer-neutral requirement bundle
     -> RuntimeSkeptic         + measured host profile
     -> UNSUPPORTED, RS-VM-0001, COUNTEREXAMPLE
        "this rests on reading your source, not on a guarantee you stated;
@@ -111,8 +112,9 @@ C/C++ source
         one-line change to the contract that would raise it to PROVEN"
 ```
 
-Which is a *better* product pitch than a percentage, because it tells the
-developer exactly what to do to get a stronger answer.
+That artifact-only flow is a possible external use, not a RuntimeSkeptic
+dependency. It is also a *better* explanation than a percentage, because it
+tells the developer exactly what to do to get a stronger answer.
 
 ## Scorecard
 
@@ -121,16 +123,16 @@ Full detail, with the command that establishes each row, in `assessment.md`.
 ```
 S1  shadPS4 exact mapping        [done]      the motivating case, measured, both lanes
 S2  Apple Silicon page size      [partial]   verdict yes; the consequence list no
-S3  Wine reserve/commit          [open]      rule exists, never executed, no Windows profile
+S3  Wine reserve/commit          [done]      Windows Job + Linux cgroup controls executed
 S4  LuaJIT +/-2 GB               [partial]   carried and declared unevaluable, out loud
 S5  mimalloc alignment           [partial]   rules exist and run; no allocator ever tested
-S6  CI pipeline gate             [partial]   mechanically works; Gate B unmeasured
-S7  studio, five platforms       [open]      two families measured, no multi-host report
+S6  CI pipeline gate             [done]      Gate B measured; strict CI gates green
+S7  studio, five platforms       [partial]   profiles exist; no multi-host matrix
 S8  security fleet, 500 apps     [open]      one bundle yes, a fleet rollup no
 S9  new kernel, profile diff     [partial]   diff works; diff -> affected contracts does not
-S10 PR review via CodeSkeptic    [blocked]   owner's instruction, Phase 5
+S10 external PR review adapter     [n/a]       outside standalone v0.2 (ADR-0001)
 ```
 
-One of ten works end to end, five do part of what they describe, three are not
-started, and one is blocked by an instruction rather than by effort. That ratio
-is the reason for writing this down instead of keeping the scenarios as a pitch.
+The scorecard is evidence, not a release backlog. S10 is explicitly outside the
+standalone v0.2 boundary; partial and open scenarios remain design references
+unless a future accepted plan promotes them into work.

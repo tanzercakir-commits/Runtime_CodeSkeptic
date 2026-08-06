@@ -46,9 +46,12 @@ ROOT = Path(__file__).resolve().parents[2]
 MEASURED = ROOT / "profiles" / "measured"
 
 # The probe sources whose change invalidates a measurement, per OS. The shared
-# header and the arena walk are in every set because they shape the ranges and
-# the ceiling every platform reports.
-SHARED = ["include/runtimeskeptic/probe/vm_probe.hpp"]
+# header is in every set. arena_walk shapes ranges on all three implemented
+# platforms, so both its interface and implementation are shared measurement
+# dependencies too; omitting Windows here once let a stale profile pass.
+SHARED = ["include/runtimeskeptic/probe/vm_probe.hpp",
+          "src/probe/arena_walk.cpp",
+          "include/runtimeskeptic/probe/arena_walk.hpp"]
 
 # Profiles that no CI workflow regenerates. Each needs a stated reason, the same
 # discipline as docs/TODO.md's "Deliberately not tracked": an exemption without
@@ -69,12 +72,10 @@ EXCEPTIONS = {
 }
 
 PROBE_SOURCES = {
-    "macos": ["src/probe/vm_probe_macos.cpp", "src/probe/arena_walk.cpp",
-              "include/runtimeskeptic/probe/arena_walk.hpp"] + SHARED,
+    "macos": ["src/probe/vm_probe_macos.cpp"] + SHARED,
     "windows": ["src/probe/vm_probe_windows.cpp",
                 "src/probe/windows_regions.cpp"] + SHARED,
-    "linux": ["src/probe/vm_probe_linux.cpp", "src/probe/arena_walk.cpp",
-              "include/runtimeskeptic/probe/arena_walk.hpp"] + SHARED,
+    "linux": ["src/probe/vm_probe_linux.cpp"] + SHARED,
 }
 
 
@@ -105,12 +106,12 @@ def main() -> int:
         return 0
 
     for profile in sorted(MEASURED.glob("*.measured.json")):
-        rel = str(profile.relative_to(ROOT))
+        rel = profile.relative_to(ROOT).as_posix()
         if profile.name in EXCEPTIONS:
             print(f"  exempt: {profile.name} - {EXCEPTIONS[profile.name]}")
             continue
         try:
-            os_name = json.loads(profile.read_text())["platform"]["os"]
+            os_name = json.loads(profile.read_text(encoding="utf-8"))["platform"]["os"]
         except (json.JSONDecodeError, KeyError) as exc:
             problems.append(f"{rel}: cannot read platform.os ({exc})")
             continue
@@ -123,9 +124,15 @@ def main() -> int:
                 f"profile cannot drift unwatched")
             continue
 
+        # A valid replacement staged or modified in this working tree will be
+        # committed after the source by construction. The clean CI checkout is
+        # the authoritative timestamp check; locally, do not condemn the old
+        # blob while the freshly validated replacement is waiting to commit.
+        if git("status", "--porcelain", "--", rel):
+            print(f"  pending: {profile.name} - replacement will be dated by its commit")
+            continue
         profile_ts = last_commit_ts(rel)
         if profile_ts is None:
-            # Uncommitted (e.g. staged in a working tree). Nothing to compare.
             continue
 
         checked += 1

@@ -204,7 +204,7 @@ RS_TEST(the_checked_in_extractor_bundle_parses_and_evaluates) {
     std::string error;
     auto text = io::read_file(
         std::string(RS_REPO_ROOT) + "/contracts/generated/"
-                                    "codeskeptic-demo-bundle.json",
+                                    "producer-neutral-demo-bundle.json",
         error);
     RS_CHECK_MESSAGE(text.has_value(), error);
     if (!text) return;
@@ -235,10 +235,12 @@ RS_TEST(the_extractor_bundle_finds_the_identity_requirement) {
     std::string error;
     auto text = io::read_file(
         std::string(RS_REPO_ROOT) + "/contracts/generated/"
-                                    "codeskeptic-demo-bundle.json",
+                                    "producer-neutral-demo-bundle.json",
         error);
+    RS_CHECK_MESSAGE(text.has_value(), error);
     if (!text) return;
     auto bundle = load_requirements(parse_or_null(*text), error);
+    RS_CHECK_MESSAGE(bundle.has_value(), error);
     if (!bundle) return;
 
     bool found_identity = false;

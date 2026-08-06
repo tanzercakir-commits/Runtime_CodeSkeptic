@@ -55,7 +55,10 @@ def main() -> int:
               file=sys.stderr)
         return 1
 
-    actual = hashlib.sha256(ROADMAP.read_bytes()).hexdigest()
+    # A checkout may materialize Git's LF text as CRLF. Freeze the content,
+    # not the platform-specific working-tree newline representation.
+    canonical = ROADMAP.read_text(encoding="utf-8").encode("utf-8")
+    actual = hashlib.sha256(canonical).hexdigest()
 
     if not RECORDED.exists():
         problems.append(
@@ -63,7 +66,7 @@ def main() -> int:
             "specification. Create it deliberately:\n"
             "      sha256sum ROADMAP.md > tools/guards/roadmap.sha256")
     else:
-        recorded_line = RECORDED.read_text().strip()
+        recorded_line = RECORDED.read_text(encoding="utf-8").strip()
         recorded = recorded_line.split()[0] if recorded_line else ""
         if recorded != actual:
             problems.append(
@@ -83,12 +86,12 @@ def main() -> int:
         problems.append("docs/PLAN.md is missing; it is the map")
     else:
         roadmap_phases = sorted(
-            {int(m) for m in PHASE_HEADING.findall(ROADMAP.read_text())})
+            {int(m) for m in PHASE_HEADING.findall(ROADMAP.read_text(encoding="utf-8"))})
         if not roadmap_phases:
             problems.append(
                 "no '## Phase N —' headings found in ROADMAP.md; the phase "
                 "pattern this guard reads has drifted from the document")
-        plan_text = PLAN.read_text()
+        plan_text = PLAN.read_text(encoding="utf-8")
         missing = [n for n in roadmap_phases
                    if f"Phase {n}" not in plan_text]
         for n in missing:
@@ -97,7 +100,7 @@ def main() -> int:
                 f"defines. The map must mirror the specification's phases - "
                 f"only the status markers move.")
 
-    count = len(PHASE_HEADING.findall(ROADMAP.read_text()))
+    count = len(PHASE_HEADING.findall(ROADMAP.read_text(encoding="utf-8")))
     print(f"roadmap: frozen at sha256:{actual[:12]}..., "
           f"{count} phase(s) mirrored in the plan")
     if problems:

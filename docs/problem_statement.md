@@ -2,7 +2,7 @@
 
 The failures RuntimeSkeptic targets are not wrong instructions; they are correct instructions executed against a layer that quietly supplied weaker semantics than the caller required.
 
-**Status:** ROADMAP Phase 0 (Research Boundary and Failure Taxonomy). The problem framing and terminology described here are stable and implemented in code (`include/runtimeskeptic/core/evidence.hpp`, `src/core/evidence.cpp`). The analysis capability described in "Scope of v0.1" is **partially implemented**: the requirement/profile/analyzer path exists in `src/vm/analyzer.cpp`, the environment probe (`rs-env-probe`) does **not** exist yet and belongs to Phase 1.
+**Status:** v0.1 built and shipping. The problem framing and terminology described here are stable and implemented in code (`include/runtimeskeptic/core/evidence.hpp`, `src/core/evidence.cpp`). The analysis capability described in "Scope of v0.1" is implemented and under test: the requirement/profile/analyzer path (`src/vm/analyzer.cpp`), the environment probe (`rs-env-probe` — Linux, macOS and Windows all measured directly; a platform with no probe returns an all-unknown profile rather than guessing), and the command-line tools (`rs-check`, `rs-profile`, `rs-replay`, `rs-mcp`) all exist and build with nothing but a C++20 compiler and CMake. <!-- checked: 2026-08-02 -->
 
 ---
 
@@ -184,7 +184,7 @@ Two consequences worth stating in the problem statement itself:
 
 | Document | Schema | Written by |
 | --- | --- | --- |
-| Environment profile | `runtime-skeptic.environment-profile.v1` | `rs-env-probe` (Phase 1; Linux and macOS implemented, Windows a stub) or hand-authored fixture |
+| Environment profile | `runtime-skeptic.environment-profile.v1` | `rs-env-probe` (Phase 1; Linux, macOS and Windows all implemented) or hand-authored fixture |
 | Application requirement | `runtime-skeptic.application-requirements.v1` | by hand in Phase 3; by CodeSkeptic in Phase 5 |
 
 **Output.** A compatibility result (`runtime-skeptic.compatibility-result.v1`) with an overall verdict in `{SUPPORTED, CONDITIONALLY_SUPPORTED, UNKNOWN, UNSUPPORTED}` and a list of findings, each with an evidence chain, remediation classes, and provably useless "rejected fixes".
@@ -193,14 +193,13 @@ Two consequences worth stating in the problem statement itself:
 
 **Properties checked.** Exact-address availability, address-space bounds, alignment against allocation granularity, size granularity, page size, hinted-mapping relocation, guest/host identity without translation, write-xor-execute, anonymous executable mappings, JIT entitlement, reserve/commit model, pointer truncation, self-contradictory fallback contracts, and retry loops around structurally impossible operations. That is 15 rules and 17 reachable finding IDs; see `docs/findings/registry.md`.
 
-**Platforms named as targets.** Windows x64, Linux x86-64, macOS on Apple Silicon, and x86-64 processes under Rosetta where measurable. Linux and macOS - natively and as a translated x86-64 process - are now MEASURED; see `profiles/measured/`. <!-- checked: 2026-07-25 --> Windows is still only *modeled*, because its probe is a stub that reports every fact unknown rather than guessing.
+**Platforms named as targets.** Windows x64, Linux x86-64, macOS on Apple Silicon, and x86-64 processes under Rosetta where measurable. All are now MEASURED by their own probe — Linux and macOS natively and as a translated x86-64 process, and Windows via `VirtualQuery`/`VirtualAlloc`; see `profiles/measured/`. <!-- checked: 2026-08-02 --> A platform with no probe returns a schema-valid, all-unknown profile rather than guessing.
 
 ### 7.2 Explicitly out of scope for v0.1
 
 | Excluded | Belongs to |
 | --- | --- |
-| Executable environment probing (`rs-env-probe`) | Phase 1 |
-| Runtime wrappers, semantic event traces, replay | Phase 4 |
+| Runtime wrappers, semantic event traces, trace replay | Phase 4 |
 | Automatic assumption extraction from C/C++ source | Phase 5 (via CodeSkeptic) |
 | Counterfactual exploration of alternative syscall outcomes | Phase 6 |
 | Temporal / lifecycle contracts and state machines | Phase 7 |
@@ -211,10 +210,9 @@ Two consequences worth stating in the problem statement itself:
 
 Stated plainly rather than left to be discovered:
 
-- **`RS-VM-0018` (file mapping beyond end of file) is registered but unreachable.** The profile carries a `file_map_beyond_eof` fact and the registry defines the ID, but no rule in `src/vm/analyzer.cpp` emits it. Beyond-EOF behavior is a temporal property (map succeeds, access faults later), which is why it fits Phase 7 more naturally than Phase 3.
+- **`RS-VM-0018` covers the statically decidable beyond-EOF case.** `rule_file_mapping_beyond_eof()` compares the declared `file_length` and `eof_access_extent` with the measured `file_map_beyond_eof` behavior, and ground-truth execution checks both the final partial page and a whole-page-overrun. Concurrent truncation after mapping remains a Phase 7 lifecycle problem.
 - **ROADMAP section 6 error classes without any finding ID:** mapping overlap, shared-memory semantic mismatch, virtual-address fragmentation risk, mapping lifetime inconsistencies. Fragmentation is inherently `PREDICTIVE` and belongs to Phase 9; lifetime and overlap belong to Phase 7.
-- **The incident corpus is incomplete.** Phase 0 exit criteria demand at least 30 classified real incidents with at least 10 in the virtual-memory category. The corpus currently contains 8 entries, all of them `provenance: pattern_reconstruction` — failure patterns reconstructed from general systems knowledge, not citations of specific reported incidents. None of them counts toward the exit criteria until replaced by a verified incident with a source. See `corpus/runtime_failures/README.md`.
-- **The build is not wired up.** The root `CMakeLists.txt` calls `add_subdirectory(src)`, `add_subdirectory(tools)` and `add_subdirectory(tests)`, and none of those directories contains a `CMakeLists.txt`. The core and VM sources exist; the CLI tools (`rs-env-probe`, `rs-profile`, `rs-check`) and tests do not.
+- **The incident corpus is cited but not fully reproduced.** Phase 0 demanded at least 30 classified real incidents with at least 10 in the virtual-memory category; both counts are now met (the live figures are recomputed from the files by `tools/guards/check_corpus.py` and reported in `corpus/runtime_failures/README.md`, not restated here — a count kept in two places is how a corpus comes to disagree with itself). What matters more than the count is reproduction: a cited incident proves the contradiction is real, not that this analyzer diagnoses it. `corpus/runtime_failures/README.md` tracks that remaining gap and which of the earliest entries are still `provenance: pattern_reconstruction` drafts that count toward nothing by design.
 
 ---
 

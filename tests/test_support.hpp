@@ -84,8 +84,24 @@ inline int run_all(const char* suite_name) {
                                                            rs_test_##name);  \
     static void rs_test_##name()
 
+// MSVC's C4127 (conditional expression is constant) fires on the many test
+// assertions that compare compile-time constants - a deliberate, correct thing
+// for a test to do. It is a documented false positive on older MSVC: VS2022 /
+// MSVC 19.44 flagged test_arena_walk.cpp:639 under /WX while VS2026 / 19.51 no
+// longer does, which meant the warnings-as-errors CI build was pinned to the
+// newest compiler (independent review B4c). Suppressing it at the one place
+// every assertion's condition is evaluated makes the /WX build portable across
+// MSVC versions and covers the whole class, not just the one line that surfaced.
+// A no-op on GCC and Clang.
+#if defined(_MSC_VER)
+#define RS_MSVC_ALLOW_CONST_COND __pragma(warning(suppress : 4127))
+#else
+#define RS_MSVC_ALLOW_CONST_COND
+#endif
+
 #define RS_CHECK(condition)                                                  \
     do {                                                                     \
+        RS_MSVC_ALLOW_CONST_COND                                             \
         if (!(condition)) {                                                  \
             ::rs::test::report_failure(__FILE__, __LINE__,                   \
                                        "expected: " #condition);             \
@@ -97,6 +113,7 @@ inline int run_all(const char* suite_name) {
 
 #define RS_CHECK_MESSAGE(condition, message)                                 \
     do {                                                                     \
+        RS_MSVC_ALLOW_CONST_COND                                             \
         if (!(condition)) {                                                  \
             ::rs::test::report_failure(__FILE__, __LINE__, (message));       \
         }                                                                    \

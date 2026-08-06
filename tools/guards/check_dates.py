@@ -10,7 +10,7 @@ WHY THIS GUARD EXISTS, stated plainly. The author of these documents is a
 language model, and this session alone produced three dates for the same day:
 the environment header said 2026-07-24, a later reminder said 2026-07-25, and
 the container clock said 2026-07-25T20:34Z. It has also been confidently wrong
-about checkable facts more than once - it reported that neither CodeSkeptic
+about checkable facts more than once - it reported that neither project
 clone had a GitHub remote when one did, and it wrote a commit message
 describing a fix the diff did not contain. A date it types is exactly that
 class of claim: plausible, unverified, and load-bearing.
@@ -124,7 +124,7 @@ QUOTES_DATES = {"tools/guards/check_dates.py", "tools/guards/check_docs.py",
 
 def git(*args, cwd=ROOT):
     return subprocess.run(["git", *args], cwd=cwd, capture_output=True,
-                          text=True)
+                          encoding="utf-8", errors="replace")
 
 
 def graft_points() -> set:
@@ -132,7 +132,7 @@ def graft_points() -> set:
     path = ROOT / ".git" / "shallow"
     if not path.exists():
         return set()
-    return {line.strip() for line in path.read_text().splitlines() if line.strip()}
+    return {line.strip() for line in path.read_text(encoding="utf-8").splitlines() if line.strip()}
 
 
 def newest_commit_date():
@@ -198,7 +198,7 @@ def main() -> int:
     truncated = 0
     if PROGRESS.exists():
         blame = blame_datetimes("docs/PROGRESS.md")
-        for i, line in enumerate(PROGRESS.read_text().splitlines(), 1):
+        for i, line in enumerate(PROGRESS.read_text(encoding="utf-8").splitlines(), 1):
             m = HEADING.match(line)
             if not m:
                 continue
@@ -239,10 +239,10 @@ def main() -> int:
     for path in sorted(ROOT.rglob("*.md")):
         if ".git" in path.parts:
             continue
-        rel = str(path.relative_to(ROOT))
+        rel = path.relative_to(ROOT).as_posix()
         if rel in QUOTES_DATES:
             continue
-        lines = path.read_text().splitlines()
+        lines = path.read_text(encoding="utf-8").splitlines()
         for i, line in enumerate(lines, 1):
             window = "\n".join(lines[max(0, i - 2):i])
             future_allowed = bool(FUTURE_OK.search(window))

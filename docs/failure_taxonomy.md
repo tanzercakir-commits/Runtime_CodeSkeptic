@@ -387,7 +387,7 @@ The ordering or lifecycle of states differs from the program's model. Each indiv
 Primary: `RS-VM-0012` (reserve/commit semantic mismatch), `RS-VM-0018` (file-backed mapping extends beyond end of file).
 Cross-listed: `RS-VM-0016`.
 
-**Implementation gap:** `RS-VM-0018` is registered in `src/vm/finding.cpp` and the profile carries the `file_map_beyond_eof` fact, but no rule in `src/vm/analyzer.cpp` emits it. It is currently unreachable. The rule belongs to Phase 3 (a static size-vs-length comparison would catch the simple case) or Phase 7 (the general lifecycle case).
+**Implemented boundary:** `RS-VM-0018` is emitted by `rule_file_mapping_beyond_eof()` when a declared file length and access extent make the static contradiction decidable. Ground-truth cases distinguish the guaranteed zero-filled final partial page from a whole-page overrun. Post-map truncation by another process still requires the Phase 7 lifecycle monitor.
 
 ### Not an ordinary memory bug because...
 
@@ -491,7 +491,7 @@ There is, today, no bug at all. Every run is correct. The finding describes a *l
 | permanent error treated as retryable | yes | yes | RSC-0007 |
 | capability present but required property absent | yes | yes | RSC-0004 |
 | resource-topology contradiction | yes | yes | RSC-0003 |
-| temporal contract violation | yes | partially (`RS-VM-0018` unreachable) | RSC-0006 |
+| temporal contract violation | yes | yes (static extent); lifecycle truncation deferred to Phase 7 | RSC-0006 |
 | loader/ABI mismatch | no (Phase 8) | no | none |
 | platform-observed behavior treated as guaranteed behavior | yes | yes | RSC-0002 |
 

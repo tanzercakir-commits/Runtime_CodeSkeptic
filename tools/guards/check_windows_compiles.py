@@ -52,7 +52,10 @@ COMPILERS = ["x86_64-w64-mingw32-g++", "x86_64-w64-mingw32-c++"]
 
 # Every translation unit that is Windows-only, i.e. empty on this machine and
 # therefore unchecked by the ordinary build.
-SOURCES = ["src/probe/vm_probe_windows.cpp"]
+SOURCES = ["src/probe/vm_probe_windows.cpp", "src/runtime/windows.cpp"]
+SOURCE_DEFINES = {
+    "src/runtime/windows.cpp": ["-DRS_RUNTIME_BUILDING_LIBRARY=1"],
+}
 
 
 def project_warning_flags() -> list:
@@ -96,8 +99,11 @@ def main() -> int:
             continue
         cmd = [compiler, "-std=c++20", "-fsyntax-only",
                "-I", str(ROOT / "include"),
+               "-I", str(ROOT / "src" / "runtime"),
                "-DRS_PLATFORM_WINDOWS", "-DNOMINMAX",
-               "-D_CRT_SECURE_NO_WARNINGS", "-Werror", *flags, str(source)]
+               "-D_CRT_SECURE_NO_WARNINGS",
+               *SOURCE_DEFINES.get(rel, []),
+               "-Werror", *flags, str(source)]
         proc = subprocess.run(cmd, capture_output=True, text=True)
         if proc.returncode != 0:
             failures.append(f"{rel}:\n" +

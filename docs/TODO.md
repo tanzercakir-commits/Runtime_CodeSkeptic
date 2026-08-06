@@ -49,34 +49,30 @@ PROGRESS entry is work that will be redone.
 For the session that begins after any amount of forgetting, on any model.
 Everything here is measured or enforced, not remembered.
 
-**Where the project stands (2026-08-01):**
+**Where the project stands (2026-08-06):**
 
 ```
-Phase 0-2   DONE
-Phase 3     PARTIAL, but the finish line moved: GATE B PASSED. The one thing
-            still open in Phase 3 is demonstration 5 (RS-VM-0012, reserve/
-            commit under memory pressure), which is BLOCKED - the harness
-            cannot provoke exhaustion safely (T-012), not a matter of effort.
-Phase 4+    not started; Phase 5 blocked by the owner's instruction
+Phase 0-4   DONE. Gate B, all seven demonstrations, T-012 bounded pressure,
+            strict rule-execution coverage and the runtime SDK matrix are green.
+Phase 5     N/A. ADR-0001 fixes RuntimeSkeptic as a standalone product.
+Phase 6-10  N/A for the v0.2 product line; reopening requires an accepted
+            Plan v2 with new evidence gates and queue items.
 Gate B      false-positive rate measured 0 on THREE operating systems:
-              Linux x86-64     1292 requirements   (strace)
-              macOS 14 arm64     37 requirements   (dtrace, mach traps)
-              Windows 10.0.26100 247 requirements  (ETW)
-            174 RS-VM-0005 notes on Windows, all SUPPORTED (T-019's payoff:
-            the noisy rule speaks as information, not a gate-breaking
-            condition, on the one host where it fires).
+              Linux x86-64       1292 requirements  (strace)
+              macOS 14 arm64       37 requirements  (dtrace, mach traps)
+              Windows 10.0.26100  247 requirements  (ETW)
+            174 RS-VM-0005 notes on Windows, all SUPPORTED.
 ```
 
-**What "finish this project" now means.** Gate B was the last *measured* exit
-criterion. What is left is either blocked by the owner (Phase 5 / CodeSkeptic,
-T-011) or is new scope (Phase 4 runtime wrapper T-009, Phase 6+). There is no
-unfinished measurement standing between the tool and its own Phase 3 claim.
-The honest next moves are on the compass below, none of them urgent.
+**What "finish this project" now means.** The standalone v0.2 product closes
+at Phase 4 under `docs/decisions/0001-standalone-product-boundary.md`. Phases
+5-10 are not incomplete work in this line; they require a separately accepted
+Plan v2. Every completed or retired item is consumed into `docs/PROGRESS.md`.
 
 **How to verify the tree before believing anything, including this file:**
 
 ```
-bash tools/guards/run_all.sh          17 guards; all must pass
+bash tools/guards/run_all.sh          every guard must run and pass
 cmake --build build -j4 && ctest --test-dir build
 ```
 
@@ -112,104 +108,28 @@ diagnostics channel now carries the constrained lane's own output (it did not
 then, twice over - see fcbbdeb). Do not chase it; the next red run will carry
 its evidence.
 
-**A rule for maintaining THIS file:** `ROADMAP.md` is frozen by hash
-(`tools/guards/check_roadmap.py`); `docs/PLAN.md` moves only its status
-markers; this file and `docs/PROGRESS.md` are the ones that change. A weekly
-scheduled session (Mondays 06:00 UTC) reads the CI channels and reports drift;
-it cannot push.
+**A rule for maintaining THIS file:** `plan.md` and `ROADMAP.md` are frozen by
+hash guards; `docs/PLAN.md` updates status and current evidence; this file
+and `docs/PROGRESS.md` carry the changing queue and immutable history. A
+weekly scheduled session (Mondays 06:00 UTC) reads the CI channels and
+reports drift; it cannot push.
 
 ---
 
 ## Now
 
+No release-blocking executable item remains in the accepted v0.2 scope.
+
 ---
 
 ## Next
 
-*(empty. Gate B is passed and no measured criterion is open. What is left is
-`Later` scope or owner-blocked work — nothing forced. The most defensible
-next pick is **T-021** (the synthetic-only coverage backlog: real, bounded,
-and the same "grade every claim" standard that has driven everything above),
-but it is a `[later]` and not urgent. The honest state of the project is that
-its Phase 3 promise is measured and kept.)*
+Any new product work starts with an owner-accepted Plan v2. It must define its
+own scope, evidence gates and consumable tasks before implementation begins.
 
 ---
 
 ## Later
-
-### T-023 — Open the second runtime domain: Filesystem first `[later]`
-
-**Serves:** the "other layers" this project has always named — filesystem,
-loader, time, networking (`docs/scenarios/`, and the public pitch). Virtual
-memory is one domain of many; the thesis is general and this is where it widens.
-**Plan:** `docs/PLAN.md` Phase 8 — additional runtime domains
-**Done when:** ONE new domain is fully through **Gate D** (ROADMAP §20) — ≥10
-real documented incidents, a bounded operation model, a probe that MEASURES the
-host's behaviour, a false-positive campaign reporting its rate on a named
-population (target 0), and 2–3 reproduce-exact diagnosis cards — and
-`docs/PLAN.md` Phase 8 moves `[open]` → `[partial]` with the domain named.
-
-**The guardrails, before any code — this is what the tool's credibility rests
-on:** Gate D gates every domain, so the corpus comes FIRST and code after. One
-domain at a time (ROADMAP §18). Never add an extractor and never modify
-CodeSkeptic (`docs/non_goals.md` §18; `tools/guards/check_non_goals.py` fails the
-build the moment one reappears). The false-positive rate is the north star,
-measured the way VM's was — a rule that fires on a request that actually
-succeeded is a bug, not a finding.
-
-**First step — VM's proven playbook, in order.** Start with **Filesystem
-Semantics** (ROADMAP §18 Candidate A: independently *measurable* the way VM was,
-and an abundant real-incident record — case-collision on case-insensitive hosts,
-non-atomic cross-filesystem rename, fsync-durability drift):
-
-```
-1  corpus        >=10 real incidents in corpus/runtime_failures/<domain>/  (Gate D-1)
-2  operation     docs/domains/<domain>/operation-model.md - a CLOSED operation
-                 set every incident maps to                               (Gate D-2)
-3  probe         rs-env-probe <domain>: MEASURE real host behaviour, facts carry
-                 evidence classes, unmeasured stays `unknown`             (Gate D-3)
-4  schema+rules  version the schema under schemas/, RS-<DOMAIN>-xxxx ids in the
-                 registry, every finding through clamp_confidence
-5  campaign      tools/campaign/ observe-and-replay, rate in docs/campaigns/ (Gate D-4)
-6  cards         2-3 reproduce-exact diagnosis cards + Gate D sign-off in PROGRESS
-```
-
-Dynamic Loader/ABI (Candidate B) is the strong second choice and the most
-VM-adjacent, but its behaviour is harder to *measure* and leans on cited specs —
-pick it only with a concrete loader-incident corpus already in hand.
-
-### T-021 — The synthetic-only backlog: argued with, never shown a kernel `[later]`
-
-**Serves:** the same standard T-020 served, one bucket further in — a rule that
-only ever meets a profile someone wrote by hand has never been contradicted by
-anything
-**Plan:** `docs/PLAN.md` Cross-cutting, "rule coverage by execution"
-**Done when:** the synthetic-only bucket has shrunk, and every rule remaining in
-it carries a written reason it cannot be executed — at which point it stops being
-a backlog and becomes the "not checkable by execution" list, which is already
-required to name its reason per line.
-
-T-020 emptied the `NO COVERAGE OF ANY KIND` bucket. The next bucket up is not a
-defect and is not nothing: those rules have unit tests against synthetic
-profiles and have never been run against a kernel. **The count is deliberately
-not written here** — the tool prints it on every push, over both hosts, and this
-project has already had one stale count ("13 of the 20 reachable") sitting in
-two documents while the tool said something else. Read the output.
-
-Two honest cautions before anyone treats this as a number to drive down:
-
-- **Some of these can never be executed here, and saying so is the work.**
-  `RS-VM-0016` needs a host with no non-destructive exact-placement primitive;
-  every runner this project can reach has one. That is a reason, and once it is
-  written down the rule belongs in the "not checkable" list, not the backlog.
-- **A ground-truth case that cannot fail is worse than none.** The harness
-  compares a prediction against what the kernel actually did; a case constructed
-  so the prediction is trivially right adds a green row and no information.
-
-**First step:** take the four rules whose ground-truth case is most obviously
-constructible (`RS-VM-0005`, `RS-VM-0006`, `RS-VM-0009`, `RS-VM-0010` are
-plain-mapping properties) and write one case each. Then re-read the bucket and
-decide whether the rest are backlog or reasons.
 
 ### T-008 — Fleet aggregation `[later]`
 
@@ -220,17 +140,6 @@ and answers "how many are affected, and which".
 
 Straightforward, and worth nothing before T-002. Answering "31 applications
 affected" with an unmeasured false-positive rate is worse than not answering.
-
-### T-009 — Phase 4 runtime wrapper `[later]`
-
-**Serves:** every scenario, indirectly
-**Plan:** `docs/PLAN.md` Phase 4
-**Done when:** something in this repository can produce `observed_invariant`
-evidence, which nothing can today.
-
-This is the only evidence class the project defines and cannot generate. It is
-also the honest answer to T-001's trap and to S4: a runtime observation is what
-decides a displacement constraint.
 
 ### T-010 — Downstream-consequence modelling `[later]`
 
@@ -248,49 +157,8 @@ filled in — not from the analyzer's imagination.
 
 ## Blocked
 
-### T-011 — CodeSkeptic integration `[blocked]`
-
-**Blocker:** the owner's standing instruction — CodeSkeptic is not to be
-modified, and no merge before many real-life tests exist.
-**Serves:** S10 (PR review)
-**Plan:** `docs/PLAN.md` Phase 5, Gate C, and §16 (differential test)
-**Done when:** a contract produced by CodeSkeptic and a hand-written contract
-for the same source reach the same verdict on the same profile, as a test — and
-the extracted one is labelled `COUNTEREXAMPLE`, never `PROVEN`, per the ceiling
-in `docs/scenarios/README.md`.
-
-**Owner's update, 2026-07-30:** CodeSkeptic is FINISHED, per the owner. The
-blocker on this item is the owner's standing instruction, so it stays until the
-owner lifts it in so many words — but what it would unblock has narrowed to
-almost nothing: the differential test CONSUMES CodeSkeptic's emitted contract
-bundles (`rs-check` already loads the
-`application-requirements-bundle.v1` shape its `--runtime-assumptions` mode
-emits) and modifies nothing. The day the owner says go, the first step is an
-emitted bundle from CodeSkeptic checked into `contracts/` here and compared
-against a hand-written contract for the same source.
-
-Blocked by a decision, not by difficulty, and the decision looks right: the
-alternative was two extractors drifting apart in two repositories. An extractor
-was built here on 2026-07-25, worked, broke `docs/non_goals.md` §18, and was
-removed; what it learned is in `docs/PROGRESS.md`.
-
-The §16 differential test needs a second, independent producer of contracts, and
-by this decision that producer lives in the other repository. Same blocker.
-
-### T-012 — Reserve/commit under memory pressure `[blocked]`
-
-**Blocker:** the ground-truth harness cannot provoke memory pressure safely on a
-shared runner, and a test that can take down its host is not a test.
-**Serves:** S3
-**Plan:** `docs/PLAN.md` Phase 3, MVP demonstration 5
-**Done when:** a ground-truth case reserves address space, has the commit
-refused under real pressure, and the harness records the refusal — inside a
-bound that cannot affect anything else on the machine.
-
-`RS-VM-0012` and `rule_reserve_commit()` exist and are exercised by contracts;
-what has never happened is a real host demonstrating the behaviour. Unblocking
-needs either a dedicated machine or a `cgroup`-bounded child, and the second is
-worth investigating when T-004 brings a Windows runner into scope.
+None. T-011 was consumed by the standalone product decision; Phases 5-10 are
+outside the current queue rather than blocked work.
 
 ---
 
@@ -298,12 +166,6 @@ worth investigating when T-004 brings a Windows runner into scope.
 
 Each needs a reason, so this cannot quietly become a way to empty the list.
 
-- **ROADMAP Phases 6, 7, 9, 10** (counterfactual, temporal, learned invariants,
-  productization) — ROADMAP §19 Risk 1 is *excessive scope*, mitigated by
-  "remain virtual-memory-only through the first useful releases". Opening any of
-  them while the first domain is still the only one measured would be that risk
-  materialising. (Phase 8 — further runtime domains — is now on the compass as
-  **T-023**, still gated on Gate D and deliberately in `Later`, not `Now`.)
 - **Documentation accuracy** (`docs/PLAN.md`, `[partial]`) — permanently
   partial by nature. Only paths and a fixed list of phrases are mechanical;
   prose is not compiled and never will be. `tools/guards/check_docs.py` covers
@@ -313,9 +175,9 @@ Each needs a reason, so this cannot quietly become a way to empty the list.
 
 ## Done
 
-Finished items are not kept here — they move to `docs/PROGRESS.md`, newest
-first, in the commit that finishes them. Twenty-three items shipped this way
-(T-001 … T-022): the false-positive campaign across three OSes, Gate B, the
-evidence bundle, the probe on every platform. Read the log for what each one
-changed and what it taught; that is the wake this compass used to carry inline.
+Finished items leave this compass when they are complete. Their accounts move
+to docs/PROGRESS.md, newest first, in the same change. The false-positive
+campaign, Gate B, evidence bundles, platform probes, and every review-hardening
+round are recorded there. Read the log for what each changed and taught; counts
+are derived by tools and are never restated here.
 

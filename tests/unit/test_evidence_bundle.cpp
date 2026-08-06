@@ -151,6 +151,31 @@ RS_TEST(editing_a_stored_file_is_caught_as_tampering) {
                      "the edit was not reported as tampering");
 }
 
+RS_TEST(an_incomplete_manifest_is_rejected_not_replayed_vacuously) {
+    TempDir tmp("incomplete");
+    std::string error;
+    RS_CHECK(bundle::write_bundle(tmp.dir(), inputs_that_produce_a_finding(), {},
+                                  error));
+
+    // Independent review 2026-08-02, A3: a manifest stripped of its inputs/
+    // outputs hash sections gave the tamper check no nodes, so tampered_files
+    // stayed empty and a three-file bundle "reproduced" its own verdict with
+    // exit 0. Overwrite the manifest with exactly the reviewer's shape - schema,
+    // overall, empty finding_ids, and nothing else - and replay must REJECT it.
+    {
+        std::ofstream out(tmp.path / "manifest.json",
+                          std::ios::binary | std::ios::trunc);
+        out << R"({"schema":"runtime-skeptic.analysis-bundle.v1",)"
+               R"("overall":"SUPPORTED","finding_ids":[]})";
+    }
+
+    auto outcome = bundle::replay_bundle(tmp.dir(), error);
+    RS_CHECK_MESSAGE(!outcome.has_value(),
+                     "an incomplete bundle was replayed instead of rejected");
+    RS_CHECK_MESSAGE(error.find("incomplete") != std::string::npos,
+                     "the rejection did not name the bundle as incomplete");
+}
+
 RS_TEST(a_manifest_that_lies_about_its_verdict_is_caught) {
     TempDir tmp("liar");
     std::string error;
@@ -213,6 +238,68 @@ RS_TEST(a_directory_that_is_not_a_bundle_is_refused_not_crashed) {
     RS_CHECK_MESSAGE(!outcome.has_value(),
                      "an empty directory was accepted as a bundle");
     RS_CHECK(!error.empty());
+}
+
+RS_TEST(a_manifest_missing_a_required_top_level_field_is_rejected) {
+    // Independent re-test 2026-08-02, A3/A4: the round-1 fix required only the
+    // inputs/outputs hash nodes, so a manifest stripped of tool_version, host,
+    // analysis_options and replay still "reproduced" with exit 0. replay must
+    // require every field analysis-bundle.v1 lists as required. One stands for
+    // all: drop tool_version from an otherwise valid, self-certified bundle.
+    TempDir tmp("stripped");
+    std::string error;
+    RS_CHECK(bundle::write_bundle(tmp.dir(), inputs_that_produce_a_finding(), {},
+                                  error));
+
+    json::Value m = read_manifest(tmp.dir());
+    m.object_ref().erase("tool_version");
+    RS_CHECK(io::write_file((tmp.path / "manifest.json").string(),
+                            json::serialize_pretty(m), error));
+
+    auto outcome = bundle::replay_bundle(tmp.dir(), error);
+    RS_CHECK_MESSAGE(!outcome.has_value(),
+                     "a manifest missing a required field was replayed");
+    RS_CHECK_MESSAGE(error.find("tool_version") != std::string::npos,
+                     "the rejection did not name the missing field");
+}
+
+RS_TEST(a_manifest_field_of_the_wrong_type_is_refused) {
+    // Round-3 re-test: the round-2 fix required the manifest's fields to be
+    // PRESENT but not to have the right type, so a manifest with overall:5 or
+    // host:5 still replayed. replay now enforces the type analysis-bundle.v1
+    // gives each field.
+    TempDir tmp("mtype");
+    std::string error;
+    RS_CHECK(bundle::write_bundle(tmp.dir(), inputs_that_produce_a_finding(), {},
+                                  error));
+    json::Value m = read_manifest(tmp.dir());
+    m["overall"] = static_cast<unsigned long long>(5);  // schema types it string
+    RS_CHECK(io::write_file((tmp.path / "manifest.json").string(),
+                            json::serialize_pretty(m), error));
+    auto outcome = bundle::replay_bundle(tmp.dir(), error);
+    RS_CHECK_MESSAGE(!outcome.has_value(),
+                     "a wrong-typed manifest field was replayed");
+}
+
+RS_TEST(a_manifest_that_redirects_a_hash_to_another_file_is_refused) {
+    // The serious one. The hash was verified on the file NAMED IN THE MANIFEST
+    // while the analysis read the fixed application_requirements.json - so a
+    // tampered requirement passed when the manifest pointed the hash at a
+    // pristine copy, and "../outside_req.json" escaped the bundle. The manifest
+    // may now name only the bundle's own canonical file.
+    TempDir tmp("redirect");
+    std::string error;
+    RS_CHECK(bundle::write_bundle(tmp.dir(), inputs_that_produce_a_finding(), {},
+                                  error));
+    json::Value m = read_manifest(tmp.dir());
+    m["inputs"]["requirement"]["file"] = std::string("../outside_req.json");
+    RS_CHECK(io::write_file((tmp.path / "manifest.json").string(),
+                            json::serialize_pretty(m), error));
+    auto outcome = bundle::replay_bundle(tmp.dir(), error);
+    // Either refused outright, or reported not-reproduced (tampered) - never a
+    // clean reproduction.
+    RS_CHECK_MESSAGE(!outcome.has_value() || !outcome->reproduced,
+                     "a hash redirected to another file was accepted");
 }
 
 RS_TEST_MAIN("evidence bundle")

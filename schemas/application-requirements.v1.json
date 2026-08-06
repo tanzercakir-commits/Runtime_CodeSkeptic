@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://runtimeskeptic.dev/schemas/application-requirements.v1.json",
   "title": "runtime-skeptic.application-requirements.v1",
-  "description": "What a program requires of its execution environment. Written by hand, or emitted by a static analyzer outside this repository - contract extraction is reserved for CodeSkeptic by docs/non_goals.md section 18. Fields under `x_` are extensions and are ignored by the reader; ANY OTHER unrecognized field is reported as a limitation of the analysis rather than dropped in silence.",
+  "description": "What a program requires of its execution environment. Written by hand or supplied as a producer-neutral artifact; this standalone repository performs no contract extraction. Fields under `x_` are extensions and are ignored by the reader; ANY OTHER unrecognized field is reported as a limitation of the analysis rather than dropped in silence.",
   "type": "object",
   "required": [
     "schema",
@@ -25,8 +25,7 @@
         "virtual_memory_map",
         "virtual_memory_protect",
         "virtual_memory_reserve",
-        "virtual_memory_commit",
-        "unknown"
+        "virtual_memory_commit"
       ]
     },
     "assumption_evidence": {
@@ -38,17 +37,36 @@
       "required": [
         "size"
       ],
+      "if": {
+        "required": [
+          "exact_address_required"
+        ],
+        "properties": {
+          "exact_address_required": {
+            "const": true
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "address"
+        ]
+      },
       "properties": {
         "address": {
           "type": [
             "string",
             "integer",
             "null"
-          ]
+          ],
+          "minimum": 0,
+          "maximum": 18446744073709551615,
+          "pattern": "^0x[0-9a-fA-F]+$"
         },
         "size": {
           "type": "integer",
-          "minimum": 1
+          "minimum": 1,
+          "maximum": 18446744073709551615
         },
         "exact_address_required": {
           "type": "boolean"
@@ -57,13 +75,17 @@
           "type": [
             "integer",
             "null"
-          ]
+          ],
+          "minimum": 0,
+          "maximum": 18446744073709551615
         },
         "required_page_size": {
           "type": [
             "integer",
             "null"
-          ]
+          ],
+          "minimum": 0,
+          "maximum": 18446744073709551615
         },
         "required_page_size_relation": {
           "enum": [
@@ -77,14 +99,20 @@
             "string",
             "integer",
             "null"
-          ]
+          ],
+          "minimum": 0,
+          "maximum": 18446744073709551615,
+          "pattern": "^0x[0-9a-fA-F]+$"
         },
         "address_max": {
           "type": [
             "string",
             "integer",
             "null"
-          ]
+          ],
+          "minimum": 0,
+          "maximum": 18446744073709551615,
+          "pattern": "^0x[0-9a-fA-F]+$"
         },
         "protection": {
           "type": "object",
@@ -113,10 +141,17 @@
           "type": [
             "integer",
             "null"
-          ]
+          ],
+          "minimum": 0,
+          "maximum": 18446744073709551615
         },
         "file_offset": {
-          "type": "integer"
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0,
+          "maximum": 18446744073709551615
         },
         "accesses_beyond_eof": {
           "type": "boolean"
@@ -145,7 +180,9 @@
           "type": [
             "integer",
             "null"
-          ]
+          ],
+          "minimum": 0,
+          "maximum": 18446744073709551615
         },
         "displacement_reference": {
           "type": "string"
@@ -169,13 +206,17 @@
           "type": [
             "integer",
             "null"
-          ]
+          ],
+          "minimum": 0,
+          "maximum": 18446744073709551615
         },
         "pointer_storage_width_bits": {
           "type": [
             "integer",
             "null"
-          ]
+          ],
+          "minimum": 0,
+          "maximum": 18446744073709551615
         }
       },
       "additionalProperties": true
@@ -189,7 +230,14 @@
     "permitted_fallbacks": {
       "type": "array",
       "items": {
-        "type": "string"
+        "enum": [
+          "relocate",
+          "smaller_size",
+          "weaker_protection",
+          "non_executable",
+          "none",
+          "unknown"
+        ]
       }
     },
     "failure_sink": {
@@ -259,7 +307,9 @@
           "type": "string"
         },
         "line": {
-          "type": "integer"
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 18446744073709551615
         },
         "symbol": {
           "type": "string"

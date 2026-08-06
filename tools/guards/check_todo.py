@@ -14,7 +14,7 @@ agreeing and nothing notices - the plan still lists a criterion as open while
 the todo has quietly dropped it, or the todo grows an item that answers to
 nothing. Six months later there is no way to tell which document is stale.
 
-SEVEN CHECKS.
+EIGHT CHECKS.
 
 1. EVERY UNFINISHED PLAN CRITERION IS ACCOUNTED FOR. It must carry the id of an
    item in TODO.md, or be tagged `(untracked)` and named in TODO.md's
@@ -33,6 +33,12 @@ SEVEN CHECKS.
 2. EVERY ID RESOLVES. A `(T-nnn)` tag in the plan must name an item that
    exists. An item that is deleted takes its tags with it.
 
+8. STRUCTURAL HEADINGS FAIL CLOSED. Section headings must be unique and may
+   not contain patch-marker debris; every task-like `### T-nnn` line must
+   match the canonical item shape; duplicate task ids are forbidden. Otherwise
+   a malformed heading can make a real task invisible while the guard stays
+   green.
+
 7. AN UNFINISHED CRITERION MAY NOT BE OWNED BY A FINISHED ITEM. Found the same
    day, one line below: Gate B was `[partial]` and cited `(T-004)`, which is
    `[done]`. Read literally that says the work holding the gate open was
@@ -46,9 +52,9 @@ SEVEN CHECKS.
 4. EVERY ITEM SAYS WHAT WOULD PROVE IT DONE. "Done when" must name something
    that runs. An item that cannot be finished is a mood.
 
-5. FINISHED WORK LEAVES A TRACE. An item marked `[done]` in TODO.md must be
-   mentioned in docs/PROGRESS.md, so that what was learned survives the item
-   being crossed off. Work that completes silently gets redone.
+5. FINISHED WORK IS CONSUMED. A `[done]` item may not remain in TODO.md.
+   Completion removes it from the queue; check_progress_history.py separately
+   requires the same change to append its evidence to docs/PROGRESS.md.
 
 6. THE MARKER AND THE SECTION MUST AGREE. An item carrying `[now]` has to sit
    under `## Now`. This was missing and the compass contradicted itself in three
@@ -112,7 +118,7 @@ def parse_todo():
     in_untracked = in_now = False
     section = None
 
-    for line in TODO.read_text().splitlines():
+    for line in TODO.read_text(encoding="utf-8").splitlines():
         if line.startswith("## "):
             section = line[3:].strip()
             in_untracked = "not tracked" in line.lower()
@@ -146,7 +152,28 @@ def main() -> int:
         print("docs/TODO.md is missing; it is the compass", file=sys.stderr)
         return 1
 
+    todo_text = TODO.read_text(encoding="utf-8")
+    todo_lines = todo_text.splitlines()
     items, order, untracked, pending = parse_todo()
+
+    section_titles = [line[3:].strip() for line in todo_lines
+                      if line.startswith("## ")]
+    for title in sorted(set(section_titles)):
+        if section_titles.count(title) > 1:
+            problems.append(f"duplicate section heading: `## {title}`")
+    for line_no, line in enumerate(todo_lines, 1):
+        if line.startswith("## ") and line.rstrip().endswith("---"):
+            problems.append(
+                f"docs/TODO.md:{line_no}: malformed section heading `{line}`")
+        if line.startswith("###") and "T-" in line and not ITEM.match(line):
+            problems.append(
+                f"docs/TODO.md:{line_no}: malformed task heading `{line}`")
+
+    valid_ids = [m.group(1) for line in todo_lines
+                 if (m := ITEM.match(line))]
+    for ident in sorted(set(valid_ids)):
+        if valid_ids.count(ident) > 1:
+            problems.append(f"duplicate TODO id: {ident}")
 
     if not items:
         problems.append("docs/TODO.md has no `### T-nnn — title `[state]`` "
@@ -164,6 +191,11 @@ def main() -> int:
         if v["state"] not in STATES:
             problems.append(f"{ident}: unknown state `[{v['state']}]` "
                             f"(expected one of {', '.join(sorted(STATES))})")
+        if v["state"] == "done":
+            problems.append(
+                f"{ident} is `[done]` but remains in docs/TODO.md. Finished "
+                "items must be consumed from the queue; their evidence belongs "
+                "in append-only docs/PROGRESS.md.")
         if v["state"] != "done" and "**Done when:**" not in v["body"]:
             problems.append(
                 f"{ident} ({v['title']}) has no **Done when:** - name "
@@ -191,19 +223,11 @@ def main() -> int:
                 f"{ident} is `[blocked]` with no **Blocker:** named. A "
                 f"blocker nobody wrote down is an excuse.")
 
-    # --- check 5: finished work leaves a trace ---------------------------
-    progress_text = PROGRESS.read_text() if PROGRESS.exists() else ""
-    for ident, v in items.items():
-        if v["state"] == "done" and ident not in progress_text:
-            problems.append(
-                f"{ident} is `[done]` but docs/PROGRESS.md never mentions it. "
-                f"Crossing an item off is not the same as recording what it "
-                f"taught.")
 
     # --- checks 1 and 2: the plan and the compass agree ------------------
     plan_tagged = set()
     if PLAN.exists():
-        lines = PLAN.read_text().splitlines()
+        lines = PLAN.read_text(encoding="utf-8").splitlines()
         body_starts = next((i for i, l in enumerate(lines)
                             if l.startswith("## ")), 0)
         for i, line in enumerate(lines, 1):

@@ -1,0 +1,36 @@
+{
+  "schema": "runtime-skeptic.application-requirements.v1",
+  "name": "Anonymous reservation requiring one-GiB alignment",
+  "component": "ground-truth pairing for RS-VM-0022",
+  "operation": "virtual_memory_map",
+  "request": {
+    "size": 65536,
+    "exact_address_required": false,
+    "required_alignment": 1073741824,
+    "protection": {"read": true, "write": true, "execute": false},
+    "file_backed": false
+  },
+  "assumptions": {
+    "guest_host_identity_required": false,
+    "translation_layer_available": false,
+    "retries_on_failure": false
+  },
+  "required_postconditions": [
+    "the returned reservation base is aligned to 1073741824 bytes"
+  ],
+  "permitted_fallbacks": [],
+  "failure_sink": {
+    "kind": "unchecked",
+    "location": {
+      "file": "tests/groundtruth/cases/mapping_alignment.c",
+      "line": 1,
+      "symbol": "main"
+    },
+    "description": "the case keeps mappings live until an ordinary successful mmap returns a base that is page-aligned but not one-GiB aligned"
+  },
+  "assumption_evidence": "specified_guarantee",
+  "extraction_limitations": [
+    "A single misaligned successful mapping is a counterexample to the claimed platform guarantee; the case makes up to 64 bounded attempts and does not implement over-allocation or trimming."
+  ],
+  "x_groundtruth": "The mapping API promises host allocation-granularity alignment, not one GiB. This case observes the weaker legal outcome without changing the requested operation."
+}

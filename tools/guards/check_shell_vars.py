@@ -200,7 +200,7 @@ def main() -> int:
         if ".git" in path.parts or "build" in path.parts:
             continue
         scanned += 1
-        rel = str(path.relative_to(ROOT))
+        rel = path.relative_to(ROOT).as_posix()
         for line, name in scan(path):
             problems.append(
                 f"{rel}:{line}: `{name}` is assigned and never read. In "

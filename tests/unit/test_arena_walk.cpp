@@ -780,4 +780,170 @@ RS_TEST(an_arena_floor_on_an_exact_multiple_is_not_an_empty_arena) {
     RS_CHECK(arena_floor_for(kWinMax, 0) == 0);
 }
 
+RS_TEST(adaptive_walk_subdivides_size_failures_instead_of_rejecting_addresses) {
+    constexpr std::uint64_t page = 4096;
+    constexpr std::uint64_t bottom = 0x100000;
+    constexpr std::uint64_t top = bottom + 8 * page;
+
+    ArenaProbe probe;
+    probe.place = [](std::uint64_t, std::uint64_t size) {
+        return size > 2 * page ? ArenaPlacement::Refused
+                               : ArenaPlacement::Placed;
+    };
+    probe.describe = [](std::uint64_t) {
+        return ArenaEntry{false, 0, 0, "ENOMEM"};
+    };
+
+    const ArenaWalk walk =
+        walk_arena_adaptive("size-limited arena", bottom, top, page,
+                            8 * page, 1000, probe);
+    RS_CHECK(walk.unavailable.empty());
+    RS_CHECK_EQ(walk.available.size(), std::size_t{1});
+    if (!walk.available.empty()) {
+        RS_CHECK_EQ(walk.available[0].range.start, bottom);
+        RS_CHECK_EQ(walk.available[0].range.end, top);
+    }
+    RS_CHECK_EQ(walk.placed, std::size_t{4});
+    RS_CHECK_EQ(walk.refused, std::size_t{0});
+}
+
+RS_TEST(adaptive_walk_does_not_promote_a_large_held_window) {
+    constexpr std::uint64_t page = 4096;
+    constexpr std::uint64_t bottom = 0x200000;
+    constexpr std::uint64_t top = bottom + 16 * page;
+
+    auto run_with_held_page = [](std::uint64_t held) {
+        ArenaProbe probe;
+        probe.place = [held](std::uint64_t base, std::uint64_t size) {
+            if (base <= held && held < base + size) {
+                return ArenaPlacement::HeldByProbe;
+            }
+            return ArenaPlacement::Placed;
+        };
+        probe.describe = [](std::uint64_t) { return ArenaEntry{}; };
+        return walk_arena_adaptive("occupied arena", bottom, top, page,
+                                   16 * page, 1000, probe);
+    };
+
+    const ArenaWalk low = run_with_held_page(bottom + page);
+    const ArenaWalk high = run_with_held_page(top - page);
+    RS_CHECK(low.unavailable.empty());
+    RS_CHECK(high.unavailable.empty());
+    RS_CHECK_MESSAGE(bounds(low.available) == bounds(high.available),
+                     "moving one held page changed the recorded facts");
+    RS_CHECK_EQ(low.available.size(), std::size_t{1});
+    if (!low.available.empty()) {
+        RS_CHECK_EQ(low.available[0].range.start, bottom);
+        RS_CHECK_EQ(low.available[0].range.end, top);
+    }
+    RS_CHECK_EQ(low.held_by_probe, std::size_t{1});
+    RS_CHECK_EQ(high.held_by_probe, std::size_t{1});
+}
+
+RS_TEST(adaptive_walk_records_only_the_exact_structurally_refused_page) {
+    constexpr std::uint64_t page = 4096;
+    constexpr std::uint64_t bottom = 0x300000;
+    constexpr std::uint64_t top = bottom + 8 * page;
+    constexpr std::uint64_t bad = bottom + 3 * page;
+
+    ArenaProbe probe;
+    probe.place = [](std::uint64_t base, std::uint64_t size) {
+        return base <= bad && bad < base + size ? ArenaPlacement::Refused
+                                                : ArenaPlacement::Placed;
+    };
+    probe.describe = [](std::uint64_t base) {
+        return ArenaEntry{false, base, page, "EPERM"};
+    };
+
+    const ArenaWalk walk = walk_arena_adaptive(
+        "structural arena", bottom, top, page, 8 * page, 1000, probe);
+    RS_CHECK_EQ(walk.refused, std::size_t{1});
+    RS_CHECK_EQ(walk.unavailable.size(), std::size_t{1});
+    if (!walk.unavailable.empty()) {
+        RS_CHECK_EQ(walk.unavailable[0].range.start, bad);
+        RS_CHECK_EQ(walk.unavailable[0].range.end, bad + page);
+    }
+    for (const auto& available : walk.available) {
+        for (const auto& unavailable : walk.unavailable) {
+            RS_CHECK_MESSAGE(
+                !(available.range.start < unavailable.range.end &&
+                  unavailable.range.start < available.range.end),
+                "adaptive available and unavailable facts overlap");
+        }
+    }
+}
+
+RS_TEST(adaptive_walk_tiles_a_short_tail_without_overlap) {
+    constexpr std::uint64_t page = 4096;
+    constexpr std::uint64_t bottom = 0x400000;
+    constexpr std::uint64_t top = bottom + 5 * page;
+    std::vector<std::pair<std::uint64_t, std::uint64_t>> visits;
+
+    ArenaProbe probe;
+    probe.place = [&visits](std::uint64_t base, std::uint64_t size) {
+        visits.emplace_back(base, size);
+        return ArenaPlacement::Placed;
+    };
+    probe.describe = [](std::uint64_t) { return ArenaEntry{}; };
+
+    const ArenaWalk walk =
+        walk_arena_adaptive("tail arena", bottom, top, page, 2 * page, 1000,
+                            probe);
+    const std::vector<std::pair<std::uint64_t, std::uint64_t>> expected = {
+        {bottom, 2 * page}, {bottom + 2 * page, 2 * page},
+        {bottom + 4 * page, page}};
+    RS_CHECK(visits == expected);
+    RS_CHECK_EQ(walk.available.size(), std::size_t{1});
+    if (!walk.available.empty()) {
+        RS_CHECK_EQ(walk.available[0].range.start, bottom);
+        RS_CHECK_EQ(walk.available[0].range.end, top);
+    }
+}
+
+RS_TEST(adaptive_walk_rejects_misaligned_inputs_without_probing) {
+    std::size_t calls = 0;
+    ArenaProbe probe;
+    probe.place = [&calls](std::uint64_t, std::uint64_t) {
+        ++calls;
+        return ArenaPlacement::Placed;
+    };
+    probe.describe = [](std::uint64_t) { return ArenaEntry{}; };
+
+    const ArenaWalk walk =
+        walk_arena_adaptive("bad arena", 0x500001, 0x502000, 4096, 4096,
+                            1000, probe);
+    RS_CHECK(walk.available.empty());
+    RS_CHECK(walk.unavailable.empty());
+    RS_CHECK_EQ(calls, std::size_t{0});
+}
+
+RS_TEST(adaptive_walk_discards_partial_facts_when_its_budget_expires) {
+    constexpr std::uint64_t page = 4096;
+    std::size_t calls = 0;
+    ArenaProbe probe;
+    probe.place = [&calls](std::uint64_t, std::uint64_t size) {
+        ++calls;
+        if (size == page && calls == 3) return ArenaPlacement::Placed;
+        return ArenaPlacement::Refused;
+    };
+    probe.describe = [](std::uint64_t) {
+        return ArenaEntry{false, 0, 0, "ENOMEM"};
+    };
+
+    // The third call records one available page and the fourth records one
+    // refused page. Visiting the untouched right half then exhausts the budget.
+    // Both partial facts must disappear, or their prefix can move with ASLR.
+    const ArenaWalk walk = walk_arena_adaptive(
+        "budgeted arena", 0x600000, 0x604000, page, 4 * page, 4, probe);
+    RS_CHECK(walk.budget_exhausted);
+    RS_CHECK_EQ(walk.attempts, std::size_t{4});
+    RS_CHECK_EQ(calls, std::size_t{4});
+    RS_CHECK_EQ(walk.placed, std::size_t{1});
+    RS_CHECK_EQ(walk.refused, std::size_t{1});
+    RS_CHECK_MESSAGE(walk.available.empty(),
+                     "a partial available prefix survived budget exhaustion");
+    RS_CHECK_MESSAGE(walk.unavailable.empty(),
+                     "a partial unavailable prefix survived budget exhaustion");
+}
+
 RS_TEST_MAIN("arena walk")

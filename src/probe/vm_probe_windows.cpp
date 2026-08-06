@@ -30,10 +30,11 @@
 //
 // 2. RESERVE AND COMMIT ARE SEPARATE OPERATIONS THE PROGRAM PERFORMS. Not a
 //    lazy-commit heuristic the kernel applies behind an ordinary mapping.
-//    `reserve_commit_model` has had the value `WindowsReserveCommit` since the
-//    model was written and no probe has ever established it. `RS-VM-0012`
-//    exists for the mismatch and has never been confirmed by execution against
-//    a host that actually has this model. This probe is what would confirm it.
+//    `reserve_commit_model` is measured here as
+//    `WindowsReserveCommit`. The bounded Windows Job Object CTest confirms
+//    reservation succeeds while commitment can fail synchronously; the
+//    paired Linux cgroup lane confirms POSIX-lazy failure moves to first
+//    touch. Together they execute the `RS-VM-0012` mismatch.
 //
 // 3. THERE IS NO DESTRUCTIVE EXACT PLACEMENT. `VirtualAlloc` with a base
 //    address FAILS when the range is not free; it never unmaps what is there.
@@ -902,8 +903,9 @@ Result probe_virtual_memory(const Options& options) {
         }
     }
 
-    // Reserve then commit. The model's `WindowsReserveCommit` value has never
-    // been established by a probe on any host; this is the one that can.
+    // Reserve then commit. This probe establishes the
+    // `WindowsReserveCommit` model; the worker-only Job Object CTest
+    // independently exercises its synchronous commitment failure.
     if (probe_reserve_then_commit(page_size, probe_length, warnings)) {
         profile.vm.reserve_commit_model = Fact<vm::ReserveCommitModel>::known(
             vm::ReserveCommitModel::WindowsReserveCommit, measured,
