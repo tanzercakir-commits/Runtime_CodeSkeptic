@@ -1,0 +1,17 @@
+{
+  "populations": {
+    "shape": {
+      "programs": 10,
+      "evaluated": 19,
+      "rejected": 0,
+      "verdicts": {
+        "SUPPORTED": 19
+      },
+      "false_positive_count": 0,
+      "false_positive_rate_percent": 0.0,
+      "unknown_share_percent": 0.0,
+      "findings": {},
+      "false_positives": []
+    }
+  }
+}
