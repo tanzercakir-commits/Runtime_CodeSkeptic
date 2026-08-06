@@ -386,6 +386,21 @@ The frozen `plan.md` and `ROADMAP.md` remain unchanged as historical intent.
 
 ## Cross-cutting work not owned by a phase
 
+- `[open]` **Platform Expansion Plan v2: claim boundary and evidence gates** -
+  the owner accepted `docs/plans/platform-expansion-v2.md`; it remains open
+  until its hash pin and adversarial workflow guard are executable. (T-037)
+- `[open]` **hosted Linux ARM64 and Windows ARM64 validation** - standard
+  public runners are selected, but support is not claimed until native build,
+  CTest, two-process probe verification and scoped provenance artifacts pass
+  on both. (T-038)
+- `[open]` **RISC-V64/ARM architecture identity and native harness** - the
+  current Linux process detection collapses non-AArch64 64-bit processes to
+  x86_64 and every 32-bit process to x86; fix that before accepting a new
+  profile, and provide the manual-only hardware path. (T-039)
+- `[blocked]` **new physical platform measurements** - RISC-V64 (T-040),
+  ARM64 16/64 KiB plus ARMv7 (T-041), and an RTOS pilot (T-042) require
+  authorized targets or licensed SDKs that are not currently available.
+
 - `[done]` ground-truth harness — `tests/groundtruth/`,
   24 registered cases (23 direct plus the bounded cgroup lane), 25/25
   adversarial pairing comparisons, three derivation checks, and case-specific

@@ -16,6 +16,23 @@ re-litigated; a mistake recorded here does not need to be re-made.
 
 ---
 
+## 2026-08-06 - Platform Expansion v2 accepted and bounded
+
+**Changed.** The owner accepted a platform-evidence addendum without changing
+the immutable `plan.md`, frozen `ROADMAP.md`, or standalone ADR. T-037 through
+T-039 now own the executable slice: claim-boundary enforcement, hosted Linux
+and Windows ARM64 evidence, and correct RISC-V64/ARM identity plus a manual
+hardware harness. T-040 through T-042 keep real RISC-V, page-size/ARMv7, and
+RTOS measurements visible behind their actual target and license blockers.
+
+**Learned.** The Linux probe was not architecture-neutral: every 64-bit
+non-AArch64 process became `x86_64`, and every 32-bit process became `x86`.
+Adding a RISC-V runner before fixing that would have produced a schema-valid,
+measured, false profile. Runner coverage must follow identity correctness.
+
+**Next.** Pin and adversarially guard the accepted plan; implement the
+architecture correction and scoped profile validator; then run the two hosted
+ARM64 lanes before changing any public support claim.
 ## 2026-08-06 - The README now starts with a runnable path
 
 **Changed.** The public README now opens with verifiable CI, language,
