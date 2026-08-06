@@ -1,0 +1,33 @@
+execution ledger rows: 47
+rule branches confirmed by a real outcome: 15/27
+  RS-VM-0002  witness: exact-mapping-below-minimum@sha256:0df4e0888ea41d91d87f55ac8185d582da62021850b9415bc9dd83380cf077bc exact-mapping-below-minimum@sha256:d6a1f7ae2c61fe481062248291f6987f9a79adb085f0e851ceaf0421f5b0b69d
+  RS-VM-0003  witness: exact-mapping-above-user-space@sha256:0df4e0888ea41d91d87f55ac8185d582da62021850b9415bc9dd83380cf077bc exact-mapping-above-user-space@sha256:d6a1f7ae2c61fe481062248291f6987f9a79adb085f0e851ceaf0421f5b0b69d
+  RS-VM-0004  witness: exact-mapping-misaligned@sha256:0df4e0888ea41d91d87f55ac8185d582da62021850b9415bc9dd83380cf077bc exact-mapping-misaligned@sha256:d6a1f7ae2c61fe481062248291f6987f9a79adb085f0e851ceaf0421f5b0b69d
+  RS-VM-0005  witness: size-tail-must-stay-unmapped@sha256:0df4e0888ea41d91d87f55ac8185d582da62021850b9415bc9dd83380cf077bc size-tail-must-stay-unmapped@sha256:d6a1f7ae2c61fe481062248291f6987f9a79adb085f0e851ceaf0421f5b0b69d
+  RS-VM-0007  witness: hinted-mapping-requires-identity@sha256:0df4e0888ea41d91d87f55ac8185d582da62021850b9415bc9dd83380cf077bc hinted-mapping-requires-identity@sha256:d6a1f7ae2c61fe481062248291f6987f9a79adb085f0e851ceaf0421f5b0b69d
+  RS-VM-0008  witness: identity-without-translation@sha256:0df4e0888ea41d91d87f55ac8185d582da62021850b9415bc9dd83380cf077bc identity-without-translation@sha256:d6a1f7ae2c61fe481062248291f6987f9a79adb085f0e851ceaf0421f5b0b69d
+  RS-VM-0012  witness: reserve-then-touch-cgroup@sha256:d6a1f7ae2c61fe481062248291f6987f9a79adb085f0e851ceaf0421f5b0b69d
+  RS-VM-0013  witness: pointer-truncation-32bit@sha256:0df4e0888ea41d91d87f55ac8185d582da62021850b9415bc9dd83380cf077bc pointer-truncation-32bit@sha256:d6a1f7ae2c61fe481062248291f6987f9a79adb085f0e851ceaf0421f5b0b69d
+  RS-VM-0015  witness: retry-permanent-exact-mapping@sha256:0df4e0888ea41d91d87f55ac8185d582da62021850b9415bc9dd83380cf077bc retry-permanent-exact-mapping@sha256:d6a1f7ae2c61fe481062248291f6987f9a79adb085f0e851ceaf0421f5b0b69d
+  RS-VM-0018  witness: file-map-beyond-eof@sha256:0df4e0888ea41d91d87f55ac8185d582da62021850b9415bc9dd83380cf077bc file-map-beyond-eof@sha256:d6a1f7ae2c61fe481062248291f6987f9a79adb085f0e851ceaf0421f5b0b69d
+  RS-VM-0020  witness: unhonourable-address-hint@sha256:0df4e0888ea41d91d87f55ac8185d582da62021850b9415bc9dd83380cf077bc unhonourable-address-hint@sha256:d6a1f7ae2c61fe481062248291f6987f9a79adb085f0e851ceaf0421f5b0b69d
+  RS-VM-0021  witness: oversized-reservation-4pib@sha256:0df4e0888ea41d91d87f55ac8185d582da62021850b9415bc9dd83380cf077bc oversized-reservation-4pib@sha256:d6a1f7ae2c61fe481062248291f6987f9a79adb085f0e851ceaf0421f5b0b69d
+  RS-VM-0022  witness: strong-reservation-alignment@sha256:0df4e0888ea41d91d87f55ac8185d582da62021850b9415bc9dd83380cf077bc strong-reservation-alignment@sha256:d6a1f7ae2c61fe481062248291f6987f9a79adb085f0e851ceaf0421f5b0b69d
+  RS-VM-0023  witness: address-bound-below-minimum@sha256:0df4e0888ea41d91d87f55ac8185d582da62021850b9415bc9dd83380cf077bc address-bound-below-minimum@sha256:d6a1f7ae2c61fe481062248291f6987f9a79adb085f0e851ceaf0421f5b0b69d
+  RS-VM-0026  witness: reservation-above-granted-1tib@sha256:0df4e0888ea41d91d87f55ac8185d582da62021850b9415bc9dd83380cf077bc
+
+Not checkable by the current execution method:
+  RS-VM-0010  all measured CI contexts report anonymous executable mapping available; the current harness cannot both produce a native profile and execute the case inside the same seccomp policy context needed to measure the false fact
+  RS-VM-0014  internal contradiction in the requirement; no host operation can confirm it
+  RS-VM-0016  every reachable measured host exposes a non-destructive exact-placement primitive; the absent-capability branch has no real host here
+  RS-VM-0017  an epistemic absence: every runtime outcome is compatible with the finding; only incorporating a measurement into the analyzed profile removes the missing-fact precondition
+  RS-VM-0019  all measured CI contexts report anonymous mapping available; installing a policy before the full probe would also block the loader/probe mappings, so the current method cannot produce and test a same-context native false profile
+  RS-VM-0024  one run can observe a displacement but cannot establish the future placement guarantee that this profile-level rule says is unevaluable
+  RS-VM-0025  a predictive fragmentation heuristic; observing one layout cannot confirm the future-fragmentation claim
+  RS-VM-0027  fires only when reservation grantability was not measured; executing the measurement supplies the missing fact and makes the branch unreachable by construction
+
+Synthetic-only backlog (4):
+  RS-VM-0001
+  RS-VM-0006
+  RS-VM-0009
+  RS-VM-0011
