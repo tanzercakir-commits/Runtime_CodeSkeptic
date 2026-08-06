@@ -486,8 +486,21 @@ struct ScanOutcome {
 // request overlaps a VMA. The adaptive walk below subdivides both outcomes and
 // records a limitation only after an exact page placement is refused.
 constexpr std::uint64_t kTiB = 1ull << 40;
+constexpr std::uint64_t kX86DefaultMapWindow = 1ull << 47;
+constexpr std::uint64_t kAarch64DefaultMapWindow = 1ull << 48;
 constexpr std::uint64_t kArenaMaxWindow = 1ull << 30;
 constexpr std::size_t kArenaAttemptBudget = 262144;
+
+std::uint64_t default_map_window_for(vm::Architecture architecture) {
+    // Linux arm64 derives ELF_ET_DYN_BASE and the ordinary mmap window from
+    // DEFAULT_MAP_WINDOW_64 (1 << VA_BITS_MIN), which is 48 bits on the
+    // standard arm64 kernel exercised by CI. The old unconditional 47-bit cap
+    // was x86-64 policy and left real AArch64 code, heap and mmap pages unknown.
+    if (architecture == vm::Architecture::Aarch64) {
+        return kAarch64DefaultMapWindow;
+    }
+    return kX86DefaultMapWindow;
+}
 
 void scan_one_arena(const char* what, std::uint64_t bottom, std::uint64_t top,
                     std::uint64_t page_size, std::uint64_t max_window_size,
@@ -566,13 +579,15 @@ void scan_one_arena(const char* what, std::uint64_t bottom, std::uint64_t top,
 void scan_allocation_arenas(std::uint64_t page_size,
                             std::uint64_t max_user_address,
                             std::uint64_t max_window_size,
+                            vm::Architecture process_architecture,
                             ScanOutcome& outcome) {
     if (page_size == 0 || max_window_size == 0 ||
         max_user_address <= max_window_size) {
         return;
     }
 
-    const std::uint64_t ceiling = arena_ceiling_for(max_user_address, kTiB);
+    const std::uint64_t ceiling = arena_ceiling_for(
+        max_user_address, kTiB, default_map_window_for(process_architecture));
     const std::uint64_t raw_top =
         max_user_address < ceiling ? max_user_address : ceiling;
     const std::uint64_t probe_top = (raw_top / page_size) * page_size;
@@ -588,7 +603,8 @@ void scan_allocation_arenas(std::uint64_t page_size,
 
 ScanOutcome scan_address_space(std::size_t page_size, std::uint64_t probe_length,
                                std::uint64_t max_user_address,
-                               std::uint64_t arena_window_size) {
+                               std::uint64_t arena_window_size,
+                               vm::Architecture process_architecture) {
     ScanOutcome outcome;
 
     std::vector<std::uint64_t> candidates;
@@ -713,7 +729,7 @@ ScanOutcome scan_address_space(std::size_t page_size, std::uint64_t probe_length
     }
 
     scan_allocation_arenas(page_size, max_user_address, arena_window_size,
-                            outcome);
+                           process_architecture, outcome);
 
     collapse_contained_ranges(outcome.unavailable);
     collapse_contained_ranges(outcome.available);
@@ -1067,8 +1083,9 @@ Result probe_virtual_memory(const Options& options) {
             biggest == 0 ? page_size
                          : (biggest < kArenaMaxWindow ? biggest
                                                      : kArenaMaxWindow);
-        ScanOutcome scan = scan_address_space(page_size, probe_length, max_user,
-                                               arena_window);
+        ScanOutcome scan = scan_address_space(
+            page_size, probe_length, max_user, arena_window,
+            profile.platform.process_arch);
         profile.vm.available_ranges = std::move(scan.available);
         profile.vm.unavailable_ranges = std::move(scan.unavailable);
         for (auto& note : scan.occupied_notes) {

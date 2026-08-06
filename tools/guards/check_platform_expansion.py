@@ -127,7 +127,13 @@ def main() -> int:
 
     linux_probe = read(Path("src/probe/vm_probe_linux.cpp"), errors)
     profile_hpp = read(Path("include/runtimeskeptic/vm/profile.hpp"), errors)
-    for contract in ("process_architecture()", "__riscv_xlen", "Architecture::Riscv64"):
+    for contract in (
+        "process_architecture()",
+        "__riscv_xlen",
+        "Architecture::Riscv64",
+        "kAarch64DefaultMapWindow",
+        "default_map_window_for",
+    ):
         require(linux_probe, contract, Path("src/probe/vm_probe_linux.cpp"), errors)
     require(profile_hpp, "Riscv64", Path("include/runtimeskeptic/vm/profile.hpp"), errors)
 

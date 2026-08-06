@@ -387,9 +387,9 @@ The frozen `plan.md` and `ROADMAP.md` remain unchanged as historical intent.
 ## Cross-cutting work not owned by a phase
 
 - `[done]` **Platform Expansion Plan v2: claim boundary and evidence gates** - `tools/guards/check_platform_expansion.py` enforces it:
-  the accepted addendum is hash-pinned; its structural guard and five
+  the accepted addendum is hash-pinned; its structural guard and six
   adversarial cases reject plan mutation, fail-open hosted lanes, runner drift,
-  and automatic hardware execution.
+  automatic hardware execution, and loss of ARM64-native mmap geometry.
 - `[open]` **hosted Linux ARM64 and Windows ARM64 validation** - standard
   public runners are selected, but support is not claimed until native build,
   CTest, two-process probe verification and scoped provenance artifacts pass
@@ -433,7 +433,7 @@ The frozen `plan.md` and `ROADMAP.md` remain unchanged as historical intent.
   match the filesystem, and a named path must exist. Still `[partial]` because
   only paths and a fixed list of phrases are mechanical; the rest of the prose
   is unchecked and always will be.
-- `[done]` the guards are tested — `tools/guards/selftest.py`, 154 cases, each
+- `[done]` the guards are tested — `tools/guards/selftest.py`, 155 cases, each
   requiring a check to fail against a deliberately wrong throwaway repository
   before it is trusted on this one; first in `tools/guards/run_all.sh`. This
   number read `25` while there were 58, surviving two earlier increases, so

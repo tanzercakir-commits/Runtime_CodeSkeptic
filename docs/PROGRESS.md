@@ -16,6 +16,32 @@ re-litigated; a mistake recorded here does not need to be re-made.
 
 ---
 
+## 2026-08-06 - Linux ARM64 shed an x86-only address-space assumption
+
+**Changed.** PR #4's first native run proved that architecture identity alone
+was insufficient: the Linux allocation-arena walk still capped every 64-bit
+target at x86-64's 47-bit default mmap window. The probe now selects the Linux
+default map window from the measured process architecture, retaining 47 bits
+for x86-64 and using the kernel's 48-bit ARM64 geometry. A focused unit test
+and a sixth platform-expansion adversarial case make the distinction durable.
+
+**Evidence.** GitHub run 31082924513 passed the complete Windows ARM64 lane and
+failed Linux ARM64 only in `test_probe`, where real code, heap and direct mmap
+addresses sat above the old 47-bit ceiling. The corrected geometry is covered
+by the warning-clean local build, complete CTest suite, platform guard, and
+155-case guard selftest before the authoritative lanes are rerun.
+
+**Learned.** A valid architecture label can coexist with architecture-invalid
+probe geometry. Linux `TASK_SIZE`, the ordinary mmap window, and their kernel
+defaults are separate policies; treating x86-64's map window as universal
+made valid AArch64 allocations appear outside the observed arena.
+
+**Next.** Rerun both hosted ARM64 lanes. Consume T-038 only after Linux and
+Windows both build warning-clean, pass every test and emit accepted two-probe
+evidence artifacts.
+
+---
+
 ## 2026-08-06 - Native architecture evidence became fail-closed
 
 **Changed.** T-037 and T-039 were consumed. RISC-V64 is now a first-class

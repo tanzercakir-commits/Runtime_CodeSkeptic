@@ -386,7 +386,8 @@ PLATFORM_FILES_OK = {
     "tools/platform/run_native_validation.sh": PLATFORM_HARNESS_OK,
     "tools/ci/validate_native_profile.py": PLATFORM_VALIDATOR_OK,
     "src/probe/vm_probe_linux.cpp":
-        "process_architecture() __riscv_xlen Architecture::Riscv64\n",
+        ("process_architecture() __riscv_xlen Architecture::Riscv64 "
+         "kAarch64DefaultMapWindow default_map_window_for\n"),
     "include/runtimeskeptic/vm/profile.hpp": "Riscv64\n",
 }
 
@@ -421,6 +422,12 @@ CASES = [
               PLATFORM_RISCV_OK.replace("  workflow_dispatch:",
                                         "  workflow_dispatch:\n  schedule:")},
          expect_fail=True, expect_text="manual-only"),
+    Case("check_platform_expansion.py", "ARM64 keeps its native mmap geometry",
+         {**PLATFORM_FILES_OK,
+          "src/probe/vm_probe_linux.cpp":
+              PLATFORM_FILES_OK["src/probe/vm_probe_linux.cpp"].replace(
+                  "kAarch64DefaultMapWindow", "kGenericMapWindow")},
+         expect_fail=True, expect_text="kAarch64DefaultMapWindow"),
     # ---- check_release_consistency: one public version, one package set ---
     Case("check_release_consistency.py", "release declarations agree",
          {"CMakeLists.txt": "project(RuntimeSkeptic\n    VERSION 0.2.0)\n",
