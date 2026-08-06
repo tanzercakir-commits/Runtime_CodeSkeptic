@@ -1,0 +1,67 @@
+Test project /Users/runner/work/Runtime_CodeSkeptic/Runtime_CodeSkeptic/build-x64
+    Start 22: test_runtime_install
+1/1 Test #22: test_runtime_install .............***Failed    1.07 sec
+-- Installing: /Users/runner/work/Runtime_CodeSkeptic/Runtime_CodeSkeptic/build-x64/runtime-install-test/lib/libruntimeskeptic.0.2.0.dylib
+-- Installing: /Users/runner/work/Runtime_CodeSkeptic/Runtime_CodeSkeptic/build-x64/runtime-install-test/lib/libruntimeskeptic.1.dylib
+-- Installing: /Users/runner/work/Runtime_CodeSkeptic/Runtime_CodeSkeptic/build-x64/runtime-install-test/lib/libruntimeskeptic.dylib
+-- Installing: /Users/runner/work/Runtime_CodeSkeptic/Runtime_CodeSkeptic/build-x64/runtime-install-test/lib/librs_trace.a
+-- Installing: /Users/runner/work/Runtime_CodeSkeptic/Runtime_CodeSkeptic/build-x64/runtime-install-test/lib/librs_core.a
+-- Installing: /Users/runner/work/Runtime_CodeSkeptic/Runtime_CodeSkeptic/build-x64/runtime-install-test/include/runtimeskeptic/runtime
+-- Installing: /Users/runner/work/Runtime_CodeSkeptic/Runtime_CodeSkeptic/build-x64/runtime-install-test/include/runtimeskeptic/runtime/runtime_posix.h
+-- Installing: /Users/runner/work/Runtime_CodeSkeptic/Runtime_CodeSkeptic/build-x64/runtime-install-test/include/runtimeskeptic/runtime/runtime_windows.h
+-- Installing: /Users/runner/work/Runtime_CodeSkeptic/Runtime_CodeSkeptic/build-x64/runtime-install-test/include/runtimeskeptic/runtime/runtime.h
+-- Installing: /Users/runner/work/Runtime_CodeSkeptic/Runtime_CodeSkeptic/build-x64/runtime-install-test/include/runtimeskeptic/runtime/trace.hpp
+-- Installing: /Users/runner/work/Runtime_CodeSkeptic/Runtime_CodeSkeptic/build-x64/runtime-install-test/lib/cmake/RuntimeSkeptic/RuntimeSkepticTargets.cmake
+-- Installing: /Users/runner/work/Runtime_CodeSkeptic/Runtime_CodeSkeptic/build-x64/runtime-install-test/lib/cmake/RuntimeSkeptic/RuntimeSkepticTargets-relwithdebinfo.cmake
+-- Installing: /Users/runner/work/Runtime_CodeSkeptic/Runtime_CodeSkeptic/build-x64/runtime-install-test/lib/cmake/RuntimeSkeptic/RuntimeSkepticConfig.cmake
+-- Installing: /Users/runner/work/Runtime_CodeSkeptic/Runtime_CodeSkeptic/build-x64/runtime-install-test/lib/cmake/RuntimeSkeptic/RuntimeSkepticConfigVersion.cmake
+-- Installing: /Users/runner/work/Runtime_CodeSkeptic/Runtime_CodeSkeptic/build-x64/runtime-install-test/bin/rs-runtime-benchmark
+-- Installing: /Users/runner/work/Runtime_CodeSkeptic/Runtime_CodeSkeptic/build-x64/runtime-install-test/bin/rs-runtime-sample
+-- The C compiler identification is AppleClang 15.0.0.15000309
+-- The CXX compiler identification is AppleClang 15.0.0.15000309
+-- Detecting C compiler ABI info
+-- Detecting C compiler ABI info - done
+-- Check for working C compiler: /usr/bin/cc - skipped
+-- Detecting C compile features
+-- Detecting C compile features - done
+-- Detecting CXX compiler ABI info
+-- Detecting CXX compiler ABI info - done
+-- Check for working CXX compiler: /usr/bin/c++ - skipped
+-- Detecting CXX compile features
+-- Detecting CXX compile features - done
+-- Configuring done (0.5s)
+-- Generating done (0.0s)
+-- Build files have been written to: /Users/runner/work/Runtime_CodeSkeptic/Runtime_CodeSkeptic/build-x64/runtime-install-test-consumer/build
+[ 50%] Building CXX object CMakeFiles/consumer.dir/main.cpp.o
+[100%] Linking CXX executable consumer
+ld: warning: ignoring file '/Users/runner/work/Runtime_CodeSkeptic/Runtime_CodeSkeptic/build-x64/runtime-install-test/lib/libruntimeskeptic.0.2.0.dylib': found architecture 'x86_64', required architecture 'arm64'
+ld: warning: ignoring file '/Users/runner/work/Runtime_CodeSkeptic/Runtime_CodeSkeptic/build-x64/runtime-install-test/lib/librs_trace.a[2](trace.cpp.o)': found architecture 'x86_64', required architecture 'arm64'
+ld: warning: ignoring file '/Users/runner/work/Runtime_CodeSkeptic/Runtime_CodeSkeptic/build-x64/runtime-install-test/lib/librs_core.a[7](schema_registry.cpp.o)': found architecture 'x86_64', required architecture 'arm64'
+ld: warning: ignoring file '/Users/runner/work/Runtime_CodeSkeptic/Runtime_CodeSkeptic/build-x64/runtime-install-test/lib/librs_core.a[6](schema.cpp.o)': found architecture 'x86_64', required architecture 'arm64'
+ld: warning: ignoring file '/Users/runner/work/Runtime_CodeSkeptic/Runtime_CodeSkeptic/build-x64/runtime-install-test/lib/librs_core.a[5](io.cpp.o)': found architecture 'x86_64', required architecture 'arm64'
+ld: warning: ignoring file '/Users/runner/work/Runtime_CodeSkeptic/Runtime_CodeSkeptic/build-x64/runtime-install-test/lib/librs_core.a[4](evidence.cpp.o)': found architecture 'x86_64', required architecture 'arm64'
+ld: warning: ignoring file '/Users/runner/work/Runtime_CodeSkeptic/Runtime_CodeSkeptic/build-x64/runtime-install-test/lib/librs_core.a[3](sha256.cpp.o)': found architecture 'x86_64', required architecture 'arm64'
+ld: warning: ignoring file '/Users/runner/work/Runtime_CodeSkeptic/Runtime_CodeSkeptic/build-x64/runtime-install-test/lib/librs_core.a[2](json.cpp.o)': found architecture 'x86_64', required architecture 'arm64'
+Undefined symbols for architecture arm64:
+  "rs::runtime::trace::replay(rs::runtime::trace::Trace const&, std::__1::basic_string<char, std::__1::char_traits<char>, std::__1::allocator<char>>&)", referenced from:
+      _main in main.cpp.o
+  "_rs_runtime_is_enabled_v1", referenced from:
+      _main in main.cpp.o
+ld: symbol(s) not found for architecture arm64
+clang: error: linker command failed with exit code 1 (use -v to see invocation)
+make[2]: *** [consumer] Error 1
+make[1]: *** [CMakeFiles/consumer.dir/all] Error 2
+make: *** [all] Error 2
+CMake Error at /Users/runner/work/Runtime_CodeSkeptic/Runtime_CodeSkeptic/tests/cmake/check_runtime_install.cmake:77 (message):
+  installed-package consumer link failed
+
+
+
+
+0% tests passed, 1 tests failed out of 1
+
+Total Test time (real) =   1.08 sec
+
+The following tests FAILED:
+	 22 - test_runtime_install (Failed)
+Errors while running CTest
